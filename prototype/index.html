@@ -170,8 +170,11 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pcard canvas { width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 10px; }
 .pcard[aria-pressed="true"] { border-color: var(--ember); background: rgba(255,178,56,.16); }
 .pcard:focus-visible { outline: 3px solid var(--ember); outline-offset: 2px; }
-.pilotbtn { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.pilotbtn canvas { width: 40px; height: 40px; }
+.pickbtn { display: flex; align-items: center; gap: 8px; padding: 0 8px; min-height: 58px; text-align: left; min-width: 0; }
+.pickbtn canvas { flex: none; width: 42px; height: 42px; border-radius: 9px; }
+.pickbtn span { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; }
+.pickbtn small { font: 900 10px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pickbtn b { font-weight: 400; font-size: 15px; overflow-wrap: anywhere; }
 .note { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.45; }
 
 .toast {
@@ -201,7 +204,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   <div class="panel">
     <div class="eyebrow" id="menuDate">Daily shaft</div>
     <h1 class="title">Coconut <em>Rocket</em></h1>
-    <p class="lede">Climb the volcano in a firework-powered coconut. Hold to fire, let go to drop. The lava worm is right behind you, and one hit ends the run.</p>
+    <p class="lede">Climb the volcano in your rocket. Hold to fire, let go to drop. Something huge is right behind you, and one hit ends the run.</p>
     <div class="label">Controls</div>
     <div class="seg" role="group" aria-label="Controls">
       <button id="ctlOne" data-ctl="one" aria-pressed="true">One thumb</button>
@@ -215,7 +218,10 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="btns">
       <button class="btn go" id="playDaily">Play today's shaft</button>
-      <button class="btn alt pilotbtn" id="openPilots"><canvas id="pilotMini" width="64" height="64" aria-hidden="true"></canvas><span>Pilot: <b id="pilotName">Lemur</b></span></button>
+      <div class="btnrow">
+        <button class="btn alt pickbtn" id="openPilots"><canvas id="pilotMini" width="72" height="72" aria-hidden="true"></canvas><span><small>Pilot</small><b id="pilotName">Lemur</b></span></button>
+        <button class="btn alt pickbtn" id="openMonsters"><canvas id="monsterMini" width="72" height="72" aria-hidden="true"></canvas><span><small>Monster</small><b id="monsterName">Magma worm</b></span></button>
+      </div>
       <div class="btnrow">
         <button class="btn alt" id="playPractice">Practice</button>
         <button class="btn alt" id="openTune">Tune</button>
@@ -231,6 +237,16 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="pilotgrid" id="pilotGrid"></div>
     <p class="note" id="pilotInfo"></p>
     <button class="btn go" id="pilotDone">Done</button>
+  </div>
+</div>
+
+<!-- Monster picker -->
+<div class="screen" id="monsterScreen" hidden>
+  <div class="panel wide">
+    <div class="eyebrow">Choose what chases you</div>
+    <div class="pilotgrid" id="monsterGrid"></div>
+    <p class="note" id="monsterInfo"></p>
+    <button class="btn go" id="monsterDone">Done</button>
   </div>
 </div>
 
@@ -311,7 +327,7 @@ const UNITS_PER_M = 10;
 /* LEVELGEN:END */
 const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1, intro: 300, camPos: 25 };
 const cfg = Object.assign({}, DEFAULTS, store.get('cr-cfg', {}));
-const settings = Object.assign({ control: 'one', hitboxes: false, pilot: 'lemur' }, store.get('cr-settings', {}));
+const settings = Object.assign({ control: 'one', hitboxes: false, pilot: 'lemur', monster: 'worm' }, store.get('cr-settings', {}));
 
 const TUNE = [
   ['gravity', 'Gravity', 500, 2200, 10, v => v],
@@ -747,7 +763,7 @@ function finishRun() {
   }
   $('overDate').textContent = G.isDaily ? `Daily shaft ${shaftNo} · ${dayLabel}` : 'Practice shaft · random layout';
   $('overMeters').innerHTML = `${m}<small>m</small>`;
-  $('overCause').textContent = CAUSES[G.cause] || 'Run over';
+  $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   $('overNew').hidden = !(isNew && m > 0);
   $('overBest').textContent = daily.best + ' m';
   $('overRuns').textContent = daily.runs;
@@ -2122,78 +2138,373 @@ function drawPlayer() {
   ctx.restore();
 }
 
+// ---------- chaser monsters ----------
+// Drawn in world units around the kill line: y = 0 is exactly where the monster catches you,
+// so every monster puts its grabbing edge (teeth, claws, fingers, flames) on that line.
+// The body fills everything below. x = 0 is the shaft's centre; the shaft is 400 wide.
+function mFill(c, y0, col) { c.fillStyle = col; c.fillRect(-320, y0, 640, 4000); }
+function mTeeth(c, cx, cy, rx, ry, n, top, len = 0.45, col = '#f7ead0') {
+  for (let k = 0; k < n; k++) {
+    const a0 = (top ? Math.PI : 0) + (k / n) * Math.PI, a1 = a0 + Math.PI / n, am = (a0 + a1) / 2;
+    pkPath(c, [[cx + Math.cos(a0) * rx, cy + Math.sin(a0) * ry], [cx + Math.cos(am) * rx * (1 - len), cy + Math.sin(am) * ry * (1 - len)], [cx + Math.cos(a1) * rx, cy + Math.sin(a1) * ry]], col, 1.8);
+  }
+}
+function mGlowEye(c, x, y, rx, ry, col, look, slit = true, rot = 0) {
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const g = c.createRadialGradient(x, y, 1, x, y, rx * 2.2); g.addColorStop(0, rgbaA(col, 0.55)); g.addColorStop(1, rgbaA(col, 0));
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, rx * 2.2, 0, TWO_PI); c.fill(); c.restore();
+  pkE(c, x, y, rx, ry, `rgb(${col})`, 3, rot);
+  if (slit) pkE(c, x + look * rx * 0.35, y, rx * 0.2, ry * 0.8, INK, 0); else pkE(c, x + look * rx * 0.3, y, rx * 0.42, ry * 0.45, INK, 0);
+  pkE(c, x + look * rx * 0.3 - rx * 0.25, y - ry * 0.3, rx * 0.16, rx * 0.16, '#ffffff', 0);
+}
+function mCracks(c, pts, col = [255, 140, 40]) {
+  c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(col, 0.85); c.lineWidth = 4;
+  for (const line of pts) { c.beginPath(); line.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
+  c.restore();
+}
+
+const MONSTERS = [
+  { id: 'worm', name: 'Magma worm', label: 'magma worm', haze: [255, 90, 20], draw(c, m) {
+    const body = pkRG(c, 0, 160, 260, ['#d0583a', '#8a2414', '#3a0a06']);
+    pkE(c, 0, 260, 245, 268, body, 4);
+    mFill(c, 300, '#3a0a06');
+    c.save(); c.beginPath(); c.ellipse(0, 260, 245, 268, 0, 0, TWO_PI); c.rect(-320, 300, 640, 4000); c.clip();
+    for (let k = 1; k <= 4; k++) { c.strokeStyle = INK; c.lineWidth = 6; c.beginPath(); c.ellipse(0, 260 + k * 60, 245 - k * 6, 268, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); }
+    mCracks(c, [[[-200, 150], [-170, 175], [-180, 210]], [[180, 140], [150, 170], [165, 205]], [[-90, 230], [-60, 250], [-80, 280]], [[100, 240], [70, 262]]]);
+    c.restore();
+    for (const d of [-1, 1]) { mGlowEye(c, d * 150, 95, 22, 16, [255, 222, 89], m.look, true, d * 0.25); pkPath(c, [[d * 115, 70], [d * 185, 82], [d * 182, 68]], '#2a0a06', 0); }
+    const mh = 34 + m.open * 34, my = mh + 2;
+    pkE(c, 0, my, 112, mh, pkRG(c, 0, my + mh * 0.5, 112, ['#ff9a3a', '#8a1006', '#160302']), 4);
+    mTeeth(c, 0, my, 112, mh, 9, true); mTeeth(c, 0, my, 112, mh, 9, false);
+    for (let k = 0; k < 3; k++) { const len = 12 + 14 * (0.5 + 0.5 * Math.sin(m.t * 2 + k * 2)); pkE(c, (k - 1) * 60, my + mh + len / 2, 5, len / 2, '#ffb238', 0); }
+  } },
+
+  { id: 'bat', name: 'Mega bat', label: 'mega bat', haze: [170, 110, 255], draw(c, m) {
+    const fl = Math.sin(m.t * 4) * 18;
+    for (const d of [-1, 1]) {
+      pkPath(c, [[d * 70, 70], [d * 150, 20 + fl], [d * 270, 0 + fl], [d * 255, 60 + fl * 0.6], [d * 230, 55], [d * 215, 120 + fl * 0.3], [d * 175, 105], [d * 150, 170], [d * 110, 150]], pkLG(c, 0, 0, 0, 170, ['#7a4ac0', '#3e2270']), 3);
+      c.strokeStyle = 'rgba(30,10,60,.7)'; c.lineWidth = 3; c.beginPath();
+      for (const [x, y] of [[270, 0], [215, 120], [150, 170]]) { c.moveTo(d * 90, 80); c.lineTo(d * x, y + fl * (y < 50 ? 1 : 0.3)); } c.stroke();
+    }
+    for (const d of [-1, 1]) { pkPath(c, [[d * 50, 60], [d * 120, -4], [d * 150, 90]], '#7a4ac0', 3); pkPath(c, [[d * 70, 62], [d * 118, 14], [d * 132, 82]], '#ff9fd2', 0); }
+    pkE(c, 0, 180, 165, 180, pkRG(c, 0, 160, 170, ['#b88ae8', '#6a3aa8', '#2e1660']), 4);
+    mFill(c, 300, '#2e1660');
+    for (const d of [-1, 1]) mGlowEye(c, d * 62, 105, 26, 18, [120, 255, 140], m.look, true, d * 0.2);
+    for (const d of [-1, 1]) pkPath(c, [[d * 30, 78], [d * 100, 84], [d * 96, 70]], '#1c0a30', 0);
+    pkPath(c, [[-16, 130], [0, 112], [16, 130], [8, 145], [-8, 145]], '#ff9fd2', 2.4);
+    const mh = 26 + m.open * 30;
+    pkE(c, 0, 200, 84, mh, pkRG(c, 0, 210, 84, ['#ff5a7a', '#6a0a2a', '#1a0410']), 3.5);
+    for (const d of [-1, 1]) pkPath(c, [[d * 40, 200 - mh * 0.85], [d * 30, 200 - mh * 0.85 + 34], [d * 20, 200 - mh * 0.92]], '#ffffff', 2);
+    mTeeth(c, 0, 200, 84, mh, 8, false, 0.3);
+  } },
+
+  { id: 'gorilla', name: 'Lava gorilla', label: 'lava gorilla', haze: [255, 110, 40], draw(c, m) {
+    const fur = pkRG(c, 0, 200, 260, ['#6a6066', '#3a3236', '#1a1416']);
+    pkE(c, 0, 330, 270, 240, fur, 4); mFill(c, 340, '#1a1416');
+    const grab = 0.5 + 0.5 * Math.sin(m.t * 3);
+    for (const d of [-1, 1]) {
+      pkLine(c, [[d * 210, 320], [d * 190, 180], [d * 175, 90]], '#3a3236', 70);
+      for (let k = 0; k < 4; k++) { const fx = d * (138 + k * 24), len = 52 - grab * 14 - Math.abs(k - 1.5) * 4; pkRect(c, fx - 11, 60 - len, 22, len + 20, 11, '#8a7a72', 3); }
+      pkE(c, d * 175, 80, 58, 40, pkRG(c, d * 175, 80, 58, ['#a8968c', '#7a6a62']), 3.5);
+      pkE(c, d * 120, 90, 14, 26, '#8a7a72', 3, d * -0.6);
+    }
+    pkE(c, 0, 140, 125, 125, fur, 4);
+    pkE(c, 0, 165, 88, 82, pkRG(c, 0, 165, 88, ['#a8968c', '#7a6a62', '#5a4a44']), 3);
+    pkE(c, 0, 100, 96, 24, '#2a2226', 0);
+    for (const d of [-1, 1]) mGlowEye(c, d * 36, 115, 14, 11, [255, 80, 40], m.look, false);
+    for (const d of [-1, 1]) pkE(c, d * 14, 150, 9, 6, '#2a1a16', 0);
+    const mh = 16 + m.open * 22;
+    pkE(c, 0, 200, 48, mh, pkRG(c, 0, 205, 48, ['#ff6a4a', '#5a0a06', '#1a0404']), 3);
+    for (const d of [-1, 1]) pkPath(c, [[d * 30, 200 - mh * 0.7], [d * 24, 200 - mh * 0.7 + 18], [d * 18, 200 - mh * 0.8]], '#ffffff', 1.8);
+    mCracks(c, [[[-200, 260], [-170, 240], [-150, 270]], [[160, 250], [190, 280]], [[-60, 40], [-40, 60], [-55, 80]], [[70, 45], [50, 70]]]);
+  } },
+
+  { id: 'mole', name: 'Giant mole', label: 'giant mole', haze: [200, 150, 110], draw(c, m) {
+    pkE(c, 0, 290, 260, 270, pkRG(c, 0, 220, 260, ['#7a6a66', '#4e403e', '#241c1a']), 4); mFill(c, 300, '#241c1a');
+    for (const d of [-1, 1]) {
+      const dig = Math.sin(m.t * 5 + d) * 8;
+      for (let k = 0; k < 5; k++) { const x = d * (120 + k * 22); pkPath(c, [[x - 9, 70 + dig], [x - 2 + d * 4, 4 + dig - Math.abs(k - 2) * 4], [x + 9, 70 + dig]], '#f4ead6', 2.4); }
+      pkE(c, d * 165, 85 + dig, 72, 42, pkRG(c, d * 165, 85, 72, ['#ffc0d0', '#ff8aa8', '#d0607e']), 3.5, d * -0.15);
+    }
+    const wig = m.t * 3;
+    for (let k = 0; k < 22; k++) { const a = k / 22 * TWO_PI, r = 36 + Math.sin(wig + k) * 4; pkE(c, Math.cos(a) * r, 70 + Math.sin(a) * r * 0.8, 9, 15, '#ff8aa8', 2.2, a + Math.PI / 2); }
+    pkE(c, 0, 70, 26, 22, pkRG(c, 0, 70, 26, ['#ffb8c8', '#ff6a92']), 3);
+    for (const d of [-1, 1]) { pkE(c, d * 70, 40, 7, 4, INK, 0); c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(d * 58, 32); c.lineTo(d * 82, 36); c.stroke(); }
+    pkRect(c, -18, 108, 17, 26, 3, '#fff6e0', 2.4); pkRect(c, 1, 108, 17, 26, 3, '#fff6e0', 2.4);
+    for (let k = 0; k < 5; k++) { const p = (m.t * 0.6 + k / 5) % 1; pkE(c, -150 + k * 75, 10 - p * 50, 6, 5, `rgba(120,90,70,${1 - p})`, 0); }
+  } },
+
+  { id: 'golem', name: 'Rock golem', label: 'rock golem', haze: [255, 160, 80], draw(c, m) {
+    const rock = pkLG(c, 0, 0, 0, 400, ['#9a8a80', '#6a5a52', '#3a2e2a']);
+    pkPath(c, [[-260, 180], [-200, 110], [-110, 90], [-60, 120], [60, 120], [110, 90], [200, 110], [260, 180], [260, 600], [-260, 600]], rock, 4); mFill(c, 590, '#3a2e2a');
+    c.strokeStyle = 'rgba(30,20,15,.55)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-160, 140); c.lineTo(-120, 230); c.lineTo(-170, 300); c.moveTo(150, 150); c.lineTo(110, 240); c.moveTo(-40, 260); c.lineTo(40, 300); c.stroke();
+    mCracks(c, [[[-70, 220], [-40, 240], [0, 225], [40, 245], [70, 220]], [[0, 225], [0, 290]]], [90, 220, 255]);
+    for (const d of [-1, 1]) {
+      const lift = Math.sin(m.t * 2.4 + d) * 8;
+      pkPath(c, [[d * 175, 300], [d * 150, 160], [d * 195, 160], [d * 230, 300]], pkLG(c, 0, 160, 0, 300, ['#8a7a70', '#4a3e38']), 3.5);
+      pkPath(c, [[d * 115, 70 + lift], [d * 130, 8 + lift], [d * 175, -2 + lift], [d * 225, 12 + lift], [d * 235, 70 + lift], [d * 200, 110 + lift], [d * 140, 110 + lift]], rock, 4);
+      c.strokeStyle = 'rgba(30,20,15,.6)'; c.lineWidth = 3; c.beginPath(); for (const x of [150, 178, 205]) { c.moveTo(d * x, 6 + lift); c.lineTo(d * (x - 4), 40 + lift); } c.stroke();
+    }
+    pkPath(c, [[-80, 40], [-30, 14], [40, 16], [85, 45], [90, 140], [40, 175], [-45, 175], [-90, 135]], rock, 4);
+    pkRect(c, -70, 62, 140, 16, 4, '#4a3e38', 0);
+    for (const d of [-1, 1]) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(d * 32, 85, 2, d * 32, 85, 40); g.addColorStop(0, 'rgba(255,170,60,.8)'); g.addColorStop(1, 'rgba(255,120,30,0)'); c.fillStyle = g; c.fillRect(d * 32 - 40, 45, 80, 80); c.restore(); pkPath(c, [[d * 14, 80], [d * 52, 76], [d * 48, 92], [d * 16, 92]], '#ffb238', 2.4); }
+    const mh = 10 + m.open * 14;
+    pkPath(c, [[-40, 128], [-20, 122], [0, 130], [20, 122], [40, 128], [34, 128 + mh], [-34, 128 + mh]], '#2a0a04', 3);
+    mCracks(c, [[[-30, 130 + mh * 0.5], [30, 130 + mh * 0.5]]]);
+  } },
+
+  { id: 'kraken', name: 'Lava kraken', label: 'lava kraken', haze: [255, 100, 70], draw(c, m) {
+    const skin = ['#ff8a6a', '#e0482a', '#8a1e10'];
+    for (let i = 0; i < 6; i++) {
+      const bx = -200 + i * 80, side = bx < 0 ? -1 : 1, sw = Math.sin(m.t * 2.2 + i) * 18, curl = Math.sin(m.t * 1.6 + i * 1.3) * 0.5;
+      const pts = []; for (let k = 0; k <= 14; k++) { const u = k / 14; pts.push([bx + side * Math.sin(u * 2.2) * 25 + sw * u * u + Math.cos(u * 6 + curl) * 10 * u * u, 260 - u * 250]); }
+      for (let k = 0; k <= 14; k++) { const [x, y] = pts[k], r = 28 - k * 1.65; pkE(c, x, y, r, r, pkRG(c, x, y, r, skin), k === 14 ? 2.4 : 0); }
+      for (let k = 2; k < 13; k += 2) { const [x, y] = pts[k]; pkE(c, x + side * 10, y, 5, 5, '#ffd0c0', 1.6); }
+    }
+    pkE(c, 0, 200, 165, 175, pkRG(c, 0, 170, 170, skin), 4); mFill(c, 300, '#8a1e10');
+    for (const [x, y, r] of [[-80, 100, 14], [60, 70, 10], [110, 160, 16], [-120, 190, 10], [20, 50, 8]]) pkDot(c, x, y, r, '#ffb09a');
+    for (const d of [-1, 1]) mGlowEye(c, d * 65, 130, 26, 22, [255, 210, 60], m.look, false);
+    for (const d of [-1, 1]) pkE(c, d * 65 + m.look * 8, 130, 14, 5, INK, 0);
+  } },
+
+  { id: 'piranha', name: 'Lava piranha', label: 'lava piranha', haze: [255, 120, 60], draw(c, m) {
+    for (const d of [-1, 1]) for (let k = 0; k < 4; k++) pkPath(c, [[d * 200, 110 + k * 40], [d * (260 + Math.sin(m.t * 6 + k) * 8), 90 + k * 40], [d * 215, 140 + k * 40]], '#ff9a3a', 2.4);
+    pkE(c, 0, 230, 230, 240, pkRG(c, 0, 200, 240, ['#ffb06a', '#e8502a', '#8a2010']), 4); mFill(c, 320, '#8a2010');
+    c.strokeStyle = 'rgba(140,30,10,.5)'; c.lineWidth = 3;
+    for (let r = 0; r < 4; r++) for (let k = -4; k <= 4; k++) { c.beginPath(); c.arc(k * 50 + (r % 2) * 25, 180 + r * 45, 24, 0.2, Math.PI - 0.2); c.stroke(); }
+    const mh = 40 + m.open * 30, my = mh + 4;
+    pkE(c, 0, my, 165, mh, pkRG(c, 0, my + mh * 0.4, 165, ['#ff6a4a', '#5a0806', '#140202']), 4);
+    mTeeth(c, 0, my, 165, mh, 11, true, 0.42); mTeeth(c, 0, my, 165, mh, 10, false, 0.5);
+    for (const d of [-1, 1]) { pkE(c, d * 150, 150, 32, 30, '#ffffff', 3.5); pkE(c, d * 150 + m.look * 10, 152, 12, 12, INK, 0); pkPath(c, [[d * 115, 115], [d * 190, 128], [d * 185, 112]], '#5a1008', 0); }
+  } },
+
+  { id: 'dragon', name: 'Fire dragon', label: 'fire dragon', haze: [255, 110, 40], draw(c, m) {
+    const fl = Math.sin(m.t * 3) * 12;
+    for (const d of [-1, 1]) pkPath(c, [[d * 120, 160], [d * 200, 40 + fl], [d * 275, 30 + fl], [d * 250, 100 + fl * 0.5], [d * 265, 160], [d * 210, 170], [d * 190, 230]], pkLG(c, 0, 30, 0, 230, ['#ff7a4a', '#a82a1a']), 3.5);
+    pkE(c, 0, 330, 210, 220, pkRG(c, 0, 300, 220, ['#5ab86a', '#2a7a3a', '#0e3a1a']), 4); mFill(c, 330, '#0e3a1a');
+    pkE(c, 0, 300, 90, 160, '#e8d070', 3);
+    for (const d of [-1, 1]) pkPath(c, [[d * 70, 50], [d * 130, 10], [d * 160, -4], [d * 140, 30], [d * 100, 70]], '#f4ead6', 3);
+    for (let k = -3; k <= 3; k++) pkPath(c, [[k * 26 - 10, 30], [k * 26, 8 - Math.abs(k) * 3], [k * 26 + 10, 30]], '#ff7a4a', 2.4);
+    pkE(c, 0, 125, 140, 105, pkRG(c, 0, 110, 140, ['#7ad88a', '#3a9a4a', '#1a5a2a']), 4);
+    pkE(c, 0, 175, 92, 55, pkRG(c, 0, 165, 92, ['#9ae8a8', '#4ab05a']), 3);
+    for (const d of [-1, 1]) { mGlowEye(c, d * 70, 100, 20, 15, [255, 210, 60], m.look, true, d * 0.3); pkPath(c, [[d * 40, 78], [d * 110, 86], [d * 104, 72]], '#0e3a1a', 0); pkE(c, d * 28, 150, 9, 6, '#0e3a1a', 0); }
+    const mh = 14 + m.open * 18;
+    pkE(c, 0, 205, 70, mh, pkRG(c, 0, 210, 70, ['#ffd06a', '#ff5a1a', '#5a0a04']), 3);
+    mTeeth(c, 0, 205, 70, mh, 7, true, 0.4); mTeeth(c, 0, 205, 70, mh, 7, false, 0.4);
+    for (let i = 0; i < 2; i++) { const p = (m.t * 0.8 + i / 2) % 1; pkE(c, (i ? 1 : -1) * (28 + p * 20), 140 - p * 60, 8 + p * 12, 8 + p * 12, `rgba(200,200,200,${0.5 * (1 - p)})`, 0); }
+  } },
+
+  { id: 'rex', name: 'Fossil rex', label: 'fossil rex', haze: [255, 150, 80], draw(c, m) {
+    mFill(c, 260, '#2a1a14');
+    pkE(c, 0, 380, 270, 160, '#2a1a14', 0);
+    for (let k = 0; k < 5; k++) { c.strokeStyle = INK; c.lineWidth = 22; c.beginPath(); c.ellipse(0, 300 + k * 55, 200 - k * 12, 60, 0, Math.PI * 1.08, Math.PI * 1.92); c.stroke(); c.strokeStyle = '#e8dcc4'; c.lineWidth = 15; c.stroke(); }
+    pkRect(c, -14, 240, 28, 400, 8, '#e8dcc4', 3);
+    const drop = m.open * 30;
+    pkPath(c, [[-130, 190 + drop], [130, 190 + drop], [110, 250 + drop], [-110, 250 + drop]], pkLG(c, 0, 190, 0, 250, ['#efe6d2', '#b8a888']), 3.5);
+    for (let k = 0; k < 9; k++) pkPath(c, [[-104 + k * 26, 192 + drop], [-92 + k * 26, 160 + drop], [-80 + k * 26, 192 + drop]], '#fffaf0', 2);
+    const bone = pkRG(c, 0, 80, 160, ['#fffaf0', '#e8dcc4', '#a89878']);
+    pkPath(c, [[-150, 190], [-160, 120], [-120, 40], [-50, 6], [50, 6], [120, 40], [160, 120], [150, 190]], bone, 4);
+    for (let k = 0; k < 10; k++) pkPath(c, [[-130 + k * 29, 186], [-118 + k * 29, 222], [-106 + k * 29, 186]], '#fffaf0', 2);
+    for (const d of [-1, 1]) { pkE(c, d * 62, 90, 36, 30, '#1a0e08', 3); mGlowEye(c, d * 62, 92, 10, 10, [255, 120, 40], m.look, false); pkE(c, d * 22, 150, 10, 14, '#1a0e08', 2); }
+    c.strokeStyle = 'rgba(80,60,40,.6)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(-30, 20); c.lineTo(-20, 50); c.lineTo(-34, 70); c.moveTo(110, 60); c.lineTo(90, 90); c.stroke();
+  } },
+
+  { id: 'flytrap', name: 'Giant flytrap', label: 'giant flytrap', haze: [160, 255, 110], draw(c, m) {
+    for (const d of [-1, 1]) for (let k = 0; k < 2; k++) pkE(c, d * (190 + k * 30), 180 + k * 80, 60, 140, pkLG(c, 0, 80, 0, 320, ['#7ad04a', '#3a8a2a']), 3.5, d * (0.6 + k * 0.2));
+    mFill(c, 190, '#2a5a1a'); pkE(c, 0, 230, 120, 70, '#2a5a1a', 0);
+    const ang = 0.18 + m.open * 0.32;
+    for (const d of [-1, 1]) {
+      c.save(); c.translate(0, 190); c.rotate(d * ang);
+      pkPath(c, [[0, 0], [d * 10, -120], [d * 60, -175], [d * 150, -170], [d * 175, -110], [d * 120, -20]], pkLG(c, 0, -175, 0, 0, ['#8ae05a', '#4a9a2a']), 4);
+      pkPath(c, [[d * 8, -10], [d * 18, -118], [d * 64, -160], [d * 140, -156], [d * 158, -108], [d * 110, -26]], pkRG(c, d * 70, -90, 90, ['#ff8a8a', '#e83a4a', '#9a1a2a']), 0);
+      for (const [x, y] of [[50, -60], [90, -110], [60, -130], [110, -70]]) pkDot(c, d * x, y, 6, '#b81a2a');
+      for (let k = 0; k < 9; k++) { const u = k / 8, x = d * (60 + u * 110), y = -172 + u * 40 + Math.sin(u * 3) * 10; pkPath(c, [[x - 5, y + 4], [x + d * 6, y - 26], [x + 5, y + 4]], '#f4f0a0', 1.6); }
+      c.restore();
+    }
+    for (let k = 0; k < 2; k++) { const len = 12 + 16 * (0.5 + 0.5 * Math.sin(m.t * 2 + k * 3)); pkE(c, -30 + k * 60, 120 + len / 2, 5, len / 2, 'rgba(220,255,160,.8)', 0); }
+  } },
+
+  { id: 'blob', name: 'Blob alien', label: 'blob alien', haze: [120, 255, 140], draw(c, m) {
+    c.beginPath(); c.moveTo(-320, 4000); c.lineTo(-320, 60);
+    for (let x = -320; x <= 320; x += 10) c.lineTo(x, 30 + Math.sin(x * 0.03 + m.t * 2) * 12 + Math.sin(x * 0.011 - m.t) * 14 + (Math.abs(x) > 200 ? (Math.abs(x) - 200) * 0.3 : 0));
+    c.lineTo(320, 4000); c.closePath();
+    c.fillStyle = pkLG(c, 0, 0, 0, 400, ['#b8ff8a', '#5ad84a', '#1e7a2a']); c.fill(); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
+    for (let k = 0; k < 7; k++) { const p = (m.t * 0.25 + k / 7) % 1; pkE(c, -180 + k * 60, 380 - p * 300, 8 + (k % 3) * 4, 8 + (k % 3) * 4, 'rgba(235,255,220,.45)', 1.2); }
+    const eyes = [[-120, 110, 26], [-40, 80, 18], [40, 100, 34], [130, 90, 20], [-170, 190, 16], [90, 190, 22], [0, 170, 14]];
+    eyes.forEach(([x, y, r], i) => { const b = ((m.t + i * 0.7) % 3.3) < 0.12 ? 0.15 : 1; pkE(c, x, y, r, r * b, '#ffffff', 3); if (b > 0.5) { pkE(c, x + m.look * r * 0.3, y + 2, r * 0.55, r * 0.55, '#2a8a3a', 0); pkDot(c, x + m.look * r * 0.3, y + 2, r * 0.28, INK); pkDot(c, x + m.look * r * 0.3 - r * 0.2, y - r * 0.15, r * 0.14, '#fff'); } });
+    const mh = 14 + m.open * 20;
+    pkE(c, 0, 250, 110, mh, '#0e4a1a', 3); pkE(c, 0, 250 + mh * 0.4, 50, mh * 0.5, '#ff7a9a', 0);
+  } },
+
+  { id: 'spider', name: 'Cave spider', label: 'cave spider', haze: [255, 70, 70], draw(c, m) {
+    for (const d of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const sw = Math.sin(m.t * 4 + i * 1.4 + d) * 10;
+      const knee = [d * (130 + i * 30), 30 + i * 22 + sw], tip = [d * (175 + i * 22), 4 + i * 26 - sw * 0.6];
+      pkLine(c, [[d * 50, 170], knee, tip], '#4a2a4a', 16);
+      pkE(c, knee[0], knee[1], 10, 10, '#5a3a5a', 2.4);
+    }
+    pkE(c, 0, 330, 175, 165, pkRG(c, 0, 300, 175, ['#6a4a6a', '#3a2a3a', '#1a0e1a']), 4); mFill(c, 340, '#1a0e1a');
+    pkPath(c, [[-30, 280], [30, 280], [0, 320], [30, 360], [-30, 360], [0, 320]], '#ff3a3a', 2.4);
+    pkE(c, 0, 150, 105, 90, pkRG(c, 0, 130, 105, ['#7a5a7a', '#4a2a4a', '#2a142a']), 4);
+    for (const [x, y, r] of [[-24, 112, 16], [24, 112, 16], [-62, 100, 10], [62, 100, 10], [-44, 76, 7], [44, 76, 7], [-12, 82, 6], [12, 82, 6]]) mGlowEye(c, x, y, r, r, [255, 60, 60], m.look, false);
+    const o = m.open * 0.25;
+    for (const d of [-1, 1]) { c.save(); c.translate(d * 24, 190); c.rotate(d * (0.15 + o)); pkPath(c, [[-12, 0], [12, 0], [d * 6, 60], [d * -4, 40]], '#2a142a', 3); pkPath(c, [[d * 6, 60], [d * -2, 72], [d * -4, 40]], '#f4ead6', 1.8); c.restore(); }
+  } },
+
+  { id: 'shark', name: 'Lava shark', label: 'lava shark', haze: [255, 120, 50], draw(c, m) {
+    pkE(c, 0, 230, 210, 235, pkRG(c, 0, 180, 220, ['#a8b8c8', '#6a7a8a', '#2a3440']), 4); mFill(c, 320, '#2a3440');
+    pkE(c, 0, 300, 150, 120, '#e8eef2', 0);
+    for (const d of [-1, 1]) { for (let k = 0; k < 3; k++) { c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(d * (170 - k * 14), 180 + k * 10); c.lineTo(d * (180 - k * 14), 230 + k * 10); c.stroke(); } pkE(c, d * 150, 75, 12, 12, INK, 2); pkDot(c, d * 150 - 3, 71, 3, '#fff'); }
+    const mh = 52 + m.open * 36, my = 110;
+    pkE(c, 0, my, 140, mh, pkRG(c, 0, my + 20, 140, ['#ff6a4a', '#6a0a0a', '#140202']), 4);
+    mTeeth(c, 0, my, 140, mh, 12, true, 0.3); mTeeth(c, 0, my, 140, mh, 12, false, 0.3);
+    mTeeth(c, 0, my, 118, mh * 0.82, 10, true, 0.22, '#e0d4bc');
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (const d of [-1, 1]) { const g = c.createRadialGradient(d * 220, 40, 2, d * 220, 40, 90); g.addColorStop(0, 'rgba(255,140,40,.6)'); g.addColorStop(1, 'rgba(255,80,20,0)'); c.fillStyle = g; c.fillRect(d * 220 - 90, -50, 180, 180); }
+    c.restore();
+    for (let k = 0; k < 6; k++) { const p = (m.t * 0.9 + k / 6) % 1, x = (k % 2 ? 1 : -1) * (180 + (k % 3) * 20); pkE(c, x, 30 - p * 60 + p * p * 80, 6, 7, `rgba(255,${150 + 60 * (1 - p) | 0},40,${1 - p})`, 0); }
+  } },
+
+  { id: 'tiki', name: 'Tiki titan', label: 'tiki titan', haze: [255, 150, 60], draw(c, m) {
+    for (let k = -4; k <= 4; k++) pkE(c, k * 40, 20 - (4 - Math.abs(k)) * 5, 16, 48, k % 2 ? '#5ab83a' : '#ff8a2a', 2.4, k * 0.18);
+    const wood = pkLG(c, -180, 0, 180, 0, ['#6a3e1c', '#a8703c', '#6a3e1c']);
+    pkRect(c, -175, 14, 350, 800, 40, wood, 4); mFill(c, 700, '#6a3e1c');
+    pkRect(c, -150, 60, 300, 26, 10, '#4a2a12', 3);
+    for (const d of [-1, 1]) { pkE(c, d * 70, 120, 44, 30, '#2a1408', 3.5); mGlowEye(c, d * 70, 122, 20, 16, [255, 170, 50], m.look, false); }
+    pkPath(c, [[-30, 140], [30, 140], [45, 200], [-45, 200]], '#8a5a2c', 3);
+    const mh = 50 + m.open * 40;
+    pkRect(c, -115, 225, 230, mh, 14, '#1a0804', 3.5);
+    c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(0, 225 + mh * 0.6, 4, 0, 225 + mh * 0.6, 120); g.addColorStop(0, 'rgba(255,200,80,.9)'); g.addColorStop(1, 'rgba(255,80,20,0)'); c.fillStyle = g; c.fillRect(-115, 225, 230, mh); c.restore();
+    for (let k = 0; k < 6; k++) { pkRect(c, -105 + k * 36, 225, 28, 18, 3, '#f2e2c0', 2); pkRect(c, -105 + k * 36, 225 + mh - 18, 28, 18, 3, '#f2e2c0', 2); }
+    c.strokeStyle = 'rgba(40,20,8,.6)'; c.lineWidth = 4;
+    for (const d of [-1, 1]) { c.beginPath(); for (let k = 0; k < 5; k++) c.lineTo(d * (140 - (k % 2) * 16), 110 + k * 30); c.stroke(); }
+  } },
+
+  { id: 'spirit', name: 'Magma spirit', label: 'magma spirit', haze: [255, 150, 40], draw(c, m) {
+    mFill(c, 60, '#5a1406');
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (let x = -300; x <= 300; x += 28) {
+      const hgt = 50 + Math.sin(m.t * 6 + x * 0.05) * 18 + Math.sin(m.t * 3.7 + x) * 8;
+      for (const [col, k] of [[[255, 80, 20], 1], [[255, 170, 50], 0.7], [[255, 245, 200], 0.4]]) {
+        const w = 26 * k, top = 70 - hgt * k * 1.2;
+        const g = c.createLinearGradient(0, top, 0, 80); g.addColorStop(0, rgbaA(col, 0)); g.addColorStop(0.4, rgbaA(col, 0.8)); g.addColorStop(1, rgbaA(col, 0.9));
+        c.fillStyle = g; c.beginPath(); c.moveTo(x - w, 80); c.quadraticCurveTo(x - w * 0.6, top + 30, x + Math.sin(m.t * 5 + x) * 6, top); c.quadraticCurveTo(x + w * 0.6, top + 30, x + w, 80); c.closePath(); c.fill();
+      }
+    }
+    c.restore();
+    pkE(c, 0, 260, 250, 200, pkRG(c, 0, 200, 250, ['#ffb03a', '#e8501a', '#5a1406']), 0);
+    for (const d of [-1, 1]) { pkE(c, d * 72, 110, 36, 44, '#1a0402', 0, d * 0.2); c.save(); c.globalCompositeOperation = 'lighter'; pkE(c, d * 72 + m.look * 8, 115, 12, 14, 'rgba(255,250,220,.95)', 0); c.restore(); }
+    const mh = 24 + m.open * 26;
+    pkPath(c, [[-110, 190], [-70, 180 + mh * 0.2], [-40, 202], [0, 186], [40, 202], [70, 180 + mh * 0.2], [110, 190], [70, 190 + mh], [0, 200 + mh], [-70, 190 + mh]], '#1a0402', 0);
+  } },
+
+  { id: 'toad', name: 'Giant toad', label: 'giant toad', haze: [200, 230, 100], draw(c, m) {
+    pkE(c, 0, 300, 270, 270, pkRG(c, 0, 240, 270, ['#a8c85a', '#6a8a2a', '#2e4a10']), 4); mFill(c, 310, '#2e4a10');
+    for (const [x, y, r] of [[-180, 200, 14], [-140, 150, 9], [160, 180, 12], [120, 240, 8], [-90, 260, 10], [200, 260, 9], [-210, 280, 8]]) pkE(c, x, y, r, r * 0.8, '#5a7a1e', 2);
+    pkE(c, 0, 250, 170, 70, '#f2e890', 3);
+    for (const d of [-1, 1]) {
+      pkE(c, d * 110, 50, 52, 48, pkRG(c, d * 110, 50, 52, ['#c8e070', '#7a9a2a']), 4);
+      pkE(c, d * 110, 52, 36, 34, '#f2c53a', 3); pkE(c, d * 110 + m.look * 8, 52, 24, 9, INK, 0); pkDot(c, d * 110 - 10, 42, 6, '#fff');
+      pkPath(c, [[d * 64, 38], [d * 110, 10], [d * 156, 38], [d * 110, 30]], '#8aaa3a', 0);
+    }
+    const mh = 4 + m.open * 40;
+    c.beginPath(); c.moveTo(-210, 150); c.quadraticCurveTo(0, 190 + mh, 210, 150); c.quadraticCurveTo(0, 175, -210, 150); c.closePath(); c.fillStyle = '#3a0a14'; c.fill(); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
+    if (mh > 15) pkE(c, 0, 170 + mh * 0.5, 50, mh * 0.35, '#ff7a9a', 0);
+  } },
+
+  { id: 'giant', name: 'Grumpy giant', label: 'grumpy giant', haze: [255, 170, 120], draw(c, m) {
+    pkE(c, 0, 420, 270, 180, '#3a6ad8', 4); mFill(c, 420, '#2a4aa8');
+    const grab = 0.5 + 0.5 * Math.sin(m.t * 2.6);
+    for (const d of [-1, 1]) {
+      pkLine(c, [[d * 230, 420], [d * 200, 200], [d * 175, 110]], '#3a6ad8', 60);
+      for (let k = 0; k < 4; k++) { const len = 56 - grab * 16 - Math.abs(k - 1.5) * 5; pkRect(c, d * (140 + k * 24) - 11, 58 - len, 22, len + 26, 11, '#f2b890', 3); }
+      pkE(c, d * 175, 85, 56, 40, pkRG(c, d * 175, 85, 56, ['#ffd0a8', '#e8a078']), 3.5);
+      pkE(c, d * 122, 92, 14, 26, '#f2b890', 3, d * -0.6);
+    }
+    for (const d of [-1, 1]) pkE(c, d * 150, 140, 22, 36, '#e8a078', 3);
+    pkE(c, 0, 150, 150, 175, pkRG(c, 0, 120, 155, ['#ffd8b8', '#f2b890', '#c8805a']), 4);
+    c.beginPath(); for (let k = 0; k <= 12; k++) { const a = Math.PI + k / 12 * Math.PI; c.lineTo(Math.cos(a) * 150, 60 + Math.sin(a) * 70 + (k % 2) * 16); } c.closePath(); c.fillStyle = pkLG(c, 0, -10, 0, 80, ['#8a5a2a', '#5a3414']); c.fill(); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
+    for (const d of [-1, 1]) { pkE(c, d * 56, 92, 28, 20, '#ffffff', 3); pkE(c, d * 56 + m.look * 8, 95, 11, 11, '#3a7ad8', 0); pkDot(c, d * 56 + m.look * 8, 95, 6, INK); pkPath(c, [[d * 22, 66], [d * 92, 72], [d * 86, 56], [d * 28, 54]], '#5a3414', 2.4); }
+    pkE(c, 0, 140, 30, 34, pkRG(c, 0, 135, 30, ['#ffc8a8', '#e8a078']), 3);
+    c.beginPath(); c.moveTo(-130, 180); c.quadraticCurveTo(-140, 330, 0, 350); c.quadraticCurveTo(140, 330, 130, 180); c.quadraticCurveTo(0, 210, -130, 180); c.closePath(); c.fillStyle = pkLG(c, 0, 180, 0, 350, ['#8a5a2a', '#4a2a10']); c.fill(); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
+    const mh = 12 + m.open * 22; pkE(c, 0, 212, 50, mh, '#5a1a10', 3);
+  } },
+
+  { id: 'hornet', name: 'Hornet queen', label: 'hornet queen', haze: [255, 210, 60], draw(c, m) {
+    const buzz = Math.abs(Math.sin(m.t * 30));
+    for (const d of [-1, 1]) pkE(c, d * 170, 130, 120 * (0.6 + 0.4 * buzz), 50, 'rgba(220,240,255,.5)', 2.4, d * -0.4);
+    pkE(c, 0, 360, 190, 170, '#ffc82a', 4); mFill(c, 360, '#1c1408');
+    for (let k = 0; k < 4; k++) { c.save(); c.beginPath(); c.ellipse(0, 360, 190, 170, 0, 0, TWO_PI); c.clip(); c.fillStyle = '#1c1408'; c.fillRect(-200, 250 + k * 70, 400, 32); c.restore(); }
+    pkE(c, 0, 140, 135, 115, pkRG(c, 0, 120, 135, ['#ffe070', '#ffc82a', '#c88a00']), 4);
+    pkPath(c, [[-60, 40], [0, 26], [60, 40], [40, 70], [-40, 70]], '#1c1408', 0);
+    for (const d of [-1, 1]) {
+      pkCurve(c, [d * 30, 40], [d * 50, 0], [d * 95, 4 + Math.sin(m.t * 3 + d) * 6], '#1c1408', 5);
+      pkE(c, d * 72, 120, 48, 62, pkRG(c, d * 72, 110, 50, ['#5a4a6a', '#1a1424', '#000000']), 4, d * 0.2);
+      for (let k = 0; k < 3; k++) pkDot(c, d * (60 + k * 8), 95 + k * 10, 4, 'rgba(255,255,255,.55)');
+      const o = m.open * 0.3; c.save(); c.translate(d * 32, 215); c.rotate(d * (0.2 + o)); pkPath(c, [[0, 0], [d * -30, 40], [d * -10, 30], [d * 10, 8]], '#3a2a10', 3); c.restore();
+    }
+    for (let k = 0; k < 14; k++) {
+      const a = m.t * (1 + (k % 3) * 0.4) + k * 1.9, x = Math.cos(a) * (120 + (k % 4) * 35), y = 30 + Math.sin(a * 1.7) * 30 + (k % 3) * 15;
+      pkE(c, x, y, 8, 5, '#ffc82a', 1.6); c.fillStyle = '#1c1408'; c.fillRect(x - 2, y - 5, 3, 10);
+      pkE(c, x, y - 6, 7 * buzz + 1, 3, 'rgba(230,245,255,.7)', 0);
+    }
+  } },
+
+  { id: 'crab', name: 'Kaiju crab', label: 'kaiju crab', haze: [255, 110, 70], draw(c, m) {
+    for (const d of [-1, 1]) for (let k = 0; k < 3; k++) pkLine(c, [[d * 180, 260 + k * 20], [d * 270, 220 + k * 40], [d * 290, 290 + k * 40]], '#d8402a', 14);
+    pkE(c, 0, 290, 250, 190, pkRG(c, 0, 250, 250, ['#ff8a5a', '#e8402a', '#8a1a0e']), 4); mFill(c, 330, '#8a1a0e');
+    for (const [x, y, r] of [[-120, 230, 14], [100, 220, 18], [0, 250, 10], [-60, 300, 12], [160, 290, 10]]) pkDot(c, x, y, r, '#ffb08a');
+    for (const d of [-1, 1]) { pkLine(c, [[d * 40, 150], [d * 46, 90]], '#e8402a', 10); pkE(c, d * 48, 76, 18, 18, pkRG(c, d * 48, 76, 18, ['#5a4a4a', '#120a0a']), 3); pkDot(c, d * 48 - 6, 70, 5, '#fff'); }
+    for (let k = 0; k < 3; k++) { const p = (m.t * 0.7 + k / 3) % 1; pkE(c, -20 + k * 20, 150 - p * 50, 6 + p * 5, 6 + p * 5, `rgba(255,255,255,${0.7 * (1 - p)})`, 1.2); }
+    for (const d of [-1, 1]) {
+      pkLine(c, [[d * 150, 230], [d * 185, 150], [d * 175, 110]], '#e8402a', 34);
+      const o = 0.25 + m.open * 0.45;
+      c.save(); c.translate(d * 175, 100);
+      pkPath(c, [[d * -50, 10], [d * -40, -80], [d * -10, -96], [d * 10, -40], [d * 30, 10]], pkRG(c, 0, -40, 70, ['#ffa07a', '#e8402a']), 4);
+      c.rotate(d * o);
+      pkPath(c, [[d * 0, 0], [d * 30, -70], [d * 60, -92], [d * 70, -50], [d * 50, 10]], pkRG(c, d * 40, -40, 60, ['#ffa07a', '#d8302a']), 4);
+      c.restore();
+    }
+  } },
+
+  { id: 'shadow', name: 'Shadow beast', label: 'shadow beast', haze: [190, 90, 255], draw(c, m) {
+    c.beginPath(); c.moveTo(-320, 4000); c.lineTo(-320, 80);
+    for (let x = -320; x <= 320; x += 8) { const tendril = Math.max(0, Math.sin(x * 0.045 + m.t * 1.5)) ** 3 * 55; c.lineTo(x, 60 - tendril + Math.sin(x * 0.1 + m.t * 3) * 6); }
+    c.lineTo(320, 4000); c.closePath();
+    c.fillStyle = pkLG(c, 0, 0, 0, 300, ['#3a2058', '#1a0e2a', '#08040e']); c.fill(); c.strokeStyle = 'rgba(180,120,255,.6)'; c.lineWidth = 3; c.stroke();
+    const eyes = [[-150, 120, 14], [-80, 100, 22], [0, 90, 16], [80, 110, 24], [150, 130, 12], [-200, 180, 10], [200, 190, 11], [-40, 160, 9], [40, 165, 9]];
+    eyes.forEach(([x, y, r], i) => { const b = ((m.t * 0.8 + i * 0.53) % 2.7) < 0.15 ? 0.1 : 1; c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(x, y, 1, x, y, r * 2.4); g.addColorStop(0, 'rgba(255,90,220,.6)'); g.addColorStop(1, 'rgba(255,90,220,0)'); c.fillStyle = g; c.fillRect(x - r * 2.4, y - r * 2.4, r * 4.8, r * 4.8); c.restore(); pkE(c, x, y, r, r * 0.7 * b, '#ffd84a', 0); if (b > 0.5) pkE(c, x + m.look * r * 0.3, y, r * 0.22, r * 0.6, '#1a0e2a', 0); });
+    const mh = 22 + m.open * 26;
+    c.beginPath(); c.moveTo(-130, 230); c.quadraticCurveTo(0, 230 + mh * 2.2, 130, 230); c.quadraticCurveTo(0, 245 + mh * 0.6, -130, 230); c.closePath();
+    c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(255,120,240,.5)'; c.fill(); c.restore();
+    for (let k = 0; k < 11; k++) { const u = (k + 0.5) / 11, x = -120 + u * 240, top = 232 + Math.sin(u * Math.PI) * mh * 0.5; pkPath(c, [[x - 9, top], [x, top + 16 + Math.sin(u * Math.PI) * 10], [x + 9, top]], '#f4eaff', 1.4); }
+  } },
+];
+let monsterIndex = Math.max(0, MONSTERS.findIndex(mn => mn.id === settings.monster));
+const monster = () => MONSTERS[monsterIndex];
+
 function drawWorm() {
-  const y = sy(G.worm.alt);
-  const cx = ox + playW / 2;
+  const mon = monster(), y = sy(G.worm.alt), cx = ox + playW / 2;
   if (y > H + 30) {
     const dist = Math.max(0, Math.round((G.p.alt - G.worm.alt) / UNITS_PER_M));
     const pulse = 0.5 + 0.5 * Math.sin(G.t * 6);
     const g = ctx.createLinearGradient(0, H, 0, H - 90);
-    g.addColorStop(0, `rgba(255,70,20,${0.25 + 0.2 * pulse})`); g.addColorStop(1, 'rgba(255,70,20,0)');
+    g.addColorStop(0, rgbaA(mon.haze, 0.25 + 0.2 * pulse)); g.addColorStop(1, rgbaA(mon.haze, 0));
     ctx.fillStyle = g; ctx.fillRect(0, H - 90, cssW, 90);
-    const label = `LAVA WORM ${dist} m BELOW`;
+    const label = `${mon.label.toUpperCase()} ${dist} m BELOW`;
     ctx.font = '900 12px Nunito, sans-serif'; ctx.textAlign = 'center';
     const w = ctx.measureText(label).width + 24, by = H - 36 - safeBot;
     ctx.fillStyle = '#1c0f0b'; ctx.beginPath(); ctx.roundRect(cx - w / 2, by - 15, w, 26, 13); ctx.fill();
     ctx.fillStyle = '#ffb238'; ctx.fillText(label, cx, by + 3);
     return;
   }
-  // heat haze above the worm
   const hg = ctx.createLinearGradient(0, y - 160, 0, y + 20);
-  hg.addColorStop(0, 'rgba(255,90,20,0)'); hg.addColorStop(1, 'rgba(255,90,20,.35)');
+  hg.addColorStop(0, rgbaA(mon.haze, 0)); hg.addColorStop(1, rgbaA(mon.haze, 0.35));
   ctx.fillStyle = hg; ctx.fillRect(0, y - 160, cssW, 180);
-
-  const R = playW * 0.82, headCy = y + R * 0.9;
-  // body
-  const bg = ctx.createRadialGradient(cx, y + R * 0.4, R * 0.1, cx, headCy, R * 1.25);
-  bg.addColorStop(0, '#a3361d'); bg.addColorStop(.55, '#6a1d10'); bg.addColorStop(1, '#2c0905');
-  ctx.fillStyle = bg; ctx.strokeStyle = '#1c0605'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.ellipse(cx, headCy, R, R * 0.95, 0, Math.PI, 0); ctx.lineTo(cx + R, H + 40); ctx.lineTo(cx - R, H + 40); ctx.closePath(); ctx.fill(); ctx.stroke();
-  // armoured rock plates with glowing seams
-  ctx.save(); ctx.clip();
-  ctx.strokeStyle = 'rgba(255,140,40,.8)'; ctx.lineWidth = 3; ctx.shadowColor = '#ff6a1a'; ctx.shadowBlur = 12;
-  for (let k = 1; k <= 3; k++) { ctx.beginPath(); ctx.ellipse(cx, headCy + k * R * 0.22, R * (1 - k * 0.06), R * 0.9, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); }
+  // drawn at 80% in play so more of the face shows above the bottom edge while it chases
+  ctx.save(); ctx.translate(cx, y); ctx.scale(s * 0.8, s * 0.8); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  mon.draw(ctx, { t: G.t, open: G.worm.open, look: clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) });
   ctx.restore();
-
-  // eyes on the sides
-  const open = G.worm.open;
-  const ey = y + R * 0.2;
-  for (const dir of [-1, 1]) {
-    const ex = cx + dir * playW * 0.36;
-    ctx.save(); ctx.translate(ex, ey);
-    ctx.fillStyle = '#ffde59'; ctx.shadowColor = '#ffb238'; ctx.shadowBlur = 18;
-    ctx.beginPath(); ctx.ellipse(0, 0, 16 * s, 12 * s, dir * 0.25, 0, 6.283); ctx.fill();
-    ctx.shadowBlur = 0;
-    const look = clamp((sx(G.p.x) - ex) / 60, -5, 5) * s;
-    ctx.fillStyle = '#1c0605'; ctx.beginPath(); ctx.ellipse(look, 0, 3.4 * s, 10 * s, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#2a0a06'; ctx.beginPath(); ctx.moveTo(-dir * 22 * s, -18 * s); ctx.lineTo(dir * 20 * s, -6 * s); ctx.lineTo(dir * 18 * s, -16 * s); ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-
-  // gaping mouth at the top
-  const mw = playW * 0.3, mh = (22 + 30 * open) * s, my = y + mh * 0.5 + 4 * s;
-  const mg = ctx.createRadialGradient(cx, my + mh * 0.3, 2, cx, my, mw);
-  mg.addColorStop(0, '#ff7a2a'); mg.addColorStop(.35, '#7a0e06'); mg.addColorStop(1, '#160302');
-  ctx.fillStyle = mg; ctx.strokeStyle = '#1c0605'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.ellipse(cx, my, mw, mh, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  // teeth
-  ctx.fillStyle = '#f7ead0'; ctx.strokeStyle = '#3a1a10'; ctx.lineWidth = 1.5;
-  const nT = 9;
-  for (const top of [true, false]) {
-    for (let k = 0; k < nT; k++) {
-      const a0 = (top ? Math.PI : 0) + (k / nT) * Math.PI, a1 = a0 + Math.PI / nT, am = (a0 + a1) / 2;
-      const p0 = [cx + Math.cos(a0) * mw, my + Math.sin(a0) * mh], p1 = [cx + Math.cos(a1) * mw, my + Math.sin(a1) * mh];
-      const tipR = 0.55 + 0.12 * hash2(k + (top ? 0 : 20), 3);
-      const tip = [cx + Math.cos(am) * mw * tipR, my + Math.sin(am) * mh * tipR];
-      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(tip[0], tip[1]); ctx.lineTo(p1[0], p1[1]); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-  }
-  // lava drool
-  ctx.fillStyle = '#ffb238';
-  for (let k = 0; k < 3; k++) {
-    const dx = cx + (k - 1) * mw * 0.55, len = (8 + 10 * (0.5 + 0.5 * Math.sin(G.t * 2 + k * 2))) * s;
-    ctx.beginPath(); ctx.ellipse(dx, my + mh * 0.85 + len / 2, 3 * s, len / 2, 0, 0, 6.283); ctx.fill();
-  }
 }
 
 // Debug overlay: every shape here is the real collision shape. The coconut dies when its
@@ -2281,7 +2592,8 @@ function frame(ts) {
   if (G && currentScreen === null) updateHud();
   const tt = ts / 1000;
   if (currentScreen === 'pilotScreen') pilotCards.forEach((cv, i) => drawPilotThumb(cv, PILOTS[i], tt + i * 0.37, false));
-  if (currentScreen === 'menu') drawPilotThumb($('pilotMini'), pilot(), tt, true);
+  if (currentScreen === 'monsterScreen') monsterCards.forEach((cv, i) => drawMonsterThumb(cv, MONSTERS[i], tt + i * 0.41, false));
+  if (currentScreen === 'menu') { drawPilotThumb($('pilotMini'), pilot(), tt, true); drawMonsterThumb($('monsterMini'), monster(), tt, true); }
   requestAnimationFrame(frame);
 }
 
@@ -2297,7 +2609,7 @@ function updateHud() {
 const $ = id => document.getElementById(id);
 let currentScreen = 'menu';
 function show(id) {
-  for (const sid of ['menu', 'pause', 'over', 'ad', 'tuneScreen', 'pilotScreen']) $(sid).hidden = sid !== id;
+  for (const sid of ['menu', 'pause', 'over', 'ad', 'tuneScreen', 'pilotScreen', 'monsterScreen']) $(sid).hidden = sid !== id;
   currentScreen = id;
   $('hud').hidden = !(id === null || id === 'pause');
 }
@@ -2346,6 +2658,7 @@ function togglePause() {
 }
 function refreshMenu() {
   $('pilotName').textContent = pilot().name;
+  $('monsterName').textContent = monster().name;
   $('menuDate').textContent = `Daily shaft · ${dayLabel}`;
   $('menuBest').textContent = daily.best + ' m';
   $('menuSeed').textContent = shaftNo;
@@ -2376,7 +2689,7 @@ $('adBtn').addEventListener('click', () => {
 
 $('shareBtn').addEventListener('click', async () => {
   const m = Math.floor(G.maxAlt / UNITS_PER_M);
-  const text = `Coconut Rocket ${shaftNo} · ${dayLabel}\nI climbed ${m} m up today's volcano before ${G.cause === 'worm' ? 'the lava worm got me' : 'I wiped out'}. Best today: ${daily.best} m.`;
+  const text = `Coconut Rocket ${shaftNo} · ${dayLabel}\nI climbed ${m} m up today's volcano before ${G.cause === 'worm' ? `the ${monster().label} got me` : 'I wiped out'}. Best today: ${daily.best} m.`;
   try { await navigator.clipboard.writeText(text); toast('Score copied. Paste it anywhere to share.'); }
   catch { toast(text.replace('\n', ' · ')); }
 });
@@ -2445,6 +2758,41 @@ function drawPilotThumb(cv, pl, t, big) {
   c.restore();
 }
 $('openPilots').addEventListener('click', () => { buildPilots(); show('pilotScreen'); });
+
+// monster picker: each card shows the monster rising with your pilot just above it
+const monsterCards = [];
+function buildMonsters() {
+  const grid = $('monsterGrid'); grid.innerHTML = ''; monsterCards.length = 0;
+  MONSTERS.forEach((mn, i) => {
+    const b = document.createElement('button');
+    b.className = 'pcard'; b.id = 'monster-' + mn.id; b.setAttribute('aria-pressed', String(i === monsterIndex));
+    b.innerHTML = `<canvas width="120" height="120" aria-hidden="true"></canvas><span>${mn.name}</span>`;
+    b.addEventListener('click', () => selectMonster(i));
+    grid.appendChild(b); monsterCards.push(b.querySelector('canvas'));
+  });
+  $('monsterInfo').textContent = monster().name;
+}
+function selectMonster(i) {
+  monsterIndex = i; settings.monster = MONSTERS[i].id; store.set('cr-settings', settings);
+  document.querySelectorAll('#monsterGrid .pcard').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  $('monsterInfo').textContent = monster().name;
+  $('monsterName').textContent = monster().name;
+}
+function drawMonsterThumb(cv, mn, t, mini) {
+  const c = cv.getContext('2d'), w = cv.width, h = cv.height;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, rgb(PAL.bgTop[0])); g.addColorStop(1, rgb(PAL.bgBot[0]));
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+  const ly = h * (mini ? 0.42 : 0.5);
+  const hz = c.createLinearGradient(0, ly - h * 0.3, 0, ly); hz.addColorStop(0, rgbaA(mn.haze, 0)); hz.addColorStop(1, rgbaA(mn.haze, 0.4));
+  c.fillStyle = hz; c.fillRect(0, ly - h * 0.3, w, h * 0.3);
+  if (!mini) { c.save(); c.translate(w / 2, h * 0.2); c.scale(w / 150, w / 150); drawPilot(c, pilot(), pilotState(t, 0, true)); c.restore(); }
+  c.save(); c.translate(w / 2, ly); c.scale(w / (mini ? 380 : 560), w / (mini ? 380 : 560)); c.lineJoin = 'round'; c.lineCap = 'round';
+  mn.draw(c, { t, open: 0.5 + 0.5 * Math.sin(t * 3.2), look: Math.sin(t * 0.8) });
+  c.restore();
+}
+$('openMonsters').addEventListener('click', () => { buildMonsters(); show('monsterScreen'); });
+$('monsterDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 
 // ---------- boot ----------
