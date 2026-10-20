@@ -283,8 +283,10 @@ const store = {
 };
 
 // ---------- config ----------
+/* LEVELGEN:BEGIN */
 const WORLD_W = 400;           // world units across the shaft
 const UNITS_PER_M = 10;
+/* LEVELGEN:END */
 const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1, intro: 300 };
 const cfg = Object.assign({}, DEFAULTS, store.get('cr-cfg', {}));
 const settings = Object.assign({ control: 'one' }, store.get('cr-settings', {}));
@@ -301,6 +303,7 @@ const TUNE = [
 ];
 
 // ---------- seeded randomness ----------
+/* LEVELGEN:BEGIN */
 function cyrb32(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
@@ -328,6 +331,7 @@ function vnoise(x, s) {
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+/* LEVELGEN:END */
 
 // ---------- daily ----------
 const now = new Date();
@@ -356,22 +360,180 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// ---------- world shape ----------
+// ---------- world shape & level layout ----------
 let G = null;
-// Easy start: about 7 s of climbing at a typical pace before the shaft tightens.
-// Measured in height, not time, so every player gets the same daily layout.
-const introAlt = () => cfg.intro * UNITS_PER_M;
-function wallAmp(a) { const I = introAlt(); return smooth(150, 600, a) * lerp(0.3, 1, smooth(I, I + 1500, a)); }
-function wallNarrow(a) { const I = introAlt(); return smooth(I, I + 12000, a); }
-function difficulty(a) { return clamp((a - introAlt()) / 12000, 0, 1); }
-function rawLeft(a, sd) { return 14 + wallAmp(a) * (40 + 60 * vnoise(a / 700, sd) + 22 * vnoise(a / 170, sd + 1) + 22 * wallNarrow(a)) + 7 * vnoise(a / 38, sd + 2); }
-function walls(a) {
-  const sd = G.seed;
-  let L = rawLeft(a, sd), R = WORLD_W - rawLeft(a, sd + 7);
-  const minGap = 196;
-  if (R - L < minGap) { const m = (minGap - (R - L)) / 2; L -= m; R += m; }
-  return [L, R];
+/* LEVELGEN:BEGIN */
+// Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m and the
+// coconut's hitbox is 26 across. Every hazard must pass these before it is placed, so a
+// layout can be hard but never impossible. Everything is measured in height, never time,
+// so every player gets the same daily shaft.
+const RULES = {
+  minLane: 92,                 // narrowest open lane any hazard may leave (about 3.5 coconuts)
+  spacing: [250, 140],         // clear height between neighbouring hazards, easy → hard
+  heavyExtra: 60,              // extra clearance after a geyser, fire wheel or spiky pod
+  zigzagExtra: 150,            // extra when consecutive wall hazards sit on opposite walls
+  minSpacing: 110,             // floor for spacing, even at high obstacle density
+  sameTypeGap: { geyser: 520, firebar: 520, boulder: 800, pend: 240, bat: 0 },
+  narrowGap: 236,              // openings narrower than this count as a narrow passage
+  narrowGeyserGap: 820,        // a geyser in a narrow passage keeps this far from any other geyser
+  boulderZone: [650, 200],     // no geyser, fire wheel or pod this far below / above a boulder's drop point
+  boulderTrigger: 560,         // a boulder drops when the player climbs within this height of it
+  setSize: [3, 6],             // hazards in a set before a breather, easy → hard
+  breather: [440, 300],        // empty height between sets, easy → hard
+  intro: { spacing: 380, setSize: 2, breather: 520 },
+  geyserWarn: 0.6,             // seconds of sputter before a geyser fires
+  geyserOn: 0.42,              // share of each geyser cycle spent firing
+  firebarClear: 40,            // room between a fire wheel's reach and the wall
+  batMaxSpeed: 250,            // fastest a bat may cross the shaft
+  spitQuiet: [150, 450],       // worm only spits when no obstacle is this far below / above the player
+};
+const WALL_HAZARDS = new Set(['geyser', 'pend']);
+const HEAVY = new Set(['geyser', 'firebar', 'pend']);
+
+function zoneT(a) { return [smooth(2200, 3400, a), smooth(7200, 8600, a)]; }
+
+function createLevel(seed, opts) {
+  const intro = opts.intro * UNITS_PER_M, density = opts.density;
+  const difficulty = a => clamp((a - intro) / 12000, 0, 1);
+  // Easy start: the shaft stays wide until `intro`, then tightens.
+  const wallAmp = a => smooth(150, 600, a) * lerp(0.3, 1, smooth(intro, intro + 1500, a));
+  const wallNarrow = a => smooth(intro, intro + 12000, a);
+  const rawLeft = (a, sd) => 14 + wallAmp(a) * (40 + 60 * vnoise(a / 700, sd) + 22 * vnoise(a / 170, sd + 1) + 22 * wallNarrow(a)) + 7 * vnoise(a / 38, sd + 2);
+  function walls(a) {
+    let L = rawLeft(a, seed), R = WORLD_W - rawLeft(a, seed + 7);
+    const minGap = 196;
+    if (R - L < minGap) { const m = (minGap - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  // The tightest opening across a band of height: [highest left wall, lowest right wall].
+  function opening(lo, hi) {
+    let L = -Infinity, R = Infinity;
+    for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = walls(a); if (l > L) L = l; if (r < R) R = r; }
+    return [L, R];
+  }
+
+  // Builders take pre-drawn random numbers `u` so a hazard can be rebuilt at a new height
+  // without changing its character. Each returns its danger band [lo, hi], or null when it
+  // cannot leave a fair lane at that height.
+  const build = {
+    bat(A, diff, u) {
+      const [L, R] = opening(A - 30, A + 30), mid = (L + R) / 2;
+      const amp = Math.max(10, (R - L) / 2 - 36);
+      const speed = Math.min(1 + u[0] * 1.3 + diff, RULES.batMaxSpeed / amp);
+      return { type: 'bat', alt: A, base: A, cx: mid, amp, speed, ph: u[1] * 6.283, x: mid, r: 15, lo: A - 30, hi: A + 30 };
+    },
+    pend(A, diff, u) {
+      // A is the anchor on the wall; the pod swings below it, reaching 0.97 × len into the shaft.
+      const side = u[0] < 0.5 ? 1 : -1;
+      const ax = walls(A)[side > 0 ? 0 : 1];
+      const [L, R] = opening(A - 160, A);
+      const room = side > 0 ? R - ax : ax - L;
+      const len = Math.min(80 + u[1] * 55, (room - 16 - RULES.minLane) / 0.971);
+      if (len < 55) return null;
+      return { type: 'pend', side, len, aAlt: A, ax, w: 1.3 + u[2] * 0.9 + diff * 0.7, ph: u[3] * 6.283, x: ax, alt: A - len, r: 16, lo: A - len - 16, hi: A - 0.24 * len + 16 };
+    },
+    geyser(A, diff, u) {
+      const side = u[0] < 0.5 ? 1 : -1;
+      const [L, R] = opening(A - 16, A + 16), gap = R - L;
+      const narrow = gap < RULES.narrowGap;
+      const len = Math.min(gap * (narrow ? 0.4 + u[1] * 0.12 : 0.45 + u[1] * 0.25), gap - RULES.minLane);
+      if (len < 70) return null;
+      const period = 2.2 + u[2] * 1.2;
+      return {
+        type: 'geyser', side, alt: A, base: walls(A)[side > 0 ? 0 : 1], len, hh: 13, narrow,
+        period, ph: u[3] * period, warnFrac: RULES.geyserWarn / period, onFrac: RULES.geyserOn,
+        lo: A - 16, hi: A + 16,
+      };
+    },
+    firebar(A, diff, u) {
+      const [L, R] = opening(A - 100, A + 100), gap = R - L, off = (u[0] - 0.5) * 24;
+      const len = Math.min(88, gap / 2 - Math.abs(off) - RULES.firebarClear);
+      if (len < 48) return null;
+      return { type: 'firebar', alt: A, cx: (L + R) / 2 + off, len, w: (u[1] < 0.5 ? -1 : 1) * (1.2 + u[2] * 0.8), ph: u[3] * 6.283, lo: A - len - 13, hi: A + len + 13 };
+    },
+    boulder(A, diff, u) {
+      const [L, R] = walls(A);
+      return { type: 'boulder', alt: A, x: L + 34 + u[0] * (R - L - 68), r: 20 + u[1] * 9, state: 'idle', spd: u[2] * 140 + diff * 120, rot: 0, spin: (u[3] - 0.5) * 6, cur: A, lo: A - 30, hi: A + 30 };
+    },
+  };
+
+  function weights(a, inIntro) {
+    if (inIntro) return { bat: 0.5, pend: 0.5 };
+    const [t1, t2] = zoneT(a);
+    return {
+      bat:     lerp(lerp(.34, .2, t1), .12, t2),
+      pend:    lerp(lerp(.36, .14, t1), .1, t2),
+      boulder: lerp(lerp(.16, .32, t1), .24, t2),
+      geyser:  lerp(lerp(.14, .34, t1), .24, t2),
+      firebar: lerp(0, .3, t2),
+    };
+  }
+
+  function spacingAfter(prev, h, diff, inIntro) {
+    if (!prev) return 0;
+    let gap = Math.max(RULES.minSpacing, (inIntro ? RULES.intro.spacing : lerp(RULES.spacing[0], RULES.spacing[1], diff)) / density);
+    if (HEAVY.has(prev.type)) gap += RULES.heavyExtra;
+    if (WALL_HAZARDS.has(prev.type) && WALL_HAZARDS.has(h.type) && prev.side !== h.side) gap += RULES.zigzagExtra;
+    return gap;
+  }
+
+  // Rules that look further back than the previous hazard.
+  function breaksRules(h, recent) {
+    for (const q of recent) {
+      if (h.lo < q.hi) return true;                                    // bands may never overlap
+      const dist = h.lo - q.hi;
+      if (q.type === h.type) {
+        let need = RULES.sameTypeGap[h.type];
+        if (h.type === 'geyser' && (h.narrow || q.narrow)) need = RULES.narrowGeyserGap;
+        if (dist < need) return true;
+      }
+      if (q.type === 'boulder' && HEAVY.has(h.type) && h.lo < q.alt + RULES.boulderZone[1]) return true;
+      if (h.type === 'boulder' && HEAVY.has(q.type) && q.hi > h.alt - RULES.boulderZone[0]) return true;
+    }
+    return false;
+  }
+
+  const rng = mulberry32((seed ^ 0x1E7E1A7) >>> 0);
+  const recent = [];                 // last placed hazards, newest last
+  let floor = 450, pending = 0, setLeft = RULES.intro.setSize;
+
+  function step(out) {
+    const inIntro = floor < intro, diff = difficulty(floor);
+    if (setLeft <= 0) {
+      pending += inIntro ? RULES.intro.breather : lerp(RULES.breather[0], RULES.breather[1], diff);
+      setLeft = inIntro ? RULES.intro.setSize : Math.max(2, Math.round(lerp(RULES.setSize[0], RULES.setSize[1], diff) + (rng() - 0.5) * 1.5));
+    }
+    const prev = recent[recent.length - 1], prev2 = recent[recent.length - 2];
+    const w = weights(floor, inIntro);
+    if (prev && w[prev.type]) w[prev.type] *= prev2 && prev2.type === prev.type ? 0 : 0.35;   // keep it varied
+    const jitter = rng() * lerp(80, 30, diff);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      let sum = 0; for (const k in w) sum += w[k];
+      if (sum <= 0) break;
+      let x = rng() * sum, type = 'bat';
+      for (const k in w) { x -= w[k]; if (x <= 0) { type = k; break; } }
+      const u = [rng(), rng(), rng(), rng()];
+      let A = floor + pending + 200, h = build[type](A, diff, u);
+      for (let k = 0; h && k < 3; k++) {          // slide it up until its band clears the spacing rule
+        const need = floor + pending + spacingAfter(prev, h, diff, inIntro) + jitter;
+        if (h.lo >= need - 0.5 && h.lo <= need + 4) break;
+        A += need - h.lo; h = build[type](A, diff, u);
+      }
+      if (!h || h.lo < floor + pending + spacingAfter(prev, h, diff, inIntro) - 0.5 || breaksRules(h, recent)) { w[type] = 0; continue; }
+      out.push(h); recent.push(h); if (recent.length > 24) recent.shift();
+      floor = h.hi; pending = 0; setLeft--;
+      return;
+    }
+    pending += 60;                     // nothing fits fairly here; leave the space empty
+  }
+
+  return {
+    seed, intro, walls, difficulty,
+    fill(upTo, out) { while (floor + pending < upTo) step(out); },
+  };
 }
+/* LEVELGEN:END */
+const walls = a => G.level.walls(a);
 const leftWall = a => walls(a)[0];
 const rightWall = a => walls(a)[1];
 
@@ -385,7 +547,6 @@ const PAL = {
   wallIn:[[28, 22, 19], [24, 18, 26], [22, 10, 8]],
   rim:   [[132, 170, 80], [160, 126, 178], [255, 128, 56]],
 };
-function zoneT(a) { return [smooth(2200, 3400, a), smooth(7200, 8600, a)]; }
 function pal(key, a) {
   const [t1, t2] = zoneT(a), p = PAL[key];
   const c = [0, 1, 2].map(i => lerp(lerp(p[0][i], p[1][i], t1), p[2][i], t2));
@@ -395,7 +556,6 @@ const rgb = (c, al = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${al})`;
 function zoneName(a) { return a < 2800 ? 'Jungle roots' : a < 7900 ? 'Basalt caves' : 'Magma core'; }
 
 // ---------- run ----------
-const CHUNK = 500;
 function newRun(isDaily) {
   const seed = isDaily ? dailySeed : (Math.random() * 4294967296) >>> 0;
   G = {
@@ -404,68 +564,12 @@ function newRun(isDaily) {
     p: { x: 200, alt: 58, vx: 0, vy: 0, r: 17, targetX: 200, invuln: 0, tilt: 0 },
     worm: { alt: -460, open: 0 },
     camAlt: 0, maxAlt: 58,
-    hazards: [], nextChunk: 0,
+    level: createLevel(seed, cfg), hazards: [],
     particles: [], spits: [], spitTimer: 4, spitRng: mulberry32(seed ^ 0x51F7A3),
     reviveUsed: false, shake: 0, cause: '', deadTimer: 0, ringTimer: 0,
   };
   G.camAlt = G.p.alt - viewH * 0.38;
   motes.forEach(m => { m.y = Math.random() * H; });
-}
-
-// ---------- hazards ----------
-function pickType(a, r) {
-  if (a < introAlt()) return r() < 0.5 ? 'bat' : 'pend';
-  const [t1, t2] = zoneT(a);
-  const w = {
-    bat:     lerp(lerp(.34, .2, t1), .12, t2),
-    pend:    lerp(lerp(.36, .14, t1), .1, t2),
-    boulder: lerp(lerp(.16, .32, t1), .24, t2),
-    geyser:  lerp(lerp(.14, .34, t1), .24, t2),
-    firebar: lerp(0, .3, t2),
-  };
-  let sum = 0; for (const k in w) sum += w[k];
-  let x = r() * sum;
-  for (const k in w) { x -= w[k]; if (x <= 0) return k; }
-  return 'bat';
-}
-function genChunk(c) {
-  const r = mulberry32((G.seed ^ Math.imul(c + 1, 0x9E3779B1)) >>> 0);
-  const a0 = c * CHUNK;
-  if (a0 < 400) return;
-  const diff = difficulty(a0);
-  const n = a0 < introAlt()
-    ? (r() < 0.6 * cfg.density ? 1 : 0)
-    : clamp(Math.round((1 + diff * 2.6) * cfg.density * (0.8 + r() * 0.45)), 0, 6);
-  for (let k = 0; k < n; k++) {
-    const A = a0 + (k + 0.2 + r() * 0.6) * CHUNK / n;
-    spawn(pickType(A, r), A, r, diff);
-  }
-}
-function spawn(type, A, r, diff) {
-  const [L, R] = walls(A), gap = R - L, mid = (L + R) / 2;
-  let h;
-  if (type === 'bat') {
-    h = { type, alt: A, base: A, cx: mid, amp: Math.max(10, gap / 2 - 36), speed: 1 + r() * 1.3 + diff, ph: r() * 6.283, x: mid, r: 15 };
-  } else if (type === 'pend') {
-    const side = r() < 0.5 ? 1 : -1, len = 80 + r() * 55;
-    const aAlt = A + len * 0.55;
-    const ax = side > 0 ? leftWall(aAlt) : rightWall(aAlt);
-    h = { type, side, len, aAlt, ax, w: 1.3 + r() * 0.9 + diff * 0.7, ph: r() * 6.283, x: ax, alt: A, r: 16 };
-  } else if (type === 'boulder') {
-    h = { type, alt: A, x: L + 34 + r() * (gap - 68), r: 20 + r() * 9, state: 'idle', spd: r() * 140 + diff * 120, rot: 0, spin: (r() - 0.5) * 6, cur: A };
-  } else if (type === 'geyser') {
-    const side = r() < 0.5 ? 1 : -1;
-    const period = 2.2 + r() * 1.2;
-    h = { type, side, alt: A, base: side > 0 ? leftWall(A) : rightWall(A), len: gap * (0.5 + r() * 0.24), period, ph: r() * period, hh: 13 };
-  } else if (type === 'firebar') {
-    const len = Math.min(88, gap / 2 - 22);
-    h = { type, alt: A, cx: mid + (r() - 0.5) * 30, len, w: (r() < 0.5 ? -1 : 1) * (1.2 + r() * 0.8), ph: r() * 6.283 };
-  }
-  if (h) G.hazards.push(h);
-}
-function ensureChunks() {
-  const top = G.camAlt + viewH + 900;
-  while (G.nextChunk * CHUNK < top) genChunk(G.nextChunk++);
 }
 
 // ---------- particles ----------
@@ -647,10 +751,11 @@ function update(dt) {
     if (p.x - 13 < L || p.x + 13 > R) die('wall');
 
     // worm spit (after 250 m)
-    if (G.maxAlt > introAlt() + 1000 && G.state === 'play') {
+    if (G.maxAlt > G.level.intro + 1000 && G.state === 'play') {
       G.spitTimer -= dt;
-      if (G.spitTimer <= 0) {
-        const diff = difficulty(G.maxAlt);
+      if (G.spitTimer <= 0 && !quietAround(p.alt)) G.spitTimer = 0.4;   // never spit while you're threading obstacles
+      else if (G.spitTimer <= 0) {
+        const diff = G.level.difficulty(G.maxAlt);
         G.spits.push({ x: p.x, warn: 0.9, alt: null, vy: 700 + diff * 140 });
         G.spitTimer = 3.2 + G.spitRng() * 3 - diff * 1.4;
       }
@@ -669,7 +774,7 @@ function update(dt) {
   updateSpits(dt);
   updateCamera(dt);
   updateParticles(dt);
-  ensureChunks();
+  G.level.fill(G.camAlt + viewH + 900, G.hazards);
 }
 
 function steer(dt) {
@@ -686,6 +791,11 @@ function updateCamera(dt) {
   G.camAlt += (target - G.camAlt) * Math.min(1, dt * 6);
   const dy = (G.camAlt - prev) * s;
   for (const m of motes) { m.y += dy * m.depth + m.drift * dt; if (m.y > H + 10) m.y -= H + 20; if (m.y < -10) m.y += H + 20; }
+}
+
+function quietAround(alt) {
+  const lo = alt - RULES.spitQuiet[0], hi = alt + RULES.spitQuiet[1];
+  return !G.hazards.some(h => h.type === 'boulder' ? h.state !== 'idle' : h.type !== 'bat' && h.hi > lo && h.lo < hi);
 }
 
 function hit(x, a, r) {
@@ -710,7 +820,7 @@ function updateHazards(dt) {
       h.alt = h.aAlt - h.len * Math.cos(h.th);
       if (play && hit(h.x, h.alt, h.r)) die('pend');
     } else if (h.type === 'boulder') {
-      if (h.state === 'idle' && camTop > h.alt - 30) { h.state = 'warn'; h.timer = 0.75; }
+      if (h.state === 'idle' && G.p.alt > h.alt - RULES.boulderTrigger) { h.state = 'warn'; h.timer = 0.75; }
       else if (h.state === 'warn') {
         h.timer -= dt;
         if (h.timer <= 0) { h.state = 'fall'; h.cur = camTop + 60; h.vy = -(240 + h.spd); }
@@ -721,8 +831,8 @@ function updateHazards(dt) {
       }
     } else if (h.type === 'geyser') {
       const c = ((t + h.ph) % h.period) / h.period;
-      h.warn = c > 0.42 && c < 0.56;
-      h.on = c >= 0.56;
+      h.on = c >= 1 - h.onFrac;
+      h.warn = !h.on && c >= 1 - h.onFrac - h.warnFrac;
       if (h.on && play) {
         const x0 = h.side > 0 ? h.base : h.base - h.len, x1 = h.side > 0 ? h.base + h.len : h.base;
         const p = G.p, cx = clamp(p.x, x0, x1), ca = clamp(p.alt, h.alt - h.hh, h.alt + h.hh);
