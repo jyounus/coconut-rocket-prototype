@@ -67,7 +67,7 @@ for (const cfg of CONFIGS) {
 
       // easy start: only bats and pods, nothing below the planks
       if (h.lo < 400) fail('nothing spawns on the start planks', where);
-      if (h.lo < intro && !['bat', 'pend'].includes(h.type)) fail('easy start has only bats and pods', `${where}: ${h.type}`);
+      if (h.lo < intro && !RULES.intro.types.includes(h.type)) fail('easy start uses only the gentle obstacles', `${where}: ${h.type}`);
 
       // every static hazard leaves a lane at least RULES.minLane wide (3.5 hitboxes)
       if (h.type === 'geyser') {
@@ -88,6 +88,22 @@ for (const cfg of CONFIGS) {
         if (clear < HITBOX + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
       }
       if (h.type === 'bat' && h.amp * h.speed > RULES.batMaxSpeed + 1e-6) fail('bats stay under the speed cap', where);
+      if (h.type === 'spike') {
+        const [L, R] = tightest(level, h.lo, h.hi);
+        const tip = h.base + h.side * h.len;
+        const lane = h.side > 0 ? R - tip : tip - L;
+        if (lane < RULES.minLane - 0.5) fail('spike leaves an open lane', `${where}: ${lane.toFixed(0)} units`);
+      }
+      if (h.type === 'spider') {
+        const [L, R] = tightest(level, h.lo, h.hi);
+        if (Math.min(h.x - h.r - L, R - h.x - h.r) < RULES.minLane - 0.5) fail('spider leaves lanes on both sides', where);
+        if (h.aAlt - h.mid - h.amp - h.r < h.lo - 0.5 || h.aAlt - h.mid + h.amp + h.r > h.hi + 0.5) fail('spider stays inside its band', where);
+      }
+      if (h.type === 'crusher') {
+        const [L, R] = tightest(level, h.lo, h.hi);
+        const lane = Math.min(R, h.rb - h.maxExt) - Math.max(L, h.lb + h.maxExt);
+        if (lane < RULES.minLane - 0.5) fail('crusher leaves an open lane when fully closed', `${where}: ${lane.toFixed(0)} units`);
+      }
       if (h.type === 'boulder') {
         const [L, R] = tightest(level, h.alt - RULES.boulderFall, h.alt + 100);
         if (h.x - h.r < L || h.x + h.r > R) fail('boulders never fall through a wall', where);
@@ -107,7 +123,7 @@ for (const cfg of CONFIGS) {
         if (h.type === q.type && h.type !== 'geyser' && dist < RULES.sameTypeGap[h.type]) fail(`${h.type}s keep their distance`, where);
 
         // a boulder never drops while you're squeezing past a geyser, fire wheel or pod
-        const heavy = t => t === 'geyser' || t === 'firebar' || t === 'pend';
+        const heavy = t => t === 'geyser' || t === 'firebar' || t === 'pend' || t === 'crusher';
         if (h.type === 'boulder' && heavy(q.type) && q.lo < h.alt + RULES.boulderZone[1]) fail('boulders keep clear of other hazards', where);
         if (q.type === 'boulder' && heavy(h.type) && h.hi > q.alt - RULES.boulderZone[0]) fail('boulders keep clear of other hazards', where);
       }
