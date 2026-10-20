@@ -285,7 +285,7 @@ const store = {
 // ---------- config ----------
 const WORLD_W = 400;           // world units across the shaft
 const UNITS_PER_M = 10;
-const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1 };
+const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1, intro: 300 };
 const cfg = Object.assign({}, DEFAULTS, store.get('cr-cfg', {}));
 const settings = Object.assign({ control: 'one' }, store.get('cr-settings', {}));
 
@@ -297,6 +297,7 @@ const TUNE = [
   ['wormBase', 'Worm start speed', 60, 320, 5, v => v],
   ['wormRamp', 'Worm speed-up', 0, 0.08, 0.002, v => v.toFixed(3)],
   ['density', 'Obstacle density', 0.3, 2.2, 0.05, v => v.toFixed(2) + '×'],
+  ['intro', 'Easy start', 0, 600, 10, v => v + ' m'],
 ];
 
 // ---------- seeded randomness ----------
@@ -357,8 +358,12 @@ resize();
 
 // ---------- world shape ----------
 let G = null;
-function wallAmp(a) { return smooth(150, 900, a); }
-function wallNarrow(a) { return smooth(2000, 14000, a); }
+// Easy start: about 7 s of climbing at a typical pace before the shaft tightens.
+// Measured in height, not time, so every player gets the same daily layout.
+const introAlt = () => cfg.intro * UNITS_PER_M;
+function wallAmp(a) { const I = introAlt(); return smooth(150, 600, a) * lerp(0.3, 1, smooth(I, I + 1500, a)); }
+function wallNarrow(a) { const I = introAlt(); return smooth(I, I + 12000, a); }
+function difficulty(a) { return clamp((a - introAlt()) / 12000, 0, 1); }
 function rawLeft(a, sd) { return 14 + wallAmp(a) * (40 + 60 * vnoise(a / 700, sd) + 22 * vnoise(a / 170, sd + 1) + 22 * wallNarrow(a)) + 7 * vnoise(a / 38, sd + 2); }
 function walls(a) {
   const sd = G.seed;
@@ -409,6 +414,7 @@ function newRun(isDaily) {
 
 // ---------- hazards ----------
 function pickType(a, r) {
+  if (a < introAlt()) return r() < 0.5 ? 'bat' : 'pend';
   const [t1, t2] = zoneT(a);
   const w = {
     bat:     lerp(lerp(.34, .2, t1), .12, t2),
@@ -426,8 +432,10 @@ function genChunk(c) {
   const r = mulberry32((G.seed ^ Math.imul(c + 1, 0x9E3779B1)) >>> 0);
   const a0 = c * CHUNK;
   if (a0 < 400) return;
-  const diff = Math.min(1, a0 / 12000);
-  const n = clamp(Math.round((1 + diff * 2.6) * cfg.density * (0.8 + r() * 0.45)), 0, 6);
+  const diff = difficulty(a0);
+  const n = a0 < introAlt()
+    ? (r() < 0.6 * cfg.density ? 1 : 0)
+    : clamp(Math.round((1 + diff * 2.6) * cfg.density * (0.8 + r() * 0.45)), 0, 6);
   for (let k = 0; k < n; k++) {
     const A = a0 + (k + 0.2 + r() * 0.6) * CHUNK / n;
     spawn(pickType(A, r), A, r, diff);
@@ -639,10 +647,10 @@ function update(dt) {
     if (p.x - 13 < L || p.x + 13 > R) die('wall');
 
     // worm spit (after 250 m)
-    if (G.maxAlt > 2500 && G.state === 'play') {
+    if (G.maxAlt > introAlt() + 1000 && G.state === 'play') {
       G.spitTimer -= dt;
       if (G.spitTimer <= 0) {
-        const diff = Math.min(1, G.maxAlt / 12000);
+        const diff = difficulty(G.maxAlt);
         G.spits.push({ x: p.x, warn: 0.9, alt: null, vy: 700 + diff * 140 });
         G.spitTimer = 3.2 + G.spitRng() * 3 - diff * 1.4;
       }
