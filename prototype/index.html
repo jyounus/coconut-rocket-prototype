@@ -162,6 +162,8 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .tune label { font-size: 14px; font-weight: 800; }
 .tune output { font-size: 13px; font-weight: 900; color: var(--ember); font-variant-numeric: tabular-nums; }
 .tune input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--ember); height: 28px; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 800; cursor: pointer; }
+.check input { width: 22px; height: 22px; accent-color: var(--ember); }
 .note { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.45; }
 
 .toast {
@@ -262,6 +264,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   <div class="panel">
     <div class="eyebrow">Tune the feel</div>
     <div class="tune" id="tuneRows"></div>
+    <label class="check" for="showHitboxes"><input type="checkbox" id="showHitboxes"> Show hitboxes</label>
     <p class="note">Changes apply straight away and are saved on this phone. Daily scores still count, so reset to defaults before comparing with friends.</p>
     <div class="btnrow">
       <button class="btn alt" id="tuneReset">Reset</button>
@@ -287,9 +290,9 @@ const store = {
 const WORLD_W = 400;           // world units across the shaft
 const UNITS_PER_M = 10;
 /* LEVELGEN:END */
-const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1, intro: 300 };
+const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 600, lag: 0.45, wormBase: 170, wormRamp: 0.03, density: 1, intro: 300, camPos: 25 };
 const cfg = Object.assign({}, DEFAULTS, store.get('cr-cfg', {}));
-const settings = Object.assign({ control: 'one' }, store.get('cr-settings', {}));
+const settings = Object.assign({ control: 'one', hitboxes: false }, store.get('cr-settings', {}));
 
 const TUNE = [
   ['gravity', 'Gravity', 500, 2200, 10, v => v],
@@ -300,6 +303,7 @@ const TUNE = [
   ['wormRamp', 'Worm speed-up', 0, 0.08, 0.002, v => v.toFixed(3)],
   ['density', 'Obstacle density', 0.3, 2.2, 0.05, v => v.toFixed(2) + '×'],
   ['intro', 'Easy start', 0, 600, 10, v => v + ' m'],
+  ['camPos', 'Rocket height on screen', 12, 60, 1, v => v + '% from bottom'],
 ];
 
 // ---------- seeded randomness ----------
@@ -579,7 +583,7 @@ function newRun(isDaily) {
     particles: [], spits: [], spitTimer: 4, spitRng: mulberry32(seed ^ 0x51F7A3),
     reviveUsed: false, shake: 0, cause: '', deadTimer: 0, ringTimer: 0,
   };
-  G.camAlt = G.p.alt - viewH * 0.38;
+  G.camAlt = G.p.alt - viewH * cfg.camPos / 100;
   motes.forEach(m => { m.y = Math.random() * H; });
 }
 
@@ -626,7 +630,11 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ' ': 'thrust', ArrowUp: 'thrust', w: 'thrust', W: 'thrust' };
 window.addEventListener('keydown', e => {
-  const k = KEYMAP[e.key]; if (!k) { if (e.key === 'Escape' || e.key === 'p') togglePause(); return; }
+  const k = KEYMAP[e.key]; if (!k) {
+    if (e.key === 'Escape' || e.key === 'p') togglePause();
+    if (e.key === 'h') { settings.hitboxes = !settings.hitboxes; hbBox.checked = settings.hitboxes; store.set('cr-settings', settings); }
+    return;
+  }
   if (currentScreen !== null) return;
   if (document.activeElement && document.activeElement.tagName === 'BUTTON' && e.key === ' ') return;
   e.preventDefault(); input.keys.add(k); recomputeThrust();
@@ -797,9 +805,13 @@ function steer(dt) {
 }
 
 function updateCamera(dt) {
-  const target = G.p.alt - viewH * 0.38;
+  // The camera eases toward its target, which on its own trails a fast climber up the screen.
+  // Leading by velocity / follow-rate cancels that lag, so the rocket holds `camPos` while moving.
+  const follow = 6;
+  const lead = G.state === 'play' ? G.p.vy / follow : 0;
+  const target = G.p.alt - viewH * cfg.camPos / 100 + lead;
   const prev = G.camAlt;
-  G.camAlt += (target - G.camAlt) * Math.min(1, dt * 6);
+  G.camAlt += (target - G.camAlt) * Math.min(1, dt * follow);
   const dy = (G.camAlt - prev) * s;
   for (const m of motes) { m.y += dy * m.depth + m.drift * dt; if (m.y > H + 10) m.y -= H + 20; if (m.y < -10) m.y += H + 20; }
 }
@@ -813,12 +825,14 @@ function boulderActive() {
 // to a point, and curling slightly upward as hot gas rises.
 function geyserHalf(h, t) { return h.hh * (0.45 + 0.95 * t) * (1 - 0.9 * smooth(0.66, 1, t)); }
 function geyserRise(t) { return 7 * t * t; }
+// The hitbox stops short of the flame's tip and sits inside its edges, so scraping past reads as a near miss.
+const GEYSER_HIT = { length: 0.82, thickness: 0.72 };
 function geyserHits(h) {
   const p = G.p;
   for (let k = -2; k <= 2; k++) {
     const x = p.x + k * 5, t = (x - h.base) * h.side / h.len;
-    if (t < 0 || t > 1) continue;
-    const d = Math.hypot(x - p.x, p.alt - (h.alt + geyserRise(t))) - geyserHalf(h, t) * 0.9;
+    if (t < 0 || t > GEYSER_HIT.length) continue;
+    const d = Math.hypot(x - p.x, p.alt - (h.alt + geyserRise(t))) - geyserHalf(h, t) * GEYSER_HIT.thickness;
     if (d < 13) return true;
   }
   return false;
@@ -932,6 +946,7 @@ function draw() {
   drawParticles(true);
   drawWorm();
   ctx.restore();
+  if (settings.hitboxes) drawHitboxes();
   drawDanger();
   if (G.state !== 'dead' && steerMode() === 'two') drawTwoThumbUI();
 }
@@ -1434,6 +1449,50 @@ function drawWorm() {
   }
 }
 
+// Debug overlay: every shape here is the real collision shape. The coconut dies when its
+// cyan circle overlaps anything red.
+const PLAYER_HIT = 13;
+function drawHitboxes() {
+  // magenta with a dark edge so it stays visible over fire and lava
+  const red = 'rgba(255,70,245,1)', redFill = 'rgba(255,70,245,.2)';
+  const circle = (x, a, r) => { ctx.beginPath(); ctx.arc(sx(x), sy(a), r * s, 0, 6.283); ctx.fill(); ctx.stroke(); };
+  ctx.save();
+  ctx.lineWidth = 2; ctx.strokeStyle = red; ctx.fillStyle = redFill;
+  ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 3;
+  for (const h of G.hazards) {
+    if (h.type === 'bat' || h.type === 'pend') circle(h.x, h.alt, h.r);
+    else if (h.type === 'boulder' && h.state === 'fall') circle(h.x, h.cur, h.r * 0.9);
+    else if (h.type === 'firebar') {
+      const c = Math.cos(h.ang || 0), sn = Math.sin(h.ang || 0);
+      for (let rad = 0; rad <= h.len; rad += 14) circle(h.cx + c * rad, h.alt + sn * rad, 8);
+    } else if (h.type === 'geyser') {
+      ctx.beginPath();
+      for (const edge of [1, -1]) for (let i = 0; i <= 16; i++) {
+        const t = (edge > 0 ? i : 16 - i) / 16 * GEYSER_HIT.length;
+        const x = sx(h.base + h.side * h.len * t), y = sy(h.alt + geyserRise(t) + edge * geyserHalf(h, t) * GEYSER_HIT.thickness);
+        i === 0 && edge > 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
+  for (const sp of G.spits) if (sp.alt != null) circle(sp.x, sp.alt, 12);
+  // shaft walls: the coconut's circle may not cross these lines
+  ctx.setLineDash([6, 5]);
+  for (const side of [0, 1]) {
+    ctx.beginPath();
+    for (let a = G.camAlt - 20, i = 0; a < G.camAlt + viewH + 20; a += 12, i++) { const x = sx(walls(a)[side]); i ? ctx.lineTo(x, sy(a)) : ctx.moveTo(x, sy(a)); }
+    ctx.stroke();
+  }
+  // worm bite line
+  const bite = sy(G.worm.alt - (PLAYER_HIT - G.p.r * 0.4));
+  if (bite < H) { ctx.beginPath(); ctx.moveTo(0, bite); ctx.lineTo(cssW, bite); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // the coconut
+  ctx.strokeStyle = 'rgba(80,230,255,.95)'; ctx.fillStyle = 'rgba(80,230,255,.18)';
+  circle(G.p.x, G.p.alt, PLAYER_HIT);
+  ctx.restore();
+}
+
 function drawDanger() {
   if (G.state !== 'play') return;
   const gap = G.p.alt - G.worm.alt;
@@ -1566,6 +1625,10 @@ $('shareBtn').addEventListener('click', async () => {
 });
 
 // tune sheet
+const hbBox = document.getElementById('showHitboxes');
+hbBox.checked = settings.hitboxes;
+hbBox.addEventListener('change', () => { settings.hitboxes = hbBox.checked; store.set('cr-settings', settings); });
+
 function buildTune() {
   const wrap = $('tuneRows'); wrap.innerHTML = '';
   for (const [key, label, min, max, step, fmt] of TUNE) {
