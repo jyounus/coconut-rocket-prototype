@@ -50,6 +50,17 @@ for (const cfg of CONFIGS) {
     }
     if (hz.length < HEIGHT / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
 
+    // shaft shape: never under 60% of the screen, and every narrow stretch opens up again
+    let narrowSince = null;
+    for (let a = 0; a <= HEIGHT; a += 5) {
+      const [L, R] = level.walls(a), w = R - L;
+      if (w < WORLD_W * 0.6 - 0.01) fail('shaft is at least 60% of the screen wide', `${tag} at ${(a / 10).toFixed(0)} m: ${(100 * w / WORLD_W).toFixed(0)}%`);
+      if (L < 0 || R > WORLD_W) fail('walls stay on screen', `${tag} at ${(a / 10).toFixed(0)} m`);
+      if (w < RULES.narrowGap) narrowSince ??= a;
+      else if (w >= 290) narrowSince = null;
+      if (narrowSince !== null && a - narrowSince > 1700) { fail('narrow stretches widen again', `${tag} narrow from ${(narrowSince / 10).toFixed(0)} m`); narrowSince = null; }
+    }
+
     for (let i = 0; i < hz.length; i++) {
       const h = hz[i];
       const where = `${tag} at ${(h.lo / 10).toFixed(0)} m`;
@@ -78,6 +89,10 @@ for (const cfg of CONFIGS) {
         if (clear < HITBOX + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
       }
       if (h.type === 'bat' && h.amp * h.speed > RULES.batMaxSpeed + 1e-6) fail('bats stay under the speed cap', where);
+      if (h.type === 'boulder') {
+        const [L, R] = tightest(level, h.alt - RULES.boulderFall, h.alt + 100);
+        if (h.x - h.r < L || h.x + h.r > R) fail('boulders never fall through a wall', where);
+      }
 
       for (let j = i + 1; j < hz.length; j++) {
         const q = hz[j], dist = q.lo - h.hi;

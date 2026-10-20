@@ -368,16 +368,21 @@ let G = null;
 // layout can be hard but never impossible. Everything is measured in height, never time,
 // so every player gets the same daily shaft.
 const RULES = {
+  minWidth: 240,               // the shaft is never narrower than 60% of the screen
+  wideWidth: [345, 300],       // width of the wide stretches, easy → hard
+  narrowChance: [0.3, 0.75],   // chance a stretch that may be narrow is narrow, easy → hard
+  wallStretch: 800,            // height of each wide or narrow stretch
   minLane: 92,                 // narrowest open lane any hazard may leave (about 3.5 coconuts)
   spacing: [250, 140],         // clear height between neighbouring hazards, easy → hard
   heavyExtra: 60,              // extra clearance after a geyser, fire wheel or spiky pod
   zigzagExtra: 150,            // extra when consecutive wall hazards sit on opposite walls
   minSpacing: 110,             // floor for spacing, even at high obstacle density
-  sameTypeGap: { geyser: 520, firebar: 520, boulder: 800, pend: 240, bat: 0 },
-  narrowGap: 236,              // openings narrower than this count as a narrow passage
+  sameTypeGap: { geyser: 520, firebar: 520, boulder: 1400, pend: 240, bat: 0 },
+  narrowGap: 270,              // openings narrower than this count as a narrow passage
   narrowGeyserGap: 820,        // a geyser in a narrow passage keeps this far from any other geyser
   boulderZone: [650, 200],     // no geyser, fire wheel or pod this far below / above a boulder's drop point
   boulderTrigger: 560,         // a boulder drops when the player climbs within this height of it
+  boulderFall: 760,            // a boulder's x keeps it clear of the walls for this far below its drop point
   setSize: [3, 6],             // hazards in a set before a breather, easy → hard
   breather: [440, 300],        // empty height between sets, easy → hard
   intro: { spacing: 380, setSize: 2, breather: 520 },
@@ -395,14 +400,26 @@ function zoneT(a) { return [smooth(2200, 3400, a), smooth(7200, 8600, a)]; }
 function createLevel(seed, opts) {
   const intro = opts.intro * UNITS_PER_M, density = opts.density;
   const difficulty = a => clamp((a - intro) / 12000, 0, 1);
-  // Easy start: the shaft stays wide until `intro`, then tightens.
-  const wallAmp = a => smooth(150, 600, a) * lerp(0.3, 1, smooth(intro, intro + 1500, a));
-  const wallNarrow = a => smooth(intro, intro + 12000, a);
-  const rawLeft = (a, sd) => 14 + wallAmp(a) * (40 + 60 * vnoise(a / 700, sd) + 22 * vnoise(a / 170, sd + 1) + 22 * wallNarrow(a)) + 7 * vnoise(a / 38, sd + 2);
+  // Shaft shape: a width that alternates in 800-unit stretches plus a centre line that sways.
+  // A narrow stretch only ever sits on an even stretch, so the next one is always wide again.
+  // The easy start (`intro`) is all wide stretches.
+  const segWidth = i => {
+    const a = i * RULES.wallStretch, diff = difficulty(a);
+    const wide = lerp(RULES.wideWidth[0], RULES.wideWidth[1], diff) + 30 * hash2(i, seed + 3);
+    if (i % 2 || a < intro + 400) return wide;
+    return hash2(i, seed + 5) < lerp(RULES.narrowChance[0], RULES.narrowChance[1], diff)
+      ? RULES.minWidth + 22 * hash2(i, seed + 4)
+      : wide;
+  };
   function walls(a) {
-    let L = rawLeft(a, seed), R = WORLD_W - rawLeft(a, seed + 7);
-    const minGap = 196;
-    if (R - L < minGap) { const m = (minGap - (R - L)) / 2; L -= m; R += m; }
+    const t = a / RULES.wallStretch, i = Math.floor(t);
+    const open = smooth(150, 600, a);                  // the starting cave is almost wall-free
+    const w = lerp(WORLD_W - 28, lerp(segWidth(i), segWidth(i + 1), smooth(0.7, 1, t - i)), open);
+    const room = (WORLD_W - w) / 2 - 14;
+    const c = WORLD_W / 2 + room * (2 * vnoise(a / 900, seed + 11) - 1) * lerp(0.3, 1, smooth(intro, intro + 1500, a));
+    let L = c - w / 2 + 6 * (2 * vnoise(a / 38, seed + 2) - 1) * open;
+    let R = c + w / 2 + 6 * (2 * vnoise(a / 38, seed + 9) - 1) * open;
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
     return [L, R];
   }
   // The tightest opening across a band of height: [highest left wall, lowest right wall].
@@ -452,7 +469,7 @@ function createLevel(seed, opts) {
       return { type: 'firebar', alt: A, cx: (L + R) / 2 + off, len, w: (u[1] < 0.5 ? -1 : 1) * (1.2 + u[2] * 0.8), ph: u[3] * 6.283, lo: A - len - 13, hi: A + len + 13 };
     },
     boulder(A, diff, u) {
-      const [L, R] = walls(A);
+      const [L, R] = opening(A - RULES.boulderFall, A + 100);   // never drops through a wall
       return { type: 'boulder', alt: A, x: L + 34 + u[0] * (R - L - 68), r: 20 + u[1] * 9, state: 'idle', spd: u[2] * 140 + diff * 120, rot: 0, spin: (u[3] - 0.5) * 6, cur: A, lo: A - 30, hi: A + 30 };
     },
   };
@@ -793,6 +810,11 @@ function updateCamera(dt) {
   for (const m of motes) { m.y += dy * m.depth + m.drift * dt; if (m.y > H + 10) m.y -= H + 20; if (m.y < -10) m.y += H + 20; }
 }
 
+// Only one boulder is ever warned about or falling above you, so a warning always matches its rock.
+function boulderActive() {
+  return G.hazards.some(h => h.type === 'boulder' && (h.state === 'warn' || (h.state === 'fall' && h.cur > G.p.alt - 40)));
+}
+
 function quietAround(alt) {
   const lo = alt - RULES.spitQuiet[0], hi = alt + RULES.spitQuiet[1];
   return !G.hazards.some(h => h.type === 'boulder' ? h.state !== 'idle' : h.type !== 'bat' && h.hi > lo && h.lo < hi);
@@ -820,10 +842,10 @@ function updateHazards(dt) {
       h.alt = h.aAlt - h.len * Math.cos(h.th);
       if (play && hit(h.x, h.alt, h.r)) die('pend');
     } else if (h.type === 'boulder') {
-      if (h.state === 'idle' && G.p.alt > h.alt - RULES.boulderTrigger) { h.state = 'warn'; h.timer = 0.75; }
+      if (h.state === 'idle' && G.p.alt > h.alt - RULES.boulderTrigger && !boulderActive()) { h.state = 'warn'; h.timer = 0.9; }
       else if (h.state === 'warn') {
         h.timer -= dt;
-        if (h.timer <= 0) { h.state = 'fall'; h.cur = camTop + 60; h.vy = -(240 + h.spd); }
+        if (h.timer <= 0) { h.state = 'fall'; h.cur = camTop + h.r + 4; h.vy = -(240 + h.spd); }   // enters straight down the warned column
       } else if (h.state === 'fall') {
         h.vy -= 320 * dt; h.cur += h.vy * dt; h.rot += h.spin * dt;
         if (play && hit(h.x, h.cur, h.r * 0.9)) die('boulder');
@@ -1071,8 +1093,14 @@ function drawPend(h) {
 function drawBoulder(h) {
   if (h.state === 'idle') return;
   if (h.state === 'warn') {
-    const x = sx(h.x), y = 70 + safeTop;
+    const x = sx(h.x), y = safeTop + 104;      // below the height counter and pause button
     const blink = Math.sin(G.t * 30) > 0;
+    // drop line: the exact column the rock will fall down
+    const lg = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+    lg.addColorStop(0, 'rgba(255,178,56,.55)'); lg.addColorStop(1, 'rgba(255,178,56,0)');
+    ctx.save(); ctx.strokeStyle = lg; ctx.lineWidth = 2 * h.r * s; ctx.globalAlpha = blink ? 0.35 : 0.2;
+    ctx.setLineDash([10, 10]); ctx.lineDashOffset = -G.t * 60;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H * 0.8); ctx.stroke(); ctx.restore();
     ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = blink ? '#ffb238' : '#ff5a1f'; ctx.strokeStyle = '#1c0f0b'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(17, 12); ctx.lineTo(-17, 12); ctx.closePath(); ctx.fill(); ctx.stroke();
