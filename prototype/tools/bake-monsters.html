@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monster Sprite Baker</title>
+<style>
+  body { margin: 0; padding: 16px; background: #1a1416; color: #f6efe0; font: 600 14px system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  #status { margin: 0 0 12px; color: #ffb238; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: #5a9a7a; border-radius: 12px; overflow: hidden; }
+  figure img { display: block; width: 100%; }
+  figcaption { background: #2a1d20; padding: 6px 10px; }
+</style>
+</head>
+<body>
+<h1>Monster sprite baker</h1>
+<p id="status">Loading…</p>
+<div class="grid" id="grid"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Renders each chaser monster in 3D and bakes it to a 2D sprite sheet for the game.
+// ?bake=1 saves every monster to ../sprites via the local sprite server; ?only=worm,bat limits the set.
+// Sprite contract (the game reads the same numbers):
+//   12 frames, 4 columns x 3 rows, each frame 800x600, a looping animation.
+//   The frame shows 13 x 9.75 model units; the kill line sits 1.5 units below the top edge.
+//   Each model is moved so its highest point lands exactly on the kill line.
+'use strict';
+const T = THREE, TAU = Math.PI * 2;
+const FRAMES = 12, COLS = 4, FW = 800, FH = 600, SS = 2;   // supersample 2x, then downscale
+const VIEW_W = 13, VIEW_H = 9.75, TOP = 1.5;
+const params = new URLSearchParams(location.search);
+
+const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(FW * SS, FH * SS);
+renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
+renderer.setClearColor(0x000000, 0);
+const camera = new T.OrthographicCamera(-VIEW_W / 2, VIEW_W / 2, TOP, TOP - VIEW_H, 0.1, 100);
+camera.position.set(0, 0, 40); camera.lookAt(0, 0, 0);
+
+// ---------- helpers ----------
+const C = h => new T.Color(h).convertSRGBToLinear();
+const soft = (hex, rough = 0.7, extra = {}) => new T.MeshStandardMaterial(Object.assign({ color: C(hex), roughness: rough, metalness: 0 }, extra));
+const gloss = (hex, rough = 0.3, extra = {}) => new T.MeshPhysicalMaterial(Object.assign({ color: C(hex), roughness: rough, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.15 }, extra));
+const glowMat = (hex, k = 1.6) => new T.MeshStandardMaterial({ color: C(hex), emissive: C(hex), emissiveIntensity: k, roughness: 0.4 });
+const SPHERE = new T.SphereGeometry(1, 40, 28);
+const M = m => typeof m === 'string' ? soft(m) : m;
+function ball(p, mat, r, x, y, z, sx = 1, sy = 1, sz = 1) { const m = new T.Mesh(SPHERE, M(mat)); m.scale.set(r * sx, r * sy, r * sz); m.position.set(x, y, z); p.add(m); return m; }
+function mesh(p, geo, mat, x = 0, y = 0, z = 0) { const m = new T.Mesh(geo, M(mat)); m.position.set(x, y, z); p.add(m); return m; }
+function cone(p, r, h, mat, x, y, z, seg = 16) { return mesh(p, new T.ConeGeometry(r, h, seg), mat, x, y, z); }
+function cyl(p, rt, rb, h, mat, x, y, z, seg = 24) { return mesh(p, new T.CylinderGeometry(rt, rb, h, seg), mat, x, y, z); }
+function tube(p, pts, r, mat) { return mesh(p, new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(q => new T.Vector3(...q))), 40, r, 14), mat); }
+function point(m, dir) { m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.clone().normalize()); }
+function shape(pts) { const s = new T.Shape(); pts.forEach(([x, y], i) => i ? s.lineTo(x, y) : s.moveTo(x, y)); return new T.ShapeGeometry(s); }
+let seed = 11; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+function canvasTex(w, h, paint) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; paint(cv.getContext('2d'), w, h); const t = new T.CanvasTexture(cv); t.wrapS = t.wrapT = T.RepeatWrapping; return t; }
+// rock or fur with glowing lava veins
+function lavaMat(base, vein, rough = 0.85, veinK = 1.4) {
+  const veins = (c, w, h, col, bg) => { c.fillStyle = bg; c.fillRect(0, 0, w, h); c.strokeStyle = col; c.lineWidth = 5; c.lineCap = 'round'; for (let i = 0; i < 26; i++) { let x = rnd() * w, y = rnd() * h; c.beginPath(); c.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (rnd() - 0.5) * 70; y += (rnd() - 0.5) * 70; c.lineTo(x, y); } c.stroke(); } };
+  const s0 = seed; const map = canvasTex(512, 512, (c, w, h) => veins(c, w, h, '#2a0e08', base)); map.encoding = T.sRGBEncoding;
+  seed = s0; const emi = canvasTex(512, 512, (c, w, h) => veins(c, w, h, '#ffffff', '#000000'));
+  map.repeat.set(2, 2); emi.repeat.set(2, 2);
+  return new T.MeshStandardMaterial({ map, emissiveMap: emi, emissive: C(vein), emissiveIntensity: veinK, roughness: rough });
+}
+function glowEye(p, x, y, z, r, hex, opts = {}) {
+  const g = new T.Group(); g.position.set(x, y, z); p.add(g);
+  ball(g, glowMat(hex, 1.8), r, 0, 0, 0, 1, opts.sy || 1, 0.7);
+  const pupil = ball(g, gloss('#0a0606', 0.1), r, 0, 0, r * 0.45, opts.flat ? 0.6 : 0.22, opts.flat ? 0.2 : 0.75, 0.4);
+  ball(g, new T.MeshBasicMaterial({ color: 0xffffff }), r * 0.18, -r * 0.3, r * 0.35, r * 0.62);
+  return g;
+}
+function cartoonEye(p, x, y, z, r, iris = '#3a7ad8') {
+  const g = new T.Group(); g.position.set(x, y, z); p.add(g);
+  ball(g, gloss('#ffffff', 0.2), r, 0, 0, 0, 1, 1, 0.7);
+  ball(g, gloss(iris, 0.2), r * 0.55, 0, 0, r * 0.5, 1, 1, 0.4);
+  ball(g, gloss('#0a0606', 0.1), r * 0.3, 0, 0, r * 0.66, 1, 1, 0.3);
+  ball(g, new T.MeshBasicMaterial({ color: 0xffffff }), r * 0.13, -r * 0.18, r * 0.2, r * 0.74);
+  return g;
+}
+function fingers(p, x, y, z, side, skin, A, phase = 0) {
+  const hand = new T.Group(); hand.position.set(x, y, z); p.add(hand);
+  ball(hand, skin, 1.05, 0, 0, 0, 1.25, 0.9, 0.75);
+  const segs = [];
+  for (let k = 0; k < 4; k++) {
+    const f = new T.Group(); f.position.set((k - 1.5) * 0.52, 0.55, 0.1); hand.add(f);
+    const len = 1.2 - Math.abs(k - 1.5) * 0.15;
+    cyl(f, 0.26, 0.28, len, skin, 0, len / 2, 0, 14); ball(f, skin, 0.26, 0, len, 0);
+    segs.push(f);
+  }
+  const thumb = new T.Group(); thumb.position.set(-side * 1.0, 0.05, 0.3); hand.add(thumb); cyl(thumb, 0.26, 0.3, 0.9, skin, 0, 0.45, 0, 14); ball(thumb, skin, 0.26, 0, 0.9, 0); thumb.rotation.z = side * 0.7;
+  A.push(t => { const grab = 0.5 + 0.5 * Math.sin(t + phase); segs.forEach((f, i) => { f.rotation.x = 0.15 + grab * 0.75; f.rotation.z = (i - 1.5) * -0.08; }); });
+  return hand;
+}
+function base(p, mat, y = -15) { cyl(p, 7.4, 7.4, 20, mat, 0, y, -1.5, 40); }
+
+// ---------- the monsters (natural coordinates; normalised after building) ----------
+const MONSTERS = {
+  worm(g, A) {
+    const rock = lavaMat('#4a1a10', '#ff6a1a');
+    base(g, rock);
+    mesh(g, new T.CylinderGeometry(5.6, 6.4, 16, 48), rock, 0, -8.5, 0);
+    for (let k = 0; k < 4; k++) { const r = mesh(g, new T.TorusGeometry(5.75 + k * 0.17, 0.38, 12, 64), soft('#2a0c06', 0.6), 0, -2.6 - k * 2.4, 0); r.rotation.x = Math.PI / 2; }
+    ball(g, rock, 5.6, 0, -0.6, 0, 1, 0.72, 1);
+    const mouth = new T.Group(); mouth.position.set(0, 2.6, 1.6); mouth.rotation.x = 0.62; g.add(mouth);
+    const disc = mesh(mouth, new T.CircleGeometry(3.0, 48), glowMat('#ff7a1a', 1.4)); disc.rotation.x = -Math.PI / 2;
+    const inner = mesh(mouth, new T.CircleGeometry(1.8, 48), glowMat('#ffd27a', 1.8), 0, 0.02, 0); inner.rotation.x = -Math.PI / 2;
+    const lip = mesh(mouth, new T.TorusGeometry(3.15, 0.55, 16, 64), soft('#5a160c', 0.6)); lip.rotation.x = Math.PI / 2;
+    const tooth = new T.ConeGeometry(0.34, 1.5, 12), ivory = gloss('#f4e6c8', 0.35);
+    for (let k = 0; k < 18; k++) { const a = k / 18 * TAU, t = mesh(mouth, tooth, ivory, Math.cos(a) * 2.9, 0.3, Math.sin(a) * 2.9); point(t, new T.Vector3(-Math.cos(a), 0.9, -Math.sin(a))); }
+    A.push(t => { const o = 0.82 + 0.18 * Math.sin(t); mouth.scale.set(o, 1, o); });
+    for (const d of [-1, 1]) { glowEye(g, d * 3.9, 0.2, 3.6, 0.55, '#ffd84a'); const brow = ball(g, soft('#2a0c06', 0.7), 1.0, d * 3.7, 0.9, 3.4, 1.2, 0.35, 0.5); brow.rotation.z = d * -0.35; }
+  },
+  bat(g, A) {
+    const fur = soft('#6a3aa8', 0.85), dark = soft('#3e2270', 0.85);
+    base(g, dark);
+    ball(g, fur, 6, 0, -7.2, 0, 1.15, 1, 0.8);
+    const wingGeo = shape([[0, 0], [2.4, 2.4], [5.4, 3.0], [6.6, 2.6], [5.6, 1.2], [5.9, -0.2], [4.6, 0.1], [4.4, -1.6], [3.0, -1.0], [2.2, -2.6], [0.6, -1.8]]);
+    const membrane = soft('#5a2e98', 0.75, { side: T.DoubleSide });
+    for (const d of [-1, 1]) {
+      const w = mesh(g, wingGeo, membrane, d * 1.6, -2.2, -0.8); w.scale.x = d;
+      const bones = new T.Group(); w.add(bones);
+      A.push(t => { w.rotation.y = d * (-0.25 + 0.22 * Math.sin(t)); w.rotation.z = d * 0.08 * Math.sin(t); });
+    }
+    ball(g, fur, 3.0, 0, -1.4, 0.6);
+    for (const d of [-1, 1]) {
+      const ear = cone(g, 1.1, 3.4, fur, d * 2.0, 1.1, 0.1); ear.rotation.z = d * -0.35;
+      const inner = cone(g, 0.6, 2.4, soft('#ff9fd2', 0.6), d * 1.95, 0.9, 0.55); inner.rotation.z = d * -0.35;
+      glowEye(g, d * 1.15, -0.7, 3.2, 0.55, '#7aff8a');
+    }
+    ball(g, soft('#ff9fd2', 0.6), 0.7, 0, -1.7, 3.2, 1, 0.8, 0.6);
+    const nose = cone(g, 0.4, 0.9, soft('#ff86c0', 0.6), 0, -1.05, 3.62); nose.scale.z = 0.4;
+    const mouth = ball(g, soft('#4a0a20', 0.5), 1.0, 0, -2.8, 3.0, 1.35, 0.6, 0.5);
+    for (const d of [-1, 1]) { const f = cone(g, 0.18, 0.7, gloss('#ffffff', 0.2), d * 0.55, -2.55, 3.45); f.rotation.x = Math.PI; }
+    A.push(t => { mouth.scale.y = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t)); });
+  },
+  gorilla(g, A) {
+    const fur = lavaMat('#3a3236', '#ff6a2a', 0.95, 0.8), skin = soft('#7a6a62', 0.75);
+    base(g, fur);
+    ball(g, fur, 5.6, 0, -6.2, 0, 1.25, 1, 0.8);
+    for (const d of [-1, 1]) {
+      tube(g, [[d * 4.6, -3.6, 0], [d * 5.6, -1.4, 0.8], [d * 4.9, 0.2, 1.5]], 1.1, fur);
+      const h = fingers(g, d * 4.8, 0.7, 1.7, d, skin, A, d);
+    }
+    ball(g, fur, 2.5, 0, -1.9, 0.8);
+    ball(g, skin, 1.45, 0, -2.6, 2.6, 1.2, 0.85, 0.7);
+    ball(g, soft('#241c1e', 0.8), 1.6, 0, -0.95, 2.35, 1.3, 0.35, 0.6);
+    for (const d of [-1, 1]) { glowEye(g, d * 0.72, -1.4, 3.1, 0.34, '#ff4a2a'); ball(g, soft('#1a1012', 0.5), 0.2, d * 0.35, -2.3, 3.55); }
+    const mouth = ball(g, soft('#3a0806', 0.5), 0.8, 0, -3.1, 3.35, 1.25, 0.5, 0.4);
+    for (const d of [-1, 1]) { const f = cone(g, 0.15, 0.5, gloss('#f6eedc', 0.3), d * 0.5, -2.85, 3.62); f.rotation.x = Math.PI; }
+    A.push(t => { mouth.scale.y = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t)); });
+  },
+  mole(g, A) {
+    const velvet = soft('#54464a', 0.95), pink = soft('#ff8fae', 0.55);
+    base(g, velvet);
+    ball(g, velvet, 6.2, 0, -6.4, 0, 1.15, 1.05, 0.8);
+    ball(g, soft('#64545a', 0.95), 2.2, 0, -1.8, 3.2, 1.1, 0.9, 0.9);
+    const star = new T.Group(); star.position.set(0, -1.7, 5.25); g.add(star);
+    const tent = new T.CylinderGeometry(0.15, 0.2, 1.0, 10);
+    const arms = [];
+    for (let k = 0; k < 22; k++) { const a = k / 22 * TAU, piv = new T.Group(); piv.rotation.z = a - Math.PI / 2; star.add(piv); const t = mesh(piv, tent, pink, 0, 0.95, 0); ball(piv, pink, 0.18, 0, 1.45, 0); arms.push(piv); }
+    ball(star, soft('#ff6a92', 0.5), 0.6, 0, 0, 0.1);
+    A.push(t => arms.forEach((a, i) => { a.scale.y = 0.9 + 0.12 * Math.sin(t * 2 + i); }));
+    for (const d of [-1, 1]) {
+      ball(g, gloss('#0a0606', 0.1), 0.17, d * 1.3, -0.7, 4.3);
+      const paw = new T.Group(); paw.position.set(d * 4.6, -1.2, 2.2); paw.rotation.z = d * 0.4; g.add(paw);
+      ball(paw, pink, 1.8, 0, 0, 0, 1.2, 0.6, 1);
+      for (let k = 0; k < 5; k++) { const c = cone(paw, 0.26, 1.9, gloss('#f4ecd8', 0.35), (k - 2) * 0.6, 1.4, 0.4); c.rotation.z = (k - 2) * -0.12; }
+      A.push(t => { paw.position.y = -1.2 + 0.35 * Math.sin(t + d); });
+    }
+    for (const d of [-1, 1]) mesh(g, new T.BoxGeometry(0.42, 0.7, 0.2), gloss('#fff8e6', 0.3), d * 0.24, -2.75, 4.95);
+  },
+  alien(g, A) {
+    const geo = new T.SphereGeometry(6, 72, 54), basePos = geo.attributes.position.array.slice();
+    const blob = mesh(g, geo, new T.MeshPhysicalMaterial({ color: C('#5ad84a'), roughness: 0.12, clearcoat: 1, emissive: C('#1a7a2a'), emissiveIntensity: 0.25 }), 0, -5.4, 0);
+    blob.scale.set(1.12, 1, 0.8);
+    base(g, soft('#2a8a3a', 0.4));
+    A.push(t => {
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = basePos[i * 3], y = basePos[i * 3 + 1], z = basePos[i * 3 + 2], k = 1 + 0.045 * Math.sin(x * 0.9 + t) + 0.035 * Math.sin(y * 1.3 - t) + 0.03 * Math.sin(z * 1.1 + t * 2);
+        pos.setXYZ(i, x * k, y * k, z * k);
+      }
+      pos.needsUpdate = true; geo.computeVertexNormals();
+    });
+    const eyes = [[-2.4, -2.6, 0.95], [-0.7, -1.4, 0.7], [1.2, -2.0, 1.25], [3.0, -1.7, 0.75], [-3.6, -4.2, 0.6], [2.4, -4.0, 0.85], [0.2, -3.6, 0.5]];
+    const blinkers = [];
+    eyes.forEach(([x, y, r], i) => {
+      const yy = (y + 5.4), zz = Math.sqrt(Math.max(0, 1 - (x / 6.7) ** 2 - (yy / 6) ** 2)) * 4.8;
+      const e = cartoonEye(g, x, y, zz - r * 0.2, r, '#2ab85a'); blinkers.push([e, i]);
+    });
+    A.push(t => blinkers.forEach(([e, i]) => { e.scale.y = Math.abs(Math.sin(t * 0.5 + i * 1.7)) < 0.08 ? 0.15 : 1; }));
+    const mouth = mesh(g, new T.TorusGeometry(1.6, 0.25, 12, 32, Math.PI), soft('#0e3a1a', 0.5), 0, -5.4, 4.35); mouth.rotation.z = Math.PI;
+    for (const d of [-1, 1]) { tube(g, [[d * 1.6, 0.2, 0.5], [d * 2.0, 1.2, 0.8], [d * 2.6, 1.7, 1.0]], 0.13, soft('#3ab84a', 0.4)); ball(g, glowMat('#eaff8a', 1.6), 0.38, d * 2.6, 1.75, 1.0); }
+  },
+  giant(g, A) {
+    const skin = soft('#f2b890', 0.6), shirt = soft('#3a6ad8', 0.8), hair = soft('#6a4220', 0.85);
+    base(g, shirt);
+    ball(g, shirt, 6, 0, -8.4, 0, 1.2, 0.8, 0.8);
+    for (const d of [-1, 1]) { tube(g, [[d * 5.2, -6, 0], [d * 6.0, -2.4, 0.8], [d * 4.9, 0.0, 1.5]], 1.0, shirt); fingers(g, d * 4.8, 0.6, 1.7, d, skin, A, d * 1.3); }
+    ball(g, skin, 3.4, 0, -2.6, 0.6);
+    for (let k = 0; k < 9; k++) ball(g, hair, 1.1 + rnd() * 0.5, -2.8 + k * 0.7, -0.2 + Math.sin(k) * 0.4, -0.4 + (k % 2) * 0.6);
+    for (const d of [-1, 1]) {
+      ball(g, skin, 0.9, d * 3.3, -2.8, 0.2, 0.5, 1, 0.6);
+      const brow = ball(g, hair, 0.85, d * 1.2, -1.42, 3.82, 1.2, 0.32, 0.45); brow.rotation.z = d * 0.32;
+      cartoonEye(g, d * 1.15, -2.1, 3.62, 0.55);
+    }
+    ball(g, soft('#e8a078', 0.6), 0.9, 0, -2.95, 3.85, 1, 1.05, 0.9);
+    ball(g, hair, 2.8, 0, -4.7, 2.0, 1.1, 0.85, 0.7);
+    const mouth = ball(g, soft('#4a1208', 0.5), 0.75, 0, -4.15, 4.02, 1.3, 0.5, 0.4);
+    A.push(t => { mouth.scale.y = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(t)); });
+  },
+  kraken(g, A) {
+    const skin = gloss('#e8482a', 0.35), pale = soft('#ffc8b8', 0.5);
+    base(g, soft('#8a1e10', 0.6));
+    ball(g, soft('#a82a1a', 0.6), 6.2, 0, -8.2, 0, 1.15, 1, 0.8);
+    const tentacles = [];
+    for (let i = 0; i < 6; i++) {
+      const grp = new T.Group(); g.add(grp); tentacles.push([grp, i]);
+    }
+    A.push(t => tentacles.forEach(([grp, i]) => {
+      while (grp.children.length) grp.remove(grp.children[0]);
+      const bx = -5.2 + i * 2.08, side = bx < 0 ? -1 : 1, sw = Math.sin(t + i * 1.1) * 0.8;
+      for (let k = 0; k <= 22; k++) {
+        const u = k / 22, x = bx + side * Math.sin(u * 2.4) * 0.9 + sw * u * u + Math.cos(u * 6 + t * 0.5 + i) * 0.5 * u * u, y = -6 + u * 6.4, z = 1.2 + Math.sin(u * 3 + i) * 0.6;
+        ball(grp, skin, 0.95 - u * 0.75, x, y, z);
+        if (k % 3 === 1 && k < 20) ball(grp, pale, 0.2 - u * 0.1, x - side * (0.75 - u * 0.6), y, z + 0.4);
+      }
+    }));
+    ball(g, skin, 3.6, 0, -3.4, 0.4, 1, 1.35, 1);
+    for (const [x, y, r] of [[-1.6, -1.4, 0.4], [1.2, -0.9, 0.3], [2.0, -2.6, 0.5], [-2.2, -3.6, 0.3]]) ball(g, soft('#ffa08a', 0.5), r, x, y, 2.9);
+    for (const d of [-1, 1]) glowEye(g, d * 1.55, -3.6, 3.62, 0.85, '#ffd23a', { flat: true });
+  },
+  dragon(g, A) {
+    const scale = gloss('#3aa04a', 0.45), belly = soft('#f2dc8a', 0.6), horn = gloss('#f4ead6', 0.35);
+    base(g, soft('#1e5a2a', 0.6));
+    ball(g, scale, 5.8, 0, -8, 0, 1.1, 1, 0.8);
+    ball(g, belly, 3.2, 0, -7.5, 3.4, 1, 1.4, 0.4);
+    const wing = shape([[0, 0], [2.6, 3.0], [5.8, 3.6], [6.6, 2.4], [5.2, 1.6], [5.8, 0.2], [4.2, 0.4], [3.8, -1.4], [1.6, -1.8]]);
+    for (const d of [-1, 1]) { const w = mesh(g, wing, soft('#d8482a', 0.7, { side: T.DoubleSide }), d * 1.6, -3.2, -1.2); w.scale.x = d; A.push(t => { w.rotation.y = d * (-0.2 + 0.18 * Math.sin(t)); }); }
+    ball(g, scale, 2.6, 0, -2.0, 1.0, 1.1, 0.9, 1.2);
+    ball(g, gloss('#6ad07a', 0.45), 1.6, 0, -2.7, 3.4, 1.1, 0.72, 1.15);
+    for (const d of [-1, 1]) {
+      const h = cone(g, 0.45, 2.6, horn, d * 1.6, 0.0, 0.2); h.rotation.z = d * -0.5; h.rotation.x = -0.5;
+      glowEye(g, d * 1.25, -1.35, 3.55, 0.48, '#ffd23a');
+      const brow = ball(g, gloss('#2a7a3a', 0.45), 0.7, d * 1.2, -0.82, 3.4, 1.2, 0.35, 0.5); brow.rotation.z = d * -0.4;
+      ball(g, soft('#1a3a1a', 0.5), 0.17, d * 0.45, -2.45, 5.18);
+    }
+    for (let k = -2; k <= 2; k++) { const s = cone(g, 0.32, 0.9, gloss('#d8482a', 0.4), k * 0.65, 0.35 - Math.abs(k) * 0.2, 0.2); }
+    const jaw = new T.Group(); jaw.position.set(0, -3.6, 2.6); g.add(jaw);
+    ball(jaw, scale, 1.3, 0, -0.4, 1.0, 1, 0.38, 1.1);
+    const throat = ball(g, glowMat('#ff7a1a', 1.6), 0.9, 0, -3.6, 4.5, 1.1, 0.45, 0.5);
+    for (let k = 0; k < 6; k++) { const t = cone(g, 0.12, 0.4, horn, -0.9 + k * 0.36, -3.55, 4.95); t.rotation.x = Math.PI; }
+    A.push(t => { const o = 0.5 + 0.5 * Math.sin(t); jaw.rotation.x = 0.1 + o * 0.35; throat.scale.y = 0.3 + o * 0.25; });
+  },
+  golem(g, A) {
+    const rock = soft('#7d6d64', 0.95, { flatShading: true }), dark = soft('#5a4c46', 0.95, { flatShading: true });
+    const rune = glowMat('#5ae8ff', 1.8), ember = glowMat('#ffb238', 2);
+    base(g, dark);
+    const body = mesh(g, new T.DodecahedronGeometry(6, 1), rock, 0, -7.2, 0); body.scale.set(1.2, 1, 0.8);
+    for (const [x, y, w, h, r] of [[-1.2, -5.2, 0.2, 2.4, 0.3], [0.6, -5.6, 0.2, 2.0, -0.4], [-0.2, -4.1, 2.6, 0.2, 0.1]]) { const m = mesh(g, new T.BoxGeometry(w, h, 0.3), rune, x, y, 4.7); m.rotation.z = r; }
+    for (const d of [-1, 1]) {
+      mesh(g, new T.IcosahedronGeometry(2.2, 0), dark, d * 4.6, -3.6, 0).material.flatShading = true;
+      const fist = new T.Group(); fist.position.set(d * 4.7, 0.0, 1.5); g.add(fist);
+      mesh(fist, new T.DodecahedronGeometry(1.8, 0), rock);
+      for (let k = 0; k < 3; k++) mesh(fist, new T.BoxGeometry(0.5, 0.5, 0.5), dark, (k - 1) * 0.7, 0.9, 1.1).rotation.set(0.3, 0.4, 0.2);
+      mesh(g, new T.IcosahedronGeometry(1.2, 0), dark, d * 5.1, -1.8, 0.8);
+      A.push(t => { fist.position.y = 0.3 * Math.sin(t + d * 1.5); });
+      for (let k = 0; k < 3; k++) ball(g, soft('#5a9a3a', 0.9), 0.4, d * (4.0 + k * 0.5), -1.8 + k * 0.1, 1.6, 1, 0.4, 1);
+    }
+    const head = mesh(g, new T.DodecahedronGeometry(2.2, 0), rock, 0, -2.0, 1.3);
+    for (const d of [-1, 1]) mesh(g, new T.BoxGeometry(0.95, 0.28, 0.3), ember, d * 0.75, -1.7, 3.25).rotation.z = d * -0.15;
+    const mouth = mesh(g, new T.BoxGeometry(1.4, 0.3, 0.3), glowMat('#ff7a1a', 1.2), 0, -2.8, 3.1);
+    A.push(t => { mouth.scale.y = 0.6 + 0.8 * (0.5 + 0.5 * Math.sin(t)); });
+  },
+  crab(g, A) {
+    const shell = gloss('#e8402a', 0.32), pale = gloss('#ffa07a', 0.35);
+    base(g, soft('#8a1a0e', 0.6));
+    ball(g, soft('#a82416', 0.6), 6.2, 0, -9, 0, 1.15, 1, 0.8);
+    ball(g, shell, 5.6, 0, -4.6, 0, 1.15, 0.6, 0.8);
+    for (let k = -3; k <= 3; k++) { const s = cone(g, 0.35, 1.0, pale, k * 1.4, -1.6 - Math.abs(k) * 0.25, 2.6 - Math.abs(k) * 0.3); s.rotation.x = 0.4; }
+    for (const [x, y, r] of [[-2.2, -3.4, 0.5], [1.8, -3.0, 0.6], [0, -2.6, 0.35], [3.2, -4.0, 0.4]]) ball(g, pale, r, x, y, 3.6, 1, 0.6, 0.5);
+    for (const d of [-1, 1]) {
+      cyl(g, 0.22, 0.26, 1.6, shell, d * 0.8, -1.4, 3.0, 12);
+      ball(g, gloss('#0a0606', 0.08), 0.48, d * 0.85, -0.5, 3.1);
+      ball(g, new T.MeshBasicMaterial({ color: 0xffffff }), 0.12, d * 0.85 - 0.15, -0.35, 3.5);
+      for (let k = 0; k < 3; k++) tube(g, [[d * 5, -5 - k * 0.6, 0.5], [d * 6.6, -4.2 - k * 0.6, 1.5], [d * 6.9, -6 - k * 0.7, 2.2]], 0.32, shell);
+      tube(g, [[d * 3.6, -4.0, 1.5], [d * 4.8, -2.4, 2.0], [d * 4.6, -1.2, 2.2]], 0.7, shell);
+      const claw = new T.Group(); claw.position.set(d * 4.6, -0.9, 2.3); g.add(claw);
+      const lower = ball(claw, shell, 1.3, d * 0.3, 0.6, 0, 0.75, 1.45, 0.7); lower.rotation.z = d * 0.25;
+      const upperPiv = new T.Group(); upperPiv.position.set(-d * 0.5, 0.2, 0.2); claw.add(upperPiv);
+      const upper = ball(upperPiv, pale, 1.0, -d * 0.2, 0.9, 0, 0.6, 1.3, 0.6);
+      A.push(t => { upperPiv.rotation.z = -d * (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(t))); });
+    }
+    for (let i = 0; i < 3; i++) { const b = ball(g, new T.MeshPhysicalMaterial({ color: C('#ffffff'), roughness: 0.05, transparent: true, opacity: 0.55 }), 0.25, 0, 0, 0); A.push(t => { const p = (t / TAU + i / 3) % 1; b.position.set(-0.5 + i * 0.5, -3.0 + p * 2.2, 4.2); b.scale.setScalar(0.18 + p * 0.25); }); }
+  },
+};
+const ORDER = ['worm', 'bat', 'gorilla', 'mole', 'alien', 'giant', 'kraken', 'dragon', 'golem', 'crab'];
+const UNDERGLOW = { worm: '#ff6a1a', bat: '#a46aff', gorilla: '#ff6a2a', mole: '#ffb07a', alien: '#7aff8a', giant: '#ffb070', kraken: '#ff6a4a', dragon: '#ff7a2a', golem: '#5ae8ff', crab: '#ff7a4a' };
+
+function makeScene(id) {
+  const scene = new T.Scene();
+  scene.add(new T.HemisphereLight(C('#fff1dc'), C('#2a1a14'), 0.8));
+  const key = new T.DirectionalLight(C('#fff1d6'), 1.7); key.position.set(-5, 7, 9); scene.add(key);
+  const rim = new T.DirectionalLight(C('#9fd8ff'), 1.6); rim.position.set(6, 5, -7); scene.add(rim);
+  const under = new T.PointLight(C(UNDERGLOW[id]), 1.6, 26, 2); under.position.set(0, -6, 9); scene.add(under);
+  const rig = new T.Group(); rig.rotation.x = 0.22; scene.add(rig);
+  const model = new T.Group(); rig.add(model);
+  const anim = []; MONSTERS[id](model, anim);
+  const pose = t => anim.forEach(fn => fn(t));
+  // move the model so its highest point (across the whole loop) sits on the kill line
+  let top = -Infinity;
+  for (let f = 0; f < FRAMES; f++) { pose(f / FRAMES * TAU); rig.updateMatrixWorld(true); top = Math.max(top, new T.Box3().setFromObject(rig).max.y); }
+  rig.position.y = -top;
+  return { scene, pose };
+}
+
+function renderFrame(sc, f) { sc.pose(f / FRAMES * TAU); renderer.render(sc.scene, camera); return renderer.domElement; }
+
+function bakeOne(id) {
+  const sc = makeScene(id);
+  const sheet = document.createElement('canvas'); sheet.width = FW * COLS; sheet.height = FH * Math.ceil(FRAMES / COLS);
+  const sx = sheet.getContext('2d'); sx.imageSmoothingQuality = 'high';
+  for (let f = 0; f < FRAMES; f++) sx.drawImage(renderFrame(sc, f), (f % COLS) * FW, Math.floor(f / COLS) * FH, FW, FH);
+  const thumb = document.createElement('canvas'); thumb.width = 400; thumb.height = 300;
+  const tx = thumb.getContext('2d'); tx.imageSmoothingQuality = 'high'; tx.drawImage(sheet, 0, 0, FW, FH, 0, 0, 400, 300);
+  return { sheet, thumb };
+}
+
+const blob = (cv, q) => new Promise(r => cv.toBlob(r, 'image/webp', q));
+async function save(name, b) { const res = await fetch('/save/' + name, { method: 'POST', body: b }); if (!res.ok) throw new Error('save failed: ' + name); }
+
+(async () => {
+  const status = document.getElementById('status'), grid = document.getElementById('grid');
+  const ids = params.get('only') ? params.get('only').split(',') : ORDER;
+  const results = [];
+  for (const id of ids) {
+    status.textContent = `Rendering ${id}…`;
+    await new Promise(r => setTimeout(r, 20));
+    const { sheet, thumb } = bakeOne(id);
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img alt="${id}" src="${thumb.toDataURL('image/png')}"><figcaption>${id}</figcaption>`;
+    grid.appendChild(fig);
+    if (params.get('bake')) {
+      status.textContent = `Saving ${id}…`;
+      const sb = await blob(sheet, 0.86), tb = await blob(thumb, 0.86);
+      await save(`monster-${id}.webp`, sb); await save(`monster-${id}-thumb.webp`, tb);
+      results.push(`${id}: sheet ${(sb.size / 1024) | 0} KB, thumb ${(tb.size / 1024) | 0} KB`);
+    }
+  }
+  status.textContent = params.get('bake') ? 'Saved. ' + results.join(' · ') : 'Preview only. Add ?bake=1 to save.';
+  window.__bakeDone = results.length ? results : true;
+})().catch(e => { document.getElementById('status').textContent = 'Error: ' + e.message; window.__bakeDone = 'error: ' + e.message; });
+</script>
+</body>
+</html>

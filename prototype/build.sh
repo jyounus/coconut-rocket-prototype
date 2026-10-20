@@ -13,4 +13,5 @@ mkdir -p dist
   cat index.html
   printf '\n</body>\n</html>\n'
 } > dist/index.html
+rm -rf dist/sprites && cp -R sprites dist/sprites
 echo "Built dist/index.html"
