@@ -386,8 +386,6 @@ const RULES = {
   setSize: [3, 6],             // hazards in a set before a breather, easy → hard
   breather: [440, 300],        // empty height between sets, easy → hard
   intro: { spacing: 380, setSize: 2, breather: 520 },
-  geyserWarn: 0.6,             // seconds of sputter before a geyser fires
-  geyserOn: 0.42,              // share of each geyser cycle spent firing
   firebarClear: 40,            // room between a fire wheel's reach and the wall
   batMaxSpeed: 250,            // fastest a bat may cross the shaft
   spitQuiet: [150, 450],       // worm only spits when no obstacle is this far below / above the player
@@ -451,16 +449,12 @@ function createLevel(seed, opts) {
     },
     geyser(A, diff, u) {
       const side = u[0] < 0.5 ? 1 : -1;
-      const [L, R] = opening(A - 16, A + 16), gap = R - L;
+      const [L, R] = opening(A - 22, A + 30), gap = R - L;      // the flame's full height, including its upward curl
       const narrow = gap < RULES.narrowGap;
       const len = Math.min(gap * (narrow ? 0.4 + u[1] * 0.12 : 0.45 + u[1] * 0.25), gap - RULES.minLane);
       if (len < 70) return null;
-      const period = 2.2 + u[2] * 1.2;
-      return {
-        type: 'geyser', side, alt: A, base: walls(A)[side > 0 ? 0 : 1], len, hh: 13, narrow,
-        period, ph: u[3] * period, warnFrac: RULES.geyserWarn / period, onFrac: RULES.geyserOn,
-        lo: A - 16, hi: A + 16,
-      };
+      // Geysers fire constantly, so the lane they leave is always visible and always the same.
+      return { type: 'geyser', side, alt: A, base: walls(A)[side > 0 ? 0 : 1], len, hh: 17, narrow, ph: u[3] * 6.283, lo: A - 22, hi: A + 30 };
     },
     firebar(A, diff, u) {
       const [L, R] = opening(A - 100, A + 100), gap = R - L, off = (u[0] - 0.5) * 24;
@@ -815,6 +809,21 @@ function boulderActive() {
   return G.hazards.some(h => h.type === 'boulder' && (h.state === 'warn' || (h.state === 'fall' && h.cur > G.p.alt - 40)));
 }
 
+// Flame shape shared by drawing and collision: thin at the vent, fullest near 60%, tapering
+// to a point, and curling slightly upward as hot gas rises.
+function geyserHalf(h, t) { return h.hh * (0.45 + 0.95 * t) * (1 - 0.9 * smooth(0.66, 1, t)); }
+function geyserRise(t) { return 7 * t * t; }
+function geyserHits(h) {
+  const p = G.p;
+  for (let k = -2; k <= 2; k++) {
+    const x = p.x + k * 5, t = (x - h.base) * h.side / h.len;
+    if (t < 0 || t > 1) continue;
+    const d = Math.hypot(x - p.x, p.alt - (h.alt + geyserRise(t))) - geyserHalf(h, t) * 0.9;
+    if (d < 13) return true;
+  }
+  return false;
+}
+
 function quietAround(alt) {
   const lo = alt - RULES.spitQuiet[0], hi = alt + RULES.spitQuiet[1];
   return !G.hazards.some(h => h.type === 'boulder' ? h.state !== 'idle' : h.type !== 'bat' && h.hi > lo && h.lo < hi);
@@ -852,13 +861,14 @@ function updateHazards(dt) {
         if (h.cur < floor) { G.hazards.splice(i, 1); continue; }
       }
     } else if (h.type === 'geyser') {
-      const c = ((t + h.ph) % h.period) / h.period;
-      h.on = c >= 1 - h.onFrac;
-      h.warn = !h.on && c >= 1 - h.onFrac - h.warnFrac;
-      if (h.on && play) {
-        const x0 = h.side > 0 ? h.base : h.base - h.len, x1 = h.side > 0 ? h.base + h.len : h.base;
-        const p = G.p, cx = clamp(p.x, x0, x1), ca = clamp(p.alt, h.alt - h.hh, h.alt + h.hh);
-        if ((p.x - cx) ** 2 + (p.alt - ca) ** 2 < 13 * 13) die('geyser');
+      if (play && geyserHits(h)) die('geyser');
+      if (h.alt > G.camAlt - 40 && h.alt < camTop + 40) {
+        if (Math.random() < dt * 16) {
+          const t = 0.1 + Math.random() * 0.8;
+          puff(h.base + h.side * h.len * t, h.alt + geyserRise(t) + (Math.random() - 0.5) * geyserHalf(h, t),
+            h.side * (90 + Math.random() * 140), 30 + Math.random() * 90, 0.45 + Math.random() * 0.4, 1.4 + Math.random() * 1.2, 'spark');
+        }
+        if (Math.random() < dt * 5) puff(h.base + h.side * h.len * 0.95, h.alt + 10, h.side * 20, 45, 1, 5 + Math.random() * 3, 'smoke');
       }
     } else if (h.type === 'firebar') {
       h.ang = t * h.w + h.ph;
@@ -895,6 +905,7 @@ function updateParticles(dt) {
     if (q.life <= 0) { ps.splice(i, 1); continue; }
     q.x += q.vx * dt; q.alt += q.vy * dt;
     if (q.kind === 'debris') q.vy -= 700 * dt;
+    else if (q.kind === 'spark') { q.vx *= 1 - dt * 1.6; q.vy += 120 * dt; }
     else { q.vx *= 1 - dt * 2; q.vy *= 1 - dt * 1.5; }
   }
 }
@@ -1124,37 +1135,81 @@ function drawBoulder(h) {
   if (Math.random() < 0.4) puff(h.x + (Math.random() - .5) * h.r, h.cur + h.r, 0, 40, 0.5, 4, 'smoke');
 }
 
+const GEYSER_LAYERS = [
+  // outer flame body, then the bright inner flame, then the white-hot core near the vent
+  { k: 1.0,  L: 1.0,  turb: 1.0, stops: ['rgba(255,90,25,.35)', 'rgba(255,85,20,.8)',   'rgba(220,40,10,.55)',  'rgba(120,20,5,0)'] },
+  { k: 0.64, L: 0.84, turb: 0.7, stops: ['rgba(255,200,90,.5)', 'rgba(255,170,50,.95)', 'rgba(255,110,30,.65)', 'rgba(255,90,20,0)'] },
+  { k: 0.34, L: 0.55, turb: 0.4, stops: ['rgba(255,255,240,1)', 'rgba(255,248,200,.95)', 'rgba(255,215,120,.6)', 'rgba(255,190,80,0)'] },
+];
 function drawGeyser(h) {
-  const bx = sx(h.base), y = sy(h.alt), dir = h.side;
-  // nozzle rock
-  ctx.fillStyle = '#3b2620'; ctx.strokeStyle = '#140c0a'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.ellipse(bx + dir * 4 * s, y, 12 * s, 17 * s, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = h.on || h.warn ? '#ffb238' : '#1a0d08';
-  ctx.beginPath(); ctx.ellipse(bx + dir * 9 * s, y, 4 * s, 8 * s, 0, 0, 6.283); ctx.fill();
-  if (h.warn) {
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let k = 0; k < 4; k++) {
-      ctx.fillStyle = `rgba(255,${120 + k * 30},40,${0.35 + 0.3 * Math.random()})`;
-      ctx.beginPath(); ctx.arc(bx + dir * (14 + Math.random() * 26) * s, y + (Math.random() - .5) * 12 * s, (3 + Math.random() * 4) * s, 0, 6.283); ctx.fill();
-    }
-    ctx.restore();
+  const dir = h.side, bx = sx(h.base), by = sy(h.alt), T = G.t, ph = h.ph;
+  const lenPx = h.len * s;
+
+  // soot stain on the wall above the vent
+  ctx.fillStyle = 'rgba(10,4,2,.35)';
+  ctx.beginPath(); ctx.ellipse(bx - dir * 2 * s, by - 26 * s, 9 * s, 26 * s, 0, 0, 6.283); ctx.fill();
+
+  // basalt vent lip sticking out of the wall
+  ctx.save(); ctx.translate(bx, by);
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = k / 10 * 6.283, rr = (15 + 5 * hash2(k, h.alt | 0)) * s;
+    ctx.lineTo(Math.cos(a) * rr * 0.75 + dir * 5 * s, Math.sin(a) * rr);
   }
-  if (h.on) {
-    const len = h.len * s;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let layer = 0; layer < 3; layer++) {
-      const th = (h.hh + 6 - layer * 5) * s;
-      const g = ctx.createLinearGradient(bx, 0, bx + dir * len, 0);
-      const cols = [['rgba(255,80,20,.85)', 'rgba(255,60,10,0)'], ['rgba(255,160,40,.9)', 'rgba(255,120,30,0)'], ['rgba(255,250,200,.95)', 'rgba(255,220,120,0)']][layer];
-      g.addColorStop(0, cols[0]); g.addColorStop(1, cols[1]);
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.moveTo(bx, y - th * 0.6);
-      for (let k = 0; k <= 10; k++) { const t = k / 10; ctx.lineTo(bx + dir * len * t, y - th * (0.6 + 0.4 * t) - Math.sin(G.t * 40 + k * 1.7 + layer) * 3 * s); }
-      for (let k = 10; k >= 0; k--) { const t = k / 10; ctx.lineTo(bx + dir * len * t, y + th * (0.6 + 0.4 * t) + Math.sin(G.t * 37 + k * 2.1 + layer) * 3 * s); }
-      ctx.closePath(); ctx.fill();
+  ctx.closePath();
+  const vg = ctx.createLinearGradient(0, -20 * s, 0, 20 * s);
+  vg.addColorStop(0, '#5a3b30'); vg.addColorStop(0.5, '#2e1c17'); vg.addColorStop(1, '#170d0a');
+  ctx.fillStyle = vg; ctx.strokeStyle = '#120806'; ctx.lineWidth = 2.5; ctx.fill(); ctx.stroke();
+  // glowing mouth and a slow lava dribble
+  const mx = dir * 12 * s;
+  const mg = ctx.createRadialGradient(mx, 0, 1, mx, 0, 10 * s);
+  mg.addColorStop(0, '#fffbe0'); mg.addColorStop(0.4, '#ffb238'); mg.addColorStop(1, '#5a1406');
+  ctx.fillStyle = mg; ctx.beginPath(); ctx.ellipse(mx, 0, 5 * s, 9 * s, 0, 0, 6.283); ctx.fill();
+  const drip = (6 + 5 * (0.5 + 0.5 * Math.sin(T * 1.7 + ph))) * s;
+  ctx.fillStyle = '#ff8a2a'; ctx.beginPath(); ctx.ellipse(mx - dir * 2 * s, 8 * s + drip / 2, 1.8 * s, drip / 2, 0, 0, 6.283); ctx.fill();
+  ctx.restore();
+
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  // heat glow lighting up the shaft around the jet
+  const gx = bx + dir * lenPx * 0.35, gr = lenPx * 0.8;
+  const glow = ctx.createRadialGradient(gx, by, 4 * s, gx, by, gr);
+  glow.addColorStop(0, `rgba(255,120,40,${0.26 + 0.05 * Math.sin(T * 9 + ph)})`); glow.addColorStop(1, 'rgba(255,80,20,0)');
+  ctx.fillStyle = glow; ctx.fillRect(gx - gr, by - gr, gr * 2, gr * 2);
+
+  // the jet: three turbulent layers that roll outward from the vent
+  const N = 20;
+  for (const ly of GEYSER_LAYERS) {
+    const L = ly.L * (ly.k === 1 ? 1 + 0.035 * Math.sin(T * 17 + ph) : 1);   // tip tongues flicker, never past the hitbox much
+    const g = ctx.createLinearGradient(bx, 0, bx + dir * lenPx * L, 0);
+    g.addColorStop(0, ly.stops[0]); g.addColorStop(0.12, ly.stops[1]); g.addColorStop(0.7, ly.stops[2]); g.addColorStop(1, ly.stops[3]);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    for (const edge of [1, -1]) {                      // upper edge out to the tip, lower edge back
+      for (let i = 0; i <= N; i++) {
+        const t = (edge > 0 ? i : N - i) / N, tt = t * L;
+        const wob = (Math.sin(tt * 14 - T * 22 + ph + edge * 1.7) * 0.2 + Math.sin(tt * 29 - T * 37 + ph * 2 + edge) * 0.1) * tt * ly.turb;
+        const half = geyserHalf(h, t) * ly.k * (1 + wob);
+        const x = bx + dir * h.len * tt * s, y = by - (geyserRise(tt) + edge * half) * s;
+        i === 0 && edge > 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
     }
-    ctx.restore();
+    ctx.closePath(); ctx.fill();
   }
+
+  // rolling fireballs give the jet volume: each one swells as it travels out, then burns away
+  for (let j = 0; j < 9; j++) {
+    const prog = (T * 1.5 + j / 9 + ph) % 1, t = prog * 0.97;
+    const r = geyserHalf(h, t) * (0.95 + 0.25 * hash2(j, h.alt | 0)) * s;
+    if (r < 1) continue;
+    const x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + Math.sin(j * 2.3 + T * 6) * geyserHalf(h, t) * 0.25) * s;
+    const heat = 1 - prog;
+    const fg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    fg.addColorStop(0, `rgba(255,${200 + 55 * heat | 0},${90 + 120 * heat | 0},${0.55 * heat + 0.15})`);
+    fg.addColorStop(0.6, `rgba(255,${90 + 70 * heat | 0},20,${0.35 * heat + 0.05})`);
+    fg.addColorStop(1, 'rgba(200,40,10,0)');
+    ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawFirebar(h) {
@@ -1195,13 +1250,16 @@ function drawParticles(additive) {
   ctx.save();
   if (additive) ctx.globalCompositeOperation = 'lighter';
   for (const q of G.particles) {
-    const isAdd = q.kind === 'flame';
+    const isAdd = q.kind === 'flame' || q.kind === 'spark';
     if (isAdd !== additive) continue;
     const t = q.life / q.max, x = sx(q.x), y = sy(q.alt);
     if (q.kind === 'flame') {
       const r = q.size * s * (0.5 + t);
       ctx.fillStyle = t > 0.6 ? `rgba(255,240,180,${t})` : `rgba(255,${80 + 120 * t | 0},30,${t})`;
       ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+    } else if (q.kind === 'spark') {
+      ctx.strokeStyle = `rgba(255,${150 + 90 * t | 0},${60 * t | 0},${t})`; ctx.lineWidth = q.size * s;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - q.vx * 0.02 * s, y + q.vy * 0.02 * s); ctx.stroke();
     } else if (q.kind === 'ring') {
       const r = (q.size + (1 - t) * 16) * s;
       ctx.strokeStyle = `rgba(230,210,200,${t * 0.55})`; ctx.lineWidth = 3 * s * t + 1;

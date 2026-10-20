@@ -75,7 +75,6 @@ for (const cfg of CONFIGS) {
         const tip = h.side > 0 ? h.base + h.len : h.base - h.len;
         const lane = h.side > 0 ? R - tip : tip - L;
         if (lane < RULES.minLane - 0.5) fail('geyser leaves an open lane', `${where}: ${lane.toFixed(0)} units`);
-        if (h.period * h.warnFrac < 0.6 - 1e-9) fail('geyser warns for at least 0.6 s', where);
       }
       if (h.type === 'pend') {
         const [L, R] = tightest(level, h.lo, h.aAlt);
