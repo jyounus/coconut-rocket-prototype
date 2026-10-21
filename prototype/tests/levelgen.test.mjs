@@ -22,6 +22,7 @@ const CONFIGS = [
 
 const failures = new Map();
 let checked = 0;
+const seen = new Map();                     // how many shafts each hazard type shows up in
 function fail(rule, detail) {
   if (!failures.has(rule)) failures.set(rule, { count: 0, example: detail });
   failures.get(rule).count++;
@@ -37,18 +38,65 @@ for (const cfg of CONFIGS) {
   for (let k = 0; k < SEEDS; k++) {
     const seed = Math.imul(k + 1, 2654435761) >>> 0;
     const level = createLevel(seed, cfg);
-    const hz = [];
-    level.fill(HEIGHT, hz);
+    const hz = [], fruit = [];
+    level.fill(HEIGHT, hz, fruit);
     checked++;
     const tag = `seed ${seed} density ${cfg.density} intro ${cfg.intro}`;
     const intro = cfg.intro * 10;
 
     // determinism: the same seed always gives the same shaft
     if (k < 20) {
-      const again = []; createLevel(seed, cfg).fill(HEIGHT, again);
-      if (JSON.stringify(again) !== JSON.stringify(hz)) fail('same seed gives the same layout', tag);
+      const again = [], againFruit = []; createLevel(seed, cfg).fill(HEIGHT, again, againFruit);
+      if (JSON.stringify(again) !== JSON.stringify(hz) || JSON.stringify(againFruit) !== JSON.stringify(fruit)) fail('same seed gives the same layout', tag);
     }
     if (hz.length < HEIGHT / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
+    if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
+    for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
+
+    // from 150 m on, holding the centre line without steering must stop working: a fair share of
+    // hazards (centred spiders and fire wheels, offset crushers, bats sweeping the middle) cover it
+    let centre = 0, after = 0;
+    for (const h of hz) {
+      if (h.lo < 1500) continue;
+      after++;
+      const [L, R] = level.walls(h.lo), mid = (L + R) / 2;
+      const covers =
+        h.type === 'bat' ||
+        (h.type === 'spider' && Math.abs(h.x - mid) < h.r + 13) ||
+        (h.type === 'firebar' && Math.abs(h.cx - mid) < h.len) ||
+        (h.type === 'crusher' && (h.lb + h.maxL > mid - 13 || h.rb - h.maxR < mid + 13)) ||
+        (h.type === 'boulder' && Math.abs(h.x - mid) < h.r + 13);
+      if (covers) centre++;
+    }
+    if (after >= 30 && centre / after < 0.25) fail('a fair share of hazards cover the centre line from 150 m', `${tag}: ${(100 * centre / after).toFixed(0)}%`);
+
+    // zone changes are left clear for their landmark
+    for (const h of hz) for (const z of RULES.zones) if (h.lo < z + RULES.landmarkClear && h.hi > z - RULES.landmarkClear) fail('zone landmarks are kept clear', `${tag}: ${h.type} at ${(h.lo / 10).toFixed(0)} m`);
+
+    // fruit sits inside the shaft and inside the safe lane of any static hazard at its height
+    const PAD = HITBOX / 2;
+    for (const f of fruit) {
+      const fw = `${tag} fruit at ${(f.alt / 10).toFixed(0)} m`;
+      const [L, R] = level.walls(f.alt);
+      if (f.x - PAD < L || f.x + PAD > R) fail('fruit is inside the shaft', fw);
+      for (const h of hz) {
+        const top = h.type === 'pend' ? h.aAlt : h.hi;
+        if (f.alt < h.lo || f.alt > top) continue;
+        if (h.type === 'geyser' || h.type === 'spike') {
+          const tip = h.base + h.side * h.len;
+          if (h.side > 0 ? f.x - PAD < tip : f.x + PAD > tip) fail('fruit never sits in a geyser or spike', `${fw}: ${h.type}`);
+        } else if (h.type === 'pend') {
+          const reach = h.ax + h.side * (h.len * Math.sin(0.78 + 0.55) + h.r);
+          if (h.side > 0 ? f.x - PAD < reach : f.x + PAD > reach) fail('fruit never sits in a pod swing', fw);
+        } else if (h.type === 'crusher') {
+          if (f.x - PAD < h.lb + h.maxL || f.x + PAD > h.rb - h.maxR) fail('fruit never sits in a crusher', fw);
+        } else if (h.type === 'firebar') {
+          if (Math.hypot(f.x - h.cx, f.alt - h.alt) < h.len + h.br + PAD) fail('fruit never sits in a fire wheel', fw);
+        } else if (h.type === 'spider') {
+          if (Math.abs(f.x - h.x) < h.r + PAD) fail('fruit never sits in a spider column', fw);
+        }
+      }
+    }
 
     // shaft shape: never under 60% of the screen, and every narrow stretch opens up again
     let narrowSince = null;
@@ -101,7 +149,7 @@ for (const cfg of CONFIGS) {
       }
       if (h.type === 'crusher') {
         const [L, R] = tightest(level, h.lo, h.hi);
-        const lane = Math.min(R, h.rb - h.maxExt) - Math.max(L, h.lb + h.maxExt);
+        const lane = Math.min(R, h.rb - h.maxR) - Math.max(L, h.lb + h.maxL);
         if (lane < RULES.minLane - 0.5) fail('crusher leaves an open lane when fully closed', `${where}: ${lane.toFixed(0)} units`);
       }
       if (h.type === 'boulder') {
@@ -129,6 +177,10 @@ for (const cfg of CONFIGS) {
       }
     }
   }
+}
+
+for (const t of ['bat', 'pend', 'spike', 'spider', 'geyser', 'crusher', 'boulder', 'firebar']) {
+  if ((seen.get(t) || 0) < checked * 0.6) fail('every hazard type shows up in most shafts', `${t} in ${seen.get(t) || 0} of ${checked}`);
 }
 
 if (failures.size) {
