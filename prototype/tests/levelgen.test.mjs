@@ -606,6 +606,7 @@ function limbCheck(id, st, rig, wallAt, kill) {
     const L = Math.max(...hand.filter(p => p[5] === 'c').map(p => Math.hypot(p[2] - p[0], p[3] - p[1]) + p[4]));
     if (L < 28) fail('the wing thumb claw is big (28+ long)', `${id}: ${L.toFixed(0)}`);
   }
+  if (st.hand === 'geode' && roles.filter(r => r === 'o').length < 6) fail('the stone hand is an open palm (palm, four fingers, thumb)', id);
   if (st.hand === 'chaetae') {   // the Scissorjaw's hand: a big fan of glass bristles that reads at phone size
     const hh = Math.max(...hand.map(p => Math.max(p[1], p[3]) + p[4])) - Math.min(...hand.map(p => Math.min(p[1], p[3]) - p[4]));
     if (roles.filter(r => r === 'x').length < 5 || hh < 55) fail('the bristle-fan hand is big (5+ bristles, 55+ tall)', `${id}: ${hh.toFixed(0)}`);
