@@ -56,6 +56,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .crys.bump { transform: scale(1.3); }
 .hud .iconbtn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 8px); right: max(16px, env(safe-area-inset-right, 0px)); }
 .hud .iconbtn.faded { opacity: .45; }
+.hudmid { transition: opacity .15s; } .hudmid.faded { opacity: .3; }
 .iconbtn {
   pointer-events: auto;
   width: 44px; height: 44px; border-radius: 14px;
@@ -145,6 +146,9 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink), inset 0 2px 0 rgba(255,255,255,.5); }
 .btn.alt { background: linear-gradient(#5b4245, #3c2a2d); color: var(--cream); box-shadow: 0 4px 0 var(--ink), inset 0 2px 0 rgba(255,255,255,.1); font-size: 18px; }
 .btn.go { background: linear-gradient(#a6e36a, var(--leaf) 55%, #4f9a2a); }
+.btn small { display: block; font: 800 12px var(--font-body); letter-spacing: 0; opacity: .8; margin-top: 1px; }
+#adBtn { font-size: 17px; line-height: 1.1; padding: 6px 12px; }
+.bonus li.cut, .bonus li.cut b { color: #ffb238; }
 .btn.big { min-height: 72px; font-size: 34px; border-radius: 20px; }
 .scoreline { margin: -6px 0 0; font-size: 13px; font-weight: 800; color: var(--muted); }
 /* Game over: the panel slides up from the bottom and leaves the top ~30% for the monster and its catch */
@@ -209,7 +213,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pcard { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px 8px; border-radius: 14px; border: 2px solid rgba(0,0,0,.4); background: rgba(0,0,0,.28); color: var(--cream); cursor: pointer; font: 800 11.5px var(--font-body); line-height: 1.15; text-align: center; min-width: 0; }
 .pcard canvas { width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 10px; }
 .pcard { background: linear-gradient(170deg, rgba(var(--tint), .5), rgba(var(--tint), .14) 60%, rgba(0,0,0,.35)); border-color: rgba(var(--tint), .6); transition: transform .12s; }
-.pcard span { text-shadow: 0 1px 0 var(--ink); }
+.pcard span { text-shadow: 0 1px 0 var(--ink); display: block; max-width: 100%; white-space: nowrap; overflow: hidden; }   /* fitted to one line (fitCards) */
 .preview { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 16px; border: 3px solid var(--ink); }
 .pilotgrid { max-height: min(34vh, 380px); }
 .pcard[aria-pressed="true"] { border-color: var(--ember); border-width: 3px; box-shadow: 0 0 0 2px var(--ink), 0 0 14px rgba(255,178,56,.55); transform: scale(1.04); }
@@ -221,7 +225,8 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pickbtn canvas { flex: none; width: 42px; height: 42px; border-radius: 9px; }
 .pickbtn span { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; }
 .pickbtn small { font: 900 10px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.pickbtn b { font-weight: 400; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pickbtn b { font-weight: 400; font-size: 15px; line-height: 1.02; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: normal; }   /* long names wrap to two lines instead of clipping */
+@media (max-width: 400px) { .pickbtn { gap: 6px; padding: 0 6px; } .pickbtn canvas { width: 34px; height: 34px; } .pickbtn b { font-size: 14px; } }
 .keyart { display: block; width: calc(100% + 40px); height: 230px; margin: -22px -20px -4px; border-radius: 23px 23px 0 0; border-bottom: 3px solid var(--ink); }
 @media (max-height: 700px) { .keyart { height: 180px; } }
 @media (max-height: 600px) { .keyart { height: 140px; } }
@@ -335,7 +340,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="btns">
       <button class="btn go" id="againBtn">Run again</button>
-      <button class="btn" id="adBtn">Watch ad for one more life</button>
+      <button class="btn" id="adBtn">Watch ad: keep flying, score halved</button>
       <div class="btnrow">
         <button class="btn alt" id="shareBtn">Share score</button>
         <button class="btn alt" id="menuBtn">Menu</button>
@@ -350,7 +355,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="eyebrow">Rewarded video</div>
     <div class="adbox"><div><b id="adCount">3</b><span class="note">A rewarded video ad plays here in the real game.</span></div></div>
     <div class="bar"><i id="adBar"></i></div>
-    <p class="note" id="adNote">You get one extra life per run. The monster gets pushed back and the obstacles around you are cleared.</p>
+    <p class="note" id="adNote">One extra life per run, and it costs half your score so far. The monster gets pushed back and the obstacles around you are cleared.</p>
   </div>
 </div>
 
@@ -361,7 +366,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="tune" id="tuneRows"></div>
     <label class="check" for="showHitboxes"><input type="checkbox" id="showHitboxes"> Show hitboxes</label>
     <p class="tunestatus" id="tuneStatus"></p>
-    <p class="note">Changes apply straight away and are saved on this phone. The engine heats while you thrust; ice crystals cool it (letting go cools it slowly). Too hot and it sputters for a second.</p>
+    <p class="note">Changes apply straight away and are saved on this phone. The engine heats while you thrust; ice crystals cool it fast (letting go cools it too). Too hot and it sputters for a second.</p>
     <div class="btnrow">
       <button class="btn alt" id="tuneReset">Reset</button>
       <button class="btn go" id="tuneDone">Done</button>
@@ -374,6 +379,15 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 <script>
 (() => {
 'use strict';
+
+// Canvas guard: an arc or ellipse with a negative radius throws (IndexSizeError) and would drop the frame, so
+// every radius is clamped at 0 (particles that shrink past zero, gradients at the end of a fade).
+for (const C of [CanvasRenderingContext2D, typeof OffscreenCanvasRenderingContext2D !== 'undefined' ? OffscreenCanvasRenderingContext2D : null]) {
+  if (!C) continue;
+  const P = C.prototype, arc = P.arc, ell = P.ellipse;
+  P.arc = function (x, y, r, a0, a1, ccw) { return arc.call(this, x, y, Math.max(0, r || 0), a0, a1, ccw); };
+  P.ellipse = function (x, y, rx, ry, rot, a0, a1, ccw) { return ell.call(this, x, y, Math.max(0, rx || 0), Math.max(0, ry || 0), rot, a0, a1, ccw); };
+}
 
 // ---------- storage ----------
 const store = {
@@ -389,7 +403,7 @@ const UNITS_PER_M = 10;
 // coolTime: seconds to cool fully; boost: strength of the kick for pressing again once it has cooled.
 // wormBase / wormRamp / chase: the monster's base speed, how much it gains per unit climbed (up to
 // +60), and the gap between the pilot's lowest point and its catch line it rubber-bands toward (see CHASE).
-const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 285, wormRamp: 0.005, chase: 175, density: 1, intro: 300, camPos: 25, heatTime: 2.2, coolTime: 3.4, boost: 1 };
+const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 285, wormRamp: 0.005, chase: 175, density: 1, intro: 300, camPos: 25, heatTime: 3.5, coolTime: 2.0, boost: 1 };
 
 // Pilot hitboxes, fitted to each drawing (art units: y points down, drawn at PILOT_SCALE in the world).
 // Each entry is a capsule [x0, y0, x1, y1, r] (a circle when both ends match). They cover the body and the
@@ -442,7 +456,7 @@ function pilotMaxSize() {
   return (pilotMax = { w, h });
 }
 /* LEVELGEN:END */
-const CFG_KEY = 'cr-cfg5';         // new key: tuned values saved under the old defaults would otherwise stick
+const CFG_KEY = 'cr-cfg6';         // new key: tuned values saved under the old defaults would otherwise stick
 const cfg = Object.assign({}, DEFAULTS, store.get(CFG_KEY, {}));
 const isDefaultTune = () => Object.keys(DEFAULTS).every(k => Math.abs(cfg[k] - DEFAULTS[k]) < 1e-9);
 const settings = Object.assign({ control: 'one', hitboxes: false, pilot: 'lemur', monster: 'worm' }, store.get('cr-settings', {}));
@@ -538,18 +552,19 @@ const RULES = {
   narrowChance: [0.25, 0.45],  // chance a stretch that may pinch does pinch, easy → hard (never two pinches in a row)
   stretch: [800, 1150],        // height of each authored stretch of wall: wide, pinch or chamber
   pinchWidth: [262, 286],      // a pinch squeezes down close to minWidth
-  // Calm chambers: a wide-open stretch with no hazards (a fruit weave instead) every 3–4 stretches.
+  // Calm chambers: a wide-open stretch with no hazards (a fruit weave instead) every 5–6 stretches.
   // Each one stages a visual event; the first one in each zone hosts that zone's spectacle (purely visual, behind the walls).
-  chamber: { width: [376, 368], len: [700, 900], every: [3, 4] },
+  chamber: { width: [376, 368], len: [520, 660], every: [5, 6] },
   wallBlend: 220,              // height over which one stretch's width eases into the next
   maxWallSlope: 1.6,           // a wall never juts inward faster than this per unit of height: no hidden ledges
   wallShape: 10,               // depth of the zone wall silhouettes: jungle root bulges, basalt column tiers, magma crags
-  minLane: 212,                // narrowest open lane any hazard may leave: 2.5 × the widest pilot hitbox
-  spacing: [200, 140],         // clear height between neighbouring hazards, easy → hard
-  heavyExtra: 40,              // extra clearance after a geyser, fire wheel or spiky pod
-  zigzagExtra: 70,             // extra when consecutive wall hazards sit on opposite walls
+  minLane: Math.ceil(pilotMaxSize().w * 2.2),   // narrowest open lane any hazard may leave: 2.2 × the widest pilot hitbox
+                               // (about 187: long enough reaches that a pilot holding the centre line must move)
+  spacing: [165, 118],         // clear height between neighbouring hazards, easy → hard
+  heavyExtra: 20,              // extra clearance after a geyser, fire wheel or spiky pod
+  zigzagExtra: 30,             // extra when consecutive wall hazards sit on opposite walls
   minSpacing: 156,             // floor for spacing, even at high obstacle density (1.25 × the tallest pilot hitbox)
-  sameTypeGap: { geyser: 520, firebar: 520, boulder: 480, pend: 240, bat: 0, spike: 120, spider: 150, crusher: 220, gate: 700, lavafall: 260 },
+  sameTypeGap: { geyser: 520, firebar: 520, boulder: 480, pend: 240, bat: 0, spike: 120, spider: 150, crusher: 220, gate: 700, lavafall: 260, hang: 260 },
   // Zone signatures: lavafalls (a constant stream of lava pouring from a wall spout, lighting the walls)
   // only in the magma core; in the basalt caves the falling rocks are broken basalt column segments.
   lavafall: { fall: [150, 210], out: [26, 46], hw: 12, hit: 12 },
@@ -559,24 +574,33 @@ const RULES = {
   maxRun: 2,                   // never more than this many hazards of one type in a row (after the first 75 m)
   narrowGap: 270,              // openings narrower than this count as a narrow passage
   narrowGeyserGap: 820,        // a geyser in a narrow passage keeps this far from any other geyser
-  boulderZone: [650, 200],     // no geyser, fire wheel or pod this far below / above a boulder's drop point
+  boulderZone: [500, 180],     // no geyser, fire wheel or pod this far below / above a boulder's drop point
   boulderTrigger: 560,         // a boulder drops when the player climbs within this height of it
   boulderFall: 760,            // a boulder's x keeps it clear of the walls for this far below its drop point
-  breather: [260, 180],        // empty height between chunks, easy → hard (short: the chunks carry the pace)
+  breather: [130, 90],         // empty height between chunks, easy → hard (short: the chunks carry the pace)
   tight: 0.7,                  // spacing factor for the close-packed steps inside a chunk
   combo: 0.55,                 // spacing factor for a combo: two hazards close enough to read together
-  ramp: 15000,                 // height over which difficulty climbs from easy to hard, after the easy start
-  // Gates: two slabs that slide out from both walls and meet, shutting the shaft for a moment.
-  // Fair by design: a gate never starts to close while the pilot is within `commit` reach below it
-  // (the distance it cannot stop in: reaction time plus braking from its climb speed, plus a margin),
-  // so it holds open for anyone already committed. It only shuts on a pilot far enough below to see
-  // the `warn` countdown and stop. Shut, it blocks for at most maxShut and its lamps count down to the
-  // reopen; it stays open at least `open` seconds (longer than climbing through it from a standstill),
-  // and the shaft below is left clear for `room` so there is always somewhere to wait.
-  gate: { open: 1.9, warn: 0.6, move: 0.4, shut: [0.3, 0.4], maxShut: 1.3, room: 550, hb: 20, react: 0.4, margin: 80, openLane: 1.3 },
+  ramp: 10000,                 // height over which difficulty climbs from easy to hard, after the easy start
+  // Gates: two stone jaws that slide out from both walls and meet, shutting the shaft for a moment, on a fixed
+  // rhythm shown by a row of countdown lamps. The clock never waits for you: a pilot out of stopping reach must
+  // time it (or wait below). Fair by design: the jaws never start to close while the pilot is within `commit`
+  // reach below (reaction time plus braking from its climb speed, including the short hang after letting go,
+  // plus a margin) or inside them: only then do they hold at the brink until it is through. Shut, a gate blocks
+  // for at most maxShut; it stays open `open` seconds (longer than climbing through it from a standstill), and
+  // the shaft below is left clear for `room` so there is always somewhere to wait.
+  gate: { open: 1.9, warn: 0.6, move: 0.4, shut: [0.45, 0.6], maxShut: 1.4, room: 600, hb: 20, react: 0.4, margin: 80, openLane: 1.3, lamps: 5 },
+  // Crushers: two pistons on the same kind of clock (open with a countdown, a fast slam, a hold, a slower pull
+  // back). Shut, they leave only a slot `slot` wide (1.5 × the widest pilot hitbox plus a margin), centred or
+  // offset toward one wall, so they threaten the centre line: thread the slot, or wait below for the rhythm.
+  // They follow the gate rule: never closing on a pilot within stopping reach. `room` below as for gates.
+  crusher: { open: 2.0, warn: 0.7, close: 0.2, reopen: 0.5, shut: [0.8, 1.0], slot: Math.ceil(pilotMaxSize().w * 1.5 + 14), offset: 70, hb: 22 },
+  // Hanging hazards: a centre-placed hazard in every zone, hanging on a thin harmless tether: a thorn vine in the
+  // jungle, a crystal stalactite in the caves (it trembles for `warn` seconds when you come within `trigger`
+  // below, then drops `drop` and shatters), a magma drip in the core. They leave a full lane on one side.
+  hang: { len: [92, 140], hw: [11, 17, 14], sway: 5, trigger: 430, warn: 0.75, drop: 170 },
   // Easy start: the first quarter uses only thorns (one static hazard type); then pods and spiders join,
   // so the jungle never runs on thorns alone. Bats (fast movers) only appear once the easy start is over.
-  intro: { spacing: 190, breather: 200, staticOnly: 0.12, first: ['spike'], types: ['pend', 'spike', 'spider'] },
+  intro: { spacing: 175, breather: 170, staticOnly: 0.12, first: ['spike'], types: ['pend', 'spike', 'spider', 'hang'], jitter: 110 },
   // The launch: the first 100 m are hazard-free, and the first two thorns are short and hug their wall,
   // well away from the centre launch line, so simply holding thrust never dies straight away.
   clearStart: 1000,
@@ -587,7 +611,7 @@ const RULES = {
   firebarClear: 108,           // room between a fire wheel's bar tip and the wall: its flame, then the widest pilot plus a margin
   batMaxSpeed: 250,            // fastest a bat may cross the shaft
   zones: [6800, 15000],        // zone changes (jungle → basalt → magma); each one gets a landmark
-  landmarkClear: 620,          // a breather arena below every zone change: wide, no hazards, a fruit weave
+  landmarkClear: 480,          // a breather arena below every zone change: wide, no hazards, a fruit weave
   landmarkAfter: 760,          // and none this far above it: the 1.5 s zone reveal plays out over empty shaft
   setPieceAt: 1500,            // each zone's scripted set piece starts about this far into the zone
   beatEvery: 1000,             // and between them a scripted beat (a gauntlet, a formation) about every 100 m
@@ -599,13 +623,14 @@ const RULES = {
   // the crystals while feathering the thrust always keeps the engine out of overheat (see the test). Every
   // crystal keeps `clear` from every hazard's hitbox (the widest pilot's half-width plus 25), so following
   // them with normal steering lag never clips a pod or a spike.
-  crystal: { gap: 680, cool: 0.3, bonus: 0.12, clear: Math.ceil(pilotMaxSize().w / 2 + 25) },
+  crystal: { gap: 680, cool: 0.26, bonus: 0.12, clear: Math.ceil(pilotMaxSize().w / 2 + 25) },
   fruitStep: 38,               // height between fruit in an arc
   fruitMargin: 24,             // fruit keep at least this far from the walls
   fruitChance: 0.12,           // share of hazards that get a risky crystal beside their safe lane
   fruitHug: Math.ceil(pilotMaxSize().w / 2 + 25),   // racing-line crystals sit exactly the clearance from a hazard's reach
   // Release beats: after a chunk's tension steps, a fruit arc sweeps across an empty stretch of shaft.
-  arc: { gap: 90, n: 3, every: 3, step: 70 },   // every third release beat carries a short ice-crystal arc
+  arc: { gap: 70, n: 3, every: 3, step: 60, pause: 30 },   // every third release beat carries a short ice-crystal arc
+                               // (the others are just a short `pause`)
   chamberFruitStep: 320,       // calm chambers' fruit weave is sparse too
   // Corridors: interlocking stretches where two or three hazard types combine at close spacing. They grow
   // more likely deeper into each zone (corridorRamp, by share of the zone climbed) and are always followed
@@ -616,6 +641,7 @@ const RULES = {
 const FIRE_HUB = 34;               // drawn hub radius (its hitbox is the hub, the bar flame and the tip)
 const WALL_HAZARDS = new Set(['geyser', 'pend', 'spike', 'lavafall']);
 const HEAVY = new Set(['geyser', 'firebar', 'pend', 'crusher', 'gate']);
+const TIMED = new Set(['gate', 'crusher']);     // closing hazards on a clock that never closes on a committed pilot
 
 // Chunks: small hand-made patterns of several hazards, chosen and stitched by the seed.
 // Each step is [type, variant]. 'A' / 'B' put a wall hazard on the chunk's first or second
@@ -624,6 +650,9 @@ const HEAVY = new Set(['geyser', 'firebar', 'pend', 'crusher', 'gate']);
 // lane sits off-centre and the pistons cover the centre line. 'tight' packs a step closer and
 // 'combo' packs it right against the step before, so the two must be read as one shape.
 // ['arc'] is a release beat: no hazard, just a fruit arc sweeping across an empty stretch.
+// 'L' gives a wall hazard its longest reach (past the centre line, leaving just minLane), so alternating
+// 'A' / 'B' steps force a lane change each time: slaloms. A hanging hazard ('hang') leans toward wall 'A' or 'B'
+// (its full lane is on the other side), or sits on the centre line with 'C'.
 // Most chunks follow a tension / release / spike rhythm: two or three mixed hazards, a fruit arc,
 // then a combo pair as the spike. Every chunk mixes hazard types, and each zone's hazards carry on
 // into the later zones in that zone's skin (thorns become crystal and obsidian, pods geodes and
@@ -636,6 +665,14 @@ const CHUNKS = [
   { name: 'lone thorn',       w: [0, .2, .2],  from: 0, to: 2200, steps: [['spike', 'A']] },
   { name: 'thorn steps',      w: [1, 0, 0],  from: 0, to: 1500, steps: [['spike', 'A'], ['spike', 'A', 'combo'], ['arc'], ['spike', 'B', 'tight']] },
   { name: 'thorn pair',       w: [1.8, 0, 0], from: 0, to: 1800, steps: [['spike', 'A'], ['spike', 'A', 'combo'], ['arc']] },
+  { name: 'thorn swap',       w: [1.6, 0, 0], from: 0, to: 1800, steps: [['spike', 'A'], ['spike', 'B', 'combo'], ['arc'], ['spike', 'A', 'tight']] },
+  { name: 'thorn stagger',    w: [1.4, 0, 0], from: 0, to: 1800, steps: [['spike', 'A'], ['spike', 'B', 'combo'], ['arc'], ['spike', 'B', 'tight']] },
+  // slaloms: hazards alternate walls every ~180–220 units with long reaches, so every step is a lane change
+  { name: 'thorn slalom',     w: [2.8, 1.2, .9], from: 1500, steps: [['spike', 'A', 'L'], ['spike', 'B', 'L', 'tight'], ['pend', 'A', 'tight'], ['arc'], ['spike', 'B', 'L'], ['hang', 'A', 'tight']] },
+  { name: 'vine weave',       w: [2.4, .6, .4], from: 1500, steps: [['hang', 'A'], ['spike', 'A', 'L', 'tight'], ['hang', 'B', 'tight'], ['arc'], ['spike', 'B', 'L'], ['pend', 'A', 'tight']] },
+  { name: 'crystal slalom',   w: [.4, 2.6, 1.2], from: 1500, steps: [['spike', 'A', 'L'], ['hang', 'A', 'tight'], ['spike', 'B', 'L', 'tight'], ['arc'], ['geyser', 'A', 'L'], ['spike', 'B', 'L', 'tight']] },
+  { name: 'magma slalom',     w: [0, .5, 2.6], from: 2500, steps: [['lavafall', 'A'], ['hang', 'A', 'tight'], ['spike', 'B', 'L', 'tight'], ['arc'], ['lavafall', 'B'], ['hang', 'B', 'tight']] },
+  { name: 'switchback',       w: [1.4, 1.6, 1.6], from: 3000, steps: [['spike', 'A', 'L'], ['pend', 'B', 'tight'], ['spike', 'A', 'L', 'tight'], ['spider', 'B', 'tight'], ['arc'], ['geyser', 'A', 'L'], ['spike', 'B', 'L', 'combo']] },
   // jungle hazards (they carry on, reskinned, into the caves and the core)
   { name: 'pod and thorn',    w: [2.4, 1, .8], from: 0,    steps: [['pend', 'A'], ['spike', 'B'], ['arc'], ['spike', 'A'], ['pend', 'A', 'combo']] },
   { name: 'web and thorn',    w: [2.2, 1, .8], from: 0,    steps: [['spider', 'C'], ['spike', 'A'], ['arc'], ['spike', 'B'], ['spider', 'A', 'combo']] },
@@ -680,19 +717,22 @@ const SET_PIECES = [
 // Scripted beats, one about every RULES.beatEvery between the set pieces: short, named, memorable
 // patterns per zone (announced as they come into view). A step the easy start doesn't allow yet becomes a thorn.
 const BEATS = [
-  [ { name: 'Thorn zigzag',   steps: [['spike', 'A'], ['spike', 'B', 'combo'], ['arc'], ['pend', 'A', 'tight']] },
+  [ { name: 'Thorn zigzag',   steps: [['spike', 'A', 'L'], ['spike', 'B', 'L', 'combo'], ['arc'], ['pend', 'A', 'tight']] },
+    { name: 'Vine curtain',   steps: [['hang', 'A'], ['spike', 'A', 'L', 'tight'], ['arc'], ['hang', 'B', 'tight']] },
     { name: 'Pod swing',      steps: [['pend', 'A'], ['spike', 'B', 'combo'], ['arc'], ['pend', 'B', 'tight']] },
     { name: 'Bat formation',  steps: [['bat'], ['bat', 'tight'], ['arc'], ['spider', 'C', 'tight']] },
     { name: 'Web curtain',    steps: [['spider', 'A'], ['spike', 'B', 'combo'], ['arc'], ['spider', 'B', 'tight']] },
     { name: 'Rockfall',       steps: [['boulder', 'A'], ['spike', 'B'], ['arc'], ['spider', 'C', 'tight']] },
     { name: 'Bramble corridor', corridor: true, steps: [['spike', 'A'], ['spider', 'C', 'tight'], ['spike', 'B', 'tight'], ['pend', 'A', 'combo'], ['spider', 'C', 'tight'], ['spike', 'B', 'combo']] } ],
   [ { name: 'Gate gauntlet',  steps: [['gate'], ['arc'], ['spike', 'A'], ['gate']] },
+    { name: 'Stalactite run', steps: [['hang', 'A'], ['spike', 'A', 'L', 'tight'], ['arc'], ['hang', 'B'], ['bat', 'tight']] },
     { name: 'Rockfall',       steps: [['boulder', 'C'], ['spike', 'A'], ['arc'], ['bat', 'tight']] },
     { name: 'Piston row',     steps: [['crusher'], ['spike', 'A', 'combo'], ['arc'], ['crusher', 'B', 'tight']] },
-    { name: 'Geyser alley',   steps: [['geyser', 'A'], ['spike', 'B', 'combo'], ['arc'], ['geyser', 'B']] },
+    { name: 'Geyser alley',   steps: [['geyser', 'A', 'L'], ['spike', 'B', 'L', 'combo'], ['arc'], ['hang', 'A', 'tight']] },
     { name: 'Bat formation',  steps: [['bat'], ['bat', 'tight'], ['arc'], ['crusher', 'A', 'tight']] },
     { name: 'Piston corridor', corridor: true, steps: [['crusher'], ['bat', 'tight'], ['crusher', 'A', 'tight'], ['spike', 'B', 'combo'], ['crusher', 'B', 'tight'], ['bat', 'combo']] } ],
   [ { name: 'Lava curtain',   steps: [['lavafall', 'A'], ['geyser', 'B', 'tight'], ['arc'], ['lavafall', 'B', 'tight']] },
+    { name: 'Drip line',      steps: [['hang', 'A'], ['lavafall', 'A', 'tight'], ['arc'], ['hang', 'B', 'tight']] },
     { name: 'Wheel duo',      steps: [['firebar', 'C'], ['arc'], ['crusher'], ['firebar', 'C']] },
     { name: 'Rockfall',       steps: [['boulder', 'C'], ['lavafall', 'A'], ['arc'], ['bat', 'tight']] },
     { name: 'Gate gauntlet',  steps: [['gate'], ['arc'], ['lavafall', 'A'], ['gate']] },
@@ -701,53 +741,65 @@ const BEATS = [
 ];
 
 // a chunk covers the centre line when it has bats, a centred step, an offset crusher or a gate
-const coversCentre = c => c.steps.some(([t, v]) => t === 'bat' || t === 'gate' || v === 'C' || (t === 'crusher' && (v === 'A' || v === 'B')));
+const coversCentre = c => c.steps.some(([t, v, w]) => t === 'bat' || t === 'gate' || t === 'crusher' || t === 'hang' || v === 'C' || v === 'L' || w === 'L');
 
 function zoneT(a) { const [z1, z2] = RULES.zones; return [smooth(z1 - 600, z1 + 600, a), smooth(z2 - 700, z2 + 700, a)]; }
 function zoneOf(a) { return a < RULES.zones[0] ? 0 : a < RULES.zones[1] ? 1 : 2; }
 // how far through its zone a height is, 0..1 (the magma core counts as 8000 deep)
 function zoneProgress(a) { const z = zoneOf(a), a0 = z ? RULES.zones[z - 1] : 0, a1 = z < 2 ? RULES.zones[z] : RULES.zones[1] + 8000; return clamp((a - a0) / (a1 - a0), 0, 1); }
 
-// Gate timing runs on the gate's own clock h.clk (seconds), which gateStep advances. One cycle is: open
-// (its last RULES.gate.warn seconds are the countdown), slabs closing (move), shut, slabs opening (move).
-// Shared by play and the test.
-const gatePeriod = h => RULES.gate.open + 2 * RULES.gate.move + h.shut;
+// Gate and crusher timing runs on the hazard's own clock h.clk (seconds), which gateStep advances. One cycle is:
+// open (its last `warn` seconds are the countdown), closing, shut (h.shut), reopening. Shared by play and the test.
+const timingOf = h => h.type === 'crusher' ? RULES.crusher : RULES.gate;
+const tClose = T => T.close ?? T.move, tReopen = T => T.reopen ?? T.move;
+const gatePeriod = h => { const T = timingOf(h); return T.open + tClose(T) + h.shut + tReopen(T); };
 function gatePhase(h, clk) { const P = gatePeriod(h); return ((clk + h.ph * P) % P + P) % P; }
-// How far a gate's slabs are closed (0 open, 1 shut) at clock clk.
+// How far a gate's jaws (or a crusher's pistons) are closed (0 open, 1 shut) at clock clk. Crushers slam
+// (accelerating in), gates slide.
 function gateK(h, clk) {
-  const u = gatePhase(h, clk), { open, move } = RULES.gate;
+  const u = gatePhase(h, clk), T = timingOf(h), { open } = T, c = tClose(T), r = tReopen(T);
   if (u < open) return 0;
-  if (u < open + move) return smooth(0, 1, (u - open) / move);
-  if (u < open + move + h.shut) return 1;
-  return 1 - smooth(0, 1, (u - open - move - h.shut) / move);
+  if (u < open + c) { const x = (u - open) / c; return h.type === 'crusher' ? x * x : smooth(0, 1, x); }
+  if (u < open + c + h.shut) return 1;
+  return 1 - smooth(0, 1, (u - open - c - h.shut) / r);
 }
-// How far each slab reaches out of its wall at closedness k; fully shut they meet at h.mid.
+// How far each gate jaw reaches out of its wall at closedness k; fully shut they meet at h.mid.
 function gateExt(h, k) { return [8 + (h.mid - h.lb + 2 - 8) * k, 8 + (h.rb - h.mid + 2 - 8) * k]; }
-// Countdown before a gate shuts: 0 while safely open, rising to 1 over the last RULES.gate.warn seconds
-// of its open phase, 1 while it closes and stays shut.
+// How far each crusher piston reaches out of its wall at closedness k; fully shut they leave the slot.
+function crusherExt(h, k) { return [h.minExt + (h.maxL - h.minExt) * k, h.minExt + (h.maxR - h.minExt) * k]; }
+// Countdown before it shuts: 0 while safely open, rising to 1 over the last `warn` seconds of its open phase,
+// 1 while it closes and stays shut.
 function gateWarn(h, clk) {
-  const u = gatePhase(h, clk), { open, move, warn } = RULES.gate, left = open - u;
+  const u = gatePhase(h, clk), T = timingOf(h), { open, warn } = T, left = open - u;
   if (u < open) return left < warn ? 1 - left / warn : 0;
-  return u < open + move + h.shut ? 1 : 0;
+  return u < open + tClose(T) + h.shut ? 1 : 0;
 }
-// How long until a shut (or closing) gate is fully open again, or 0.
+// Seconds until it next starts to close (0 once closing or shut), and until a shut one is fully open again.
+function gateCloseIn(h, clk) { const u = gatePhase(h, clk), { open } = timingOf(h); return u < open ? open - u : 0; }
 function gateReopenIn(h, clk) {
-  const u = gatePhase(h, clk), { open, move } = RULES.gate;
-  return u < open ? 0 : open + 2 * move + h.shut - u;
+  const u = gatePhase(h, clk), T = timingOf(h);
+  return u < T.open ? 0 : gatePeriod(h) - u;
 }
-// The reach below a gate a pilot climbing at vy can no longer stop in: a reaction time at that speed,
-// then braking under gravity, plus a margin.
-function gateCommit(vy, gravity) { const v = Math.max(0, vy); return v * RULES.gate.react + v * v / (2 * gravity) + RULES.gate.margin; }
-// Advance a gate's clock by dt. `below` is the gap from the pilot's top to the gate's underside (negative
-// once it is inside), `passed` is true once its whole hitbox is above the gate. While the pilot is committed
-// (inside, or within gateCommit below) an open gate holds open: a running countdown is cancelled and the
-// slabs never start to move. Once the slabs are moving the cycle always plays out, which is safe because
-// they only start while the pilot is beyond its stopping reach.
+// The reach below a gate a pilot climbing at vy can no longer stop in: a reaction time at that speed, then
+// braking: the first HANG.time seconds after letting go at HANG.k × gravity (the hang), then full gravity; plus a margin.
+const HANG = { time: 0.15, k: 0.5 }, FALL_CAP = -380;   // (FALL_CAP: the fastest the pilot ever falls)
+function brakeDist(vy, gravity) {
+  const v = Math.max(0, vy), g1 = gravity * HANG.k, v1 = v - g1 * HANG.time;
+  if (v1 <= 0) return v * v / (2 * g1);
+  return (v + v1) / 2 * HANG.time + v1 * v1 / (2 * gravity);
+}
+function gateCommit(vy, gravity) { const v = Math.max(0, vy); return v * RULES.gate.react + brakeDist(v, gravity) + RULES.gate.margin; }
+// Advance a gate's (or crusher's) clock by dt. `below` is the gap from the pilot's top to its underside (negative
+// once it is inside), `passed` is true once its whole hitbox is above it. The clock runs on its fixed rhythm; the
+// one exception is the moment it would start to close: if the pilot is committed then (inside, or within
+// gateCommit below) it holds at the brink (h.held) until the pilot is through or has dropped back out of reach.
+// Once moving the cycle always plays out, which is safe because it only starts while the pilot is beyond its
+// stopping reach.
 function gateStep(h, dt, below, vy, gravity, passed) {
-  const u = gatePhase(h, h.clk), { open, warn } = RULES.gate;
+  const u = gatePhase(h, h.clk), { open } = timingOf(h);
   const committed = !passed && below < gateCommit(vy, gravity);
-  h.held = committed && u < open;
-  if (h.held) { h.clk += Math.min(u + dt, open - warn - 1e-3) - u; return; }
+  h.held = committed && u < open && u + dt >= open - 1e-3;
+  if (h.held) { h.clk += Math.max(0, open - 1e-3 - u); return; }
   h.clk += dt;
 }
 
@@ -825,8 +877,25 @@ function dangerShapes(h) {
     S.push({ k: 'b', x0: h.lb - 40, x1: h.lb + h.maxL + 2, a0: h.alt - h.hb, a1: h.alt + h.hb });
     S.push({ k: 'b', x0: h.rb - h.maxR - 2, x1: h.rb + 40, a0: h.alt - h.hb, a1: h.alt + h.hb });
   } else if (h.type === 'spider') S.push({ k: 'b', x0: h.x - h.hw, x1: h.x + h.hw, a0: h.lo, a1: h.hi });
+  else if (h.type === 'hang') S.push({ k: 'b', x0: h.x - h.hw - RULES.hang.sway, x1: h.x + h.hw + RULES.hang.sway, a0: h.lo, a1: h.aAlt });
   else if (h.type === 'firebar') S.push({ k: 'c', x: h.cx, a: h.alt, r: h.len + h.br * 1.08 });
   return S;
+}
+// A hanging hazard's body as capsules {x0, a0, x1, a1, r}, shared by drawing and collision: from where it hangs
+// (top) down `len`, swaying a little at the bottom (sway, its top fixed), lowered by `fall` while a stalactite drops.
+// Thorn vine: an even rope with thorns out to its radius and a seed bud at the end; stalactite: a cone, wide at the
+// top; magma drip: a thin molten strand with a heavy glob at the bottom.
+function hangSway(h, t) { return RULES.hang.sway * Math.sin(t * 1.3 + h.ph) * (h.skin === 1 ? 0.25 : 1); }
+function hangCaps(h, t) {
+  const N = 6, sw = hangSway(h, t), top = h.aAlt - (h.fall || 0), out = [];
+  const rad = u => h.skin === 0 ? (u > 0.86 ? h.hw : h.hw - 3) : h.skin === 1 ? lerp(h.hw, 3, u) : (u > 0.72 ? h.hw : 5);
+  const reach = h.len - rad(1);                 // the lowest hitbox point sits exactly `len` below the top
+  const at = u => [h.x + sw * Math.pow(u, 1.5), top - reach * u];
+  for (let i = 0; i < N; i++) {
+    const u0 = i / N, u1 = (i + 1) / N, [x0, a0] = at(u0), [x1, a1] = at(u1);
+    out.push({ x0, a0, x1, a1, r: Math.max(rad(u0), rad(u1)) });
+  }
+  return out;
 }
 // Distance from a point to a shape's edge (negative inside).
 function shapeDist(q, x, a) {
@@ -979,21 +1048,18 @@ function createLevel(seed, opts) {
       return { type: 'spider', skin: zoneOf(A), x, aAlt: A, mid, amp, w: 1.4 + u[3] * 0.9 + diff * 0.6, ph: u[3] * 6.283, alt: A - mid, r, hw, lo, hi };
     },
     crusher(A, diff, u) {
-      // Two basalt pistons that slide in from both walls and back. At full stretch they still leave
-      // minLane. With an offset (u[4]) one piston reaches past the centre line and the lane sits to one side.
-      // (each piston's hitbox reaches 2 past its face, to the tips of its teeth)
-      const hb = 22, [L, R] = opening(A - hb - 4, A + hb + 4), gap = R - L;
-      const [lb, rb] = walls(A);
-      let maxL, maxR;
-      if (u[4]) {
-        const short = 12, long = gap - short - RULES.minLane - 6;
-        if (long >= gap / 2 - 24) [maxL, maxR] = u[4] > 0 ? [long, short] : [short, long];
-      }
-      if (!maxL) {      // centred (or too tight for an off-centre lane): both pistons reach in equally
-        maxL = maxR = Math.min(gap * 0.32, (gap - RULES.minLane - 6) / 2);
-        if (maxL < 34) return null;
-      }
-      return { type: 'crusher', skin: zoneOf(A), alt: A, lb, rb, minExt: 8, maxL, maxR, extL: 8, extR: 8, hb, w: 0.9 + u[0] * 0.5 + diff * 0.3, ph: u[1] * 6.283, lo: A - hb - 4, hi: A + hb + 4 };
+      // Two basalt pistons on a clock (see gateStep). Open they leave a wide lane; shut they leave only a slot
+      // RULES.crusher.slot wide (about 1.5 widest pilots), centred, or offset toward one wall by u[4], so a fully
+      // shut crusher always covers the centre line. Each piston's hitbox reaches 2 past its face (its teeth).
+      const C = RULES.crusher, hb = C.hb, [L, R] = opening(A - hb - 4, A + hb + 4), gap = R - L;
+      const [lb, rb] = walls(A), slot = C.slot;
+      if (gap - 16 - 4 < RULES.minLane) return null;
+      let c = (L + R) / 2;
+      if (u[4]) c += u[4] * Math.min(C.offset, gap / 2 - slot / 2 - 30);
+      const maxL = c - slot / 2 - 2 - lb, maxR = rb - (c + slot / 2) - 2;
+      if (maxL < 30 || maxR < 30) return null;
+      return { type: 'crusher', skin: zoneOf(A), alt: A, lb, rb, mid: c, slot, minExt: 8, maxL, maxR, extL: 8, extR: 8, hb, k: 0, clk: 0,
+        shut: lerp(C.shut[0], C.shut[1], u[0]) , ph: u[1], lo: A - hb - 4, hi: A + hb + 4 };
     },
     gate(A, diff, u) {
       // Two slabs from both walls that meet in the middle for a moment, then slide back into the
@@ -1004,6 +1070,19 @@ function createLevel(seed, opts) {
       const [lb, rb] = walls(A), mid = (L + R) / 2;
       return { type: 'gate', skin: zoneOf(A), alt: A, lb, rb, mid, hb, k: 0, extL: 8, extR: 8, clk: 0,
         shut: lerp(RULES.gate.shut[0], RULES.gate.shut[1], diff), ph: u[1], lo: A - hb - 4, hi: A + hb + 4 };
+    },
+    hang(A, diff, u) {
+      // A is where it hangs from (its tether runs up out of sight from here, harmless); it hangs `len` below.
+      // It leans toward one wall (u[0] < 0.5: the left), leaving a full minLane on the other side and at least a
+      // widest-pilot lane plus a margin on its own side, so it always covers the centre line or close to it.
+      const H = RULES.hang, z = zoneOf(A), len = lerp(H.len[0], H.len[1], u[1]), hw = H.hw[z] + H.sway;
+      const drop = z === 1 ? H.drop : 0, lo = A - len - drop - 4, hi = A + H.hw[z] + 2;
+      const [L, R] = opening(lo, hi), gap = R - L, side = u[0] < 0.5 ? 1 : -1;
+      const small = gap - 2 * hw - RULES.minLane;            // the lane left on the side it leans toward
+      if (small < pilotMaxSize().w + 16) return null;
+      const want = (L + R) / 2 - side * (u[0] === 0.5 ? 0 : 10 + 20 * u[2]);
+      const x = side > 0 ? clamp(want, L + hw + pilotMaxSize().w + 16, R - hw - RULES.minLane) : clamp(want, L + hw + RULES.minLane, R - hw - pilotMaxSize().w - 16);
+      return { type: 'hang', skin: z, side, x, ax: x, aAlt: A, len, hw: H.hw[z], drop, alt: A - len / 2, state: 'idle', fall: 0, ph: u[3] * 6.283, lo, hi };
     },
     lavafall(A, diff, u) {
       // A is the spout on the wall; the stream pours straight down for `fall` and burns out. Constant.
@@ -1032,6 +1111,7 @@ function createLevel(seed, opts) {
       return h.side > 0 ? [reach, R] : [L, reach];
     }
     if (h.type === 'crusher') { const [L, R] = opening(h.lo, h.hi); return [Math.max(L, h.lb + h.maxL + 2), Math.min(R, h.rb - h.maxR - 2)]; }
+    if (h.type === 'hang') { const [L, R] = opening(h.lo, h.hi), w = h.hw + RULES.hang.sway; return h.x - w - L > R - h.x - w ? [L, h.x - w] : [h.x + w, R]; }
     if (h.type === 'lavafall') { const [L, R] = opening(h.lo, h.hi); return h.side > 0 ? [h.x + h.hw, R] : [L, h.x - h.hw]; }
     if (h.type === 'spider') { const [L, R] = opening(h.lo, h.hi); return h.x - h.hw - L > R - h.x - h.hw ? [L, h.x - h.hw] : [h.x + h.hw, R]; }
     return null;
@@ -1052,11 +1132,11 @@ function createLevel(seed, opts) {
     // a spider's column is on the lane's near side, a crusher's longer piston sets its tight side
     let line;
     if (h.type === 'geyser' || h.type === 'spike' || h.type === 'pend' || h.type === 'lavafall') line = h.side > 0 ? lane[0] + hug : lane[1] - hug;
-    else if (h.type === 'spider') line = lane[0] >= h.x ? lane[0] + hug : lane[1] - hug;
+    else if (h.type === 'spider' || h.type === 'hang') line = lane[0] >= h.x ? lane[0] + hug : lane[1] - hug;
     else if (h.type === 'crusher') line = h.maxL >= h.maxR ? lane[0] + hug : lane[1] - hug;
     else line = (lane[0] + lane[1]) / 2;
     const mid = clamp(line, Math.min(lane[0] + hug, (lane[0] + lane[1]) / 2), Math.max(lane[1] - hug, (lane[0] + lane[1]) / 2));
-    add(mid, h.type === 'pend' ? h.aAlt - h.len * 0.75 : h.type === 'spider' ? h.aAlt - h.mid : h.type === 'lavafall' ? (h.lo + h.alt) / 2 : h.alt);
+    add(mid, h.type === 'pend' ? h.aAlt - h.len * 0.75 : h.type === 'spider' ? h.aAlt - h.mid : h.type === 'lavafall' ? (h.lo + h.alt) / 2 : h.type === 'hang' ? h.aAlt - h.len * 0.6 : h.alt);
   }
 
   // Which hazard types the easy start allows at height a (null: everything).
@@ -1086,7 +1166,7 @@ function createLevel(seed, opts) {
     let gap = Math.max(RULES.minSpacing, (inIntro ? RULES.intro.spacing : lerp(RULES.spacing[0], RULES.spacing[1], diff)) / density);
     if (HEAVY.has(prev.type)) gap += RULES.heavyExtra;
     if (WALL_HAZARDS.has(prev.type) && WALL_HAZARDS.has(h.type) && prev.side !== h.side) gap += RULES.zigzagExtra;
-    if (h.type === 'gate') gap = Math.max(gap, RULES.gate.room);    // somewhere clear to wait below a gate
+    if (TIMED.has(h.type)) gap = Math.max(gap, RULES.gate.room);    // somewhere clear to wait below a gate or crusher
     return gap;
   }
 
@@ -1113,7 +1193,7 @@ function createLevel(seed, opts) {
   const rng = mulberry32((seed ^ 0x1E7E1A7) >>> 0);
   const recent = [];                 // last placed hazards, newest last
   let spikesPlaced = 0, arcsSeen = 0, pendStart = 0;
-  let floor = RULES.clearStart, pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
+  let floor = RULES.clearStart + Math.floor(rng() * 160), pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
   const marks = [], setDone = [false, false, false];   // set pieces placed, as { alt, name, zone }
   const chambers = [], specDone = [0, 0, 0];
   const chunkMarks = [];             // where each chunk starts (after its breather): the chase surges here
@@ -1138,7 +1218,7 @@ function createLevel(seed, opts) {
   // A zone's set piece cuts in once the floor reaches it, ending whatever chunk was running.
   function setPieceDue() {
     const z = zoneOf(floor), at = (z ? RULES.zones[z - 1] : 0) + RULES.setPieceAt;
-    return !setDone[z] && floor >= at - (z ? 700 : 300) ? z : -1;
+    return !setDone[z] && floor >= at - (z ? 700 : 0) ? z : -1;
   }
   function nextChunk() {
     const z = setPieceDue();
@@ -1235,7 +1315,8 @@ function createLevel(seed, opts) {
     if (type === 'arc') {               // a release beat: an empty stretch with a fruit arc across it
       queue.shift(); retries = 0;
       const a0 = floor + pending + RULES.arc.gap, a1 = a0 + RULES.arc.step * (RULES.arc.n - 1);
-      if (fruitOut && arcsSeen++ % RULES.arc.every === 0 && !chamberNear(a0 - 10, a1 + 10)) {
+      const full = arcsSeen++ % RULES.arc.every === 0;     // (decided without looking at fruit, so the layout never depends on it)
+      if (full && fruitOut && !chamberNear(a0 - 10, a1 + 10)) {
         // a short sweep from one wall across to the other: the outer ones are off the main line
         const dir = rng() < 0.5 ? 1 : -1;
         for (let k = 0; k < RULES.arc.n; k++) {
@@ -1243,7 +1324,7 @@ function createLevel(seed, opts) {
           pendFruit.push({ x: clamp((l + r) / 2 + dir * u * ((r - l) / 2 - M), l + M, r - M), alt: a, arc: true, bonus: Math.abs(u) > 0.5 });
         }
       } else rng();
-      floor = a1; pending = 0;
+      floor = full ? a1 : floor + pending + RULES.arc.pause; pending = 0;
       return;
     }
     // lavafalls belong to the magma core: anywhere else the step becomes a geyser (or a thorn)
@@ -1266,12 +1347,13 @@ function createLevel(seed, opts) {
         else if (type === 'crusher') u[4] = sd;
         else u[0] = toward(sd);
       } else if (v === 'C') u[0] = 0.5;
+      else if (v === 'L') u[1] = 1;      // the longest reach: past the centre line
     }
     // bats close together never share a flight pattern, so a run of bats never looks like clones
     if (type === 'bat' && lastBat && floor + pending - lastBat.alt < RULES.batLookGap) u[2] = ((lastBat.pat + 1 + (u[2] < 0.5 ? 0 : 1)) % 3 + 0.5) / 3;
     const tight = vars.includes('combo') ? RULES.combo : vars.includes('tight') ? RULES.tight : 1;
-    const gapTo = h => prev ? Math.max(RULES.minSpacing, spacingAfter(prev, h, diff, inIntro) * tight) : 0;
-    const jitter = rng() * (inIntro ? 40 : lerp(80, 30, diff)) * tight;
+    const gapTo = h => prev ? Math.max(RULES.minSpacing, spacingAfter(prev, h, diff, inIntro) * tight, TIMED.has(h.type) ? RULES.gate.room : 0) : 0;
+    const jitter = rng() * (inIntro ? RULES.intro.jitter : lerp(45, 15, diff)) * tight;
     let A = floor + pending + 200, h = build[type](A, diff, u);
     for (let k = 0; h && k < 3; k++) {          // slide it up until its band clears the spacing rule
       const need = floor + pending + gapTo(h) + jitter;
@@ -1291,12 +1373,13 @@ function createLevel(seed, opts) {
       // step for a thorn (which fits almost anywhere), or skip it if even that failed
       if (!retries) pendStart = pending;
       pending += 60;
-      if (++retries > (type === 'boulder' ? 16 : 10)) {
+      // (a step that doesn't fit this stretch's width at all gives up quickly: no long empty climbs)
+      if (++retries > (!h ? 2 : type === 'boulder' ? 16 : 10)) {
         if (!h) pending = pendStart;     // (blocked by the rules, e.g. a landmark or a chamber: keep the height and move on up)
         retries = 0;
         if (queue[0][0] !== 'spike' && !queue[0].fb) {
           // a centre-line hazard that can't fit becomes a bat (it always fits and still covers the centre)
-          const ok2 = allowed(floor + pending), toBat = ['crusher', 'gate', 'firebar', 'spider'].includes(type) && (!ok2 || ok2.includes('bat'));
+          const ok2 = allowed(floor + pending), toBat = ['crusher', 'gate', 'firebar', 'spider', 'hang'].includes(type) && (!ok2 || ok2.includes('bat'));
           const fb = [toBat ? 'bat' : 'spike', ...queue[0].slice(1).filter(v => v === 'tight' || v === 'combo'), 'A']; fb.fb = true; queue[0] = fb;
         }
         else queue.shift();
@@ -1366,7 +1449,7 @@ function newRun(isDaily) {
     zoom: 1,
     camAlt: 0, maxAlt: 58,
     level: createLevel(seed, cfg), hazards: [], fruit: [],
-    particles: [], pops: [], streaks: [],
+    particles: [], pops: [], streaks: [], banners: [], banner: null,
     fruitCount: 0, closeCount: 0, lastHundred: 0, zone: 0,
     hitStop: 0, flash: 0, flashCol: [255, 255, 255], burst: null, slow: 0, knock: null, bite: null, punch: 0, deathAlt: 58, deathX: 200,
     calm: 0, markIdx: 0, surgeWarn: 0, grinT: 0, rubbleT: 0,
@@ -1445,7 +1528,9 @@ window.addEventListener('keydown', e => {
   }
   if (currentScreen !== null) return;
   if (document.activeElement && document.activeElement.tagName === 'BUTTON' && e.key === ' ') return;
-  e.preventDefault(); input.keys.add(k); recomputeThrust();
+  e.preventDefault();
+  if (e.repeat && !input.keys.has(k)) return;    // a key held since before a death, pause or menu: wait for a fresh press
+  input.keys.add(k); recomputeThrust();
   if (k === 'thrust') input.pressed = true;
 });
 window.addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k) { input.keys.delete(k); recomputeThrust(); } });
@@ -1477,6 +1562,9 @@ const CAUSES = {
   'spike-obsidian': 'Speared by obsidian',
   spider: 'Bitten by a cave spider',
   crusher: 'Squashed by a basalt crusher',
+  'hang-0': 'Snagged on a hanging thorn vine',
+  'hang-1': 'Skewered by a falling stalactite',
+  'hang-2': 'Splashed by a magma drip',
   gate: 'Shut in by a gate',
   firebar: 'Singed by a fire wheel',
   lavafall: 'Scorched by a lavafall',
@@ -1504,7 +1592,9 @@ function die(cause, h) {
     const a = Math.random() * 6.283, v = 120 + Math.random() * 320;
     puff(p.x, p.alt, Math.cos(a) * v, Math.sin(a) * v, 0.6 + Math.random() * 0.6, 3 + Math.random() * 5, i % 3 ? 'debris' : 'flame');
   }
-  input.pointers.clear(); input.pressed = false; recomputeThrust();
+  // drop every held input: a key or finger held through the death, the ad and the revive must never launch the
+  // pilot on its own (key auto-repeat after this is ignored too, see the keydown handler)
+  input.pointers.clear(); input.keys.clear(); input.pressed = false; recomputeThrust();
   vibrate(80);
 }
 function vibrate(ms) { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch {} }
@@ -1521,7 +1611,10 @@ function causeColour(cause) {
 // Score is in points: 10 per metre climbed, plus bonus points for fruit and close calls.
 const PTS_PER_M = 10, FRUIT_BONUS = 25, CLOSE_BONUS = 50;
 const fmtPts = n => n.toLocaleString('en-GB') + ' pts';
-const runScore = () => Math.floor(G.maxAlt / UNITS_PER_M) * PTS_PER_M + G.fruitCount * FRUIT_BONUS + G.closeCount * CLOSE_BONUS;
+// The ad revive costs half the run's score: at the revive half of everything banked so far (height and bonuses) is
+// taken off (G.halved), then the run carries on and everything earned after it adds normally.
+const rawScore = () => Math.floor(G.maxAlt / UNITS_PER_M) * PTS_PER_M + G.fruitCount * FRUIT_BONUS + G.closeCount * CLOSE_BONUS;
+const runScore = () => rawScore() - (G.halved || 0);
 let sessionPracticeRuns = 0;
 function finishRun() {
   const m = Math.floor(G.maxAlt / UNITS_PER_M), score = runScore(), counts = isDefaultTune();
@@ -1548,7 +1641,8 @@ function finishRun() {
   $('overBonus').innerHTML =
     `<li><span>Height ${m} m × ${PTS_PER_M}</span><b>${(m * PTS_PER_M).toLocaleString('en-GB')}</b></li>` +
     `<li><span>Ice crystals ${G.fruitCount} × ${FRUIT_BONUS}</span><b>+${(G.fruitCount * FRUIT_BONUS).toLocaleString('en-GB')}</b></li>` +
-    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>`;
+    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>` +
+    (G.halved ? `<li class="cut"><span>Ad revive: score halved</span><b>−${G.halved.toLocaleString('en-GB')}</b></li>` : '');
   $('overPoints').textContent = fmtPts(0);
   $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   // the height bar: this run against the best, with a marker at the best
@@ -1567,6 +1661,7 @@ function finishRun() {
     $('overRunsLabel').textContent = 'Practice runs'; $('overRuns').textContent = `${sessionPracticeRuns} this visit`;
   }
   $('adBtn').hidden = G.reviveUsed;
+  if (!G.reviveUsed) $('adBtn').innerHTML = `Watch ad: keep flying, score halved<small>${fmtPts(score)} → ${fmtPts(Math.ceil(score / 2))}</small>`;
   $('shareBtn').hidden = !G.isDaily;
   show('over');
   for (const el of document.querySelectorAll('#over .stat b, #over .total b, #over .bonus li span')) fitText(el, 11);
@@ -1591,6 +1686,10 @@ function countUp(score, isNew) {
 function revive() {
   const p = G.p;
   G.reviveUsed = true;
+  // the price of the revive: half of everything banked so far (rounded in the player's favour)
+  const before = runScore(); G.halved = (G.halved || 0) + Math.floor(before / 2);
+  G.pops.length = 0; G.banner = null; G.banners.length = 0;
+  addPop('Score halved', p.x, G.deathAlt + 150, { col: '#ffb238', life: 2.2, rise: 10, sub: `${fmtPts(before)} → ${fmtPts(runScore())}` });
   p.alt = G.deathAlt;                               // back to exactly where the run ended
   const [L, R] = walls(p.alt);
   p.x = p.targetX = (L + R) / 2; p.vx = 0; p.vy = 0; p.tilt = 0; p.rot = 0; refreshPilotCaps();
@@ -1601,6 +1700,7 @@ function revive() {
   G.camAlt = p.alt - viewH * cfg.camPos / 100;
   G.hazards = G.hazards.filter(h => Math.abs((h.type === 'boulder' ? h.cur : h.alt) - p.alt) > 340 || (h.type === 'boulder' && h.state === 'idle' && h.alt > p.alt + 340));
   G.state = 'ready'; G.reviving = true;
+  input.keys.clear(); input.pointers.clear(); input.pressed = false; recomputeThrust();
   showHint();
   show(null);
 }
@@ -1632,7 +1732,7 @@ const CHASE = { k: 1.35, cap: 140, floor: 0.42, surgeTo: 150, beatLen: 1.2, ever
   surgeV: 1.15, surgeK: 1.6, surgeMax: 1.7, surgeHeat: 0.4 };
 function gateAhead(reach = RULES.gate.room + 120) {
   const a = G.p.alt;
-  return G.hazards.some(h => h.type === 'gate' && h.lo < a + reach && h.hi > a - 120);
+  return G.hazards.some(h => TIMED.has(h.type) && h.lo < a + reach && h.hi > a - 120);
 }
 function chaseSpeed(gap, dt) {
   const base = cfg.wormBase + Math.min(60, G.maxAlt * cfg.wormRamp);
@@ -1675,11 +1775,11 @@ function update(rawDt) {
     return;
   }
   let dt = rawDt;
-  if (G.slow > 0) { G.slow -= rawDt; dt *= 0.35; }             // close-call slow-mo
+  if (G.slow > 0) { G.slow -= rawDt; dt *= G.slowK || 0.35; }    // close-call slow-mo
   else if (G.revealSlow > 0) { G.revealSlow -= rawDt; dt *= 0.4; }   // a beat of slow-mo as a new zone opens up
   if (G.sweep) G.sweep.t += rawDt;
   G.flash = Math.max(0, G.flash - rawDt * 2.6);
-  if (G.zoneCard) G.zoneCard.t += rawDt;
+  updateBanner(rawDt);
   if (G.reveal > 0) { G.reveal = Math.max(0, G.reveal - rawDt); G.shake = Math.max(G.shake, 2.5 * Math.sin(Math.PI * G.reveal / REVEAL)); }
   G.closeFlash = Math.max(0, (G.closeFlash || 0) - rawDt * 3);
   const p = G.p;
@@ -1705,7 +1805,7 @@ function update(rawDt) {
       if (G.reviving) p.alt += Math.sin(G.t * 3) * 0.3;
       steer(dt); poseRot(dt); refreshPilotCaps();
       updateCamera(dt);
-      updateParticles(dt);
+      updateParticles(dt); updatePops(dt);
       return;
     }
   }
@@ -1756,8 +1856,11 @@ function update(rawDt) {
 
     // vertical: thrust (weaker when hot) against gravity, with a little headroom during a boost
     const eff = ht.over > 0 ? OVERHEAT.thrust : 1 - 0.2 * smooth(0.6, 1, ht.v);
-    p.vy += ((on ? cfg.thrust * eff : 0) - cfg.gravity) * dt;
-    p.vy = clamp(p.vy, -560, cfg.maxUp * (1 + 0.22 * ht.boostT / 0.45));
+    // the hang: for HANG.time after letting go gravity is HANG.k as strong, so a short release floats a moment
+    // before the drop (and the fall is capped at FALL_CAP, so a mistake is recoverable)
+    const grav = cfg.gravity * (!on && ht.offFor < HANG.time ? HANG.k : 1);
+    p.vy += ((on ? cfg.thrust * eff : 0) - grav) * dt;
+    p.vy = clamp(p.vy, FALL_CAP, cfg.maxUp * (1 + 0.22 * ht.boostT / 0.45));
     p.alt += p.vy * dt;
     // the starting planks crack and fall away just after launch: they are not a floor to rest on
     if (!G.planks && (p.alt > 140 || G.t - G.launchT > 0.6)) breakPlanks();
@@ -1808,13 +1911,14 @@ function update(rawDt) {
     const hall = G.level.marks.find(mk => mk.zone === 1);
     G.pullBack = lerp(G.pullBack || 0, hall && p.alt > hall.alt - 420 && p.alt < hall.alt + 1500 ? 1 : 0, Math.min(1, dt * 2));
     // announce each set piece at the side as it comes into view
-    for (const mk of G.level.marks) if (!mk.shown && p.alt > mk.alt - viewH * 0.55) { mk.shown = true; addPop(mk.name, 0, 0, { big: true, life: 1.4 }); }
+    for (const mk of G.level.marks) if (!mk.shown && p.alt > mk.alt - viewH * 0.55) { mk.shown = true; queueBanner({ kind: 'mark', text: mk.name, life: 1.4, alt: mk.alt }); }
     const z = zoneIndex(p.alt);
     if (z > G.zone) {
       G.zone = z; G.flash = Math.max(G.flash, 0.7); G.flashCol = [[255, 236, 150], [140, 210, 255], [255, 140, 50]][z];
-      G.zoneCard = { i: z, t: 0 }; G.reveal = REVEAL; G.shake = Math.max(G.shake, 7); vibrate(40);
+      queueBanner({ kind: 'zone', i: z, life: CARD_LIFE }, true); G.reveal = REVEAL; G.shake = Math.max(G.shake, 7); vibrate(40);
       G.revealSlow = 0.45; G.sweep = { t: 0, z };
       for (let i = 0; i < 40; i++) { const a = Math.random() * 6.283, v = 80 + Math.random() * 260; puff(p.x, p.alt + 40, Math.cos(a) * v, Math.sin(a) * v, 0.8 + Math.random() * 0.6, 2 + Math.random() * 1.5, 'spark'); }
+      zoneBreak(z);
     }
 
     // the monster: an elastic chase (see CHASE and chaseSpeed)
@@ -1918,7 +2022,7 @@ function update(rawDt) {
     }
   }
   G.surgeWarn = Math.max(0, (G.surgeWarn || 0) - dt / (CHASE.warn + 0.3));
-  updateRoar(dt);
+  updateRoar(dt); updateTell(dt);
   if (G.state === 'play' && monsterGap() < 200 && G.worm.snap <= 0 && Math.random() < dt * 0.8) G.worm.snap = 1;
   // jaws: a slow chew, wide open during a lunge, shutting hard on a snap
   const chew = 0.5 + 0.5 * Math.sin(G.t * 3.2);
@@ -1948,6 +2052,7 @@ function pickCrystal(f) {
   else if (f.bonus) chainEvent('Risky! extra cool', '#9ae8ff');
   // the chain: crystals grabbed within a few seconds of each other (they are sparse now)
   G.chain = G.chainT > 0 ? (G.chain || 0) + 1 : 1; G.chainT = 4;
+  if (G.chain >= 2) G.hitStop = Math.max(G.hitStop, 0.03 + 0.012 * Math.min(G.chain, 5));   // a brief hit-pause that grows with the chain
   for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; puff(f.x, f.alt, Math.cos(a) * (150 + 40 * (k % 2)), Math.sin(a) * (150 + 40 * (k % 2)), 0.4, 2, 'frost'); }
   for (let k = 0; k < 5; k++) puff(f.x + (Math.random() - .5) * 24, f.alt + (Math.random() - .5) * 24, (Math.random() - .5) * 50, 40 + Math.random() * 50, 0.6 + Math.random() * 0.3, 3 + Math.random() * 3, 'sparkle');
   puff(f.x, f.alt, 0, 30, 0.45, 10, 'star');
@@ -2080,19 +2185,6 @@ function shapeHits(q) {
   return false;
 }
 
-// Crusher timing: open, a 0.3 s wind-up shake (drawn, so you can read it), a fast slam, a hold,
-// then a slow pull back. Returns [closedness 0..1, wind-up progress 0..1, red telegraph 0..1]; the
-// telegraph glows on the inner faces for the 0.6 s before the slam.
-function crusherK(h, t) {
-  const P = 6.283 / h.w, s0 = (((t / P + h.ph / 6.283) % 1) + 1) % 1 * P;
-  const open = P * 0.42, wind = 0.3, slam = 0.14, hold = P * 0.16;
-  if (s0 < open) return [0, 0, clamp((s0 - open + 0.3) / 0.6, 0, 1), s0 > open - 0.5 ? 1 : 0];
-  if (s0 < open + wind) return [0, (s0 - open) / wind, 0.5 + 0.5 * (s0 - open) / wind, 1];
-  if (s0 < open + wind + slam) { const x = (s0 - open - wind) / slam; return [x * x, 0]; }
-  if (s0 < open + wind + slam + hold) return [1, 0];
-  return [1 - smooth(open + wind + slam + hold, P, s0), 0];
-}
-
 // Every hazard's collision shapes, fitted to its drawing.
 function hazardShapes(h) {
   const S = [], c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r }), box = (x0, x1, a0, a1) => S.push({ k: 'b', x0, x1, a0, a1 });
@@ -2107,6 +2199,7 @@ function hazardShapes(h) {
       break;
     }
     case 'pend': c(h.x, h.alt, h.hr); break;
+    case 'hang': if (h.state !== 'gone') for (const q of hangCaps(h, G.t)) cap(q.x0, q.a0, q.x1, q.a1, q.r); break;
     case 'spider': {
       const k = 1.3;
       cap(h.x, h.alt + 9 * k, h.x, h.alt - 8 * k, 12 * k);                    // abdomen, head and fangs
@@ -2139,13 +2232,13 @@ function hazardShapes(h) {
 function hazardHits(h) { return hazardShapes(h).some(shapeHits); }
 // a hazard's height band, for skipping the far ones
 function hazBand(h) { return h.type === 'boulder' ? [h.cur - 60, h.cur + 60] : [h.lo - 30, (h.type === 'pend' ? h.aAlt : h.hi) + 30]; }
-const causeOf = h => h.type === 'spike' ? 'spike-' + h.skin : h.type === 'boulder' && h.col ? 'column' : h.type;
+const causeOf = h => h.type === 'spike' ? 'spike-' + h.skin : h.type === 'hang' ? 'hang-' + h.skin : h.type === 'boulder' && h.col ? 'column' : h.type;
 
 // A close call: you came within the grown near shape of a hazard (see NEAR_K) and got away clean.
 // Pops sit to the side away from the pilot, inside the shaft.
 function sideX(x, d) { const [L, R] = walls(G.p.alt), right = x < (L + R) / 2; return clamp(x + (right ? d : -d), L + 40, R - 40); }
 function closeCall(h) {
-  G.closeCount++; G.slow = 0.2; G.closeFlash = 1; G.p.nearT = 0.5; G.p.grinT = 1.5;
+  G.closeCount++; G.slow = 0.05; G.slowK = 0.15; G.closeFlash = 1;   // a 3-frame time-slow and a screen-edge flash G.p.nearT = 0.5; G.p.grinT = 1.5;
   // every close call scores, but the "Close!" pop shows at most once every 1.5 s
   if (G.t - G.lastPopT > 1.5) { G.lastPopT = G.t; chainEvent(`Close! +${CLOSE_BONUS}`, '#ffe14a'); }
   puff(G.p.x, G.p.alt, 0, 0, 0.45, 22, 'whoosh');
@@ -2188,13 +2281,15 @@ function updateHazards(dt) {
     } else if (h.type === 'spider') {
       h.alt = h.aAlt - (h.mid + h.amp * Math.sin(t * h.w + h.ph));
     } else if (h.type === 'crusher') {
-      const [k, wind, tele, pre] = crusherK(h, t);
-      h.wind = wind; h.tele = tele;
-      // grit starts trickling off the pistons half a second before they move, then pours in the wind-up
-      if (pre && Math.random() < dt * (wind > 0 ? 34 : 16)) slabDust(h, [h.lb + h.extL, h.rb - h.extR]);
-      // (they draw back 5 units into the wall during the wind-up: anticipation, art and hitbox together)
-      h.extL = h.minExt + (h.maxL - h.minExt) * k - 5 * wind;
-      h.extR = h.minExt + (h.maxR - h.minExt) * k - 5 * wind;
+      // its own clock on a fixed rhythm, held at the brink only for a committed pilot (see gateStep)
+      if (G.state === 'play') gateStep(h, dt, (h.alt - h.hb) - pilotHigh(), G.p.vy, cfg.gravity, pilotLow() > h.alt + h.hb);
+      const k = gateK(h, h.clk), warn = h.held ? 0 : gateWarn(h, h.clk), wind = k === 0 && warn > 0 ? smooth(0.55, 1, warn) : 0;
+      h.wind = wind; h.tele = k > 0 ? 0 : warn; h.warn = warn;
+      // grit trickles off the pistons through the countdown and pours in the last moment before the slam
+      if (warn > 0 && k === 0 && Math.random() < dt * (wind > 0 ? 34 : 14)) slabDust(h, [h.lb + h.extL, h.rb - h.extR]);
+      // (they draw back 5 units into the wall in the wind-up: anticipation, art and hitbox together)
+      const [eL, eR] = crusherExt(h, k);
+      h.extL = eL - 5 * wind; h.extR = eR - 5 * wind;
       h.k = k;
       // a puff of grit from both faces each time it slams to full stretch
       if (k > 0.985 && !h.slammed) { h.slammed = true; slamDust(h, [h.lb + h.extL, h.rb - h.extR]); }
@@ -2207,6 +2302,28 @@ function updateHazards(dt) {
       h.warn = h.held ? 0 : gateWarn(h, h.clk);
       if (h.warn > 0.5 && Math.random() < dt * 24) slabDust(h, [h.lb + h.extL, h.rb - h.extR]);
       if (k >= 1 && was < 1) { slamDust(h, [h.mid, h.mid]); if (Math.abs(h.alt - G.p.alt) < viewH * 0.7) G.shake = Math.max(G.shake, 4); }
+    } else if (h.type === 'hang') {
+      // the cave stalactite: it trembles (grit and a red glint) once you come within reach below, then drops and shatters
+      if (h.skin === 1) {
+        const H2 = RULES.hang;
+        if (h.state === 'idle' && G.state === 'play' && pilotHigh() > h.aAlt - h.len - H2.trigger && pilotLow() < h.aAlt) { h.state = 'warn'; h.timer = H2.warn; }
+        else if (h.state === 'warn') {
+          h.timer -= dt;
+          if (Math.random() < dt * 26) puff(h.x + (Math.random() - 0.5) * 20, h.aAlt + 4, (Math.random() - 0.5) * 30, -40 - Math.random() * 60, 0.7, 1.5 + Math.random() * 2, 'debris');
+          if (h.timer <= 0) { h.state = 'fall'; h.vy = 120; }
+        } else if (h.state === 'fall') {
+          h.vy += 1500 * dt; h.fall = Math.min(h.drop, h.fall + h.vy * dt);
+          if (h.fall >= h.drop) {
+            h.state = 'gone';
+            const wc = pal('wall', h.alt), lit = [190, 236, 255];
+            for (let i = 0; i < 12; i++) puff(h.x + (Math.random() - 0.5) * 20, h.aAlt - h.fall - h.len * Math.random(), (Math.random() - 0.5) * 260, -40 + Math.random() * 180, 0.8, 2.5 + Math.random() * 3.5, 'rock', { c: [120, 150, 210], l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 14 });
+            for (let i = 0; i < 10; i++) puff(h.x, h.aAlt - h.fall - h.len * 0.7, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, 0.4, 2, 'frost');
+            if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 3);
+          }
+        }
+      } else if (h.skin === 2 && h.alt > G.camAlt - 40 && h.alt < camTop + 40 && Math.random() < dt * 3) {
+        puff(h.x + hangSway(h, t), h.aAlt - h.len - 4, 0, -160, 0.3, 2.2, 'ember', [255, 150, 50]);   // a drip falling from the glob (it fades within a few units)
+      }
     } else if (h.type === 'firebar') {
       h.ang = t * h.w + h.ph;
     } else if (h.type === 'lavafall') {
@@ -2312,6 +2429,7 @@ function draw() {
   drawWalls();
   drawZoneSweep();
   drawZoneMoments();
+  drawZoneCrack();
   drawThrustLight();
   drawShimmer();
   drawPlanks();
@@ -2330,6 +2448,7 @@ function draw() {
   ctx.restore();
   if (currentScreen === null || currentScreen === 'pause') { drawHudShade(); drawProgressTick(); drawHudWarn(); drawStatus(); }
   drawZoneCard();
+  drawBanner();
   drawPops();
   drawDanger();
   drawRoar();
@@ -2416,6 +2535,12 @@ function drawBackground() {
     }
     ctx.restore();
   }
+  // two silhouette layers per zone between the back wall and the cliffs (0.3 and 0.6 parallax), each with a band of
+  // atmospheric haze in front of it, so the shaft has real depth
+  drawSilhouettes(0.3, tone(0.3), sky, wJ, wB, wM, 0);
+  hazeBand(sky, 0.22);
+  drawSilhouettes(0.6, tone(0.52), sky, wJ, wB, wM, 1);
+  hazeBand(sky, 0.12);
   // far cliffs framing both sides (0.2), then the mid rock (0.5): each nearer layer darker
   for (const [f, depth, seedOff, base, spire] of [[0.2, 0.36, 19, 150, 90], [0.5, 0.66, 31, 96, 30]]) {
     ctx.fillStyle = rgb(tone(depth));
@@ -2440,11 +2565,64 @@ function drawBackground() {
     const up = ctx.createLinearGradient(0, H, 0, H * 0.2);
     up.addColorStop(0, `rgba(255,90,20,${(0.34 + 0.07 * Math.sin(G.t * 2.2)) * t2})`); up.addColorStop(1, 'rgba(255,60,10,0)');
     ctx.fillStyle = up; ctx.fillRect(-drawPad * s - 40, H * 0.2, cssW + 2 * drawPad * s + 80, H * 0.8 + drawPad * s + 40);
+    // the lava river far below: a bright molten band glowing at the bottom edge, with a rolling crest and bubbles
+    const rv = H - 46 * s, a = t2;
+    const rg = ctx.createLinearGradient(0, rv - 40 * s, 0, H + 10);
+    rg.addColorStop(0, 'rgba(255,120,20,0)'); rg.addColorStop(0.45, `rgba(255,140,30,${0.45 * a})`); rg.addColorStop(1, `rgba(255,220,120,${0.8 * a})`);
+    ctx.fillStyle = rg; ctx.fillRect(-drawPad * s - 40, rv - 40 * s, cssW + 2 * drawPad * s + 80, H - rv + 60 * s + drawPad * s);
+    ctx.strokeStyle = `rgba(255,240,170,${0.55 * a})`; ctx.lineWidth = 2.4 * s; ctx.beginPath();
+    for (let x = -20; x <= cssW + 20; x += 10) ctx.lineTo(x, rv + 10 * s + Math.sin(x * 0.03 + G.t * 2.2) * 4 * s + Math.sin(x * 0.011 - G.t * 1.3) * 5 * s);
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) { const ph = (G.t * 0.6 + hash2(i, 91)) % 1, bx = ox + playW * hash2(i, 92); ctx.fillStyle = `rgba(255,250,200,${0.7 * a * (1 - ph)})`; ctx.beginPath(); ctx.arc(bx, rv + 16 * s - ph * 22 * s, (1.5 + 2 * hash2(i, 93)) * s * (1 - ph * 0.5), 0, 6.283); ctx.fill(); }
     ctx.restore();
   }
   drawMotes();
 }
 
+// A soft fog of the zone's sky colour, thicker toward the top and bottom of the screen (atmospheric perspective).
+function hazeBand(sky, a) {
+  const P = drawPad * s + 40, g = ctx.createLinearGradient(0, -P, 0, H + P);
+  g.addColorStop(0, rgbaA(sky.map(v => v | 0), a * 1.3)); g.addColorStop(0.5, rgbaA(sky.map(v => v | 0), a * 0.4)); g.addColorStop(1, rgbaA(sky.map(v => v | 0), a));
+  ctx.fillStyle = g; ctx.fillRect(-P, -P, cssW + 2 * P, H + 2 * P);
+}
+// Parallax silhouettes (flat, no outline, a lit edge only): jungle roots twisting down from the canopy and old
+// trunks; basalt organ-pipe columns; magma crags with glowing cracks. `f` is the parallax factor, `n` the layer.
+function drawSilhouettes(f, col, sky, wJ, wB, wM, n) {
+  const baseA = G.camAlt * f, P = drawPad, slot = n ? 260 : 190, i0 = Math.floor((baseA - 300 - P) / slot), i1 = Math.ceil((baseA + viewH + 300 + P) / slot);
+  const lit = col.map((v, i) => lerp(v, sky[i], 0.5) + 14), yOf = a => H - (a - baseA) * s, sd = G.seed + 300 + n * 50;
+  for (let i = i0; i <= i1; i++) {
+    const hsh = hash2(i, sd);
+    if (hsh < (n ? 0.35 : 0.2)) continue;
+    const xr = hash2(i, sd + 1), x = ox - 30 * s + (playW + 60 * s) * xr, y = yOf(i * slot), sc = s * (n ? 1.25 : 0.85) * (0.8 + 0.4 * hsh);
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+    if (wJ > 0.02) {
+      ctx.globalAlpha = wJ;
+      // a twisting root hanging down from above, with side rootlets
+      ctx.strokeStyle = rgb(col); ctx.lineCap = 'round'; ctx.lineWidth = 16 - 6 * n * 0;
+      ctx.beginPath(); ctx.moveTo(0, -260); ctx.bezierCurveTo(40 * (hsh - 0.5), -170, -30 * (xr - 0.5), -60, 16 * (hsh - 0.5), 60); ctx.stroke();
+      ctx.lineWidth = 6; for (let k = 0; k < 3; k++) { const yy = -200 + k * 80, d = k % 2 ? 1 : -1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.quadraticCurveTo(d * 30, yy + 20, d * 50, yy + 60); ctx.stroke(); }
+      ctx.strokeStyle = rgb(lit, 0.45); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-6, -250); ctx.bezierCurveTo(40 * (hsh - 0.5) - 6, -170, -30 * (xr - 0.5) - 6, -60, 16 * (hsh - 0.5) - 6, 56); ctx.stroke();
+    }
+    if (wB > 0.02) {
+      ctx.globalAlpha = wB;
+      // a stack of hexagonal columns at stepped heights, each with a lit cap
+      for (let k = 0; k < 3; k++) {
+        const bx = (k - 1) * 30, h0 = 80 + 120 * hash2(i * 3 + k, sd + 2);
+        ctx.fillStyle = rgb(col.map(v => v * (0.9 + 0.08 * k))); ctx.fillRect(bx - 14, -h0, 28, h0 + 220);
+        ctx.fillStyle = rgb(lit, 0.55); ctx.beginPath(); ctx.moveTo(bx - 14, -h0); ctx.lineTo(bx - 7, -h0 - 7); ctx.lineTo(bx + 7, -h0 - 7); ctx.lineTo(bx + 14, -h0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(bx + 4, -h0, 10, h0 + 220);
+      }
+    }
+    if (wM > 0.02) {
+      ctx.globalAlpha = wM;
+      // a jagged crag rising from below with a glowing seam
+      ctx.fillStyle = rgb(col); ctx.beginPath(); ctx.moveTo(-60, 200); ctx.lineTo(-34, -40); ctx.lineTo(-12, -10); ctx.lineTo(6, -130 - 60 * hsh); ctx.lineTo(28, -30); ctx.lineTo(60, 200); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,110,30,${0.18 + 0.08 * Math.sin(G.t * 2 + i)})`; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(6, -120 - 60 * hsh); ctx.lineTo(-2, -40); ctx.lineTo(8, 40); ctx.lineTo(-4, 120); ctx.stroke(); ctx.restore();
+    }
+    ctx.restore();
+  }
+}
 // Mid-layer rock formations (0.5 parallax, behind the walls): mossy outcrops trailing roots in the
 // jungle, broken basalt column stacks in the caves, obsidian crags with glowing seams in the core.
 // Low contrast and never outlined, so they read as scenery.
@@ -3262,7 +3440,7 @@ function drawSpeedLines() {
     }
   }
   // near top speed, long streaks rush down both screen edges (over the walls), thicker and faster the closer you are
-  const ke = up ? clamp((v - 0.7 * cfg.maxUp) / (0.45 * cfg.maxUp), 0, 1) : 0;
+  const ke = up ? clamp((v - 0.6 * cfg.maxUp) / (0.45 * cfg.maxUp), 0, 1) : 0;
   if (ke > 0) for (let i = 0; i < 10; i++) {
     const side = i % 2, j = hash2(i, 61), x = side ? cssW - (4 + 18 * j) : 4 + 18 * j;
     const len = (60 + 160 * ke) * (0.6 + 0.6 * hash2(i, 62)), y = ((G.camAlt * s * (2.2 + j) + hash2(i, 63) * H * 2) % (H + len + 100)) - len;
@@ -3270,13 +3448,13 @@ function drawSpeedLines() {
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
   }
   if (k > 0) {
-    const n = 8 + Math.round(26 * k * k), col = wM > 0.5 ? [255, 210, 160] : wB > 0.5 ? [200, 225, 255] : [240, 255, 220];
+    const n = 8 + Math.round(38 * k * k), col = wM > 0.5 ? [255, 210, 160] : wB > 0.5 ? [200, 225, 255] : [240, 255, 220];
     for (let i = 0; i < n; i++) {
       const near = hash2(i, 13) < 0.3;                         // a few streaks hug the rocket
       const x = near ? sx(G.p.x) + (hash2(i, 7) - 0.5) * 120 * s : ox + playW * (0.08 + 0.84 * hash2(i, 7));
       const len = (16 + 60 * hash2(i, 8)) * (0.5 + 1.6 * k) * s;
       const y = ((G.camAlt * s * (1.2 + hash2(i, 9)) + hash2(i, 10) * H * 2) % (H + 200)) - 100;
-      ctx.strokeStyle = rgbaA(col, (0.04 + 0.17 * k * hash2(i, 11)) * (near ? 1.4 : 1)); ctx.lineWidth = 1 + 1.2 * hash2(i, 12) * k;
+      ctx.strokeStyle = rgbaA(col, (0.05 + 0.26 * k * hash2(i, 11)) * (near ? 1.4 : 1)); ctx.lineWidth = 1 + 1.8 * hash2(i, 12) * k;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
     }
   }
@@ -3340,9 +3518,10 @@ function drawFlash() {
     ctx.restore();
   }
   if (G.closeFlash > 0) {
-    const g = ctx.createRadialGradient(cssW / 2, H / 2, Math.min(cssW, H) * 0.3, cssW / 2, H / 2, Math.max(cssW, H) * 0.7);
-    g.addColorStop(0, 'rgba(255,225,74,0)'); g.addColorStop(1, `rgba(255,225,74,${0.35 * G.closeFlash})`);
+    const g = ctx.createRadialGradient(cssW / 2, H / 2, Math.min(cssW, H) * 0.42, cssW / 2, H / 2, Math.max(cssW, H) * 0.62);
+    g.addColorStop(0, 'rgba(255,240,150,0)'); g.addColorStop(0.7, `rgba(255,225,74,${0.3 * G.closeFlash})`); g.addColorStop(1, `rgba(255,250,220,${0.6 * G.closeFlash})`);
     ctx.fillStyle = g; ctx.fillRect(0, 0, cssW, H);
+    ctx.strokeStyle = `rgba(255,250,220,${0.8 * G.closeFlash})`; ctx.lineWidth = 5; ctx.strokeRect(2.5, 2.5, cssW - 5, H - 5);
   }
 }
 
@@ -3351,28 +3530,11 @@ function drawPops() {
   for (const q of G.pops) {
     const k = q.t / q.life, al = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
     ctx.save(); ctx.globalAlpha = al; ctx.lineJoin = 'round';
-    if (q.big) {
-      // set-piece and beat names: a ribbon banner under the HUD (below the zone card if one is up), cream
-      // lettering with an ink outline on a dark ribbon, sliding in and out quickly
-      const slide = 1 - smooth(0, 0.16, q.t), card = G.zoneCard && G.zoneCard.t < CARD_LIFE ? 54 : 0;
-      ctx.font = '400 19px "Lilita One", sans-serif';
-      const tw = ctx.measureText(q.text).width, bw = tw + 46, bh = 30;
-      ctx.translate(ox + playW / 2, hudBottom() + 22 + card + 36 * row++); ctx.scale(1 + 0.25 * slide, 1 + 0.25 * slide);
-      ctx.fillStyle = INK;
-      ctx.beginPath(); ctx.moveTo(-bw / 2 - 12, -bh / 2 + 3); ctx.lineTo(bw / 2 + 12, -bh / 2 + 3); ctx.lineTo(bw / 2 + 4, 3); ctx.lineTo(bw / 2 + 12, bh / 2 + 3); ctx.lineTo(-bw / 2 - 12, bh / 2 + 3); ctx.lineTo(-bw / 2 - 4, 3); ctx.closePath(); ctx.fill();
-      const rg = ctx.createLinearGradient(0, -bh / 2, 0, bh / 2); rg.addColorStop(0, '#7a2a14'); rg.addColorStop(1, '#3e120a');
-      ctx.fillStyle = rg; ctx.strokeStyle = INK; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(-bw / 2 - 10, -bh / 2); ctx.lineTo(bw / 2 + 10, -bh / 2); ctx.lineTo(bw / 2 + 2, 0); ctx.lineTo(bw / 2 + 10, bh / 2); ctx.lineTo(-bw / 2 - 10, bh / 2); ctx.lineTo(-bw / 2 - 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,200,140,.25)'; ctx.fillRect(-bw / 2 + 2, -bh / 2 + 3, bw - 4, 2);
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-      ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeText(q.text, 0, 1);
-      ctx.fillStyle = '#fff1d6'; ctx.fillText(q.text, 0, 1);
-      ctx.restore(); continue;
-    }
     const pop = q.t < 0.12 ? 0.6 + q.t / 0.12 * 0.6 : 1.2 - 0.2 * Math.min(1, (q.t - 0.12) / 0.2);
     ctx.font = `400 ${q.small ? 16 : 24}px "Lilita One", sans-serif`;
     // clamped inside the safe area: under the HUD, above the bottom edge, within the sides
-    const hw = Math.max(ctx.measureText(q.text).width, q.sub ? 80 : 0) * 0.6 + 8;
+    const tw = ctx.measureText(q.text).width; let sw = 0; if (q.sub) { ctx.save(); ctx.font = '900 13px Nunito, sans-serif'; sw = ctx.measureText(q.sub).width / 1.2; ctx.restore(); }
+    const hw = Math.max(tw, sw) * 0.6 + 8;
     const px = clamp(sx(q.x), Math.max(16, ox) + hw, Math.min(cssW - 16, ox + playW) - hw), py = clamp(sy(q.alt), hudBottom() + 24, H - safeBot - 48);
     ctx.translate(px, py); ctx.scale(pop, pop);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -3383,6 +3545,43 @@ function drawPops() {
   }
 }
 
+// Banners (zone cards and set-piece / beat names) queue up: only one shows at a time, under the HUD. A zone card
+// jumps the queue and cuts a running name banner short, so they never stack or overlap.
+function queueBanner(b, urgent) {
+  b.t = 0;
+  if (urgent) { G.banners.unshift(b); if (G.banner && G.banner.kind === 'mark') G.banner.t = Math.max(G.banner.t, G.banner.life - 0.2); }
+  else G.banners.push(b);
+}
+function updateBanner(dt) {
+  if (G.banner) { G.banner.t += dt; if (G.banner.t > G.banner.life) G.banner = null; }
+  // (a name banner that waited so long its stretch is already behind you is dropped)
+  while (!G.banner && G.banners.length) { const b = G.banners.shift(); if (b.kind !== 'mark' || b.alt > G.p.alt - 150) G.banner = b; }
+  G.zoneCard = G.banner && G.banner.kind === 'zone' ? G.banner : null;
+}
+// a banner fades back while a hazard passes behind it, so it never hides a threat
+function bannerAlpha(y, hh) { return hazardBehind([ox, y - hh / 2, ox + playW, y + hh / 2]) ? 0.35 : 1; }
+function drawBanner() {
+  const q = G.banner;
+  if (!q || q.kind !== 'mark') return;
+  const k = q.t / q.life;
+  ctx.save(); ctx.globalAlpha = (k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1) * bannerAlpha(hudBottom() + 22, 34); ctx.lineJoin = 'round';
+  {
+      const slide = 1 - smooth(0, 0.16, q.t);
+      ctx.font = '400 19px "Lilita One", sans-serif';
+      const tw = ctx.measureText(q.text).width, bw = tw + 46, bh = 30;
+      ctx.translate(ox + playW / 2, hudBottom() + 22); ctx.scale(1 + 0.25 * slide, 1 + 0.25 * slide);
+      ctx.fillStyle = INK;
+      ctx.beginPath(); ctx.moveTo(-bw / 2 - 12, -bh / 2 + 3); ctx.lineTo(bw / 2 + 12, -bh / 2 + 3); ctx.lineTo(bw / 2 + 4, 3); ctx.lineTo(bw / 2 + 12, bh / 2 + 3); ctx.lineTo(-bw / 2 - 12, bh / 2 + 3); ctx.lineTo(-bw / 2 - 4, 3); ctx.closePath(); ctx.fill();
+      const rg = ctx.createLinearGradient(0, -bh / 2, 0, bh / 2); rg.addColorStop(0, '#7a2a14'); rg.addColorStop(1, '#3e120a');
+      ctx.fillStyle = rg; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-bw / 2 - 10, -bh / 2); ctx.lineTo(bw / 2 + 10, -bh / 2); ctx.lineTo(bw / 2 + 2, 0); ctx.lineTo(bw / 2 + 10, bh / 2); ctx.lineTo(-bw / 2 - 10, bh / 2); ctx.lineTo(-bw / 2 - 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,200,140,.25)'; ctx.fillRect(-bw / 2 + 2, -bh / 2 + 3, bw - 4, 2);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeText(q.text, 0, 1);
+      ctx.fillStyle = '#fff1d6'; ctx.fillText(q.text, 0, 1);
+  }
+  ctx.restore();
+}
 // The zone title card: a slim banner just under the HUD (never over the metres or the crystal count), in for
 // 0.25 s, held to about 1.2 s, then faded out; the shaft above a zone change is kept clear, so it never hides a hazard.
 const CARD_LIFE = 1.6;
@@ -3393,7 +3592,7 @@ function drawZoneCard() {
   const left = Math.max(16, ox), right = Math.min(cssW - 16, ox + playW);
   const w = Math.min(right - left - 40, 250), hh = 44, y = hudBottom() + 34;
   const x = ox + playW / 2, pop = 0.85 + 0.15 * tin + 0.05 * Math.sin(Math.PI * smooth(0, 0.4, zc.t));
-  ctx.save(); ctx.globalAlpha = Math.min(tin, 1 - tout); ctx.translate(x, y); ctx.scale(pop, pop);
+  ctx.save(); ctx.globalAlpha = Math.min(tin, 1 - tout) * bannerAlpha(y, hh); ctx.translate(x, y); ctx.scale(pop, pop);
   const g = ctx.createLinearGradient(0, -hh / 2, 0, hh / 2), cols = [['#4aa860', '#1e5a2a'], ['#5a6ad8', '#2a2a7a'], ['#e8501a', '#5a1006']][i];
   g.addColorStop(0, cols[0]); g.addColorStop(1, cols[1]);
   ctx.fillStyle = INK; ctx.beginPath(); ctx.roundRect(-w / 2 + 2, -hh / 2 + 4, w, hh, 12); ctx.fill();
@@ -3575,9 +3774,9 @@ function dangerGlow(x, y, r, a = 0.32) {
 
 // A soft light behind each hazard in the zone's key-light colour, so a dark hazard never melts
 // into a dark cave (the purple spider on blue basalt, a black fire bat on magma rock).
-const BACKLIGHT = [[255, 246, 210], [190, 236, 255], [255, 190, 120]];
+const BACKLIGHT = [[255, 236, 180], [255, 220, 190], [255, 190, 110]];   // warm in every zone
 function backlight(x, y, r, zi, a = 0.3) {
-  a *= 0.4 + 0.6 * glowK;
+  a *= (0.4 + 0.6 * glowK) * 1.35;    // (brighter: a warm rim of light behind every hazard)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(x, y, r * s * 0.2, x, y, r * s);
   g.addColorStop(0, rgbaA(BACKLIGHT[zi], a)); g.addColorStop(0.55, rgbaA(BACKLIGHT[zi], a * 0.45)); g.addColorStop(1, rgbaA(BACKLIGHT[zi], 0));
@@ -3688,8 +3887,21 @@ function drawPend(h) {
   const ax = sx(h.ax), ay = sy(h.aAlt), px = sx(h.x), py = sy(h.alt);
   const mx = (ax + px) / 2 - (py - ay) * 0.1 * h.side, my = (ay + py) / 2;
   ctx.lineCap = 'round';
+  // its full swing reach, so a pod never surprises: a faint band over everywhere the pod (hitbox included) sweeps,
+  // with a dotted edge at its outer reach. (screen angle = pi/2 - swing angle; the swing runs 0.23..1.33 out from the wall)
+  {
+    const t0 = Math.PI / 2 - h.side * 0.23, t1 = Math.PI / 2 - h.side * 1.33, a0 = Math.min(t0, t1), a1 = Math.max(t0, t1);
+    const near = glowK, rIn = (h.len - h.hr) * s, rOut = (h.len + h.hr) * s;
+    ctx.save();
+    ctx.fillStyle = rgbaA(DANGER_RGB, 0.05 + 0.07 * near);
+    ctx.beginPath(); ctx.arc(ax, ay, rOut, a0, a1); ctx.arc(ax, ay, Math.max(0, rIn), a1, a0, true); ctx.closePath(); ctx.fill();
+    ctx.setLineDash([3 * s, 6 * s]); ctx.lineWidth = 2 * s;
+    ctx.strokeStyle = 'rgba(28,15,11,.5)'; ctx.beginPath(); ctx.arc(ax, ay, rOut, a0, a1); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,236,200,${0.3 + 0.35 * near})`; ctx.lineWidth = 1.3 * s; ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+  }
   if (zi === 0) {
-    for (const [w, c] of [[7, INK], [4.5, '#4f8a2a'], [1.6, '#9fd45a']]) {
+    for (const [w, c] of [[9.5, INK], [6, '#4f8a2a'], [2.2, '#9fd45a']]) {
       ctx.strokeStyle = c; ctx.lineWidth = w * s;
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, px, py); ctx.stroke();
     }
@@ -3708,8 +3920,8 @@ function drawPend(h) {
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, lx = lerp(ax, px, t), ly = lerp(ay, py, t);
       ctx.save(); ctx.translate(lx, ly); ctx.rotate(ang + (k % 2 ? Math.PI / 2 : 0)); ctx.scale(s, s);
-      ctx.strokeStyle = INK; ctx.lineWidth = 4.4; ctx.beginPath(); ctx.ellipse(0, 0, 5.5, k % 2 ? 2 : 3.2, 0, 0, 6.283); ctx.stroke();
-      ctx.strokeStyle = zi === 1 ? '#8a7a8a' : `rgb(255,${110 + 50 * Math.sin(G.t * 3 + k) | 0},40)`; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = INK; ctx.lineWidth = 5.6; ctx.beginPath(); ctx.ellipse(0, 0, 5.5, k % 2 ? 2 : 3.2, 0, 0, 6.283); ctx.stroke();
+      ctx.strokeStyle = zi === 1 ? '#a89aa8' : `rgb(255,${110 + 50 * Math.sin(G.t * 3 + k) | 0},40)`; ctx.lineWidth = 2.8; ctx.stroke();
       ctx.restore();
     }
   }
@@ -4100,7 +4312,14 @@ const CRUSHER_SKINS = [
   { body: ['#4a4044', '#221c20', '#0c0809'], lit: '#7a6a66', seam: 'rgba(255,120,40,.5)', rivet: '#e8a070', face: '#1a0c0a' },
 ];
 function drawCrusher(h) {
-  const y = sy(h.alt), hb = h.hb, wind = h.wind || 0, tele = h.tele || 0;
+  const y = sy(h.alt), hb = h.hb, wind = h.wind || 0, tele = h.tele || 0, timing = gateTiming(h), warn = h.warn || 0;
+  // where the slot will be when it slams: two dashed brackets across its band, bright through the countdown
+  if (h.k < 0.98) {
+    const a = timing === 'soon' ? 0.55 + 0.4 * Math.sin(G.t * 22) : timing === 'held' ? 0.5 : 0.22, x0 = sx(h.mid - h.slot / 2), x1 = sx(h.mid + h.slot / 2);
+    ctx.save(); ctx.setLineDash([5 * s, 5 * s]); ctx.lineCap = 'round';
+    for (const x of [x0, x1]) { ctx.strokeStyle = 'rgba(28,15,11,.6)'; ctx.lineWidth = 4 * s; ctx.beginPath(); ctx.moveTo(x, y - hb * s); ctx.lineTo(x, y + hb * s); ctx.stroke(); ctx.strokeStyle = timing === 'held' ? `rgba(127,224,90,${a})` : timing === 'soon' ? rgbaA(DANGER_RGB, a) : `rgba(255,241,214,${a})`; ctx.lineWidth = 2 * s; ctx.stroke(); }
+    ctx.restore();
+  }
   // wind-up: the pistons shudder for 0.3 s before they slam
   const jit = wind > 0 ? Math.sin(G.t * 95) * (1 + 2.2 * wind) * s : 0;
   for (const side of [1, -1]) {
@@ -4112,6 +4331,7 @@ function drawCrusher(h) {
     ctx.save(); ctx.translate(sx(wallX) + jit * side, y + (wind > 0 ? Math.cos(G.t * 80) * wind * s : 0)); ctx.scale(s * side, s);
     const L = ext;
     drawSlab(L, hb, CRUSHER_SKINS[h.skin ?? 1], tele);
+    drawLamps(h, timing, Math.max(-36 + 2 * 9, L - 30), -hb + 6, 3, 9);
     // a lava seam that brightens as the jaws close
     const heat = Math.max(h.k || 0, wind);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -4131,7 +4351,71 @@ function drawCrusher(h) {
   }
 }
 
-// Gate: two slabs that meet in the middle on a fixed rhythm. A lamp on each slab tells the timing
+// Hanging hazards, drawn exactly over their capsules (hangCaps): a thorn vine on a thin stem (jungle), a crystal
+// stalactite on an iron chain that trembles and drops (caves), a magma drip on a glowing strand (core). The tether
+// above is thin, dark and outline-free: harmless scenery, like a spider's thread.
+function drawHang(h) {
+  if (h.state === 'gone') return;
+  const caps = hangCaps(h, G.t), zi = h.skin, top = h.aAlt - (h.fall || 0);
+  const shake = h.state === 'warn' ? Math.sin(G.t * 80) * 1.6 * s : 0;
+  const X = x => sx(x) + shake, Y = a => sy(a);
+  // the tether, up out of sight
+  ctx.save(); ctx.lineCap = 'round';
+  if (zi === 0) { ctx.strokeStyle = 'rgba(40,70,30,.75)'; ctx.lineWidth = 2.2 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.quadraticCurveTo(X(h.x) + 6 * s, Y(top) - 120 * s, X(h.x) - 4 * s, -20); ctx.stroke(); }
+  else if (zi === 1) { ctx.setLineDash([5 * s, 3 * s]); ctx.strokeStyle = 'rgba(60,64,90,.8)'; ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top) - 4 * s); ctx.lineTo(X(h.x), -20); ctx.stroke(); ctx.setLineDash([]); }
+  else { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,120,40,${0.35 + 0.1 * Math.sin(G.t * 3 + h.ph)})`; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.lineTo(X(h.x), -20); ctx.stroke(); }
+  ctx.restore();
+  const last = caps[caps.length - 1], bx = X(last.x1), by = Y(last.a1);
+  backlight(X(h.x), Y(top - h.len / 2), h.len * 0.75, zi, 0.32);
+  dangerGlow(bx, by, 40);
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (zi === 1) {
+    // the cone: wide at the top, a sharp tip, ink edge, icy facets; red-hot glint while it trembles
+    const L = [], R = [];
+    for (const c of caps) { L.push([X(c.x0) - c.r * s, Y(c.a0)]); R.push([X(c.x0) + c.r * s, Y(c.a0)]); }
+    const tip = [X(last.x1), Y(last.a1) + 3 * s];
+    ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.lineTo(...tip); for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath();
+    const g = ctx.createLinearGradient(L[0][0], 0, R[0][0], 0); g.addColorStop(0, '#e8fbff'); g.addColorStop(0.45, '#7ab8f0'); g.addColorStop(1, '#2a3a8a');
+    ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(20,30,80,.55)'; ctx.lineWidth = 1.4 * s;
+    ctx.beginPath(); ctx.moveTo(X(h.x) - 4 * s, Y(top)); ctx.lineTo(X(h.x) + 2 * s, Y(top - h.len * 0.5)); ctx.lineTo(...tip); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(L[0][0] + 4 * s, L[0][1] + 4 * s); ctx.lineTo(L[3][0] + 3 * s, L[3][1]); ctx.stroke();
+    pkRect(ctx, X(h.x) - (h.hw + 3) * s, Y(top) - 7 * s, (h.hw + 3) * 2 * s, 9 * s, 4 * s, '#3a4058', 2.4 * s);   // the rock it grew from
+    ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(tip[0] - 3 * s, tip[1] - 9 * s); ctx.lineTo(...tip); ctx.lineTo(tip[0] + 3 * s, tip[1] - 9 * s); ctx.closePath(); ctx.fill();
+    if (h.state === 'warn') { ctx.globalCompositeOperation = 'lighter'; const k = 1 - h.timer / RULES.hang.warn, gg = ctx.createRadialGradient(tip[0], tip[1], 1, tip[0], tip[1], 34 * s); gg.addColorStop(0, rgbaA(DANGER_RGB, 0.5 + 0.4 * k)); gg.addColorStop(1, rgbaA(DANGER_RGB, 0)); ctx.fillStyle = gg; ctx.fillRect(tip[0] - 34 * s, tip[1] - 34 * s, 68 * s, 68 * s); }
+  } else {
+    // the rope (vine or molten strand), ink-edged, along the capsule centre line
+    const path = () => { ctx.beginPath(); ctx.moveTo(X(caps[0].x0), Y(caps[0].a0)); for (const c of caps) ctx.lineTo(X(c.x1), Y(c.a1)); };
+    const body = zi === 0 ? (h.hw - 3) * 2 * 0.62 : 10;
+    path(); ctx.strokeStyle = INK; ctx.lineWidth = (body + 3.4) * s; ctx.stroke();
+    path(); ctx.strokeStyle = zi === 0 ? '#4f9a2a' : '#ff7a1a'; ctx.lineWidth = body * s; ctx.stroke();
+    path(); ctx.strokeStyle = zi === 0 ? '#a8e060' : '#ffe08a'; ctx.lineWidth = body * 0.3 * s; ctx.stroke();
+    if (zi === 0) {
+      // thorns along the vine, out to its hitbox radius, red-tipped
+      for (let i = 0; i < caps.length - 1; i++) for (const d of [-1, 1]) {
+        const c = caps[i], mx = X((c.x0 + c.x1) / 2), my = Y((c.a0 + c.a1) / 2) + d * 4 * s, r = (h.hw - 3) * s;
+        ctx.fillStyle = '#f3e2a8'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6 * s;
+        ctx.beginPath(); ctx.moveTo(mx, my - 4 * s); ctx.lineTo(mx + d * r, my + 1 * s); ctx.lineTo(mx, my + 3 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(mx + d * r * 0.6, my - 1 * s); ctx.lineTo(mx + d * r, my + 1 * s); ctx.lineTo(mx + d * r * 0.6, my + 2 * s); ctx.closePath(); ctx.fill();
+      }
+      // the thorn bud at the end
+      const r = h.hw * s, cx = X(last.x1), cy = Y(last.a1);
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.3; pkPath(ctx, [[cx + Math.cos(a - 0.3) * r * 0.6, cy + Math.sin(a - 0.3) * r * 0.6], [cx + Math.cos(a) * r, cy + Math.sin(a) * r], [cx + Math.cos(a + 0.3) * r * 0.6, cy + Math.sin(a + 0.3) * r * 0.6]], k % 2 ? '#f3e2a8' : DANGER, 1.4 * s); }
+      pkE(ctx, cx, cy, r * 0.62, r * 0.62, pkRG(ctx, cx, cy, r * 0.62, ['#ff9a7a', '#c8203a', '#5a0a1a']), 2.2 * s);
+      pkRim(ctx, cx, cy, r * 0.45, r * 0.45);
+    } else {
+      // the glob, heavy and molten, pulsing
+      const r = h.hw * s, cx = X(last.x1), cy = Y(last.a1), p = 0.5 + 0.5 * Math.sin(G.t * 4 + h.ph);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, r * 2.6); gl.addColorStop(0, `rgba(255,150,40,${0.45 + 0.2 * p})`); gl.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = gl; ctx.fillRect(cx - r * 2.6, cy - r * 2.6, r * 5.2, r * 5.2); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(cx - r * 0.5, cy - r * 1.1); ctx.quadraticCurveTo(cx - r * 1.05, cy - r * 0.2, cx - r * 0.85, cy + r * 0.35); ctx.arc(cx, cy, r, Math.PI * 0.85, Math.PI * 0.15, true); ctx.quadraticCurveTo(cx + r * 1.05, cy - r * 0.2, cx + r * 0.5, cy - r * 1.1); ctx.closePath();
+      const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.2, 1, cx, cy, r * 1.1); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.45, '#ffb238'); g.addColorStop(1, '#c8300a');
+      ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = '#3a0804'; ctx.lineWidth = 2.6 * s; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,230,.8)'; ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.arc(cx, cy, r * 0.6, -2.6, -1.6); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+// Gate skins (the jaws): a row of countdown lamps on each jaw tells the timing
 // (green open, amber countdown, red shut), and for the RULES.gate.warn seconds before it shuts a
 // countdown glow runs along the seam and both slabs' undersides, so you can read it from below.
 const GATE_SKINS = [
@@ -4139,37 +4423,83 @@ const GATE_SKINS = [
   { body: ['#6a7090', '#363a58', '#181a2e'], lit: '#9aa4cc', seam: 'rgba(10,12,30,.6)', rivet: '#c8d4ff', face: '#22263e', tooth: '#d8f4ff', glow: [120, 220, 255] },
   { body: ['#4a3a38', '#241816', '#0e0606'], lit: '#7a6058', seam: 'rgba(255,120,40,.45)', rivet: '#e8a070', face: '#1a0c0a', tooth: '#ffcf8a', glow: [255, 120, 40] },
 ];
-// 'held' (open and holding for the pilot just below), 'open', 'soon' (countdown), 'shut', 'opening'
+// 'held' (holding at the brink for the committed pilot), 'open', 'soon' (countdown), 'shut', 'opening'
 function gateTiming(h) {
-  const u = gatePhase(h, h.clk), { open, move, warn } = RULES.gate;
-  if (u < open) return h.held ? 'held' : open - u < warn ? 'soon' : 'open';
-  return u < open + move + h.shut ? 'shut' : 'opening';
+  const u = gatePhase(h, h.clk), T = timingOf(h);
+  if (u < T.open) return h.held ? 'held' : T.open - u < T.warn ? 'soon' : 'open';
+  return u < T.open + tClose(T) + h.shut ? 'shut' : 'opening';
+}
+// Segmented countdown lamps for gates and crushers (in a slab's own frame): while open they go out one by one as
+// the close nears (green, then flashing red through the countdown); while shut they light up red one by one
+// toward the reopen; all green while it holds for you.
+function drawLamps(h, timing, x0, y, n, step) {
+  const T = timingOf(h), closeIn = gateCloseIn(h, h.clk), reopen = gateReopenIn(h, h.clk), cyc = tClose(T) + h.shut + tReopen(T);
+  const on = timing === 'held' ? n : timing === 'open' || timing === 'soon' ? Math.ceil(n * closeIn / T.open - 1e-6) : n - Math.ceil(n * reopen / cyc - 1e-6);
+  const flash = Math.sin(G.t * 26) > 0;
+  for (let k = 0; k < n; k++) {
+    const lit = k < on, x = x0 - k * step;
+    const col = !lit ? '#2a1414' : timing === 'held' ? '#7fe05a' : timing === 'soon' ? (flash ? '#ff4a5a' : '#ffc23a') : timing === 'open' ? '#7fe05a' : '#ff3a2a';
+    pkE(ctx, x, y, 3.2, 3.2, col, 1.4);
+    if (lit) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(x, y, 0.5, x, y, 9); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.55; ctx.fillStyle = g; ctx.fillRect(x - 9, y - 9, 18, 18); ctx.restore(); }
+  }
+}
+// Gate art: two carved stone jaws (a heavy rounded snout, a brow ridge and big interlocking fangs on the inner
+// face), set in a faint carved archway on the back wall, so a gate never reads as a piston crusher. The fangs
+// stop at the hitbox (3 past the face).
+function drawJaw(L, hb, K, warn, side) {
+  const x0 = -40, x1 = L - 8;
+  ctx.beginPath(); ctx.moveTo(x0, -hb); ctx.lineTo(x1 - 6, -hb); ctx.quadraticCurveTo(x1 + 6, -hb, x1 + 6, -hb + 10); ctx.lineTo(x1 + 6, hb - 10); ctx.quadraticCurveTo(x1 + 6, hb, x1 - 6, hb); ctx.lineTo(x0, hb); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, 0, -hb, 0, hb, K.body); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.stroke();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = K.lit; ctx.fillRect(x0, -hb, x1 - x0 + 8, 4);
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(x0, hb - 6, x1 - x0 + 8, 6);
+  // clenched teeth along the jaw's whole length: a dark mouth line with cream fangs biting up and down, so the
+  // slab reads as a stone jaw (crushers are plain riveted pistons)
+  ctx.fillStyle = 'rgba(10,4,4,.85)'; ctx.fillRect(x0, -3, x1 - x0 + 2, 6);
+  ctx.fillStyle = K.tooth; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
+  for (let tx = x1 - 4, k = 0; tx > x0; tx -= 9, k++) for (const dy of [-1, 1]) {
+    const o = dy > 0 ? 4.5 : 0; ctx.beginPath(); ctx.moveTo(tx - 4 - o, dy * 2); ctx.lineTo(tx - o, dy * -7); ctx.lineTo(tx + 4 - o, dy * 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  // the brow ridge and a carved eye socket
+  ctx.strokeStyle = K.seam; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x0, -hb + 8); ctx.quadraticCurveTo(x1 - 14, -hb + 5, x1 - 2, -hb + 10); ctx.stroke();
+  ctx.restore();
+  // fangs: this jaw's on the top half or the bottom half, so the two interlock when shut
+  const top = side > 0;
+  for (let k = 0; k < 2; k++) {
+    const yc = (top ? -hb * 0.5 : hb * 0.5) + (k ? (top ? 6 : -6) : (top ? -6 : 6)), w = k ? 5 : 7;
+    pkPath(ctx, [[x1 + 4, yc - w], [L + 3, yc], [x1 + 4, yc + w]], K.tooth, 2);
+  }
+  if (warn > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x1 + 4, 0, 1, x1 + 4, 0, hb * 2); g.addColorStop(0, rgbaA(DANGER_RGB, 0.7 * warn)); g.addColorStop(1, rgbaA(DANGER_RGB, 0));
+    ctx.fillStyle = g; ctx.fillRect(x1 - hb * 2, -hb * 2, hb * 4, hb * 4); ctx.restore();
+  }
 }
 function drawGate(h) {
   const y = sy(h.alt), hb = h.hb, K = GATE_SKINS[h.skin || 0], timing = gateTiming(h), warn = h.warn || 0;
-  const lamp = timing === 'open' || timing === 'held' ? '#7fe05a' : timing === 'opening' ? '#ffc23a' : timing === 'soon' ? (Math.sin(G.t * 28) > 0 ? '#ffc23a' : '#6a4a10') : '#ff3a2a';
-  const reopen = gateReopenIn(h, h.clk), reopenMax = 2 * RULES.gate.move + h.shut;
-  // countdown glow along the seam line and under both slabs while it is about to shut or shut
+  // the carved archway on the back wall: faint, dark and outline-free (scenery: it never blocks)
+  ctx.save(); ctx.globalAlpha = 0.32; ctx.strokeStyle = rgb(K.glow.map(v => v * 0.35)); ctx.lineWidth = 7 * s; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(sx(h.lb + 6), y - hb * s); ctx.quadraticCurveTo(sx(h.mid), y - (hb + 120) * s, sx(h.rb - 6), y - hb * s); ctx.stroke();
+  ctx.lineWidth = 3 * s; ctx.setLineDash([3 * s, 9 * s]); ctx.beginPath(); ctx.moveTo(sx(h.lb + 14), y - (hb + 6) * s); ctx.quadraticCurveTo(sx(h.mid), y - (hb + 108) * s, sx(h.rb - 14), y - (hb + 6) * s); ctx.stroke();
+  ctx.restore();
   if (warn > 0) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const pulse = timing === 'soon' ? 0.7 + 0.3 * Math.sin(G.t * (14 + 26 * warn)) : 1;
     const g = ctx.createRadialGradient(sx(h.mid), y, 2, sx(h.mid), y, 90 * s);
     g.addColorStop(0, rgbaA(DANGER_RGB, 0.75 * warn * pulse)); g.addColorStop(1, rgbaA(DANGER_RGB, 0));
     ctx.fillStyle = g; ctx.fillRect(sx(h.mid) - 90 * s, y - 90 * s, 180 * s, 180 * s);
-    // (a soft band that rises from nothing at the seam, peaks under the slabs and fades out below: no hard edge)
     const ug = ctx.createLinearGradient(0, y, 0, y + (hb + 34) * s);
     ug.addColorStop(0, rgbaA(DANGER_RGB, 0)); ug.addColorStop(0.5, rgbaA(DANGER_RGB, 0.6 * warn * pulse)); ug.addColorStop(1, rgbaA(DANGER_RGB, 0));
     ctx.fillStyle = ug; ctx.fillRect(sx(h.lb), y, (h.rb - h.lb) * s, (hb + 34) * s);
     ctx.restore();
   }
-  // the closing line: a dashed line across the open gap where the slabs will meet. Faint while it is safely open
-  // (or held for you), bright, thick and racing in the countdown.
+  // the closing line where the jaws will meet: faint while safely open (green while it holds for you), racing red in the countdown
   if (timing !== 'shut' && h.k < 0.98) {
     const soon = timing === 'soon', x0 = sx(h.lb + h.extL + 4), x1 = sx(h.rb - h.extR - 4);
     ctx.save(); ctx.lineCap = 'round';
     ctx.setLineDash([8 * s, 8 * s]); ctx.lineDashOffset = -G.t * (soon ? 90 : 20) * s;
     ctx.strokeStyle = 'rgba(28,15,11,.6)'; ctx.lineWidth = (soon ? 6 : 4) * s; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
-    ctx.strokeStyle = soon ? rgbaA(DANGER_RGB, 0.6 + 0.4 * Math.sin(G.t * 26)) : timing === 'held' ? 'rgba(127,224,90,.55)' : 'rgba(255,241,214,.35)';
+    ctx.strokeStyle = soon ? rgbaA(DANGER_RGB, 0.6 + 0.4 * Math.sin(G.t * 26)) : timing === 'held' ? 'rgba(127,224,90,.7)' : 'rgba(255,241,214,.35)';
     ctx.lineWidth = (soon ? 3.2 : 2) * s; ctx.stroke();
     ctx.setLineDash([]); ctx.restore();
   }
@@ -4179,26 +4509,10 @@ function drawGate(h) {
     ctx.fillRect(Math.min(sx(wallX - side * 6), sx(wallX + side * 4)), y - (hb + 5) * s, 10 * s, (hb + 5) * 2 * s);
     const shiver = timing === 'soon' ? Math.sin(G.t * 90) * warn * 0.8 * s : 0;
     ctx.save(); ctx.translate(sx(wallX) + shiver * side, y); ctx.scale(s * side, s);
-    const L = ext;
-    drawSlab(L, hb, K, warn);
-    // interlocking teeth: this slab's on the top half, the other's on the bottom half
-    for (let k = 0; k < 2; k++) {
-      const y0 = (side > 0 ? -hb : 0) + k * hb / 2, y1 = y0 + hb / 2;
-      pkPath(ctx, [[L - 4, y0], [L + 4, (y0 + y1) / 2], [L - 4, y1]], K.tooth, 2);
-    }
-    // countdown pips on the underside: three red lights fill in over the warning; while it is shut they
-    // turn amber and go out one by one, counting down to the moment it is fully open again
-    for (let k = 0; k < 3; k++) {
-      const px = Math.max(-30, L - 22 - k * 9);
-      const col = timing === 'soon' ? (warn > k / 3 ? '#ff4a5a' : '#2a1414') : timing === 'shut' || timing === 'opening' ? (reopen > reopenMax * k / 3 ? '#ffc23a' : '#2a1414') : timing === 'held' ? '#7fe05a' : '#2a1414';
-      pkE(ctx, px, hb - 4, 2.6, 2.6, col, 1.2);
-    }
-    // timing lamp (it swells and throbs through the countdown)
-    const lx = Math.max(-24, L - 24), lp = timing === 'soon' ? 1 + 0.45 * Math.abs(Math.sin(G.t * 14)) : 1;
-    pkE(ctx, lx, -4, 4.2 * lp, 4.2 * lp, lamp, 1.8);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const lr = 14 * lp * (timing === 'soon' ? 1.5 : 1), lg = ctx.createRadialGradient(lx, -4, 1, lx, -4, lr); lg.addColorStop(0, lamp); lg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.globalAlpha = timing === 'soon' ? 0.85 : 0.5; ctx.fillStyle = lg; ctx.fillRect(lx - lr, -4 - lr, lr * 2, lr * 2); ctx.restore();
+    drawJaw(ext, hb, K, warn, side);
+    // the countdown lamps: a row along the jaw (they show over the wall rock while it is open)
+    const n = RULES.gate.lamps;
+    drawLamps(h, timing, Math.max(-36 + (n - 1) * 8, ext - 22), -hb + 10.5, n, 8);
     ctx.restore();
   }
 }
@@ -4253,7 +4567,7 @@ function drawLavafall(h) {
   ctx.restore();
   ctx.restore();
 }
-const DRAW = { bat: drawBat, pend: drawPend, geyser: drawGeyser, firebar: drawFirebar, spike: drawSpike, spider: drawSpider, crusher: drawCrusher, gate: drawGate, lavafall: drawLavafall };
+const DRAW = { hang: drawHang, bat: drawBat, pend: drawPend, geyser: drawGeyser, firebar: drawFirebar, spike: drawSpike, spider: drawSpider, crusher: drawCrusher, gate: drawGate, lavafall: drawLavafall };
 
 function drawParticles(additive) {
   ctx.save();
@@ -4772,10 +5086,9 @@ const PILOTS = [
 
   { id: 'chameleon', name: 'Chameleon', ride: 'Firework rocket', exhaust: 'fire', nozzles: [[0, 29]], draw(c, st) {
     // one chunky shape: a fat firework with the chameleon hugging its front, a big casqued head on top and its
-    // tail curled in a spiral round the bottom; its skin slowly cycles through the zones' colours
-    const zones = [[90, 200, 74], [58, 184, 200], [255, 138, 58], [176, 90, 224]];
-    const p = pmod(st.t * 0.15, zones.length), i = Math.floor(p), f = p - i, a = zones[i], b = zones[(i + 1) % zones.length];
-    const col = a.map((v, k) => Math.round(v + (b[k] - v) * f)), skin = `rgb(${col})`, light = `rgb(${col.map(v => Math.round(v + (255 - v) * 0.5))})`, dark = `rgb(${col.map(v => Math.round(v * 0.6))})`;
+    // tail curled in a spiral round the bottom; its skin is a fixed bright lime (it never camouflages into a zone)
+    // with a pale 2 px rim light so it always reads
+    const col = [126, 222, 58], skin = `rgb(${col})`, light = `rgb(${col.map(v => Math.round(v + (255 - v) * 0.5))})`, dark = `rgb(${col.map(v => Math.round(v * 0.6))})`;
     for (const d of [-1, 1]) pkPath(c, [[d * 8, 15], [d * 15, 26], [d * 8, 23]], '#e8402c', 1.8);
     pkRect(c, -9, -8, 18, 34, 4, pkLG(c, -9, 0, 9, 0, ['#1f4ab0', '#4a7ae8', '#1f4ab0']), 2.4);
     c.fillStyle = '#ffc93a'; c.fillRect(-9, 0, 18, 3.5); c.fillRect(-9, 15, 18, 3.5);
@@ -4796,6 +5109,11 @@ const PILOTS = [
     if (st.blink > 0.35) { const ex = 9.5 + Math.sin(st.t * 1.3) * 1.4; pkDot(c, ex, -19, 2, INK); pkDot(c, ex - 0.6, -19.8, 0.7, '#fff'); }
     pkSmile(c, 2, -13, 3.6, 1.4);
     pkRim(c, 3, -18, 8, 6);
+    // the light rim: about 2 px on screen, along the lit upper left of the head, body and tail
+    c.strokeStyle = 'rgba(240,255,215,.95)'; c.lineWidth = 1.15;
+    c.beginPath(); c.ellipse(3, -18, 9.6, 7.6, 0, 3.3, 5.4); c.stroke();
+    c.beginPath(); c.ellipse(1, 4, 11.6, 12.6, 0, 2.9, 4.9); c.stroke();
+    c.beginPath(); c.arc(-9, 18, 6.2, 2.2, 3.9); c.stroke();
   } },
 
   { id: 'axolotl', name: 'Axolotl', ride: 'Water-bottle rocket', exhaust: 'water', nozzles: [[0, 32]], draw(c, st) {
@@ -4953,6 +5271,23 @@ function drawPlayer() {
   if (G.thrust) drawNozzleGlow(ctx, pl);
   ctx.restore();
   drawBoostReady();
+  drawPilotHeat();
+}
+// Heat beside the pilot, where your eyes are: a small upright bar on the roomier side, fading in once the engine
+// is warm (so it is not clutter when cool), green → amber → red, blinking through an overheat.
+function drawPilotHeat() {
+  if (G.state !== 'play') return;
+  const ht = G.heat, p = G.p, over = ht.over > 0, a = over ? 1 : smooth(0.18, 0.4, ht.v) * (0.6 + 0.4 * smooth(0.5, 0.8, ht.v));
+  if (a <= 0.01) return;
+  const [L, R] = walls(p.alt), [x0, x1] = pilotExtent(pilot().id, 0), side = p.x - L > R - p.x ? -1 : 1;
+  const x = sx(p.x + (side > 0 ? x1 + 10 : x0 - 10)), y = sy(p.alt), hgt = 40, w = 8;
+  const col = over ? (Math.sin(G.t * 30) > 0 ? [255, 58, 42] : [255, 225, 74]) : heatColour(ht.v), f = over ? 1 : ht.v;
+  ctx.save(); ctx.globalAlpha = a;
+  pkRect(ctx, x - w / 2, y - hgt / 2, w, hgt, 4, 'rgba(20,12,10,.75)', 2.6);
+  ctx.fillStyle = rgb(col); ctx.beginPath(); ctx.roundRect(x - w / 2 + 2, y + hgt / 2 - 2 - (hgt - 4) * f, w - 4, (hgt - 4) * f, 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,241,214,.85)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(x - w / 2 - 1.5, y - hgt / 2 - 1.5, w + 3, hgt + 3, 5); ctx.stroke();
+  ctx.save(); ctx.translate(x, y - hgt / 2 - 9); drawFlameIcon(6, rgb(col), Math.sin(G.t * 20)); ctx.restore();
+  ctx.restore();
 }
 // The thrust flame: an additive, flickering cone of fire from every nozzle (orange edge, yellow body,
 // pale core), longer at speed and during a boost, sputtering short when the engine is hot.
@@ -5055,9 +5390,12 @@ function drawHeatGauge(x, y) {
   const hot = ht.v > 0.75 && !over, r = 22 * (1 + 0.18 * frost) * (hot ? 1 + 0.05 * Math.sin(G.t * 14) : 1);
   const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
   ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round';
-  ctx.globalAlpha = clamp(0.55 + ht.v * 0.8 + frost, 0, 1);
   ctx.fillStyle = 'rgba(20,12,10,.72)'; ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, 6.283); ctx.fill();
+  // a bright cream bezel and a light track, so the dial reads on the darkest cave
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, r + 7, 0, 6.283); ctx.stroke();
+  ctx.strokeStyle = '#fff1d6'; ctx.lineWidth = 2.4; ctx.stroke();
   ctx.strokeStyle = INK; ctx.lineWidth = 11; ctx.beginPath(); ctx.arc(0, 0, r, a0, a1); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,241,214,.22)'; ctx.lineWidth = 6; ctx.stroke();
   const col = over ? (Math.sin(G.t * 30) > 0 ? [255, 58, 42] : [255, 225, 74]) : heatColour(ht.v);
   const fill = over ? 1 : Math.max(0.02, ht.v), segs = Math.max(1, Math.ceil(fill * 20));
   ctx.lineWidth = 7; ctx.lineCap = 'butt';
@@ -5091,7 +5429,7 @@ function drawStatus() {
   if (G.state !== 'play') return;
   const x0 = Math.max(16, ox) + 6, cx = x0 + 28, cy = safeTop + 36;
   const behind = hazardBehind([x0 - 6, cy - 34, x0 + 150, cy + 40]);
-  ctx.save(); ctx.globalAlpha = behind ? 0.4 : 1;
+  ctx.save(); ctx.globalAlpha = behind ? 0.3 : 1;
   drawHeatGauge(cx, cy);
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   if ((G.chain || 0) > 1 && G.chainT > 0) {
@@ -6122,12 +6460,12 @@ const MONSTER_FORMS = {
   worm:    { sx: 0.9, sy: 1.05, coil: true },        // a top-down maw, no face
   golem:   { horns: 'crystal' },
   kraken:  { sx: 0.82, sy: 1.16 },
-  piranha: { crest: 'fin' },
+  piranha: { crest: 'fin', tilt: -0.42 },              // side-profile jaws, snapping in from the side
   dragon:  { heads: 3, headX: 262, headY: 150 },
-  rex:     { sx: 0.8, sy: 1.2 },                     // a long neck
+  rex:     { sx: 0.8, sy: 1.2, tilt: 0.38 },          // a long neck, head turned side-on
   flytrap: { heads: 3, headX: 262, headY: 170 },
   blob:    { sx: 1.1, sy: 0.9 },
-  shark:   { sx: 0.72, sy: 1.26, crest: 'fin' },
+  shark:   { sx: 0.72, sy: 1.26, crest: 'fin', tilt: -0.34 },
   tiki:    { sx: 0.78, sy: 1.24, horns: 'feather' },
   spirit:  { sx: 0.86, sy: 1.14, crest: 'flame' },
   toad:    { sx: 1.12, sy: 0.88 },
@@ -6147,7 +6485,7 @@ const MONSTER_LIMBS = {
   gorilla: { kind: 'arms', hand: 'knuckle', skin: ['#a07a6a', '#56382e', '#22120e'], claw: '#2a1a18', glow: [255, 130, 40] },
   mole:    { kind: 'arms', hand: 'shovel', skin: ['#9a8a84', '#54443f', '#2e2422'], claw: '#f4e8d2', palm: '#ff9ab0' },
   golem:   { kind: 'arms', hand: 'claw', skin: ['#9a94a6', '#4e4858', '#1c1820'], claw: '#2a2830', glow: [255, 170, 80] },
-  kraken:  { kind: 'tentacles', n: 3, skin: ['#ff9a7a', '#c83a2a', '#5a1008'], sucker: '#ffd8c0' },
+  kraken:  { kind: 'tentacles', n: 5, skin: ['#ff9a7a', '#c83a2a', '#5a1008'], sucker: '#ffd8c0' },
   piranha: { kind: 'fins', skin: ['#ffb070', '#d8501a', '#5a1406'], bone: '#ffe4b8' },
   dragon:  { kind: 'wings', skin: ['#f06a2a', '#9a240c', '#3a0804'], bone: '#ffc080' },
   rex:     { kind: 'arms', hand: 'talon', shY: 470, skin: ['#d8c8a0', '#8a7a5a', '#3a3020'], claw: '#fff6e0' },
@@ -6159,7 +6497,7 @@ const MONSTER_LIMBS = {
   spirit:  { kind: 'arms', hand: 'flame', skin: ['#ffd878', '#ff7a1a', '#8a1e04'], claw: '#fff6c8', glow: [255, 200, 80] },
   toad:    { kind: 'arms', hand: 'pad', skin: ['#d0e878', '#6a8a2a', '#2a3a0e'], claw: '#f0f6b0' },
   giant:   { kind: 'arms', hand: 'knuckle', skin: ['#e8b090', '#a8644c', '#4a2418'], claw: '#3a1a10' },
-  hornet:  { kind: 'legs', n: 3, drones: true, skin: ['#ffd23a', '#a87000', '#2a1a00'], claw: '#1a1000' },
+  hornet:  { kind: 'legs', n: 3, drones: 9, skin: ['#ffd23a', '#a87000', '#2a1a00'], claw: '#1a1000' },
   crab:    { kind: 'legs', n: 3, pincers: true, skin: ['#ff8a5a', '#c83a1a', '#4a0e04'], claw: '#fff2dc' },
   shadow:  { kind: 'arms', hand: 'claw', pairs: 2, skin: ['#7a5aaa', '#2e1c50', '#0e0820'], claw: '#e0c0ff', glow: [190, 90, 255] },
 };
@@ -6277,9 +6615,9 @@ function drawLimbs(c, mon, m, half, layer = 'back') {
       mATaper(c, [sh, [d * (wall - 60), (sh[1] + hy) / 2 + 30], [hx, hy + 20]], 60, 40, limbGrad(c, L, hy, sh[1]), { rim: LIMB_RIM, rw: 4, lw: 4 });
       drawHand(c, { ...L, hand: 'pincer' }, d, hx, hy, t);
     }
-    if (L.drones) for (let k = 0; k < 4; k++) {
+    if (L.drones) for (let k = 0; k < (L.drones > 1 ? L.drones : 4); k++) {
       // drones buzzing up the flanks ahead of the queen (always under the catch line)
-      const d = k % 2 ? 1 : -1, a = t * (2.4 + k * 0.3) + k * 1.7, x = d * (wall - 60 + Math.cos(a) * 26), y = 70 + k * 34 + Math.sin(a * 1.3) * 18;
+      const d = k % 2 ? 1 : -1, a = t * (2.4 + k * 0.3) + k * 1.7, x = d * (wall - 60 - (k >> 1) % 3 * 46 + Math.cos(a) * 26), y = 50 + k * 24 + Math.sin(a * 1.3) * 18;   // a swarm round the queen
       c.save(); c.translate(x, y); c.rotate(Math.sin(a) * 0.4);
       c.save(); c.globalAlpha = 0.6; pkE(c, -9, -10, 10, 5, 'rgba(230,245,255,.75)', 1.4, -0.5); pkE(c, 9, -10, 10, 5, 'rgba(230,245,255,.75)', 1.4, 0.5); c.restore();
       pkE(c, 0, 4, 9, 14, pkLG(c, 0, -10, 0, 18, ['#ffe04a', '#2a1a00', '#ffe04a', '#2a1a00']), 2.6);
@@ -6339,7 +6677,7 @@ function drawMonsterForm(c, mon, m, coilHalf) {
     const dark = mon.haze.map(v => v * 0.3 | 0), mid = mon.haze.map(v => v * 0.62 | 0);
     mATaper(c, [[d * 150, 700], [d * (f.headX - 10) + sway(d) * 0.5, 420], [d * f.headX + sway(d), f.headY + 110]], 120, 70, pkLG(c, 0, f.headY, 0, 700, [rgb(mid), rgb(dark)]), { rim: rgbaA(mon.haze.map(v => Math.min(255, v + 60)), 0.55), rw: 5, lw: 4 });
   }
-  c.save(); c.scale(f.sx || 1, f.sy || 1);
+  c.save(); if (f.tilt) { c.translate(-f.tilt * 90, 40 * Math.abs(f.tilt)); c.rotate(f.tilt); } c.scale(f.sx || 1, f.sy || 1);
   mon.draw(c, m);
   if (f.horns) drawHorns(c, f.horns, mon);
   if (f.crest) drawCrest(c, f.crest, mon);
@@ -6394,6 +6732,11 @@ function monsterEyes(mon) {
   }
   return eyeCache[mon.id];
 }
+// The mouth's centre in the monster's art frame, after its form's tilt and stretch (see drawMonsterForm).
+function mouthArt(mon) {
+  const mo = mon.mouth || [0, 150, 100, 50], f = monForm(mon), x = mo[0] * (f.sx || 1), y = mo[1] * (f.sy || 1), a = f.tilt || 0;
+  return a ? [-a * 90 + x * Math.cos(a) - y * Math.sin(a), 40 * Math.abs(a) + x * Math.sin(a) + y * Math.cos(a)] : [x, y];
+}
 function drawWorm() {
   const mon = monster(), W = G.worm, realY = sy(W.alt), cx = ox + playW / 2;
   G.sliverPx = 0;
@@ -6409,7 +6752,10 @@ function drawWorm() {
   ctx.restore();
   const b = G.state === 'dead' ? G.bite : null;
   G.biteGeo = null;
-  if (realY > H + 2 && !b) { drawSliver(mon, realY, prox, rim, cx); return; }
+  // While the catch line is lower than its visible floor (see sliverFloor), the head is shown cropped at the bottom
+  // edge; the real head takes over seamlessly once the line rises past that floor.
+  const floorPx = sliverFloor(prox);
+  if (realY > H - floorPx && !b) { drawSliver(mon, realY, prox, rim, cx, floorPx); return; }
   const crouch = W.crouch > 0 ? smooth(0, 0.25, CHASE.warn - W.crouch) : 0, surge = W.surge, breathe = Math.sin(G.t * 2.4);
   // its art's y = 0 sits exactly on the catch line (crouch and breathing squash it from the top down)
   let y = realY, tx = cx;
@@ -6418,10 +6764,10 @@ function drawWorm() {
   if (b) {
     // the swallow: the whole head lunges and swells so its own mouth closes on the pilot; the jaws
     // stay wide for a beat, snap shut, then chew
-    const e = smooth(0, 0.16, b.t), kb = s * MON_SCALE * lerp(1, 1.18, e), px = sx(b.x), py = sy(b.alt);
-    tx = lerp(cx, px - mo[0] * kb * fx, e); y = lerp(y, py - mo[1] * kb * fy, e); k = kb;
+    const e = smooth(0, 0.16, b.t), kb = s * MON_SCALE * lerp(1, 1.18, e), px = sx(b.x), py = sy(b.alt), [mxA, myA] = mouthArt(mon);
+    tx = lerp(cx, px - mxA * kb, e); y = lerp(y, py - myA * kb, e); k = kb;
     open = b.t < 0.22 ? 1 : b.t < 0.32 ? 1 - smooth(0.22, 0.32, b.t) : 0.06 + 0.1 * Math.max(0, Math.sin((b.t - 0.32) * 9)) * Math.max(0, 1 - (b.t - 0.32) * 0.6);
-    G.biteGeo = { mx: tx + mo[0] * k * fx, my: y + mo[1] * k * fy, rx: mo[2] * k * fx, ry: mo[3] * k * fy, open };
+    G.biteGeo = { mx: tx + mxA * k, my: y + myA * k, rx: mo[2] * k * fx, ry: mo[3] * k * fy, open };
   }
   // a zone-contrasting back-light behind it (soft and unclipped: no hard band at the catch line)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -6505,13 +6851,20 @@ function drawMonsterDepths(mon, y, k, tx) {
 // (its brow, eyes and the top of its jaws, in its real silhouette), growing as it closes in, with its own tell
 // (drawTells) reaching up ahead of it. Purely visual: it only shows while the real catch line is off screen, and
 // sinks away just before the real head rises into view.
-function drawSliver(mon, realY, prox, rim, cx) {
+// How much of the head always shows at the bottom edge: about 8% of the screen height when far, growing to about
+// 16% as it closes (roughly 60 → 130 px on a phone), but always at least 44 px below the pilot's lowest point, so the
+// head never looks like it has already caught you.
+function sliverFloor(prox) {
+  if (G.state === 'dead' || !pCaps.length) return 0;
+  const want = H * lerp(0.08, 0.16, prox) + 10 * G.worm.surge, cap = H - sy(pilotLow()) - 44;
+  return Math.max(0, Math.min(want, cap));
+}
+function drawSliver(mon, realY, prox, rim, cx, px) {
   if (G.state === 'dead') return;
-  const W = G.worm, fade = smooth(0, 60 * s, realY - H), f = monForm(mon);
-  const k = s * MON_SCALE * 0.92, headH = 300 * k * (f.sy || 1);
-  const px = headH * (0.17 + 0.13 * prox + 0.05 * W.surge - (W.crouch > 0 ? 0.03 : 0)) * fade;
+  const W = G.worm, f = monForm(mon);
+  const k = s * MON_SCALE * lerp(0.86, 1.0, prox) * (1 - (W.crouch > 0 ? 0.04 : 0));   // it swells as it closes in
   G.sliverPx = px;
-  drawTells(mon, prox * fade, px);
+  drawTells(mon, prox, px);
   if (px < 2) return;
   const top = H - px;
   ctx.save();
@@ -6525,14 +6878,14 @@ function drawSliver(mon, realY, prox, rim, cx) {
   ctx.save(); ctx.translate(cx + (W.surge > 0 ? (Math.random() - 0.5) * 5 * W.surge : 0), top);
   ctx.scale(k, k * (1 - (W.crouch > 0 ? 0.06 : 0)));
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  mFlare = W.crouch > 0 ? 1 : 0.35 * prox;
+  mFlare = W.crouch > 0 ? 1 : 0.35 + 0.5 * prox;
   const [wl, wr] = walls(G.camAlt + 4);
-  drawMonsterForm(ctx, mon, { t: G.t, open: G.worm.open, look: clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) }, ((wr - wl) / 2) / (MON_SCALE * 0.92));
+  drawMonsterForm(ctx, mon, { t: G.t, open: G.worm.open, look: clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) }, ((wr - wl) / 2) / (k / s));
   mFlare = 0;
   ctx.restore();
-  // it is still deep in the shaft: a haze in its own colour thickens toward the bottom edge
+  // a thin haze in its own colour toward the bottom edge while it is still well back
   const fog = ctx.createLinearGradient(0, top, 0, H);
-  fog.addColorStop(0, rgbaA(mon.haze.map(v => v * 0.12 | 0), 0.05)); fog.addColorStop(1, rgbaA(mon.haze.map(v => v * 0.1 | 0), 0.55 - 0.25 * prox));
+  fog.addColorStop(0, rgbaA(mon.haze.map(v => v * 0.12 | 0), 0.02)); fog.addColorStop(1, rgbaA(mon.haze.map(v => v * 0.1 | 0), 0.4 - 0.3 * prox));
   ctx.fillStyle = fog; ctx.fillRect(-40, top, cssW + 80, px + 60);
   ctx.restore();
 }
@@ -6543,6 +6896,10 @@ function drawTells(mon, prox, px) {
   if (prox < 0.08 || G.state !== 'play') return;
   const L = monLimbs(mon), t = G.t, k = s * MON_SCALE * 0.95, base = H - px;
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // every tell stays at least 34 px below the pilot's lowest point (clipped): purely visual, it never reaches you
+  const capY = pCaps.length ? sy(pilotLow()) + 34 : 0;
+  ctx.beginPath(); ctx.rect(-40, capY, cssW + 80, H + 80 - capY); ctx.clip();
+  drawAttack(mon, L, base, capY);
   for (const side of [0, 1]) {
     const d = side ? 1 : -1, wx = sx(walls(G.camAlt + 30)[side]) - d * 14 * s;
     if (L.kind === 'arms' || L.pincers) {
@@ -6590,6 +6947,65 @@ function drawTells(mon, prox, px) {
     ctx.restore();
   }
   ctx.restore();
+}
+// Attack tells: every few seconds while it is close, the monster lashes out in its own way below you: a claw swipe
+// across the shaft from one side (clawed arms, pincers), a tongue or vine lash flicking up from its mouth (toad,
+// flytrap, blob, worm), a tentacle whip (kraken), a gust off its wings or fins, a snapping jaw lurch, or a burst of
+// drones (hornet). Purely visual and clipped below the pilot (see drawTells), so it never extends the catch line.
+const TELL_KIND = { toad: 'tongue', flytrap: 'tongue', blob: 'tongue', worm: 'tongue', kraken: 'whip', hornet: 'swarm', shark: 'snap', piranha: 'snap', rex: 'snap', spider: 'snap', dragon: 'gust', bat: 'gust' };
+function tellKind(mon) { const L = monLimbs(mon); return TELL_KIND[mon.id] || (L.kind === 'arms' || L.pincers ? 'swipe' : L.kind === 'tentacles' ? 'whip' : L.kind === 'wings' || L.kind === 'fins' ? 'gust' : 'snap'); }
+function updateTell(dt) {
+  if (G.state !== 'play') { G.tell = null; return; }
+  if (G.tell) { G.tell.t += dt; if (G.tell.t > 0.7) G.tell = null; return; }
+  G.tellT = (G.tellT ?? 2) - dt;
+  if (G.tellT <= 0 && monsterGap() < 420) { G.tell = { t: 0, side: Math.random() < 0.5 ? -1 : 1 }; G.tellT = 2.4 + Math.random() * 1.8; if (monsterGap() < 260) { G.shake = Math.max(G.shake, 2); vibrate(8); } }
+}
+function drawAttack(mon, L, base, capY) {
+  const T = G.tell; if (!T) return;
+  const e = T.t / 0.7, kind = tellKind(mon), cx = ox + playW / 2, d = T.side, sk = L.skin || ['#888', '#444', '#111'];
+  const reach = Math.max(capY, base - 120 * s), hit = Math.sin(Math.PI * Math.min(1, e * 1.3));   // out and back
+  if (kind === 'swipe') {
+    // a clawed hand sweeping across the bottom of the shaft from one wall, with motion streaks
+    const x = lerp(ox + (d < 0 ? 0 : playW), ox + (d < 0 ? playW : 0), smooth(0.1, 0.75, e)), y = lerp(base + 20 * s, reach + 30 * s, hit);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 4; i++) { ctx.strokeStyle = `rgba(255,240,220,${0.35 * hit * (1 - i / 4)})`; ctx.lineWidth = (6 - i) * s; ctx.beginPath(); ctx.arc(x - d * 80 * s, y + 120 * s, (130 + i * 14) * s, -Math.PI / 2 - 0.9, -Math.PI / 2 + 0.9); ctx.stroke(); }
+    ctx.restore();
+    ctx.save(); ctx.translate(x, y); ctx.scale(k2(1.25), k2(1.25)); ctx.rotate(-d * 0.5);
+    mATaper(ctx, [[-d * 30, 280], [-d * 10, 130], [0, 20]], 74, 52, pkLG(ctx, 0, 0, 0, 280, sk), { rim: LIMB_RIM, rw: 4, lw: 4 });
+    drawHand(ctx, L.pincers ? { ...L, hand: 'pincer' } : L.hand ? L : { ...L, hand: 'claw', claw: L.claw || '#fff' }, -d, 0, 0, G.t);
+    ctx.restore();
+  } else if (kind === 'tongue') {
+    // a tongue (or vine) flicking up from the middle of its head and snapping back
+    const col = mon.id === 'flytrap' ? '#6abf3a' : mon.id === 'blob' ? '#7aff9a' : '#ff6a8a', y1 = lerp(base + 10 * s, reach, hit), x1 = cx + Math.sin(e * 9) * 18 * s;
+    pkLine(ctx, [[cx, H + 20], [lerp(cx, x1, 0.5) + d * 20 * s, (H + y1) / 2], [x1, y1]], col, 12 * s);
+    pkE(ctx, x1, y1, 13 * s, 10 * s, col, 2.4);
+    if (mon.id === 'flytrap') pkPath(ctx, [[x1 - 12 * s, y1], [x1, y1 - 16 * s], [x1 + 12 * s, y1]], '#ff5a7a', 2);
+  } else if (kind === 'whip') {
+    const pts = [];
+    for (let j = 0; j <= 10; j++) { const u = j / 10; pts.push([lerp(ox + (d < 0 ? 10 : playW - 10), cx + d * 40 * s, u) + Math.sin(u * 6 + e * 12) * 26 * s * u, lerp(H + 20, reach + 10 * s, u * hit)]); }
+    mATaper(ctx, pts, 30 * s, 6 * s, pkLG(ctx, 0, reach, 0, H, sk), { rim: LIMB_RIM, rw: 3 * s, lw: 3 * s });
+    for (let j = 3; j < 10; j += 2) pkE(ctx, pts[j][0], pts[j][1], 3.4 * s, 2.6 * s, L.sucker || '#ffd8c0', 1.2);
+  } else if (kind === 'gust') {
+    // a wing or fin beat: a wall of air rushing up from below (bent streaks), the wing tip raking past
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (let i = 0; i < 9; i++) { const x = ox + playW * (0.1 + 0.1 * i), y = lerp(H + 10, reach, hit) + (i % 3) * 14 * s; ctx.strokeStyle = rgbaA(mon.haze.map(v => Math.min(255, v + 80)), 0.4 * hit); ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.moveTo(x, y + 60 * s); ctx.quadraticCurveTo(x + d * 14 * s, y + 30 * s, x, y); ctx.stroke(); }
+    ctx.restore();
+  } else if (kind === 'swarm') {
+    for (let i = 0; i < 9; i++) {
+      const u = hash2(i, 77), x = cx + (u - 0.5) * playW * 0.8 + Math.sin(G.t * 9 + i) * 10 * s, y = lerp(H + 20, reach + u * 40 * s, hit);
+      ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(Math.sin(G.t * 12 + i) * 0.4);
+      pkE(ctx, -8, -8, 9, 4, 'rgba(230,245,255,.7)', 1.2, -0.5); pkE(ctx, 8, -8, 9, 4, 'rgba(230,245,255,.7)', 1.2, 0.5);
+      pkE(ctx, 0, 3, 7, 11, pkLG(ctx, 0, -8, 0, 14, ['#ffe04a', '#2a1a00', '#ffe04a', '#2a1a00']), 2); pkDot(ctx, -2, -8, 1.5, '#ff4a3a'); pkDot(ctx, 2, -8, 1.5, '#ff4a3a');
+      ctx.restore();
+    }
+  } else {
+    // a jaw snap: white bite streaks closing on the space just above its head
+    const y = lerp(base, reach + 20 * s, hit), w = playW * 0.28 * (1 - 0.6 * smooth(0.4, 0.6, e));
+    ctx.save(); ctx.lineCap = 'round';
+    for (const dd of [-1, 1]) { ctx.strokeStyle = INK; ctx.lineWidth = 9 * s; ctx.beginPath(); ctx.moveTo(cx - w, y + dd * 14 * s); ctx.quadraticCurveTo(cx, y + dd * (4 - 26 * (1 - e)) * s, cx + w, y + dd * 14 * s); ctx.stroke(); ctx.strokeStyle = '#f7ead0'; ctx.lineWidth = 4.5 * s; ctx.stroke(); }
+    ctx.restore();
+  }
+  function k2(m) { return s * MON_SCALE * m; }
 }
 // The roar: when it closes in (the gap drops under ~210 after being clear), a shudder, a rumble and rings of
 // its breath bursting from the bottom edge, once per approach.
@@ -6659,6 +7075,31 @@ function drawSurgeWarn() {
   ctx.restore();
 }
 
+// The zone reveal's wall-break: both walls burst inward along the boundary in the new zone's rock (big tumbling
+// chunks, dust and a shock ring), and a bright crack line flashes across the shaft. Purely visual: the stretch
+// around a zone change is kept clear of hazards.
+function zoneBreak(z) {
+  const a0 = G.p.alt + viewH * 0.25, [L, R] = walls(a0), wc = ROCK[z][1], lit = ROCK[z][0];
+  for (let i = 0; i < 34; i++) {
+    const side = i % 2, x = side ? R - 2 : L + 2, dir = side ? -1 : 1, a = a0 + (Math.random() - 0.5) * 220;
+    puff(x, a, dir * (60 + Math.random() * 300), (Math.random() - 0.3) * 260, 1.3 + Math.random() * 0.7, 5 + Math.random() * 10, 'rock', { c: wc, l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 12 });
+    if (i % 3 === 0) puff(x + dir * 10, a, dir * 50, 30, 1.2, 12 + Math.random() * 10, 'smoke');
+  }
+  puff(G.p.x, a0, 0, 0, 0.6, 30, 'shock');
+  G.crackT = 0.6; G.crackAlt = a0; G.crackCol = ZONE_RIM[z];
+}
+function drawZoneCrack() {
+  if (!(G.crackT > 0)) return;
+  G.crackT -= 1 / 60;
+  const y = sy(G.crackAlt), [L, R] = walls(G.crackAlt), e = G.crackT / 0.6;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = rgbaA(G.crackCol, 0.9 * e); ctx.lineWidth = (2 + 5 * e) * s; ctx.beginPath();
+  for (let x = L, i = 0; x <= R; x += 18, i++) ctx.lineTo(sx(x), y + (i % 2 ? -1 : 1) * 7 * s * hash2(i, 5));
+  ctx.stroke();
+  const g = ctx.createLinearGradient(0, y - 60 * s, 0, y + 60 * s); g.addColorStop(0, rgbaA(G.crackCol, 0)); g.addColorStop(0.5, rgbaA(G.crackCol, 0.35 * e)); g.addColorStop(1, rgbaA(G.crackCol, 0));
+  ctx.fillStyle = g; ctx.fillRect(sx(L), y - 60 * s, (R - L) * s, 120 * s);
+  ctx.restore();
+}
 // Rubble: wall chunks the monster tears loose as it climbs, kicked up the shaft from just above its
 // head (or from the bottom edge while it is below the screen). Purely visual, no collision.
 function wallBreak(n, big) {
@@ -6728,6 +7169,14 @@ function drawDanger() {
   const b = ctx.createLinearGradient(0, H * 0.62, 0, H);
   b.addColorStop(0, rgbaA(haze, 0)); b.addColorStop(1, rgbaA(haze, 0.22 * d * beat));
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = b; ctx.fillRect(0, H * 0.62, cssW, H * 0.38); ctx.restore();
+  // under ~250 units a plain red danger band rises from the bottom edge, pulsing faster as it closes (readable on any monster)
+  const r = clamp(1 - (monsterGap() - 40) / 210, 0, 1);
+  if (r > 0) {
+    const rb = ctx.createLinearGradient(0, H * (0.78 - 0.2 * r), 0, H);
+    rb.addColorStop(0, 'rgba(255,30,40,0)'); rb.addColorStop(1, `rgba(255,30,40,${(0.22 + 0.3 * r) * beat})`);
+    ctx.fillStyle = rb; ctx.fillRect(0, H * (0.78 - 0.2 * r), cssW, H * (0.22 + 0.2 * r));
+    ctx.fillStyle = `rgba(255,60,60,${0.5 * r * beat})`; ctx.fillRect(0, H - 4, cssW, 4);
+  }
 }
 
 // The resume countdown: a big 3-2-1 in the middle of the lane with a shrinking ring.
@@ -6798,6 +7247,7 @@ function updateHud() {
   // the pause button fades while a hazard passes behind it (and a warning arrow points at it, see drawHudWarn)
   const hb = hudBoxes();
   $('pauseBtn').classList.toggle('faded', hazardBehind(hb.right));
+  $('hudHeight').classList.toggle('faded', hazardBehind(hb.left));
 }
 let hudCache = null;
 function hudBoxes() {
@@ -6815,6 +7265,7 @@ function hazardRects(fn) {
     if (h.type === 'boulder') { if (h.state !== 'fall') continue; x0 = h.x - h.r; x1 = h.x + h.r; a0 = h.cur - h.r; a1 = h.cur + h.r; }
     else if (h.type === 'geyser' || h.type === 'spike') { x0 = Math.min(h.base, h.base + h.side * h.len); x1 = Math.max(h.base, h.base + h.side * h.len); }
     else if (h.type === 'crusher' || h.type === 'gate') { x0 = h.lb; x1 = h.rb; }
+    else if (h.type === 'hang') { x0 = h.x - h.hw - 8; x1 = h.x + h.hw + 8; }
     else if (h.type === 'firebar') { x0 = h.cx - h.len - 16; x1 = h.cx + h.len + 16; }
     else if (h.type === 'bat') { x0 = h.cx - h.amp - 40; x1 = h.cx + h.amp + 40; }
     else if (h.type === 'pend') { x0 = Math.min(h.ax, h.x) - 36; x1 = Math.max(h.ax, h.x) + 36; }
@@ -6881,7 +7332,7 @@ function togglePause() {
   if (!G || G.state === 'dead') return;
   if (currentScreen === 'pause') { paused = false; show(null); beginResume(); return; }
   if (currentScreen !== null) return;
-  paused = true; input.pointers.clear(); recomputeThrust();
+  paused = true; input.pointers.clear(); input.keys.clear(); input.pressed = false; recomputeThrust();
   $('pauseMeters').innerHTML = `${Math.floor(G.maxAlt / UNITS_PER_M)}<small>m</small>`;
   show('pause');
 }
@@ -6896,7 +7347,9 @@ function beginResume() {
   G.p.vy = Math.max(0, G.p.vy);
   Object.assign(G.heat, { over: 0, v: Math.min(G.heat.v, 0.5) });
 }
-function fitMenu() { fitText($('pilotName'), 11); fitText($('monsterName'), 11); }
+function fitMenu() { fitText($('menuBest'), 13); fitText($('menuSeed'), 13); }
+// picker card names: one line each, shrunk to fit their card (never wrapped or clipped)
+function fitCards(grid) { requestAnimationFrame(() => document.querySelectorAll(`#${grid} .pcard span`).forEach(el => fitText(el, 8))); }
 function refreshMenu() {
   $('pilotName').textContent = pilot().name;
   $('monsterName').textContent = monster().name;
@@ -6934,7 +7387,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 $('adBtn').addEventListener('click', () => {
   if (!G || G.reviveUsed) return;
   const nm = monster().label;
-  $('adNote').textContent = `You get one extra life per run. The ${nm} gets pushed back and the obstacles around you are cleared.`;
+  $('adNote').textContent = `One extra life per run, and it costs half your score so far: ${fmtPts(runScore())} becomes ${fmtPts(Math.ceil(runScore() / 2))}. The ${nm} gets pushed back and the obstacles around you are cleared.`;
   show('ad');
   const t0 = performance.now(), dur = 3000;
   const tick = () => {
@@ -6982,7 +7435,7 @@ function fitTune() { document.querySelectorAll('#tuneRows label').forEach(el => 
 tap($('openTune'), () => { tuneReturn = 'menu'; show('tuneScreen'); buildTune(); fitTune(); });
 $('tuneDone').addEventListener('click', () => show(tuneReturn));
 $('tuneReset').addEventListener('click', () => { Object.assign(cfg, DEFAULTS); store.set(CFG_KEY, cfg); buildTune(); fitTune(); toast('Back to the default feel.'); });
-window.addEventListener('resize', () => { if (currentScreen === 'tuneScreen') fitTune(); });
+window.addEventListener('resize', () => { if (currentScreen === 'tuneScreen') fitTune(); if (currentScreen === 'menu') fitMenu(); });
 
 // pilot picker: each card is a live mini shaft with the pilot firing its rocket
 const pilotCards = [];
@@ -7044,8 +7497,9 @@ function drawPilotThumb(cv, pl, t, big) {
   // trail runs off the bottom edge
   // normalised so every pilot fills its card about the same: scaled by the size of its own bounding box
   // (the geometric mean of width and height), then capped so nothing is cropped
-  const [bx0, by0, bx1, by1] = pilotBounds(pl), bw = bx1 - bx0, bh = by1 - by0, pad = big ? 0.9 : 0.86;
-  const k = Math.min(w * 0.7 / Math.sqrt(bw * bh), w * pad / bw, h * pad / bh);
+  const [bx0, by0, bx1, by1] = pilotBounds(pl), bw = bx1 - bx0, bh = by1 - by0, pad = big ? 0.9 : 0.94;
+  // (the pilot fills most of its card: about 70% of the whole card's height, label included)
+  const k = Math.min(w * (big ? 0.7 : 0.9) / Math.sqrt(bw * bh), w * pad / bw, h * pad / bh);
   c.save(); c.translate(w / 2 - (bx0 + bx1) / 2 * k, h * 0.48 - (by0 + by1) / 2 * k + Math.sin(t * 2) * 1.5); c.scale(k, k);
   // exhaust trail
   for (const [x, y, exName = pl.exhaust] of pl.nozzles) {
@@ -7128,7 +7582,7 @@ function drawKeyArt(cv, t) {
   c.fillStyle = tg; c.fillText('Rocket', 0, y2);
   c.restore();
 }
-tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); $('pilot-' + pilot().id).scrollIntoView({ block: 'center' }); });
+tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); fitCards('pilotGrid'); $('pilot-' + pilot().id).scrollIntoView({ block: 'center' }); });
 
 // monster picker: each card shows the monster alone, jaws open, lit from below
 const monsterCards = [];
@@ -7150,6 +7604,7 @@ function selectMonster(i) {
   $('monster-' + MONSTERS[i].id)?.scrollIntoView({ block: 'nearest' });
   $('monsterInfo').textContent = MONSTER_TAGS[monster().id] || ''; $('monsterSelName').textContent = monster().name;
   $('monsterName').textContent = monster().name;
+  if (currentScreen === 'tuneScreen') buildTune();
 }
 // The monster alone in a dark shaft, jaws open, lit from below by its own lava glow.
 function monsterPortrait(c, mn, t, w, h, k, top, open) {
@@ -7174,10 +7629,10 @@ function drawMonsterThumb(cv, mn, t, mini) {
   const c = cv.getContext('2d'), w = cv.width, h = cv.height;
   c.setTransform(1, 0, 0, 1, 0, 0);
   const f = monForm(mn), wide = f.heads ? 1.5 : f.coil ? 1.25 : 1;   // pull back for the wider silhouettes
-  const k = w > h * 1.5 ? h / (300 * Math.min(wide, 1.2)) : w / ((mini ? 330 : 420) * wide);   // the wide preview fits by height
+  const k = w > h * 1.5 ? h / (300 * Math.min(wide, 1.2)) : w / ((mini ? 330 : 330) * wide);   // (cards: the head fills ~70% of the card)   // the wide preview fits by height
   monsterPortrait(c, mn, t, w, h, k, h * (f.heads ? 0.2 : 0.1), 0.75 + 0.25 * Math.sin(t * 2.6));
 }
-tap($('openMonsters'), () => { buildMonsters(); show('monsterScreen'); $('monster-' + monster().id).scrollIntoView({ block: 'center' }); });
+tap($('openMonsters'), () => { buildMonsters(); show('monsterScreen'); fitCards('monsterGrid'); $('monster-' + monster().id).scrollIntoView({ block: 'center' }); });
 $('monsterDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 
