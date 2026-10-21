@@ -615,6 +615,20 @@ if (!zoneMix.intro || zoneMix.intro.size < 60) fail('the opening varies between 
 if ((seen.get('lavafall*') || 0) < checked * 0.55) fail('lavafalls show up in most shafts', `${seen.get('lavafall*') || 0} of ${checked}`);
 if ((zoneMix.corridors || 0) < checked * 0.55) fail('corridor stretches show up in most shafts', `${zoneMix.corridors || 0} of ${checked}`);
 
+// Crystals never pop in on screen: filled the way the game does (a little at a time as the camera climbs, up to
+// the screen top + 900), every crystal must already exist while it is still well above the top of a tall phone screen.
+let popChecked = 0;
+for (let sd = 0; sd < 150; sd++) {
+  const VIEW = 1100, lv = createLevel(sd * 104729 + 7, DEFAULTS), hz = [], fr = [];
+  lv.fill(VIEW + 900, hz, fr);
+  let seenF = fr.length;
+  for (let cam = 10; cam < 25000; cam += 10) {
+    lv.fill(cam + VIEW + 900, hz, fr);
+    for (; seenF < fr.length; seenF++, popChecked++) if (fr[seenF].alt < cam + VIEW + 100) fail('crystals appear above the screen, never pop in on it', `seed ${sd}: crystal at ${fr[seenF].alt | 0} appeared with the screen top at ${cam + VIEW}`);
+  }
+}
+if (popChecked < 1000) fail('crystal pop-in is checked', `${popChecked}`);
+
 if (failures.size) {
   console.log(`FAILED: ${failures.size} rule(s) broken across ${checked} shafts`);
   for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
