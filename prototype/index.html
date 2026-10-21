@@ -2241,7 +2241,7 @@ function update(rawDt) {
     // embers and grit kicked up the shaft as it nears, and its hot breath rising from the maw
     const prox = clamp(1 - (gap - 100) / 650, 0, 1), haze = monster().haze;
     if (gap < 460 && Math.random() < dt * 16) {
-      const mo = monster().mouth || [0, 150, 100, 50], ma = G.worm.alt - mo[1] * MON_SCALE;
+      const mo = monster().breath || monster().mouth || [0, 150, 100, 50], ma = G.worm.alt - mo[1] * MON_SCALE;   // (breath: where its hot breath comes from, if not its mouth)
       puff(WORLD_W / 2 + mo[0] * MON_SCALE + (Math.random() - 0.5) * mo[2] * MON_SCALE, ma + 20, (Math.random() - 0.5) * 30, 90 + Math.random() * 70 + 120 * G.worm.surge, 1.3 + Math.random() * 0.6, 14 + Math.random() * 12, 'breath', haze);
     }
     if (Math.random() < dt * 40 * prox) {
@@ -6820,138 +6820,144 @@ function moleMaw(c, m, open) {
   c.restore();
   moleMawPath(c); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
 }
-// The head (mon.head): the velvet dome, the star nose, the maw and the drill, then the face over the drill's flanks.
+// The head (mon.head): the face is in front. A round velvet head, a smaller golden drill rising off the forehead like a
+// horn (it splits on the bite: its halves swing apart like doors round the glowing toothed maw inside it, which faces up
+// at the prey), and below it the face: two beady eyes under scowling furred brows, a big pink star nose of 22 fleshy
+// rays round its nostrils in the middle of the snout, buck teeth, jowls and whiskers.
+const MOLE_DS = 0.66, MOLE_DY = 6 - 14 * MOLE_DS;   // the drill's size and offset on the head (its art is drawn tip at y 14)
+function moleStarNose(c, x, y, t, wig, splay, rage) {
+  const M = MOLE, R = 27, N = 12;
+  // the fleshy rays: twelve fat tapering pink fingers growing out of the nose disc's rim, each curling a little and
+  // wriggling on its own, a crease down each and a round wet tip
+  for (let k = 0; k < N; k++) {
+    const a = (k + 0.5) / N * TWO_PI - Math.PI / 2 + Math.sin(t * 4 + k * 1.7) * wig, L = (40 + 6 * Math.sin(k * 2.3)) * (1 + 0.15 * splay), bend = 7 * Math.sin(t * 3 + k * 1.3) + (k % 2 ? 4 : -4);
+    const ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux, P = (u, w) => [x + ux * (R - 6 + L * u) + nx * (w + bend * u * u), y + uy * (R - 6 + L * u) + ny * (w + bend * u * u)];
+    const S = 8, Lp = [], Rp = []; for (let i = 0; i <= S; i++) { const u = i / S, w = lerp(11, 7.5, u); Lp.push(P(u, w)); Rp.push(P(u, -w)); }
+    const tip = P(1, 0), ray = c2 => { c2.beginPath(); Lp.forEach(([px, py], i) => i ? c2.lineTo(px, py) : c2.moveTo(px, py)); c2.arc(tip[0], tip[1], 7.5, a + Math.PI / 2, a - Math.PI / 2, true); for (let i = S; i >= 0; i--) c2.lineTo(Rp[i][0], Rp[i][1]); c2.closePath(); };
+    mAShape(c, ray, pkLG(c, x + ux * R, y + uy * R, tip[0], tip[1], [M.pink[3], M.pink[2], M.pink[1], M.pink[0]]), { lw: 3.2 });
+    const m1 = P(0.25, 2), m2 = P(0.85, 2); c.strokeStyle = 'rgba(120,16,50,.5)'; c.lineWidth = 2; c.beginPath(); c.moveTo(m1[0], m1[1]); c.lineTo(m2[0], m2[1]); c.stroke();
+    const h = P(0.85, 4); pkE(c, h[0], h[1], 3.4, 2.2, 'rgba(255,255,255,.75)', 0, a);
+  }
+  // the disc the rays grow from: two small nostrils, a wet shine
+  mAShape(c, mAEl(x, y, R + 2, R), pkRG(c, x - 8, y - 10, R * 1.3, [M.pink[0], M.pink[1], M.pink[2]]), { rim: 'rgba(255,240,244,.85)', rw: 3, lw: 3.6 });
+  for (const d of [-1, 1]) pkE(c, x + d * 9, y + 4, 4.2 + rage, 5.6, '#4a0a20', 0, d * 0.35);
+  pkE(c, x - 9, y - 12, 7, 4, 'rgba(255,255,255,.75)', 0, -0.4);
+}
 function moleHead(c, m) {
   const M = MOLE, t = m.t, J = mJ(m, 0.12), ct = mChewT(m), ce = mChewE(ct), rage = mRage;
   // the drill's doors: a menacing slit in the chase, flung wide on the bite, shut and grinding in the chew
   const phi = J <= 1 ? 0.3 * J : 0.3 + 0.75 * smooth(1, 1.3, J), slide = 9 * Math.min(J, 1), grind = ct >= 0 ? ce : 0;
   const spin = t * (1.4 + 3.6 * rage) + (ct >= 0 ? 16 * ct : 0), heat = clamp(0.25 + 0.5 * rage + 0.8 * grind, 0, 1);
-  const breathe = Math.sin(t * 2.4);
+  const chomp = ct >= 0 ? ce * Math.abs(Math.sin(ct * 9)) : 0;
   if (m.bite >= 0) c.scale(1 - 0.08 * smooth(0, 0.12, m.bite), 1);   // (it tucks in as it lunges, so its whiskers stay on screen in the bite's zoom)
   if (grind > 0) c.translate(Math.sin(ct * 61) * 2.2 * grind, Math.cos(ct * 47) * 1.4 * grind);   // (the whole head judders as it grinds)
-  // --- the head's mass: a soft rounded dome of velvet fur ---
-  const head = gvTufts(gvFur(mAMirror([[0, 24], [84, 28], [156, 56], [206, 104], [232, 168], [234, 232], [208, 294], [150, 336], [70, 356], [0, 360]]), 3, 7, (x, y) => y > 36 ? 1 : 0, 0.3, 41));
-  mShade(c, 0, 340, 230, 50, 0.45);
-  mAShape(c, head, pkRG(c, -60, 90, 310, [M.fur[0], M.fur[1], M.fur[2], M.fur[3]]), { rim: 'rgba(255,240,226,.85)', rw: 7, under: 'rgba(255,170,90,.35)', uw: 10, lw: 4.5 });
+  // --- the head's mass: a soft round head of velvet fur, inked tufts round its outline ---
+  const head = gvTufts(gvFur(mAMirror([[0, 74], [84, 78], [156, 100], [206, 138], [232, 190], [234, 244], [208, 300], [150, 340], [70, 358], [0, 362]]), 3, 9, (x, y) => y > 90 ? 1 : 0.4, 0.3, 41));
+  mShade(c, 0, 344, 230, 50, 0.45);
+  mAShape(c, head, pkRG(c, -60, 120, 310, [M.fur[0], M.fur[1], M.fur[2], M.fur[3]]), { rim: 'rgba(255,240,220,.95)', rw: 8, under: 'rgba(255,170,90,.35)', uw: 10, lw: 5 });
   c.save(); head(c); c.clip();
-  // the velvet's silvery sheen sweeping over the dome, a core shadow round its lower sides, and soft fur ticks all
-  // lying back from the snout, light and dark
   c.lineCap = 'round';
-  c.strokeStyle = 'rgba(255,246,236,.22)'; c.lineWidth = 34; c.beginPath(); c.ellipse(-20, 150, 170, 110, 0, Math.PI * 1.08, Math.PI * 1.7); c.stroke();
-  c.strokeStyle = 'rgba(255,250,244,.32)'; c.lineWidth = 10; c.beginPath(); c.ellipse(-20, 150, 170, 110, 0, Math.PI * 1.15, Math.PI * 1.55); c.stroke();
-  c.strokeStyle = 'rgba(40,16,6,.3)'; c.lineWidth = 30; c.beginPath(); c.ellipse(0, 200, 226, 150, 0, Math.PI * 0.05, Math.PI * 0.95); c.stroke();
+  c.strokeStyle = 'rgba(255,246,236,.25)'; c.lineWidth = 34; c.beginPath(); c.ellipse(-20, 180, 170, 100, 0, Math.PI * 1.08, Math.PI * 1.7); c.stroke();
+  c.strokeStyle = 'rgba(40,16,6,.35)'; c.lineWidth = 30; c.beginPath(); c.ellipse(0, 220, 226, 140, 0, Math.PI * 0.05, Math.PI * 0.95); c.stroke();
+  // a pale muzzle patch round the snout so the pink nose and the eyes sit on a light ground (value contrast)
+  { const g = c.createRadialGradient(0, 236, 10, 0, 236, 150); g.addColorStop(0, 'rgba(255,236,214,.75)'); g.addColorStop(0.6, 'rgba(240,206,176,.4)'); g.addColorStop(1, 'rgba(240,206,176,0)'); c.fillStyle = g; c.beginPath(); c.ellipse(0, 236, 160, 120, 0, 0, TWO_PI); c.fill(); }
   for (let i = 0; i < 120; i++) {
-    const x = (hash2(i, 11) * 2 - 1) * 230, y = 34 + hash2(i, 12) * 310, a = Math.atan2(y - 210, x);
-    c.strokeStyle = i % 3 ? 'rgba(50,22,8,.34)' : 'rgba(255,240,226,.4)'; c.lineWidth = 2;
+    const x = (hash2(i, 11) * 2 - 1) * 230, y = 80 + hash2(i, 12) * 270, a = Math.atan2(y - 230, x);
+    c.strokeStyle = i % 3 ? 'rgba(50,22,8,.4)' : 'rgba(255,240,226,.45)'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.cos(a) * 6 + 2, y + Math.sin(a) * 6, x + Math.cos(a) * 10, y + Math.sin(a) * 10); c.stroke();
   }
   c.restore();
-  // --- the chin under the snout ---
-  mAShape(c, mASm([[-70, 236], [70, 236], [84, 272], [40, 302], [0, 306], [-40, 302], [-84, 272]]), pkLG(c, 0, 236, 0, 304, [M.fur[1], M.fur[2]]), { rim: 'rgba(255,236,220,.5)', rw: 4, lw: 4 });
-  // --- the star nose: eleven fat fleshy tentacles fanning out round the drill's base like a star (they wriggle as it
-  // hunts, splay wide on the bite and squirm as it grinds), then the fleshy ring they grow from ---
-  const ringY = 206 + 4 * J, splay = clamp(J, 0, 1.3);
-  for (let k = 0; k < 11; k++) {
-    const u = k / 10, a = Math.PI * (-0.13 + 1.26 * u), wig = Math.sin(t * 5 + k * 1.3) * (0.05 + 0.08 * rage) + (ct >= 0 ? 0.14 * Math.sin(ct * 30 + k) * ce : 0);
-    const bx = Math.cos(a) * 96, by = ringY + Math.sin(a) * 30, L = 76 + 8 * Math.sin(k * 1.7) + 12 * splay, aa = a + wig + (u - 0.5) * 0.12 * splay;
-    const mid = [bx + Math.cos(aa - 0.12) * L * 0.55, by + Math.sin(aa - 0.12) * L * 0.5], tip = [bx + Math.cos(aa) * L, by + Math.sin(aa) * L * 0.86];
-    const pts = mSmooth([[bx, by], mid, tip], 10);
-    mATaper(c, pts, 46, 24, pkLG(c, bx, by, tip[0], tip[1], [M.pink[2], M.pink[1], M.pink[0]]), { rim: 'rgba(255,240,244,.8)', rw: 4, lw: 3.6 });
-    pkE(c, tip[0], tip[1], 12.5, 12.5, pkRG(c, tip[0] - 3, tip[1] - 3, 13, [M.pink[0], M.pink[1]]), 3.4);
-    c.strokeStyle = 'rgba(150,30,70,.45)'; c.lineWidth = 2; c.beginPath(); c.moveTo(lerp(bx, mid[0], 0.3), lerp(by, mid[1], 0.3)); c.quadraticCurveTo(mid[0], mid[1], lerp(mid[0], tip[0], 0.7), lerp(mid[1], tip[1], 0.7)); c.stroke();
-    pkE(c, tip[0] - 3, tip[1] - 3.5, 3.4, 2.4, 'rgba(255,255,255,.8)', 0);
-  }
-  mAShape(c, mAEl(0, ringY, 118, 42), pkRG(c, -30, ringY - 18, 126, [M.pink[0], M.pink[1], M.pink[2], M.pink[3]]), { rim: 'rgba(255,236,240,.7)', rw: 4, lw: 4.5 });
-  c.strokeStyle = 'rgba(120,20,50,.45)'; c.lineWidth = 2.4; for (let k = 0; k < 11; k++) { const a = Math.PI * (-0.13 + 1.26 * k / 10); if (Math.sin(a) < -0.05) continue; c.beginPath(); c.moveTo(Math.cos(a) * 98, ringY + Math.sin(a) * 33); c.lineTo(Math.cos(a) * 116, ringY + Math.sin(a) * 40); c.stroke(); }
+  // --- the drill on its forehead: the maw inside it, its two halves, a ruff of fur round its root ---
+  const ds = MOLE_DS * (1 + 0.24 * smooth(1, 1.3, J));   // (it swells as it splits on the bite, growing down from its tip, never above the catch line)
+  c.save(); c.translate(0, 6 - 14 * ds); c.scale(ds, ds);
   if (phi > 0.004 || slide > 0.3) moleMaw(c, m, phi);
-  // --- the drill (left half, then right) ---
   for (const side of [-1, 1]) moleHalf(c, side, phi, spin, heat, slide + (grind > 0 ? 2.5 * grind * (0.5 + 0.5 * Math.sin(ct * 40)) : 0));
-  // a glint at the tip, and molten drool from the seam when it gapes
   if (phi < 0.3) { c.save(); c.globalCompositeOperation = 'lighter'; const gl = 0.5 + 0.5 * Math.sin(t * 3.1); c.fillStyle = `rgba(255,255,230,${(0.5 + 0.4 * gl).toFixed(3)})`; c.beginPath(); for (const [dx, dy] of [[0, -9], [2, -2], [9, 0], [2, 2], [0, 9], [-2, 2], [-9, 0], [-2, -2]]) c.lineTo(-6 + dx * (0.7 + 0.3 * gl), 40 + dy * (0.7 + 0.3 * gl)); c.closePath(); c.fill(); c.restore(); }
-  if (J > 0.3 && m.bite < 0) {
-    c.lineCap = 'round';
-    for (const [dx, k] of [[-5, 0], [6, 1.7]]) { const len = 20 + 26 * (0.5 + 0.5 * Math.sin(t * 2.2 + k * 3)) * J, x = dx, y = 226; c.strokeStyle = 'rgba(80,20,0,.6)'; c.lineWidth = 7; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 3, y + len * 0.6, x, y + len); c.stroke(); c.strokeStyle = '#ffc040'; c.lineWidth = 4; c.stroke(); pkE(c, x, y + len, 4.5, 5.5, '#ffd860', 1.6); mAGlow(c, x, y + len, 14, [255, 180, 60], 0.5); }
-  }
-  // --- the face over the drill's flanks: jowls, whiskers, eyes and brows ---
+  c.restore();
+  { const ry = MOLE_DY + MOLE.B * MOLE_DS + 12, ruff = gvTufts(gvFur(mAMirror([[0, ry - 4], [50, ry - 10], [80, ry - 4], [84, ry + 6], [50, ry + 12], [0, ry + 12]]), 2, 7, (x, y) => y > ry ? 1 : 0.5, 0.3, 47));
+    mAShape(c, ruff, pkLG(c, 0, ry - 12, 0, ry + 18, [M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,220,.8)', rw: 3, lw: 3.6 }); }
+  // --- the face ---
+  // jowls with whisker pores and stiff whiskers
   for (const d of [-1, 1]) {
-    const jw = gvTufts(gvFur([[d * 96, 226], [d * 156, 204], [d * 222, 220], [d * 244, 258], [d * 216, 292], [d * 150, 296], [d * 104, 270]], 3, 6, (x, y) => y > 250 ? 1 : 0.3, 0.3, 43 + d));
-    mAShape(c, jw, pkRG(c, d * 150 - 20, 236, 100, [M.fur[0], M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,226,.75)', rw: 5, lw: 4 });
-    c.save(); jw(c); c.clip(); c.strokeStyle = 'rgba(90,36,10,.45)'; c.lineWidth = 2.2; for (let i = 0; i < 9; i++) { const x = d * (112 + i * 13), y = 284 - Math.abs(i - 4) * 3; c.beginPath(); c.moveTo(x, y - 12); c.lineTo(x + d * 3, y + 4); c.stroke(); } c.restore();
-    // whisker pores and stiff bristle whiskers
-    for (const [px, py] of [[118, 240], [134, 252], [124, 266], [146, 238]]) pkE(c, d * px, py, 2.6, 2.2, 'rgba(60,20,6,.7)', 0);
-    for (const [x0, y0, x1, y1, bw] of [[126, 244, 248, 206, 0], [136, 256, 252, 252, 1], [126, 268, 236, 298, 0]]) {
+    const jw = gvTufts(gvFur([[d * 92, 250], [d * 156, 222], [d * 222, 238], [d * 244, 274], [d * 216, 306], [d * 150, 312], [d * 100, 290]], 3, 6, (x, y) => y > 270 ? 1 : 0.3, 0.3, 43 + d));
+    mAShape(c, jw, pkRG(c, d * 150 - 20, 250, 100, [M.fur[0], M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,226,.85)', rw: 5, lw: 4 });
+    c.save(); jw(c); c.clip(); c.strokeStyle = 'rgba(90,36,10,.5)'; c.lineWidth = 2.2; for (let i = 0; i < 9; i++) { const x = d * (112 + i * 13), y = 300 - Math.abs(i - 4) * 3; c.beginPath(); c.moveTo(x, y - 12); c.lineTo(x + d * 3, y + 4); c.stroke(); } c.restore();
+    for (const [px, py] of [[118, 256], [134, 268], [124, 282], [146, 254]]) pkE(c, d * px, py, 2.6, 2.2, 'rgba(60,20,6,.75)', 0);
+    for (const [x0, y0, x1, y1, bw] of [[126, 260, 248, 222, 0], [136, 272, 254, 268, 1], [126, 284, 236, 314, 0]]) {
       const w = Math.sin(t * 1.6 + y0 * 0.1 + d) * 4;
       c.lineCap = 'round'; c.strokeStyle = INK; c.lineWidth = 5; c.beginPath(); c.moveTo(d * x0, y0); c.quadraticCurveTo(d * (x0 + x1) / 2, (y0 + y1) / 2 - 18, d * x1, y1 + w); c.stroke();
       c.strokeStyle = bw ? '#fff4dc' : '#f0d8b0'; c.lineWidth = 2; c.stroke();
     }
   }
-  // the eyes: tiny beady slits, nearly shut and half buried in the fur (a mole hardly needs them), a pin-prick glint
-  const blk = mBlink(mSeed), shut = clamp(Math.max(blk, ct >= 0 ? 0.5 * grind : 0), 0, 1);
-  for (const d of [-1, 1]) {
-    const ex = d * 152, ey = 138 + 3 * rage;
-    mShade(c, ex, ey + 3, 30, 16, 0.45);
-    pkE(c, ex, ey, 14, 5 * (1 - 0.75 * shut) + 1.2, '#140604', 2.4, -d * 0.18);
-    if (shut < 0.6) { pkE(c, ex - d * 4, ey - 1, 2.6, 1.6, 'rgba(255,252,236,.95)', 0); mAGlow(c, ex, ey, 14, M.eye, 0.2 + 0.25 * rage); }
-    // the fur closing over it: a soft upper lid of fur and a few hairs across it
-    c.strokeStyle = M.fur[1]; c.lineWidth = 7; c.lineCap = 'round'; c.beginPath(); c.moveTo(ex - 18, ey - 3 + d * 2); c.quadraticCurveTo(ex, ey - 9 + 3 * rage, ex + 18, ey - 3 - d * 2); c.stroke();
-    c.strokeStyle = 'rgba(255,240,226,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(ex - 16, ey - 7 + d * 2); c.quadraticCurveTo(ex, ey - 13 + 3 * rage, ex + 16, ey - 7 - d * 2); c.stroke();
-    c.strokeStyle = 'rgba(60,26,10,.55)'; c.lineWidth = 1.6; for (let k = 0; k < 5; k++) { const hx = ex - 14 + k * 7; c.beginPath(); c.moveTo(hx, ey - 10); c.lineTo(hx + d * 2, ey - 2); c.stroke(); }
-    mBrowC(c, d * 150, 116, 56, { col: M.fur[1], th: 13, ang: 0.36, arch: 0.18, rim: 'rgba(255,240,226,.7)', lw: 3.5 });
+  // the mouth under the nose: a dark smirk with two big buck teeth, gnashing as it chews
+  { const my = 304, o = 4 + 10 * clamp(m.open || 0, 0, 1) * (m.bite >= 0 ? 0 : 1) + 12 * chomp + 6 * rage;
+    const mp = mASm([[-46, my - 4], [-20, my - 2], [0, my], [20, my - 2], [46, my - 4], [30, my + o * 0.8], [0, my + o + 6], [-30, my + o * 0.8]]);
+    mAShape(c, mp, pkRG(c, 0, my + o * 0.5, 50, ['#a8283a', '#5a0a18', '#1e0206']), { lw: 3.6 });
+    for (const d of [-1, 1]) pkPath(c, [[d * 2, my - 2], [d * 18, my - 2], [d * 17, my + 16 + o * 0.3], [d * 3, my + 16 + o * 0.3]], pkLG(c, 0, my, 0, my + 18, ['#fffaf0', '#f2e2c4']), 2.4);
+    mAShape(c, mASm([[-60, my + o + 8], [0, my + o + 14], [60, my + o + 8], [40, my + o + 30], [0, my + o + 36], [-40, my + o + 30]]), pkLG(c, 0, my + o, 0, my + o + 36, [M.fur[0], M.fur[1]]), { rim: 'rgba(255,240,226,.6)', rw: 3, lw: 3.4 });   // the chin
   }
-  // --- the chew: sparks spraying from the grinding seam, crumbs of rocket from the collar ---
+  // the star nose: big, pink and in the middle of the face
+  moleStarNose(c, 0, 228 + 2 * chomp, t, 0.05 + 0.08 * rage + 0.14 * grind, clamp(J, 0, 1.3), rage);
+  // the eyes: glossy black beads with a big glint, under heavy scowling brows of fur (they squeeze shut as it grinds)
+  const blk = mBlink(mSeed), shut = clamp(Math.max(blk, ct >= 0 ? 0.55 * grind : 0), 0, 1);
+  for (const d of [-1, 1]) {
+    const ex = d * 112, ey = 176 + 2 * rage;
+    mShade(c, ex, ey + 4, 30, 22, 0.5);
+    pkE(c, ex, ey, 21, 21, 'rgba(255,236,214,.9)', 0);   // a pale ring of bare skin round the eye
+    pkE(c, ex, ey, 14, 14 * (1 - 0.85 * shut) + 1, pkRG(c, ex - 4, ey - 4, 15, ['#4a2a20', '#140604', '#000000']), 3);
+    if (shut < 0.6) { pkE(c, ex - 5, ey - 5, 4.6, 4, 'rgba(255,255,255,.95)', 0); pkE(c, ex + 5, ey + 5, 1.8, 1.6, 'rgba(255,255,255,.7)', 0); mAGlow(c, ex, ey, 22, M.eye, 0.15 + 0.25 * rage); }
+    { const by = 150 - 6 * chomp + 4 * rage, br = gvTufts(gvFur([[ex - d * 40, by + 8 + 6 * rage], [ex - d * 8, by - 12], [ex + d * 34, by - 20], [ex + d * 34, by - 6], [ex - d * 4, by + 6], [ex - d * 36, by + 20 + 6 * rage]], 2, 6, (px, py) => py < by ? 1 : 0.2, 0.4, 53 + d));
+      mAShape(c, br, pkLG(c, 0, by - 22, 0, by + 12, [M.fur[1], M.fur[2], M.fur[3]]), { rim: 'rgba(255,240,226,.9)', rw: 3, lw: 3.4 }); }   // a bushy scowling brow of fur
+  }
+  // --- the chew: sparks spraying from the grinding drill's seam, crumbs from the mouth ---
   if (grind > 0) {
     c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
     for (let k = 0; k < 20; k++) {
-      const p = (ct * 2.6 + k * 0.071) % 1, d = k % 2 ? 1 : -1, y0 = 50 + (k * 37) % 170, x = d * (6 + p * (70 + (k % 4) * 30)), y = y0 + p * p * 90 - p * 20;
-      for (const [w, col] of [[7 - p * 4, `rgba(255,${(160 - p * 80) | 0},40,${(0.6 * (1 - p) * grind).toFixed(3)})`], [3 - p * 2, `rgba(255,250,210,${((1 - p) * grind).toFixed(3)})`]]) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x, y); c.lineTo(x - d * 22 * (1 - p), y - 10 * (1 - p)); c.stroke(); }
+      const p = (ct * 2.6 + k * 0.071) % 1, d = k % 2 ? 1 : -1, y0 = 30 + (k * 37) % 110, x = d * (6 + p * (60 + (k % 4) * 24)), y = y0 + p * p * 70 - p * 20;
+      for (const [w, col] of [[6 - p * 3.5, `rgba(255,${(160 - p * 80) | 0},40,${(0.6 * (1 - p) * grind).toFixed(3)})`], [2.6 - p * 1.6, `rgba(255,250,210,${((1 - p) * grind).toFixed(3)})`]]) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x, y); c.lineTo(x - d * 18 * (1 - p), y - 8 * (1 - p)); c.stroke(); }
     }
-    mAGlow(c, 0, 130, 90, [255, 190, 80], 0.3 * grind);
+    mAGlow(c, 0, 80, 70, [255, 190, 80], 0.3 * grind);
     c.restore();
-    mCrumbs(c, -70, 236, ct, -1, 4); mCrumbs(c, 70, 236, ct, 1, 4);
+    mCrumbs(c, -40, 310, ct, -1, 4); mCrumbs(c, 40, 310, ct, 1, 4);
   }
 }
-// The body (mon.body): a fat velvety mole body tapering away below, huge rounded shoulders the digging arms grow out
-// of, a soft pale front, fur tufts and a rim of light round its edges, and the gulp: the rocket's lump stretching the
-// belly out as it slides down (its outline bulges with it), clods of dirt crumbling off its flanks as it climbs.
+// The body (mon.body): a fat furry pear (narrow at the neck, a big round bottom), a pale belly-fur patch down its front,
+// inked fur tufts all round its outline, stubby clawed pink hind paws under it, the shoulders the digging arms grow out
+// of, and the gulp: the rocket's lump stretching the belly out as it slides down.
 function moleBody(c, m) {
   const M = MOLE, t = m.t, br = Math.sin(t * 2.4);
   if (m.bite >= 0) c.scale(1 - 0.18 * smooth(0, 0.12, m.bite), 1);   // (it hunches in tight as it lunges, so all of it stays on screen in the bite's zoom)
-  const gy = mGulpY(m, 380, 880), gx = gy == null ? 0 : Math.sin(gy * 0.012) * 14, sw = gy == null ? 0 : Math.sin(Math.PI * clamp((gy - 380) / 500, 0, 1)) * 0.5 + 0.5;
-  const bump = y => gy == null ? 0 : 74 * sw * Math.exp(-(((y - gy) / 85) ** 2));
-  // the silhouette, densely sampled so the gulp's bulge pushes it out smoothly as it passes
-  const base = [[0, 240], [140, 246], [216, 290], [240, 380], [236, 500], [210, 650], [172, 820], [128, 1000], [84, 1240], [44, 1500], [0, 1700]], half = [];
+  const gy = mGulpY(m, 380, 720), gx = gy == null ? 0 : Math.sin(gy * 0.012) * 10, sw = gy == null ? 0 : Math.sin(Math.PI * clamp((gy - 380) / 340, 0, 1)) * 0.5 + 0.5;
+  const bump = y => gy == null ? 0 : 50 * sw * Math.exp(-(((y - gy) / 80) ** 2));
+  const base = [[0, 240], [150, 250], [214, 296], [242, 380], [262, 480], [274, 580], [268, 670], [238, 750], [180, 806], [96, 834], [0, 842]], half = [];
   for (let i = 0; i < base.length - 1; i++) for (let k = 0; k < 4; k++) { const f = k / 4, x = lerp(base[i][0], base[i + 1][0], f), y = lerp(base[i][1], base[i + 1][1], f); half.push([x > 1 ? x + bump(y) : x, y]); }
   half.push(base[base.length - 1]);
-  // clods of dirt crumbling off its flanks and falling away below it
-  for (let k = 0; k < 10; k++) {
-    const d = k % 2 ? 1 : -1, p = (t * (0.35 + 0.1 * hash2(k, 71)) + hash2(k, 72)) % 1, y0 = 380 + 300 * hash2(k, 73), x = d * (lerp(270, 200, (y0 - 380) / 300) + 30 * p), y = y0 + 260 * p * p, r = 8 + 7 * hash2(k, 74);
-    c.save(); c.globalAlpha = 1 - smooth(0.6, 1, p); c.translate(x, y); c.rotate(p * 4 + k);
-    pkPath(c, [[-r, -r * 0.3], [-r * 0.2, -r * 0.9], [r * 0.8, -r * 0.5], [r, r * 0.4], [r * 0.1, r * 0.85], [-r * 0.8, r * 0.6]], pkLG(c, 0, -r, 0, r, ['#a07a5a', '#6a4a36', '#3a2618']), 2.2);
-    c.restore();
+  // the stubby hind paws, sticking out under its round bottom: pink soles, five cream claws each
+  for (const d of [-1, 1]) {
+    const px = d * 150, py = 826 + 2 * Math.sin(t * 3 + d);
+    mAShape(c, gvTufts(gvFur([[px - d * 50, py - 30], [px + d * 40, py - 36], [px + d * 70, py - 6], [px + d * 50, py + 20], [px - d * 30, py + 18]], 2, 6, () => 1, 0.3, 60 + d)), pkLG(c, px, py - 36, px, py + 20, [M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,220,.85)', rw: 4, lw: 4 });
+    mAShape(c, mAEl(px + d * 14, py + 12, 46, 16), pkLG(c, 0, py, 0, py + 28, [M.pink[0], M.pink[1], M.pink[2]]), { lw: 3.4 });
+    for (let k = 0; k < 5; k++) { const cx = px + d * 14 + (k - 2) * 17; mHook(c, [cx - 5, py + 20], [cx + 5, py + 20], [cx + d * 2, py + 46 + 3 * Math.sin(k)], d * 2, '#fff4de', 2.2); }
   }
-  const path = gvTufts(gvFur(mAMirror(half), 1, 13, (x, y) => y > 300 && y < 1400 ? 1 : 0, 0.45, 45));
-  mAShape(c, path, pkLG(c, 0, 240, 0, 1200, [M.fur[1], M.fur[2], M.fur[3], '#120804']), { rim: 'rgba(255,240,226,.8)', rw: 8, under: 'rgba(255,170,90,.3)', uw: 10, lw: 4.5 });
+  const path = gvTufts(gvFur(mAMirror(half), 1, 17, (x, y) => y > 290 && y < 830 ? 1 : 0.3, 0.45, 45));
+  mAShape(c, path, pkLG(c, 0, 240, 0, 840, [M.fur[1], M.fur[2], M.fur[3]]), { rim: 'rgba(255,240,220,.9)', rw: 8, under: 'rgba(255,170,90,.3)', uw: 10, lw: 5 });
   c.save(); path(c); c.clip();
-  // form: a soft pale front rounding into shadow down both flanks (no hard panel), the velvet's sheen down its lit
-  // side, and soft fur ticks lying back along it
-  { const g = c.createRadialGradient(-30, 470, 20, 0, 560, 300); g.addColorStop(0, 'rgba(255,232,210,.55)'); g.addColorStop(0.45, 'rgba(230,190,160,.25)'); g.addColorStop(1, 'rgba(230,190,160,0)'); c.fillStyle = g; c.beginPath(); c.ellipse(0, 560, 220, 360, 0, 0, TWO_PI); c.fill(); }
-  for (const d of [-1, 1]) { c.strokeStyle = 'rgba(30,12,4,.35)'; c.lineWidth = 50; c.beginPath(); c.moveTo(d * 270, 330); c.quadraticCurveTo(d * 300, 600, d * 190, 900); c.stroke(); }
-  c.strokeStyle = 'rgba(255,246,236,.2)'; c.lineWidth = 30; c.beginPath(); c.moveTo(-190, 340); c.quadraticCurveTo(-236, 520, -150, 860); c.stroke();
-  for (let j = 0; j < 150; j++) { const x = (hash2(j, 81) * 2 - 1) * 250, y = 280 + hash2(j, 82) * 800; c.strokeStyle = j % 3 ? 'rgba(50,22,8,.35)' : 'rgba(255,240,226,.32)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + x * 0.02 + 1.5, y + 6, x + x * 0.03, y + 11); c.stroke(); }
-  // dirt caked on the fur here and there
-  for (const [x, y, r] of [[-180, 600, 18], [196, 520, 14], [130, 800, 16], [-120, 860, 12]]) pkE(c, x, y, r * 1.5, r, 'rgba(110,76,50,.35)', 0);
-  // the gulp: the swallowed rocket stretching the belly, a tight round lump with stretched skin round it, glowing
+  for (const d of [-1, 1]) { c.strokeStyle = 'rgba(30,12,4,.35)'; c.lineWidth = 50; c.beginPath(); c.moveTo(d * 260, 330); c.quadraticCurveTo(d * 300, 600, d * 200, 820); c.stroke(); }
+  c.strokeStyle = 'rgba(255,246,236,.2)'; c.lineWidth = 30; c.beginPath(); c.moveTo(-190, 340); c.quadraticCurveTo(-240, 520, -170, 760); c.stroke();
+  // the belly-fur patch: a big pale oval of soft fur down its front, its edge inked in tufts
+  const bp = gvTufts(gvFur(mAMirror([[0, 400], [90, 410], [150, 470], [176, 580], [160, 690], [104, 770], [0, 790]]), 2, 11, () => 1, 0.35, 49));
+  mAShape(c, bp, pkRG(c, -30, 520, 260, ['#fff0dc', '#f0cfae', '#c89a76']), { lw: 3.6 });
+  c.save(); bp(c); c.clip();
+  for (let j = 0; j < 60; j++) { const x = (hash2(j, 85) * 2 - 1) * 150, y = 420 + hash2(j, 86) * 360; c.strokeStyle = j % 2 ? 'rgba(120,70,40,.45)' : 'rgba(255,255,255,.5)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 2, y + 6, x + x * 0.02, y + 12); c.stroke(); }
+  c.restore();
+  // inked fur ticks all over the dark fur
+  for (let j = 0; j < 150; j++) { const x = (hash2(j, 81) * 2 - 1) * 260, y = 280 + hash2(j, 82) * 560; c.strokeStyle = j % 3 ? 'rgba(30,12,4,.5)' : 'rgba(255,240,226,.35)'; c.lineWidth = 2.2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + x * 0.02 + 1.5, y + 6, x + x * 0.03, y + 12); c.stroke(); }
   if (gy != null) {
-    const rx = 70 + 40 * sw, ry = 88 + 22 * sw;
-    // (no outline of its own: the belly itself swells round it) a lit dome on top, a shadow rolling under it, the fur
-    // stretched thin over it in arcs
+    const rx = 60 + 30 * sw, ry = 70 + 16 * sw;
     { const g = c.createRadialGradient(gx - rx * 0.3, gy - ry * 0.35, 4, gx, gy, rx * 1.15); g.addColorStop(0, 'rgba(255,236,214,.6)'); g.addColorStop(0.6, 'rgba(230,180,140,.25)'); g.addColorStop(1, 'rgba(230,180,140,0)'); c.fillStyle = g; c.beginPath(); c.ellipse(gx, gy, rx * 1.15, ry * 1.15, 0, 0, TWO_PI); c.fill(); }
-    c.strokeStyle = 'rgba(40,14,4,.55)'; c.lineWidth = 16; c.beginPath(); c.ellipse(gx, gy + 6, rx, ry, 0, -0.2, Math.PI * 0.85); c.stroke();
+    c.strokeStyle = 'rgba(40,14,4,.55)'; c.lineWidth = 14; c.beginPath(); c.ellipse(gx, gy + 6, rx, ry, 0, -0.2, Math.PI * 0.85); c.stroke();
     c.strokeStyle = INK; c.lineWidth = 3.4; c.beginPath(); c.ellipse(gx, gy, rx, ry, 0, -0.35, Math.PI * 0.95); c.stroke();
     c.strokeStyle = 'rgba(255,248,236,.7)'; c.lineWidth = 5; c.beginPath(); c.ellipse(gx, gy, rx * 0.86, ry * 0.86, 0, Math.PI * 1.08, Math.PI * 1.55); c.stroke();
-    c.strokeStyle = 'rgba(60,26,10,.4)'; c.lineWidth = 2;
-    for (const d of [-1, 1]) for (const k of [0, 1, 2]) { c.beginPath(); c.ellipse(gx, gy, rx + 10 + k * 10, ry + 8 + k * 9, 0, d > 0 ? -0.5 + k * 0.1 : Math.PI - 0.4, d > 0 ? 0.4 : Math.PI + 0.5 - k * 0.1); c.stroke(); }
-    c.save(); c.beginPath(); c.ellipse(gx, gy, rx, ry, 0, 0, TWO_PI); c.clip(); for (let j = 0; j < 30; j++) { const a = hash2(j, 91) * TWO_PI, rr = Math.sqrt(hash2(j, 92)), x = gx + Math.cos(a) * rx * rr, y = gy + Math.sin(a) * ry * rr; c.strokeStyle = j % 3 ? 'rgba(60,26,10,.3)' : 'rgba(255,240,226,.45)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (x - gx) * 0.1, y + 7); c.stroke(); } c.restore();
     mAGlow(c, gx, gy, rx * 1.1, [255, 200, 90], 0.3);
   }
   c.restore();
@@ -6960,7 +6966,7 @@ function moleBody(c, m) {
     const x = d * 200, y = 318 + 2 * br;
     const sp = gvTufts(gvFur([[x - 92, y + 6], [x - 50, y - 64], [x + 30, y - 76], [x + 92, y - 26], [x + 88, y + 46], [x + 20, y + 76], [x - 60, y + 60]], 2, 9, (px, py) => py > y + 20 ? 1 : 0.3, 0.4, 50 + d));
     mShade(c, x, y + 70, 96, 26, 0.45);
-    mAShape(c, sp, pkRG(c, x - d * 20, y - 40, 130, [M.fur[0], M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,226,.85)', rw: 6, under: 'rgba(255,170,90,.3)', uw: 8, lw: 4.5 });
+    mAShape(c, sp, pkRG(c, x - d * 20, y - 40, 130, [M.fur[0], M.fur[1], M.fur[2]]), { rim: 'rgba(255,240,226,.9)', rw: 6, under: 'rgba(255,170,90,.3)', uw: 8, lw: 4.5 });
     c.save(); sp(c); c.clip(); c.strokeStyle = 'rgba(255,246,236,.25)'; c.lineWidth = 16; c.beginPath(); c.ellipse(x, y, 70, 54, -d * 0.3, Math.PI * 1.1, Math.PI * 1.7); c.stroke(); c.restore();
   }
 }
@@ -7740,7 +7746,7 @@ const MONSTERS = [
       c.restore();
     } },
 
-  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, hazeK: 0.45, mouth: [0, 128, 78, 92], halfW: 252, fit: 0.9,
+  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, hazeK: 0.45, mouth: [0, 100, 60, 70], breath: [0, 280, 40, 20], halfW: 252, fit: 0.9,
     // A burrowing tyrant with a cream armoured mantle and a golden drill for a snout. The drill turns as it hunts, its
     // seam parts to show a glowing grinder maw, and on the bite it cracks down the middle and the halves swing back like
     // doors (two golden horns framing the maw); then it slams shut and grinds, sparks spraying from the seam.
