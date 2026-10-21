@@ -413,7 +413,7 @@ const PILOT_SCALE = 1.5, PILOT_TILT = 0.31;
 // they are), so every lane has spare room around the real hitboxes.
 const LANE_SCALE = 1.8;
 const PILOT_HITS = {
-  lemur:     [[0, -18, 0, -18, 12.5], [-6, -29, 6, -29, 4], [0, 8, 0, 10, 16.5], [-16, 18, -17, 27, 3.5], [16, 18, 17, 27, 3.5], [0, 25, 0, 27.5, 6.5]],
+  lemur:     [[0, -18, 0, -18, 12.5], [-6.8, -28, 6.8, -28, 3.6], [0, 8, 0, 10, 16.5], [-16, 18, -17, 27, 3.5], [16, 18, 17, 27, 3.5], [0, 25, 0, 27.5, 6.5]],
   ember:     [[-1, -16.5, 1, -16.5, 12.6], [-7, -28, 7, -28, 3.5], [0, 5, 0, 13, 15.5], [0, 24, 0, 26.5, 6], [-11, 22, -14, 26.5, 3], [11, 22, 14, 26.5, 3], [-9, -11, -13.5, -13.5, 3.5], [9, -11, 13.5, -13.5, 3.5]],
   snail:     [[0, 13, 0, 13, 16], [0, -11, 0, -11, 10.5], [-9, -27.5, 9, -27.5, 6.8], [0, 30, 0, 32, 6.5]],
   puffer:    [[0, -28, 0, -17, 12.5], [0, 4, 0, 4, 15.5], [-17.5, 2, -17.5, 15, 4.3], [17.5, 2, 17.5, 15, 4.3], [0, 20, 0, 25, 6.5]],
@@ -5054,7 +5054,7 @@ const rgbaA = (col, a) => `rgba(${col[0]},${col[1]},${col[2]},${a})`;
 // sail-cloth fins on bamboo spars. Kiko rides in the cut-open top, aviator goggles on, a teal scarf and
 // the ringed tail streaming in the draught. LM eases the thrust/fall poses between frames.
 const LM = { k: 0, f: 0, t: -1 };
-const LM_FUR = ['#e2dce8', '#a49cb0', '#5e5668'], LM_DARK = '#27212c', LM_WHITE = '#fbf8fc';
+const LM_FUR = ['#e2dce8', '#a49cb0', '#5e5668'], LM_WARM = ['#e6d4c6', '#b4967f', '#705648'], LM_DARK = '#27212c', LM_WHITE = '#fbf8fc';
 function lmRand(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 function lmEase(st, thr, fall) {
   const dt = st.t - LM.t; LM.t = st.t;
@@ -5142,16 +5142,20 @@ function lmShellPath(c) {
 }
 function lmHusk(c, k, t) {
   const [nx, ny, nrx, nry] = LM_NUT;
-  c.fillStyle = pkRG(c, nx - 3, ny - 2, nrx, ['#d89a5e', '#a4612f', '#6a3818', '#3a1c0c']); c.fill();
+  // the top of the nut is pale tan husk (it stays light against the red magma walls), the shell below the strap
+  // a rich brown; a side vignette keeps it round
+  { const g = c.createLinearGradient(0, -3, 0, 25); for (const [o, col] of [[0, '#fbe8c0'], [0.22, '#f2cf96'], [0.42, '#dca86a'], [0.6, '#a8683a'], [0.8, '#7e4826'], [1, '#5c3018']]) g.addColorStop(o, col); c.fillStyle = g; c.fill(); }
   c.save(); c.clip();
-  // husk fibres: short strands along the meridians, dark and light
+  const vg = c.createRadialGradient(-4, 4, 4, 0, 9, 19); vg.addColorStop(0, 'rgba(60,24,8,0)'); vg.addColorStop(0.7, 'rgba(60,24,8,0)'); vg.addColorStop(1, 'rgba(60,24,8,.42)'); c.fillStyle = vg; c.fillRect(-18, -8, 36, 34);
+  // husk fibres: short strands along the meridians; pale straw ones up on the tan husk, dark ones on the shell
   c.lineCap = 'round';
-  for (let i = 0; i < 46; i++) {
-    const u = lmRand(i) * 2 - 1, v = lmRand(i + 50), x = u * 15, y = -1 + v * 25, bend = x * 0.12;
-    c.strokeStyle = i % 3 ? 'rgba(52,24,10,.45)' : 'rgba(255,200,140,.35)'; c.lineWidth = i % 3 ? 0.8 : 0.6;
+  for (let i = 0; i < 58; i++) {
+    const u = lmRand(i) * 2 - 1, v = lmRand(i + 50), x = u * 15, y = -2 + v * 26, bend = x * 0.12, top = y < 7;
+    c.strokeStyle = top ? (i % 3 ? 'rgba(255,246,214,.7)' : 'rgba(150,92,40,.5)') : (i % 3 ? 'rgba(52,24,10,.45)' : 'rgba(255,200,140,.3)');
+    c.lineWidth = top ? (i % 3 ? 0.65 : 0.7) : (i % 3 ? 0.8 : 0.6);
     c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + bend * 0.5, y + 2, x + bend, y + 3.6); c.stroke();
   }
-  const sh = c.createRadialGradient(-7, 3, 0.5, -7, 3, 9); sh.addColorStop(0, 'rgba(255,225,180,.45)'); sh.addColorStop(1, 'rgba(255,225,180,0)'); c.fillStyle = sh; c.fillRect(-17, -6, 20, 20);
+  const sh = c.createRadialGradient(-7, 2, 0.5, -7, 2, 9); sh.addColorStop(0, 'rgba(255,248,225,.5)'); sh.addColorStop(1, 'rgba(255,248,225,0)'); c.fillStyle = sh; c.fillRect(-17, -6, 20, 20);
   // brass strap with rivets, curving round the nut
   const top = [[-17.2, 5], [0, 12.4], [17.2, 5]], bot = [[-17.4, 9.2], [0, 16.8], [17.4, 9.2]];
   c.beginPath(); c.moveTo(...top[0]); c.quadraticCurveTo(...top[1], ...top[2]); c.lineTo(...bot[2]); c.quadraticCurveTo(...bot[1], ...bot[0]); c.closePath();
@@ -5161,7 +5165,7 @@ function lmHusk(c, k, t) {
   for (let i = -2; i <= 2; i++) { const u = (i + 2.5) / 5, x = (1 - u) * (1 - u) * -17.3 + 2 * (1 - u) * u * 0 + u * u * 17.3, y = (1 - u) * (1 - u) * 7.1 + 2 * (1 - u) * u * 14.6 + u * u * 7.1; pkE(c, x, y, 1, 0.9, '#ffe9a0', 0.9); pkDot(c, x - 0.3, y - 0.3, 0.35, '#ffffff'); }
   // a stitched leather patch over an old crack
   c.save(); c.translate(-10.6, 2.4); c.rotate(-0.4);
-  pkRect(c, -3.2, -2.3, 6.4, 4.6, 1.6, pkLG(c, 0, -2.3, 0, 2.3, ['#e0b47a', '#b07c48']), 1.1);
+  pkRect(c, -3.2, -2.3, 6.4, 4.6, 1.6, pkLG(c, 0, -2.3, 0, 2.3, ['#a8683a', '#74401e']), 1.1);
   c.setLineDash([0.9, 0.8]); c.strokeStyle = '#fff0d0'; c.lineWidth = 0.55; c.beginPath(); c.roundRect(-2.3, -1.45, 4.6, 2.9, 1); c.stroke(); c.setLineDash([]);
   c.restore();
   // the racing roundel: cream disc, red ring, a yellow lightning bolt (glows hot while it burns)
@@ -5171,7 +5175,7 @@ function lmHusk(c, k, t) {
   c.restore();
   // ambient occlusion low on the nut and right under the lip; flame bounce light from below
   const ao = c.createLinearGradient(0, 14, 0, 26); ao.addColorStop(0, 'rgba(30,10,4,0)'); ao.addColorStop(1, 'rgba(30,10,4,.55)'); c.fillStyle = ao; c.fillRect(-18, 14, 36, 12);
-  const lip = c.createLinearGradient(0, 0, 0, 5); lip.addColorStop(0, 'rgba(30,10,4,.5)'); lip.addColorStop(1, 'rgba(30,10,4,0)'); c.fillStyle = lip; c.fillRect(-18, -2, 36, 7);
+  const lip = c.createLinearGradient(0, 0, 0, 5); lip.addColorStop(0, 'rgba(60,24,8,.3)'); lip.addColorStop(1, 'rgba(30,10,4,0)'); c.fillStyle = lip; c.fillRect(-18, -2, 36, 7);
   if (k > 0.02) { c.globalCompositeOperation = 'lighter'; const bl = c.createRadialGradient(0, 30, 2, 0, 30, 18); bl.addColorStop(0, `rgba(255,140,40,${0.55 * k})`); bl.addColorStop(1, 'rgba(255,100,20,0)'); c.fillStyle = bl; c.fillRect(-18, 10, 36, 16); }
   c.restore();
 }
@@ -5195,24 +5199,36 @@ function lmEye(c, d, st, mood) {
   pkE(c, x - 1.2 + lx * 0.4, y - 1.2 + (lid > 0.3 ? 0.9 : 0), 1.15, 1.15 * b, '#ffffff', 0);
   pkDot(c, x + 1.3 + lx * 0.4, y + 1.3, 0.5, 'rgba(255,255,255,.85)');
 }
+// a black triangular eye patch round each eye, tapering down and in toward the muzzle (d = side)
+function lmPatch(c, d) {
+  c.beginPath(); c.moveTo(d * 1.9, -19.4);
+  c.quadraticCurveTo(d * 4.8, -21.9, d * 9, -20.4);
+  c.quadraticCurveTo(d * 10.5, -17.2, d * 7.8, -14.3);
+  c.quadraticCurveTo(d * 5.8, -12.1, d * 3.6, -10.9);
+  c.quadraticCurveTo(d * 2.4, -11.5, d * 2.3, -13.4);
+  c.quadraticCurveTo(d * 1.5, -16.4, d * 1.9, -19.4); c.closePath();
+}
 function lmFace(c, st, mood) {
-  // the dark crown V, the bridge and the eye patches on the white mask
-  c.fillStyle = LM_DARK;
-  for (const d of [-1, 1]) {
-    c.beginPath(); c.moveTo(d * 0.8, -12); c.quadraticCurveTo(d * 0.2, -21.5, d * 5.5, -21.6); c.quadraticCurveTo(d * 10.4, -21, d * 9.8, -16.2);
-    c.quadraticCurveTo(d * 9, -12.2, d * 5, -12.6); c.quadraticCurveTo(d * 2.4, -12.4, d * 0.8, -12); c.closePath(); c.fill();
-  }
-  c.beginPath(); c.moveTo(-2.4, -25.5); c.lineTo(2.4, -25.5); c.lineTo(1.4, -11); c.lineTo(-1.4, -11); c.closePath(); c.fill();
+  // a ring-tailed lemur's face: white, with a black triangle round each eye and a long dark muzzle between
+  // them (the white bridge between the eyes keeps it from reading as a raccoon's mask)
+  for (const d of [-1, 1]) { lmPatch(c, d); c.fillStyle = pkLG(c, d * 2, -21, d * 6, -11, ['#40364a', '#251e2a', '#1d1722']); c.fill(); }
+  const sn = () => { c.beginPath(); c.moveTo(-2.2, -15.2); c.quadraticCurveTo(0, -16.4, 2.2, -15.2); c.quadraticCurveTo(2.1, -12.4, 1.4, -9.8); c.lineTo(-1.4, -9.8); c.quadraticCurveTo(-2.1, -12.4, -2.2, -15.2); c.closePath(); };
+  sn(); c.fillStyle = pkLG(c, 0, -16.4, 0, -9.8, ['#766c80', '#463d4e', '#2a232f']); c.fill();
+  // the lit ridge of the muzzle and a soft shadow down its far side
+  c.save(); sn(); c.clip();
+  c.fillStyle = 'rgba(20,14,24,.4)'; c.beginPath(); c.moveTo(1, -17); c.lineTo(3, -17); c.lineTo(2, -10); c.lineTo(0.6, -10); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(230,222,240,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-0.5, -15.4); c.quadraticCurveTo(-0.7, -13.2, -0.4, -11.2); c.stroke();
+  c.restore();
   for (const d of [-1, 1]) lmEye(c, d, st, mood);
-  // brows on the white mask
-  const bw = { calm: [0.4, 0], thrust: [1.6, -0.25], grin: [0.8, 0.1], fall: [-1.4, 0.2], panic: [-2, 0.35] }[mood];
-  c.strokeStyle = '#4a4252'; c.lineWidth = 1.5;
-  for (const d of [-1, 1]) { c.beginPath(); c.moveTo(d * 2.4, -22.2 + bw[0]); c.quadraticCurveTo(d * 5.2, -23.4 - bw[1] * 4 + bw[0] * 0.3, d * 8.4, -22.4 - bw[0] * 0.25); c.stroke(); }
+  // brows on the white band above the patches
+  const bw = { calm: [0.4, 0], thrust: [1.5, -0.25], grin: [0.7, 0.1], fall: [-1.2, 0.2], panic: [-1.7, 0.35] }[mood];
+  c.strokeStyle = '#625670'; c.lineWidth = 1.15;
+  for (const d of [-1, 1]) { c.beginPath(); c.moveTo(d * 2.2, -22.2 + bw[0]); c.quadraticCurveTo(d * 5.2, -23.5 - bw[1] * 4 + bw[0] * 0.3, d * 8.3, -22.6 - bw[0] * 0.25); c.stroke(); }
 }
 function lmMouth(c, mood) {
-  c.beginPath(); c.moveTo(-3, -11.2); c.quadraticCurveTo(0, -12.2, 3, -11.2); c.quadraticCurveTo(2.2, -8.8, 0, -8.6); c.quadraticCurveTo(-2.2, -8.8, -3, -11.2); c.closePath();
-  c.fillStyle = '#100a0e'; c.fill(); c.strokeStyle = INK; c.lineWidth = 1; c.stroke();
-  pkE(c, -0.9, -10.9, 0.9, 0.45, 'rgba(255,255,255,.75)', 0);
+  c.beginPath(); c.moveTo(-2.4, -11.3); c.quadraticCurveTo(0, -12.1, 2.4, -11.3); c.quadraticCurveTo(1.8, -8.9, 0, -8.6); c.quadraticCurveTo(-1.8, -8.9, -2.4, -11.3); c.closePath();
+  c.fillStyle = '#140e14'; c.fill(); c.strokeStyle = INK; c.lineWidth = 1; c.stroke();
+  pkE(c, -0.8, -10.9, 0.85, 0.42, 'rgba(255,255,255,.75)', 0);
   c.lineWidth = 1.2; c.strokeStyle = INK;
   if (mood === 'calm') { c.beginPath(); c.moveTo(0, -8.6); c.lineTo(0, -7.6); c.moveTo(-2.8, -7.6); c.quadraticCurveTo(-1.4, -6.2, 0, -7.6); c.quadraticCurveTo(1.4, -6.2, 2.8, -7.6); c.stroke(); }
   else if (mood === 'thrust' || mood === 'grin') {
@@ -5231,46 +5247,46 @@ function lmMouth(c, mood) {
     c.fillStyle = '#ffffff'; c.fillRect(-2.6, -7.5, 1.3, 1.1); c.fillRect(1.3, -7.5, 1.3, 1.1);
   }
 }
+// small round ears set wide on the crown, grey with pale pink insides and a fringe of white fur (d = side)
 function lmEar(c, d, mood, t) {
-  const tip = { calm: [12.6, -33.6], thrust: [15.4, -30.4], grin: [13.4, -33.4], fall: [11.4, -35.2], panic: [16.6, -27.6] }[mood];
-  const tw = Math.sin(t * 3.1 + d) * 0.4;
-  const tx = d * tip[0], ty = tip[1] + tw;
-  c.beginPath(); c.moveTo(d * 4.4, -26.6); c.quadraticCurveTo(d * 6.5, ty + 1, tx, ty); c.quadraticCurveTo(d * 13.6, -27, d * 10.8, -22.6); c.closePath();
-  c.fillStyle = pkLG(c, 0, ty, 0, -22, ['#d8d2de', '#8a8296']); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.8; c.stroke();
-  c.beginPath(); c.moveTo(d * 6.2, -25.4); c.quadraticCurveTo(d * 7.6, ty + 3, tx - d * 1, ty + 2.2); c.quadraticCurveTo(d * 11.6, -26.4, d * 9.6, -23.6); c.closePath();
-  c.fillStyle = '#f4dfe6'; c.fill();
-  // a white fluff tuft at the inner base of the ear
-  c.beginPath(); c.moveTo(d * 5.4, -25.4); c.quadraticCurveTo(d * 7, -28.6, d * 8.4, -29.6); c.quadraticCurveTo(d * 8.2, -27.4, d * 9.6, -26.6); c.quadraticCurveTo(d * 8.6, -24.6, d * 5.4, -25.4); c.closePath();
-  c.fillStyle = LM_WHITE; c.fill();
+  const [ex, ey, ea] = { calm: [9.1, -27.5, 0.45], thrust: [10.4, -26.5, 0.9], grin: [9.4, -27.5, 0.55], fall: [8.7, -28.3, 0.22], panic: [11.4, -25.7, 1.15] }[mood];
+  c.save(); c.translate(d * ex, ey); c.rotate(d * (ea + Math.sin(t * 3.1 + d) * 0.04)); c.scale(d, 1);
+  pkE(c, 0, -1, 3.8, 4.6, pkLG(c, 0, -6, 0, 3, ['#cfc8d8', '#958da2', '#6a6276']), 1.6);
+  pkE(c, -0.2, -0.6, 2.4, 3.2, pkLG(c, 0, -4, 0, 2.4, ['#fbe8ef', '#e0bccb']), 0);
+  // the white fur fringe round the rim, and a fluff tuft out of the ear
+  c.strokeStyle = 'rgba(255,252,255,.7)'; c.lineWidth = 0.7;
+  for (const a of [-1.75, -1.05, -0.35]) { const x = Math.cos(a) * 3.3, y = -1 + Math.sin(a) * 4.1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * 1.2, y + Math.sin(a) * 1.2); c.stroke(); }
+  c.beginPath(); c.moveTo(-1.6, 2.4); c.quadraticCurveTo(-1.2, -0.6, 0.6, -2.4); c.quadraticCurveTo(0.2, 0, 1.4, 1.6); c.closePath(); c.fillStyle = LM_WHITE; c.fill();
+  c.restore();
+}
+function lmHeadPath(c) {
+  // round crown, pointed white fur ruffs at the cheeks, the chin narrowing under the muzzle
+  c.beginPath(); c.moveTo(0, -28.6);
+  c.bezierCurveTo(7, -28.6, 11.4, -25, 11.6, -19.5);
+  c.lineTo(13.6, -17.2); c.lineTo(11.4, -16); c.lineTo(12.8, -13.6); c.lineTo(9.6, -12.9);
+  c.quadraticCurveTo(6.4, -8.8, 2.8, -6.6); c.quadraticCurveTo(0, -5.2, -2.8, -6.6);
+  c.quadraticCurveTo(-6.4, -8.8, -9.6, -12.9); c.lineTo(-12.8, -13.6); c.lineTo(-11.4, -16); c.lineTo(-13.6, -17.2); c.lineTo(-11.6, -19.5);
+  c.bezierCurveTo(-11.4, -25, -7, -28.6, 0, -28.6); c.closePath();
 }
 function lmHead(c, st, mood, t) {
   for (const d of [-1, 1]) lmEar(c, d, mood, t);
-  // head: round crown, pointed fur ruffs at the cheeks, a short tapering muzzle
-  const head = () => {
-    c.beginPath(); c.moveTo(0, -28.6);
-    c.bezierCurveTo(7, -28.6, 11.4, -25, 11.6, -19.5);
-    c.lineTo(14.6, -16.8); c.lineTo(11.8, -15.2); c.lineTo(14, -12.4); c.lineTo(10.2, -11.6);
-    c.quadraticCurveTo(7, -7.4, 0, -6.6);
-    c.quadraticCurveTo(-7, -7.4, -10.2, -11.6); c.lineTo(-14, -12.4); c.lineTo(-11.8, -15.2); c.lineTo(-14.6, -16.8); c.lineTo(-11.6, -19.5);
-    c.bezierCurveTo(-11.4, -25, -7, -28.6, 0, -28.6); c.closePath();
-  };
-  head(); c.fillStyle = pkRG(c, 0, -19, 14, LM_FUR); c.fill();
+  const head = () => lmHeadPath(c);
+  // the white face, softly shaded at its edges, under a grey crown cap
+  head(); c.fillStyle = pkRG(c, 0, -17, 13, ['#ffffff', '#f6f2f8', '#d2cada']); c.fill();
   c.save(); head(); c.clip();
-  // the white face mask with soft shading at its edges
-  c.beginPath(); c.moveTo(0, -26.4); c.quadraticCurveTo(8.6, -26, 10.4, -19.4); c.lineTo(13.6, -16.6); c.lineTo(11.2, -15); c.lineTo(13.4, -12.2); c.lineTo(9.6, -11);
-  c.quadraticCurveTo(6, -7, 0, -6.6); c.quadraticCurveTo(-6, -7, -9.6, -11); c.lineTo(-13.4, -12.2); c.lineTo(-11.2, -15); c.lineTo(-13.6, -16.6); c.lineTo(-10.4, -19.4); c.quadraticCurveTo(-8.6, -26, 0, -26.4); c.closePath();
-  c.fillStyle = pkRG(c, 0, -17, 13, ['#ffffff', '#f4f0f6', '#cfc6d8']); c.fill();
+  c.beginPath(); c.moveTo(-16, -31); c.lineTo(16, -31); c.lineTo(16, -19.2); c.lineTo(11, -19.6); c.quadraticCurveTo(8.6, -24.9, 0, -24.4); c.quadraticCurveTo(-8.6, -24.9, -11, -19.6); c.lineTo(-16, -19.2); c.closePath();
+  c.fillStyle = pkRG(c, 0, -24, 13, ['#d4cedc', '#9c94aa', '#655d70']); c.fill();
   lmFace(c, st, mood);
   // fur strokes on the crown
   c.strokeStyle = 'rgba(70,60,80,.55)'; c.lineWidth = 0.7;
   for (const [x, y, a] of [[-6, -27, 0.5], [-3, -27.8, 0.2], [3, -27.8, -0.2], [6, -27, -0.5]]) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + a * 2, y + 2.2); c.stroke(); }
   // ambient occlusion under the chin edge
-  const ao = c.createLinearGradient(0, -10, 0, -6); ao.addColorStop(0, 'rgba(40,20,40,0)'); ao.addColorStop(1, 'rgba(40,20,40,.25)'); c.fillStyle = ao; c.fillRect(-15, -10, 30, 4);
+  const ao = c.createLinearGradient(0, -10, 0, -6); ao.addColorStop(0, 'rgba(40,20,40,0)'); ao.addColorStop(1, 'rgba(40,20,40,.22)'); c.fillStyle = ao; c.fillRect(-15, -10, 30, 4);
   // rim light along the top and the lit right side (the outline offset inward, clipped to the head)
   c.translate(-1.3, 1.2); head(); c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1.3; c.stroke();
   c.restore();
   head(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
-  lmMouth(c, mood);
+  c.save(); c.translate(0, 0.9); lmMouth(c, mood); c.restore();
   // aviator goggles pushed up on the crown: leather strap, brass rims, sky-blue lenses
   c.beginPath(); c.moveTo(-10.2, -24.6); c.quadraticCurveTo(0, -30.6, 10.2, -24.6); c.strokeStyle = INK; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = '#7a4424'; c.lineWidth = 1.8; c.stroke();
   for (const d of [-1, 1]) {
@@ -5305,12 +5321,13 @@ function lmScarfTails(c, t, k, f) {
   }
 }
 function lmBody(c, st, mood, t, k) {
-  // torso rising out of the coconut: grey fur, a white chest bib
+  // torso rising out of the coconut: warm brown-grey back and shoulders, a white chest bib
   const tor = () => { c.beginPath(); c.moveTo(-9, 1); c.lineTo(-9.8, -4.6); c.quadraticCurveTo(-8, -10.4, 0, -10.6); c.quadraticCurveTo(8, -10.4, 9.8, -4.6); c.lineTo(9, 1); c.closePath(); };
-  tor(); c.fillStyle = pkRG(c, 0, -6, 11, LM_FUR); c.fill();
+  tor(); c.fillStyle = pkRG(c, 0, -6, 11, LM_WARM); c.fill();
   c.save(); tor(); c.clip(); pkE(c, 0, -2.6, 5, 6, pkRG(c, 0, -4, 6, ['#ffffff', '#f2eef4', '#cfc6d8']), 0);
-  const ao = c.createLinearGradient(0, -10.6, 0, -4); ao.addColorStop(0, 'rgba(40,20,50,.45)'); ao.addColorStop(1, 'rgba(40,20,50,0)'); c.fillStyle = ao; c.fillRect(-11, -11, 22, 7);
+  const ao = c.createLinearGradient(0, -10.6, 0, -4); ao.addColorStop(0, 'rgba(50,26,30,.45)'); ao.addColorStop(1, 'rgba(50,26,30,0)'); c.fillStyle = ao; c.fillRect(-11, -11, 22, 7);
   c.strokeStyle = 'rgba(160,150,170,.8)'; c.lineWidth = 0.7; for (const x of [-2, 0.4, 2.6]) { c.beginPath(); c.moveTo(x, -4); c.lineTo(x - 0.5, -2); c.stroke(); }
+  c.strokeStyle = 'rgba(110,80,66,.6)'; c.lineWidth = 0.7; for (const d of [-1, 1]) for (const y of [-6.4, -3.6]) { c.beginPath(); c.moveTo(d * 8.6, y); c.lineTo(d * 7.6, y + 1.6); c.stroke(); }
   c.restore();
   tor(); c.strokeStyle = INK; c.lineWidth = 1.8; c.stroke();
 }
@@ -5322,14 +5339,38 @@ function lmScarf(c) {
   c.strokeStyle = 'rgba(230,255,252,.7)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-5, -6.4); c.quadraticCurveTo(0, -3.6, 5, -6.4); c.stroke();
   pkE(c, -6.6, -6.4, 2.6, 2.3, pkRG(c, -6.6, -6.4, 2.6, ['#5af0e6', '#13a8b0', '#0b6e7c']), 1.4);
 }
-function lmArm(c, d, mood, t) {
+// one of Kiko's slender black-skinned lemur hands: the furred back of the hand, a thumb and four long knuckled
+// fingers. up: flung up in the air (the bite), fingers splayed; otherwise curled over the coconut's front lip.
+function lmHand(c, hx, hy, d, up) {
+  const SK = '#3a2f38', HI = 'rgba(176,160,176,.85)';
+  if (up) {
+    for (let i = 0; i < 4; i++) { const a = -Math.PI / 2 + d * (-0.55 + i * 0.36), L = 3.1 + (i === 1 || i === 2 ? 0.5 : 0); pkLine(c, [[hx, hy], [hx + Math.cos(a) * L, hy + Math.sin(a) * L]], SK, 1.15); pkDot(c, hx + Math.cos(a) * (L - 0.2), hy + Math.sin(a) * (L - 0.2), 0.32, HI); }
+    pkLine(c, [[hx, hy + 0.4], [hx - d * 2.5, hy - 0.6]], SK, 1.1);
+    pkE(c, hx, hy + 0.6, 1.9, 1.6, pkRG(c, hx, hy + 0.6, 1.9, ['#bdb4c8', '#8a8296', '#5e566a']), 1.1);
+    return;
+  }
+  // the fingers hook over the lip and down the husk, each with a lit knuckle and a pale fingertip
+  for (let i = 0; i < 4; i++) {
+    const o = (i - 1.5) * 1.12, x0 = hx + o * 0.85, x1 = hx + o * 1.08 + d * 0.15, L = 2.9 + (i === 1 || i === 2 ? 0.45 : 0);
+    pkCurve(c, [x0, hy - 0.3], [x0 + o * 0.12, hy + 1.2], [x1, hy + L], SK, 1.2);
+    pkDot(c, x0 + o * 0.08, hy + 0.9, 0.36, HI); pkDot(c, x1, hy + L - 0.1, 0.3, 'rgba(120,100,116,.9)');
+  }
+  // the thumb, hooked over the lip on the inner side
+  pkCurve(c, [hx - d * 1.9, hy - 0.4], [hx - d * 2.9, hy + 0.2], [hx - d * 2.7, hy + 1.7], SK, 1.1);
+  // the furred back of the hand over the knuckles
+  pkE(c, hx, hy - 0.7, 2.3, 1.45, pkRG(c, hx, hy - 1, 2.3, ['#c4bccf', '#918a9e', '#625a6e']), 1.1);
+}
+function lmArm(c, d, mood, t, up = 0) {
   const jit = mood === 'panic' ? Math.sin(t * 55 + d) * 0.35 : 0;
-  const hx = d * 10.6 + jit, hy = -0.6;
-  pkCurve(c, [d * 7.6, -6.4], [d * 13.4, -6.2], [hx, hy - 0.8], '#9a92a6', 3.4);
-  // hand gripping the lip: dark palm, three fingers curled over the front
-  pkE(c, hx, hy, 2.6, 2.1, pkRG(c, hx, hy, 2.6, ['#6a6274', '#3a3342', '#221c28']), 1.3);
-  c.strokeStyle = INK; c.lineWidth = 0.7;
-  for (const o of [-1.1, 0, 1.1]) { c.beginPath(); c.moveTo(hx + o, hy + 0.2); c.lineTo(hx + o * 1.1, hy + 1.9); c.stroke(); }
+  if (up) {   // the bite: both arms flung up, waving
+    const w = Math.sin(t * 19 + d * 1.7), hx = d * (18.6 + w * 0.8), hy = -24.6 + Math.cos(t * 19 + d) * 0.9;
+    pkCurve(c, [d * 8.4, -6.8], [d * 20.6, -11.6], [hx, hy + 1.6], '#a199ae', 3.3);
+    lmHand(c, hx, hy, d, true);
+    return;
+  }
+  const hx = d * 10.4 + jit, hy = -1;
+  pkCurve(c, [d * 7.6, -6.4], [d * 13.4, -6.2], [hx, hy - 1.2], '#a199ae', 3.4);
+  lmHand(c, hx, hy, d, false);
 }
 // Ember the dragon: an azure hatchling with a chipped horn and a crimson scarf, riding a cast-iron potbelly
 // stove it stokes with its own fire (stove legs as fins, the grate glowing hotter while you thrust).
@@ -5955,12 +5996,15 @@ function ffyScarfTail(c, t, k, fast) {
 }
 
 const PILOTS = [
-  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket', noInk: '#45325a', exhaust: 'fire', nozzles: [[0, 33]], draw(c, st) {
+  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket', noInk: '#45325a', exhaust: 'fire', nozzles: [[0, 33]], bitePose: true, draw(c, st) {
     const t = st.t, panic = pkMood === 'panic', thr = st.thrust ? 1 : 0, fall = !thr && pkLookDown && !panic ? 1 : 0;
+    const bite = st.bite >= 0;   // swallowed: the nut tips over, Kiko pops half out of it with both arms flung up
     lmEase(st, thr, fall);
-    const k = LM.k, f = LM.f;
+    const k = LM.k, f = bite ? 1 : LM.f;
     const mood = panic ? 'panic' : pkMood === 'grin' ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
     c.lineJoin = 'round'; c.lineCap = 'round';
+    const tip = bite ? 0.24 + 0.06 * Math.sin(t * 13) : 0;
+    c.save(); c.translate(0, 10); c.rotate(tip); c.translate(0, -10);
     // back layer: tail, fins, bell
     lmTail(c, t, k, f, panic);
     const flap = 0.1 * k + 0.04 * k * Math.sin(t * 32) - 0.1 * f + 0.02 * Math.sin(t * 2.4);
@@ -5972,21 +6016,25 @@ const PILOTS = [
     pkE(c, rx0, ry0, rrx, rry, '#fff6e4', 1.6);
     pkE(c, rx0, ry0 + 0.5, rrx - 2, rry - 1.2, pkLG(c, 0, ry0 - 3, 0, ry0 + 3, ['#1e0c06', '#4a2410']), 1);
     const bob = Math.sin(t * 2.4) * 0.5 + (mood === 'thrust' ? 0.7 : 0) + (mood === 'fall' ? -0.6 : 0), shake = panic ? Math.sin(t * 47) * 0.4 : 0;
-    c.save(); c.translate(shake, bob);
+    // (in the bite Kiko leans back upright against the tipped nut and rises out of it)
+    const lean = () => { c.translate(shake, bob); if (bite) { c.translate(0, -2.6); c.rotate(-tip * 1.6); } };
+    c.save(); lean();
     lmBody(c, st, mood, t, k);
     c.restore();
     lmFrontPath(c); c.save(); lmHusk(c, k, t); c.restore(); lmFrontPath(c); c.strokeStyle = INK; c.lineWidth = 2.2; c.stroke();
     // the cut lip: white coconut meat with a thin dark shell line under it
     c.beginPath(); c.ellipse(rx0, ry0, rrx - 0.6, rry - 0.4, 0, Math.PI, 0, true); c.strokeStyle = INK; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = '#fff6e4'; c.lineWidth = 1.7; c.stroke();
-    c.save(); c.translate(shake, bob);
-    for (const d of [-1, 1]) lmArm(c, d, mood, t);
+    // rim light on the nut's lit edge
+    c.strokeStyle = 'rgba(255,236,200,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 9, 16, 15, 0, -0.5, 0.6); c.stroke();
+    c.save(); lean();
+    if (!bite) for (const d of [-1, 1]) lmArm(c, d, mood, t);
     lmScarfTails(c, t, k, f);
     lmScarf(c);
     c.translate(0, mood === 'thrust' ? 0.5 : 0);
     lmHead(c, st, mood, t);
+    if (bite) for (const d of [-1, 1]) lmArm(c, d, mood, t, 1);   // (flung up past the cheeks, in front of the head)
     c.restore();
-    // rim light on the nut's lit edge
-    c.strokeStyle = 'rgba(255,236,200,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 9, 16, 15, 0, -0.5, 0.6); c.stroke();
+    c.restore();
   } },
 
   { id: 'ember', name: 'Ember the dragon', ride: 'Potbelly stove rocket', noInk: '#0e2f78', exhaust: 'fire', nozzles: [[0, 31]], draw(c, st) {
