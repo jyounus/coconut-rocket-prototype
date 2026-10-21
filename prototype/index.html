@@ -148,7 +148,6 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .btn.go { background: linear-gradient(#a6e36a, var(--leaf) 55%, #4f9a2a); }
 .btn small { display: block; font: 800 12px var(--font-body); letter-spacing: 0; opacity: .8; margin-top: 1px; }
 #adBtn { font-size: 17px; line-height: 1.1; padding: 6px 12px; }
-.bonus li.cut, .bonus li.cut b { color: #ffb238; }
 .btn.big { min-height: 72px; font-size: 34px; border-radius: 20px; }
 .scoreline { margin: -6px 0 0; font-size: 13px; font-weight: 800; color: var(--muted); }
 /* Game over: the panel slides up from the bottom and leaves the top ~30% for the monster and its catch */
@@ -340,7 +339,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="btns">
       <button class="btn go" id="againBtn">Run again</button>
-      <button class="btn" id="adBtn">Watch ad: keep flying, score halved</button>
+      <button class="btn" id="adBtn">Watch ad: keep flying</button>
       <div class="btnrow">
         <button class="btn alt" id="shareBtn">Share score</button>
         <button class="btn alt" id="menuBtn">Menu</button>
@@ -355,7 +354,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="eyebrow">Rewarded video</div>
     <div class="adbox"><div><b id="adCount">3</b><span class="note">A rewarded video ad plays here in the real game.</span></div></div>
     <div class="bar"><i id="adBar"></i></div>
-    <p class="note" id="adNote">One extra life per run, and it costs half your score so far. The monster gets pushed back and the obstacles around you are cleared.</p>
+    <p class="note" id="adNote">Continue your run from right where you were. The monster gets pushed back and the obstacles around you are cleared.</p>
   </div>
 </div>
 
@@ -409,7 +408,10 @@ const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase:
 // Each entry is a capsule [x0, y0, x1, y1, r] (a circle when both ends match). They cover the body and the
 // vehicle, never the flame; thin trim (tails, antennae, whiskers, wing tips) is left out. The hitbox turns
 // with the drawn tilt (capped at PILOT_TILT radians either way).
-const PILOT_SCALE = 1.8, PILOT_TILT = 0.31;   // (1.8: 1.2x the old 1.5, art and hitboxes together)
+const PILOT_SCALE = 1.5, PILOT_TILT = 0.31;
+// The generator keeps sizing its lanes and crystal clearances for pilots drawn at LANE_SCALE (a little bigger than
+// they are), so every lane has spare room around the real hitboxes.
+const LANE_SCALE = 1.8;
 const PILOT_HITS = {
   lemur:     [[0, -9, 0, -9, 12.5], [-8, 11, 8, 11, 11.5], [0, 22, 0, 31, 6.5]],
   ember:     [[0, -14, 0, -14, 12.5], [0, 4, 0, 10, 17.5], [-9, -8, -17.5, -13, 5], [9, -8, 17.5, -13, 5]],
@@ -428,33 +430,34 @@ const PILOT_HITS = {
   hamster:   [[0, 0, 0, 0, 18], [-19, 3, -19, 10, 3.5], [19, 3, 19, 10, 3.5]],
   piggy:     [[-5, 3, 5, 3, 15.5], [-12, 16, 12, 16, 5]],
   goat:      [[0, 4, 0, 24, 8], [-8, -4, 9, -4, 9], [6, -21, 6, -21, 8]],
-  chameleon: [[0, -6, 0, 24, 9], [1, 4, 1, 4, 13.5], [3, -18, 3, -18, 10.5], [1, -22, 3, -28, 4.5], [-9, 18, -9, 18, 7.5]],
+  chameleon: [[0, -14, 0, 26, 7.5], [3, -4, 3, 4, 10], [5, -16, 5, -16, 8.5], [-1, 19, -1, 19, 8]],
   axolotl:   [[-2, -13, 2, -13, 17], [0, 8, 0, 20, 11], [-12, 14, -15, 19, 3.5], [12, 14, 15, 19, 3.5]],
   mushroom:  [[-1, 8, 1, 8, 16], [-6, -17, 6, -17, 7], [0, -11, 0, -11, 7.5]],
   robot:     [[-4, -6, 4, -6, 9], [-4, 8, 4, 8, 9], [-18, -6, -18, -6, 3.5], [18, -6, 18, -6, 3.5], [-6, 19, 6, 19, 3]],
 };
 // A pilot's hitbox extent in world units at a given tilt: [left, right, bottom, top] relative to its centre
 // (bottom and top as heights, so top is positive).
-function pilotExtent(id, rot) {
+function pilotExtent(id, rot, S = PILOT_SCALE) {
   const cs = Math.cos(rot), sn = Math.sin(rot);
   let x0 = Infinity, x1 = -Infinity, a0 = Infinity, a1 = -Infinity;
   for (const [ax, ay, bx, by, r] of PILOT_HITS[id]) for (const [lx, ly] of [[ax, ay], [bx, by]]) {
-    const x = (lx * cs - ly * sn) * PILOT_SCALE, a = -(lx * sn + ly * cs) * PILOT_SCALE, R = r * PILOT_SCALE;
+    const x = (lx * cs - ly * sn) * S, a = -(lx * sn + ly * cs) * S, R = r * S;
     x0 = Math.min(x0, x - R); x1 = Math.max(x1, x + R); a0 = Math.min(a0, a - R); a1 = Math.max(a1, a + R);
   }
   return [x0, x1, a0, a1];
 }
-// The widest and tallest any pilot's hitbox gets at any tilt: every lane and gap is sized from these.
-let pilotMax = null;
-function pilotMaxSize() {
-  if (pilotMax) return pilotMax;
+// The widest and tallest any pilot's hitbox gets at any tilt (at scale S): lanes and gaps are sized from these.
+const pilotMax = {};
+function pilotMaxSize(S = PILOT_SCALE) {
+  if (pilotMax[S]) return pilotMax[S];
   let w = 0, h = 0;
   for (const id in PILOT_HITS) for (let k = -10; k <= 10; k++) {
-    const [x0, x1, a0, a1] = pilotExtent(id, PILOT_TILT * k / 10);
+    const [x0, x1, a0, a1] = pilotExtent(id, PILOT_TILT * k / 10, S);
     w = Math.max(w, x1 - x0); h = Math.max(h, a1 - a0);
   }
-  return (pilotMax = { w, h });
+  return (pilotMax[S] = { w, h });
 }
+const laneSize = () => pilotMaxSize(LANE_SCALE);
 /* LEVELGEN:END */
 const CFG_KEY = 'cr-cfg6';         // new key: tuned values saved under the old defaults would otherwise stick
 const cfg = Object.assign({}, DEFAULTS, store.get(CFG_KEY, {}));
@@ -558,7 +561,7 @@ const RULES = {
   wallBlend: 220,              // height over which one stretch's width eases into the next
   maxWallSlope: 1.6,           // a wall never juts inward faster than this per unit of height: no hidden ledges
   wallShape: 10,               // depth of the zone wall silhouettes: jungle root bulges, basalt column tiers, magma crags
-  minLane: Math.ceil(pilotMaxSize().w * 2.2),   // narrowest open lane any hazard may leave: 2.2 × the widest pilot hitbox
+  minLane: Math.ceil(laneSize().w * 2.2),      // narrowest open lane any hazard may leave: 2.2 × the widest pilot hitbox at LANE_SCALE
                                // (about 187: long enough reaches that a pilot holding the centre line must move)
   spacing: [165, 118],         // clear height between neighbouring hazards, easy → hard
   heavyExtra: 20,              // extra clearance after a geyser, fire wheel or spiky pod
@@ -623,11 +626,11 @@ const RULES = {
   // the crystals while feathering the thrust always keeps the engine out of overheat (see the test). Every
   // crystal keeps `clear` from every hazard's hitbox (the widest pilot's half-width plus 25), so following
   // them with normal steering lag never clips a pod or a spike.
-  crystal: { gap: 680, cool: 0.26, bonus: 0.12, clear: Math.ceil(pilotMaxSize().w / 2 + 25) },
+  crystal: { gap: 680, cool: 0.26, bonus: 0.12, clear: Math.ceil(laneSize().w / 2 + 25) },
   fruitStep: 38,               // height between fruit in an arc
   fruitMargin: 24,             // fruit keep at least this far from the walls
   fruitChance: 0.12,           // share of hazards that get a risky crystal beside their safe lane
-  fruitHug: Math.ceil(pilotMaxSize().w / 2 + 25),   // racing-line crystals sit exactly the clearance from a hazard's reach
+  fruitHug: Math.ceil(laneSize().w / 2 + 25),   // racing-line crystals sit exactly the clearance from a hazard's reach
   // Release beats: after a chunk's tension steps, a fruit arc sweeps across an empty stretch of shaft.
   arc: { gap: 70, n: 3, every: 3, step: 60, pause: 30 },   // every third release beat carries a short ice-crystal arc
                                // (the others are just a short `pause`)
@@ -1017,7 +1020,7 @@ function createLevel(seed, opts) {
     firebar(A, diff, u) {
       const [L, R] = opening(A - 132, A + 132), gap = R - L, off = (u[0] - 0.5) * 16;
       const len = Math.min(112, gap / 2 - Math.abs(off) - RULES.firebarClear);
-      if (len < 46 || Math.min((L + R) / 2 + off - L, R - (L + R) / 2 - off) - FIRE_HUB < pilotMaxSize().w * 1.5) return null;   // a lane beside the hub too
+      if (len < 46 || Math.min((L + R) / 2 + off - L, R - (L + R) / 2 - off) - FIRE_HUB < laneSize().w * 1.5) return null;   // a lane beside the hub too
       return { type: 'firebar', alt: A, cx: (L + R) / 2 + off, len, br: 13, w: (u[1] < 0.5 ? -1 : 1) * (1.1 + u[2] * 0.7), ph: u[3] * 6.283, lo: A - len - 19, hi: A + len + 19 };
     },
     spike(A, diff, u) {
@@ -1079,9 +1082,9 @@ function createLevel(seed, opts) {
       const drop = z === 1 ? H.drop : 0, lo = A - len - drop - 4, hi = A + H.hw[z] + 2;
       const [L, R] = opening(lo, hi), gap = R - L, side = u[0] < 0.5 ? 1 : -1;
       const small = gap - 2 * hw - RULES.minLane;            // the lane left on the side it leans toward
-      if (small < pilotMaxSize().w + 16) return null;
+      if (small < laneSize().w + 16) return null;
       const want = (L + R) / 2 - side * (u[0] === 0.5 ? 0 : 10 + 20 * u[2]);
-      const x = side > 0 ? clamp(want, L + hw + pilotMaxSize().w + 16, R - hw - RULES.minLane) : clamp(want, L + hw + RULES.minLane, R - hw - pilotMaxSize().w - 16);
+      const x = side > 0 ? clamp(want, L + hw + laneSize().w + 16, R - hw - RULES.minLane) : clamp(want, L + hw + RULES.minLane, R - hw - laneSize().w - 16);
       return { type: 'hang', skin: z, side, x, ax: x, aAlt: A, len, hw: H.hw[z], drop, alt: A - len / 2, state: 'idle', fall: 0, ph: u[3] * 6.283, lo, hi };
     },
     lavafall(A, diff, u) {
@@ -1412,19 +1415,19 @@ const rightWall = a => walls(a)[1];
 
 // ---------- zones / palette ----------
 const PAL = {
-  // jungle, basalt caves, magma core, in three value tiers: a dark, low-saturation background
-  // (about 18-25% luminance, 30% darker and greyer than before so it never competes with crystals or vines; parallax layers fogging toward the far colour with depth), dark walls
+  // jungle, basalt caves, magma core, in three value tiers: a mid-value, low-saturation background
+  // (about 25-35% luminance, parallax layers fogging toward the far colour with depth), dark walls
   // (about 15%) with a bright rim light on their edge, and saturated, ink-outlined hazards and pilot on
   // top. The zones sit far apart: mossy green, deep blue-violet, and smoky red-brown in the core.
-  bgTop: [[68, 85, 73], [65, 67, 96], [69, 42, 34]],
-  bgBot: [[34, 47, 41], [32, 33, 57], [33, 17, 14]],
-  far:   [[55, 69, 59], [53, 55, 82], [53, 32, 26]],
-  far2:  [[49, 63, 54], [48, 50, 75], [47, 27, 22]],
+  bgTop: [[92, 128, 102], [86, 90, 150], [112, 56, 40]],
+  bgBot: [[44, 72, 58], [40, 42, 92], [54, 22, 16]],
+  far:   [[74, 104, 84], [70, 74, 128], [86, 42, 30]],
+  far2:  [[66, 94, 76], [62, 66, 118], [76, 36, 26]],
   wall:  [[48, 38, 28], [36, 38, 62], [30, 20, 20]],
   wallIn:[[18, 13, 9], [11, 11, 24], [9, 5, 5]],
-  rim:   [[255, 226, 150], [255, 200, 170], [255, 140, 50]],     // warm rim light on the play layer in every zone
+  rim:   [[210, 250, 130], [160, 220, 255], [255, 140, 50]],
 };
-// The rock blocks along each wall's edge: lit, mid and shadow tones per zone (mossy sandstone, blue basalt, scorched obsidian).
+// Rock tones per zone (lit, mid, shadow) for the debris when a zone change cracks the walls.
 const ROCK = [[[150, 122, 86], [96, 76, 52], [44, 34, 22]], [[112, 112, 158], [70, 68, 108], [32, 30, 54]], [[112, 70, 58], [64, 38, 32], [26, 14, 12]]];
 function pal(key, a) {
   const [t1, t2] = zoneT(a), p = PAL[key];
@@ -1638,11 +1641,13 @@ function finishRun() {
   }
   $('overDate').textContent = G.isDaily ? `Daily shaft ${shaftNo} · ${dayLabel}` : 'Practice shaft · random layout';
   $('overMeters').innerHTML = `${m}<small>m</small>`;
-  $('overBonus').innerHTML =
+  // (after an ad revive the lines show what the run did without per-line points, so they never have to add up
+  // to a final score that kept half its total at the revive)
+  $('overBonus').innerHTML = G.halved ?
+    `<li><span>Height</span><b>${m} m</b></li><li><span>Ice crystals</span><b>${G.fruitCount}</b></li><li><span>Close calls</span><b>${G.closeCount}</b></li>` :
     `<li><span>Height ${m} m × ${PTS_PER_M}</span><b>${(m * PTS_PER_M).toLocaleString('en-GB')}</b></li>` +
     `<li><span>Ice crystals ${G.fruitCount} × ${FRUIT_BONUS}</span><b>+${(G.fruitCount * FRUIT_BONUS).toLocaleString('en-GB')}</b></li>` +
-    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>` +
-    (G.halved ? `<li class="cut"><span>Ad revive: score halved</span><b>−${G.halved.toLocaleString('en-GB')}</b></li>` : '');
+    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>`;
   $('overPoints').textContent = fmtPts(0);
   $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   // the height bar: this run against the best, with a marker at the best
@@ -1661,7 +1666,7 @@ function finishRun() {
     $('overRunsLabel').textContent = 'Practice runs'; $('overRuns').textContent = `${sessionPracticeRuns} this visit`;
   }
   $('adBtn').hidden = G.reviveUsed;
-  if (!G.reviveUsed) $('adBtn').innerHTML = `Watch ad: keep flying, score halved<small>${fmtPts(score)} → ${fmtPts(Math.ceil(score / 2))}</small>`;
+  if (!G.reviveUsed) $('adBtn').innerHTML = 'Watch ad: keep flying<small>Continue your run</small>';
   $('shareBtn').hidden = !G.isDaily;
   show('over');
   for (const el of document.querySelectorAll('#over .stat b, #over .total b, #over .bonus li span')) fitText(el, 11);
@@ -1687,9 +1692,8 @@ function revive() {
   const p = G.p;
   G.reviveUsed = true;
   // the price of the revive: half of everything banked so far (rounded in the player's favour)
-  const before = runScore(); G.halved = (G.halved || 0) + Math.floor(before / 2);
+  G.halved = (G.halved || 0) + Math.floor(runScore() / 2);
   G.pops.length = 0; G.banner = null; G.banners.length = 0;
-  addPop('Score halved', p.x, G.deathAlt + 150, { col: '#ffb238', life: 2.2, rise: 10, sub: `${fmtPts(before)} → ${fmtPts(runScore())}` });
   p.alt = G.deathAlt;                               // back to exactly where the run ended
   const [L, R] = walls(p.alt);
   p.x = p.targetX = (L + R) / 2; p.vx = 0; p.vy = 0; p.tilt = 0; p.rot = 0; refreshPilotCaps();
@@ -2315,9 +2319,9 @@ function updateHazards(dt) {
           h.vy += 1500 * dt; h.fall = Math.min(h.drop, h.fall + h.vy * dt);
           if (h.fall >= h.drop) {
             h.state = 'gone';
-            const wc = pal('wall', h.alt), lit = [190, 236, 255];
-            for (let i = 0; i < 12; i++) puff(h.x + (Math.random() - 0.5) * 20, h.aAlt - h.fall - h.len * Math.random(), (Math.random() - 0.5) * 260, -40 + Math.random() * 180, 0.8, 2.5 + Math.random() * 3.5, 'rock', { c: [120, 150, 210], l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 14 });
-            for (let i = 0; i < 10; i++) puff(h.x, h.aAlt - h.fall - h.len * 0.7, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, 0.4, 2, 'frost');
+            const lit = [255, 150, 210];
+            for (let i = 0; i < 12; i++) puff(h.x + (Math.random() - 0.5) * 20, h.aAlt - h.fall - h.len * Math.random(), (Math.random() - 0.5) * 260, -40 + Math.random() * 180, 0.8, 2.5 + Math.random() * 3.5, 'rock', { c: [70, 58, 90], l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 14 });
+            for (let i = 0; i < 10; i++) puff(h.x, h.aAlt - h.fall - h.len * 0.7, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, 0.4, 2, 'spark');
             if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 3);
           }
         }
@@ -2509,7 +2513,7 @@ function drawBackground() {
         const cc = farC.map(v => v * (0.85 + 0.25 * hash2(j, i))), cg = ctx.createLinearGradient(0, y0, 0, foot);
         cg.addColorStop(0, rgb(cc)); cg.addColorStop(0.6, rgb(cc)); cg.addColorStop(1, rgb(cc, 0));
         ctx.fillStyle = cg; ctx.fillRect(x + 1, y0, cw - 2, foot - y0);
-        ctx.fillStyle = rgb(farHi, 0.4); ctx.fillRect(x + 1, y0, cw - 2, 3 * s);
+        ctx.fillStyle = rgb(farHi, 0.55); ctx.fillRect(x + 1, y0, cw - 2, 3 * s);
         ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(x + cw * 0.62, y0 + 3 * s, cw * 0.36, (foot - y0) * 0.7);
       }
     }
@@ -2535,12 +2539,6 @@ function drawBackground() {
     }
     ctx.restore();
   }
-  // two silhouette layers per zone between the back wall and the cliffs (0.3 and 0.6 parallax), each with a band of
-  // atmospheric haze in front of it, so the shaft has real depth
-  drawSilhouettes(0.3, tone(0.3), sky, wJ, wB, wM, 0);
-  hazeBand(sky, 0.22);
-  drawSilhouettes(0.6, tone(0.52), sky, wJ, wB, wM, 1);
-  hazeBand(sky, 0.12);
   // far cliffs framing both sides (0.2), then the mid rock (0.5): each nearer layer darker
   for (const [f, depth, seedOff, base, spire] of [[0.2, 0.36, 19, 150, 90], [0.5, 0.66, 31, 96, 30]]) {
     ctx.fillStyle = rgb(tone(depth));
@@ -2565,64 +2563,11 @@ function drawBackground() {
     const up = ctx.createLinearGradient(0, H, 0, H * 0.2);
     up.addColorStop(0, `rgba(255,90,20,${(0.34 + 0.07 * Math.sin(G.t * 2.2)) * t2})`); up.addColorStop(1, 'rgba(255,60,10,0)');
     ctx.fillStyle = up; ctx.fillRect(-drawPad * s - 40, H * 0.2, cssW + 2 * drawPad * s + 80, H * 0.8 + drawPad * s + 40);
-    // the lava river far below: a bright molten band glowing at the bottom edge, with a rolling crest and bubbles
-    const rv = H - 46 * s, a = t2;
-    const rg = ctx.createLinearGradient(0, rv - 40 * s, 0, H + 10);
-    rg.addColorStop(0, 'rgba(255,120,20,0)'); rg.addColorStop(0.45, `rgba(255,140,30,${0.45 * a})`); rg.addColorStop(1, `rgba(255,220,120,${0.8 * a})`);
-    ctx.fillStyle = rg; ctx.fillRect(-drawPad * s - 40, rv - 40 * s, cssW + 2 * drawPad * s + 80, H - rv + 60 * s + drawPad * s);
-    ctx.strokeStyle = `rgba(255,240,170,${0.55 * a})`; ctx.lineWidth = 2.4 * s; ctx.beginPath();
-    for (let x = -20; x <= cssW + 20; x += 10) ctx.lineTo(x, rv + 10 * s + Math.sin(x * 0.03 + G.t * 2.2) * 4 * s + Math.sin(x * 0.011 - G.t * 1.3) * 5 * s);
-    ctx.stroke();
-    for (let i = 0; i < 8; i++) { const ph = (G.t * 0.6 + hash2(i, 91)) % 1, bx = ox + playW * hash2(i, 92); ctx.fillStyle = `rgba(255,250,200,${0.7 * a * (1 - ph)})`; ctx.beginPath(); ctx.arc(bx, rv + 16 * s - ph * 22 * s, (1.5 + 2 * hash2(i, 93)) * s * (1 - ph * 0.5), 0, 6.283); ctx.fill(); }
     ctx.restore();
   }
   drawMotes();
 }
 
-// A soft fog of the zone's sky colour, thicker toward the top and bottom of the screen (atmospheric perspective).
-function hazeBand(sky, a) {
-  const P = drawPad * s + 40, g = ctx.createLinearGradient(0, -P, 0, H + P);
-  g.addColorStop(0, rgbaA(sky.map(v => v | 0), a * 1.3)); g.addColorStop(0.5, rgbaA(sky.map(v => v | 0), a * 0.4)); g.addColorStop(1, rgbaA(sky.map(v => v | 0), a));
-  ctx.fillStyle = g; ctx.fillRect(-P, -P, cssW + 2 * P, H + 2 * P);
-}
-// Parallax silhouettes (flat, no outline, a lit edge only): jungle roots twisting down from the canopy and old
-// trunks; basalt organ-pipe columns; magma crags with glowing cracks. `f` is the parallax factor, `n` the layer.
-function drawSilhouettes(f, col, sky, wJ, wB, wM, n) {
-  const baseA = G.camAlt * f, P = drawPad, slot = n ? 260 : 190, i0 = Math.floor((baseA - 300 - P) / slot), i1 = Math.ceil((baseA + viewH + 300 + P) / slot);
-  const lit = col.map((v, i) => lerp(v, sky[i], 0.5) + 14), yOf = a => H - (a - baseA) * s, sd = G.seed + 300 + n * 50;
-  for (let i = i0; i <= i1; i++) {
-    const hsh = hash2(i, sd);
-    if (hsh < (n ? 0.35 : 0.2)) continue;
-    const xr = hash2(i, sd + 1), x = ox - 30 * s + (playW + 60 * s) * xr, y = yOf(i * slot), sc = s * (n ? 1.25 : 0.85) * (0.8 + 0.4 * hsh);
-    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
-    if (wJ > 0.02) {
-      ctx.globalAlpha = wJ;
-      // a twisting root hanging down from above, with side rootlets
-      ctx.strokeStyle = rgb(col); ctx.lineCap = 'round'; ctx.lineWidth = 16 - 6 * n * 0;
-      ctx.beginPath(); ctx.moveTo(0, -260); ctx.bezierCurveTo(40 * (hsh - 0.5), -170, -30 * (xr - 0.5), -60, 16 * (hsh - 0.5), 60); ctx.stroke();
-      ctx.lineWidth = 6; for (let k = 0; k < 3; k++) { const yy = -200 + k * 80, d = k % 2 ? 1 : -1; ctx.beginPath(); ctx.moveTo(0, yy); ctx.quadraticCurveTo(d * 30, yy + 20, d * 50, yy + 60); ctx.stroke(); }
-      ctx.strokeStyle = rgb(lit, 0.45); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-6, -250); ctx.bezierCurveTo(40 * (hsh - 0.5) - 6, -170, -30 * (xr - 0.5) - 6, -60, 16 * (hsh - 0.5) - 6, 56); ctx.stroke();
-    }
-    if (wB > 0.02) {
-      ctx.globalAlpha = wB;
-      // a stack of hexagonal columns at stepped heights, each with a lit cap
-      for (let k = 0; k < 3; k++) {
-        const bx = (k - 1) * 30, h0 = 80 + 120 * hash2(i * 3 + k, sd + 2);
-        ctx.fillStyle = rgb(col.map(v => v * (0.9 + 0.08 * k))); ctx.fillRect(bx - 14, -h0, 28, h0 + 220);
-        ctx.fillStyle = rgb(lit, 0.55); ctx.beginPath(); ctx.moveTo(bx - 14, -h0); ctx.lineTo(bx - 7, -h0 - 7); ctx.lineTo(bx + 7, -h0 - 7); ctx.lineTo(bx + 14, -h0); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(bx + 4, -h0, 10, h0 + 220);
-      }
-    }
-    if (wM > 0.02) {
-      ctx.globalAlpha = wM;
-      // a jagged crag rising from below with a glowing seam
-      ctx.fillStyle = rgb(col); ctx.beginPath(); ctx.moveTo(-60, 200); ctx.lineTo(-34, -40); ctx.lineTo(-12, -10); ctx.lineTo(6, -130 - 60 * hsh); ctx.lineTo(28, -30); ctx.lineTo(60, 200); ctx.closePath(); ctx.fill();
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,110,30,${0.18 + 0.08 * Math.sin(G.t * 2 + i)})`; ctx.lineWidth = 2.4;
-      ctx.beginPath(); ctx.moveTo(6, -120 - 60 * hsh); ctx.lineTo(-2, -40); ctx.lineTo(8, 40); ctx.lineTo(-4, 120); ctx.stroke(); ctx.restore();
-    }
-    ctx.restore();
-  }
-}
 // Mid-layer rock formations (0.5 parallax, behind the walls): mossy outcrops trailing roots in the
 // jungle, broken basalt column stacks in the caves, obsidian crags with glowing seams in the core.
 // Low contrast and never outlined, so they read as scenery.
@@ -3026,31 +2971,14 @@ function drawWalls() {
       ctx.fillStyle = 'rgba(255,255,255,.05)';
       ctx.fillRect(x0 - (side ? 0 : playW), y - 3 * s, playW, 2 * s);
     }
-    // a deep shadow behind the edge band, then the band itself: a row of chunky, ink-outlined rock blocks about
-    // 30 units deep, lit from the shaft side, so the wall reads as a solid textured rock mass rather than a line
-    // (clipped to the rock, so the collision edge stays exactly the drawn edge)
+    // a thick lit front face along the edge, a bevel line and a deep shadow behind it
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 16 * s;
-    ctx.beginPath(); trace(34); ctx.stroke();
-    for (let a = Math.floor(bot / 30) * 30 - 30, j = 0; a < top + 30; a += 30, j++) {
-      const ai = Math.round(a / 30), hA = hash2(ai, G.seed + 41 + side * 5), hB = hash2(ai, G.seed + 43 + side * 5);
-      const am = a + 15, x = sx(wx(am)), y = sy(am), d = (16 + 6 * hA) * s, bh = (17 + 5 * hB) * s, bw = (22 + 6 * hB) * s;
-      const [b1, b2] = zoneT(am), stone = [0, 1, 2].map(k => ROCK.map(z => z[k])).map(zs => zs[0].map((v, c) => lerp(lerp(v, zs[1][c], b1), zs[2][c], b2)));
-      const cxB = x + dir * d * 0.75;
-      ctx.beginPath();
-      for (let k = 0; k < 7; k++) {
-        const an = k / 7 * 6.283 + hA, rr = 0.82 + 0.3 * hash2(ai * 7 + k, G.seed + 47);
-        ctx.lineTo(cxB + Math.cos(an) * bw * rr, y + Math.sin(an) * bh * rr);
-      }
-      ctx.closePath();
-      const bg2 = ctx.createLinearGradient(cxB - dir * bw, y - bh, cxB + dir * bw * 0.6, y + bh);
-      bg2.addColorStop(0, rgb(stone[0])); bg2.addColorStop(0.55, rgb(stone[1])); bg2.addColorStop(1, rgb(stone[2]));
-      ctx.fillStyle = bg2; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2.6 * s; ctx.stroke();
-      // a lit top edge and a crack or two
-      ctx.strokeStyle = rgb(stone[0].map(v => Math.min(255, v * 1.35 + 20)), 0.8); ctx.lineWidth = 2 * s;
-      ctx.beginPath(); ctx.arc(cxB, y, Math.min(bw, bh) * 0.72, -2.6, -0.9); ctx.stroke();
-      if (hB > 0.55) { ctx.strokeStyle = 'rgba(10,6,4,.55)'; ctx.lineWidth = 1.5 * s; ctx.beginPath(); ctx.moveTo(cxB - bw * 0.3, y - bh * 0.5); ctx.lineTo(cxB, y); ctx.lineTo(cxB - bw * 0.1, y + bh * 0.6); ctx.stroke(); }
-    }
+    ctx.strokeStyle = rgb(lit, 0.95); ctx.lineWidth = 14 * s;
+    ctx.beginPath(); trace(6); ctx.stroke();
+    ctx.strokeStyle = rgb(wallC.map(v => v * 1.15), 1); ctx.lineWidth = 9 * s;
+    ctx.beginPath(); trace(14); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 12 * s;
+    ctx.beginPath(); trace(25); ctx.stroke();
     // carved ledges inside the rock with a lit top
     for (let a = Math.floor(bot / 110) * 110; a < top; a += 110) {
       const j = hash2(a / 110, G.seed + 23 + side);
@@ -3108,13 +3036,13 @@ function drawWalls() {
       for (let a = Math.floor(bot / 190) * 190; a < top + 190; a += 190) {
         const j = hash2(a / 190, G.seed + 57 + side);
         if (j < 0.35) continue;
-        const len = 120 + 140 * j, x0 = wx(a) + dir * (30 + 8 * j);   // (behind the edge's rock band)
+        const len = 120 + 140 * j, x0 = wx(a) + dir * (8 + 6 * j);
         const yA = sy(a), yB = sy(a - len);
         const lg = ctx.createLinearGradient(0, yA, 0, yB);
         lg.addColorStop(0, `rgba(255,200,90,${0.85 * magma})`); lg.addColorStop(0.7, `rgba(255,90,20,${0.6 * magma})`); lg.addColorStop(1, 'rgba(255,60,10,0)');
         ctx.strokeStyle = lg; ctx.lineWidth = (7 + 4 * j) * s;
         ctx.beginPath();
-        for (let k = 0; k <= 10; k++) { const aa = a - len * k / 10; ctx.lineTo(sx(wx(aa) + dir * (30 + 8 * j)) + Math.sin(k + G.t * 2) * 1.2 * s, sy(aa)); }
+        for (let k = 0; k <= 10; k++) { const aa = a - len * k / 10; ctx.lineTo(sx(wx(aa) + dir * (8 + 6 * j)) + Math.sin(k + G.t * 2) * 1.2 * s, sy(aa)); }
         ctx.stroke();
         ctx.strokeStyle = `rgba(255,250,210,${0.7 * magma})`; ctx.lineWidth = 2 * s;
         ctx.setLineDash([10 * s, 16 * s]); ctx.lineDashOffset = -G.t * 90 * s;
@@ -3132,14 +3060,13 @@ function drawWalls() {
     if (magma > 0.05) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const fl = 0.85 + 0.15 * Math.sin(G.t * 2.4 + side);
-      for (const [w, al, off] of [[26, 0.08, 10], [12, 0.16, 5], [5, 0.32, 2]]) { ctx.strokeStyle = `rgba(255,${110 + 40 * (w < 10) | 0},30,${al * magma * fl})`; ctx.lineWidth = w * s; ctx.beginPath(); trace(off); ctx.stroke(); }
+      for (const [w, al, off] of [[30, 0.16, 10], [14, 0.32, 5], [6, 0.55, 2]]) { ctx.strokeStyle = `rgba(255,${110 + 40 * (w < 10) | 0},30,${al * magma * fl})`; ctx.lineWidth = w * s; ctx.beginPath(); trace(off); ctx.stroke(); }
       ctx.restore();
     }
-    ctx.strokeStyle = INK; ctx.lineWidth = 6.5 * s;
-    ctx.beginPath(); trace(2.4); ctx.stroke();
-    // a thin warm rim light on the lip (molten in the core), never a glowing tube
-    ctx.strokeStyle = magma > 0.5 ? `rgba(255,${170 + 50 * Math.sin(G.t * 3 + side) | 0},80,.9)` : rgb(rimC, 0.85); ctx.lineWidth = 2.4 * s;
-    ctx.beginPath(); trace(-0.6); ctx.stroke();
+    ctx.strokeStyle = INK; ctx.lineWidth = 5 * s;
+    ctx.beginPath(); trace(1.8); ctx.stroke();
+    ctx.strokeStyle = magma > 0.5 ? `rgba(255,${170 + 50 * Math.sin(G.t * 3 + side) | 0},80,.95)` : rgb(rimC, 0.95); ctx.lineWidth = 4 * s;
+    ctx.beginPath(); trace(-0.8); ctx.stroke();
     // jungle: a tangle of thick roots twisting along the wall face over the root bulges, plus moss
     if (jungle > 0.05) {
       ctx.save(); ctx.globalAlpha = jungle;
@@ -3774,9 +3701,9 @@ function dangerGlow(x, y, r, a = 0.32) {
 
 // A soft light behind each hazard in the zone's key-light colour, so a dark hazard never melts
 // into a dark cave (the purple spider on blue basalt, a black fire bat on magma rock).
-const BACKLIGHT = [[255, 236, 180], [255, 220, 190], [255, 190, 110]];   // warm in every zone
+const BACKLIGHT = [[255, 246, 210], [255, 220, 190], [255, 190, 120]];   // (caves: warm, never the crystals' icy blue)
 function backlight(x, y, r, zi, a = 0.3) {
-  a *= (0.4 + 0.6 * glowK) * 1.35;    // (brighter: a warm rim of light behind every hazard)
+  a *= 0.4 + 0.6 * glowK;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(x, y, r * s * 0.2, x, y, r * s);
   g.addColorStop(0, rgbaA(BACKLIGHT[zi], a)); g.addColorStop(0.55, rgbaA(BACKLIGHT[zi], a * 0.45)); g.addColorStop(1, rgbaA(BACKLIGHT[zi], 0));
@@ -3921,7 +3848,7 @@ function drawPend(h) {
       const t = (k + 0.5) / n, lx = lerp(ax, px, t), ly = lerp(ay, py, t);
       ctx.save(); ctx.translate(lx, ly); ctx.rotate(ang + (k % 2 ? Math.PI / 2 : 0)); ctx.scale(s, s);
       ctx.strokeStyle = INK; ctx.lineWidth = 5.6; ctx.beginPath(); ctx.ellipse(0, 0, 5.5, k % 2 ? 2 : 3.2, 0, 0, 6.283); ctx.stroke();
-      ctx.strokeStyle = zi === 1 ? '#a89aa8' : `rgb(255,${110 + 50 * Math.sin(G.t * 3 + k) | 0},40)`; ctx.lineWidth = 2.8; ctx.stroke();
+      ctx.strokeStyle = zi === 1 ? '#8a94a8' : `rgb(255,${110 + 50 * Math.sin(G.t * 3 + k) | 0},40)`; ctx.lineWidth = 2.8; ctx.stroke();
       ctx.restore();
     }
   }
@@ -4160,9 +4087,9 @@ function drawSpike(h) {
     // a bright ridge highlight and a hot tip; the small ones fan out from the base
     // (dark obsidian glass with hot magenta tips: never icy blue, so it can't be mistaken for a crystal pickup)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const glow = ctx.createRadialGradient(len * 0.8, 0, 2, len * 0.8, 0, len * 0.5);
+    const glow = ctx.createRadialGradient(len * 0.4, 0, 2, len * 0.4, 0, len * 0.7);
     glow.addColorStop(0, 'rgba(255,42,140,.3)'); glow.addColorStop(1, 'rgba(255,42,140,0)');
-    ctx.fillStyle = glow; ctx.fillRect(len * 0.3, -len * 0.5, len, len);
+    ctx.fillStyle = glow; ctx.fillRect(-10, -len * 0.7, len * 1.2, len * 1.4);
     ctx.restore();
     const pts = len > 80 ? [[len * 0.5, hf * 0.6, -0.36], [len * 0.62, hf * 0.66, 0.3], [len, hf, 0]] : [[len * 0.58, hf * 0.66, -0.34], [len, hf, 0.05]];
     for (const [l, w, rot] of pts) {
@@ -4178,13 +4105,11 @@ function drawSpike(h) {
       // facet lines, a glassy ridge glint and the hot magenta point
       ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.1;
       ctx.beginPath(); ctx.moveTo(sh, -w * 0.7); ctx.lineTo(sh, w * 0.7); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,190,220,.75)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(-4, w * 0.15); ctx.lineTo(sh, w * 0.1); ctx.lineTo(l * 0.9, 0); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,190,220,.75)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-4, w * 0.15); ctx.lineTo(sh, w * 0.1); ctx.lineTo(l * 0.97, 0); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,220,240,.35)'; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(-4, -w * 0.88); ctx.lineTo(sh * 0.95, -w * 0.64); ctx.stroke();
-      ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(sh * 1.02, -w * 0.62); ctx.lineTo(l, 0); ctx.lineTo(sh * 1.02, w * 0.62); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.stroke();
-      ctx.fillStyle = 'rgba(255,200,230,.9)'; ctx.beginPath(); ctx.moveTo(l * 0.86, -w * 0.12); ctx.lineTo(l, 0); ctx.lineTo(l * 0.86, w * 0.05); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(l * 0.84, -w * 0.3); ctx.lineTo(l, 0); ctx.lineTo(l * 0.84, w * 0.3); ctx.closePath(); ctx.fill();
       ctx.restore();
     }
   } else {
@@ -4370,16 +4295,17 @@ function drawHang(h) {
   dangerGlow(bx, by, 40);
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (zi === 1) {
-    // the cone: wide at the top, a sharp tip, ink edge, icy facets; red-hot glint while it trembles
+    // the cone: wide at the top, a sharp tip, ink edge, dark obsidian-glass facets like the cave's crystal spikes
+    // (never the pickups' icy blue); red-hot glint while it trembles
     const L = [], R = [];
     for (const c of caps) { L.push([X(c.x0) - c.r * s, Y(c.a0)]); R.push([X(c.x0) + c.r * s, Y(c.a0)]); }
     const tip = [X(last.x1), Y(last.a1) + 3 * s];
     ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.lineTo(...tip); for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath();
-    const g = ctx.createLinearGradient(L[0][0], 0, R[0][0], 0); g.addColorStop(0, '#e8fbff'); g.addColorStop(0.45, '#7ab8f0'); g.addColorStop(1, '#2a3a8a');
+    const g = ctx.createLinearGradient(L[0][0], 0, R[0][0], 0); g.addColorStop(0, '#6a5a7e'); g.addColorStop(0.45, '#3a2e4a'); g.addColorStop(1, '#120c1a');
     ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3 * s; ctx.stroke();
-    ctx.strokeStyle = 'rgba(20,30,80,.55)'; ctx.lineWidth = 1.4 * s;
+    ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4 * s;
     ctx.beginPath(); ctx.moveTo(X(h.x) - 4 * s, Y(top)); ctx.lineTo(X(h.x) + 2 * s, Y(top - h.len * 0.5)); ctx.lineTo(...tip); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(L[0][0] + 4 * s, L[0][1] + 4 * s); ctx.lineTo(L[3][0] + 3 * s, L[3][1]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,190,220,.75)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(L[0][0] + 4 * s, L[0][1] + 4 * s); ctx.lineTo(L[3][0] + 3 * s, L[3][1]); ctx.stroke();
     pkRect(ctx, X(h.x) - (h.hw + 3) * s, Y(top) - 7 * s, (h.hw + 3) * 2 * s, 9 * s, 4 * s, '#3a4058', 2.4 * s);   // the rock it grew from
     ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(tip[0] - 3 * s, tip[1] - 9 * s); ctx.lineTo(...tip); ctx.lineTo(tip[0] + 3 * s, tip[1] - 9 * s); ctx.closePath(); ctx.fill();
     if (h.state === 'warn') { ctx.globalCompositeOperation = 'lighter'; const k = 1 - h.timer / RULES.hang.warn, gg = ctx.createRadialGradient(tip[0], tip[1], 1, tip[0], tip[1], 34 * s); gg.addColorStop(0, rgbaA(DANGER_RGB, 0.5 + 0.4 * k)); gg.addColorStop(1, rgbaA(DANGER_RGB, 0)); ctx.fillStyle = gg; ctx.fillRect(tip[0] - 34 * s, tip[1] - 34 * s, 68 * s, 68 * s); }
@@ -5084,36 +5010,27 @@ const PILOTS = [
     for (const d of [-1, 1]) pkEye(c, 6 + d * 3.4, -21, 2.4, st, { iris: '#f2c53a', flat: true });
   } },
 
-  { id: 'chameleon', name: 'Chameleon', ride: 'Firework rocket', exhaust: 'fire', nozzles: [[0, 29]], draw(c, st) {
-    // one chunky shape: a fat firework with the chameleon hugging its front, a big casqued head on top and its
-    // tail curled in a spiral round the bottom; its skin is a fixed bright lime (it never camouflages into a zone)
-    // with a pale 2 px rim light so it always reads
-    const col = [126, 222, 58], skin = `rgb(${col})`, light = `rgb(${col.map(v => Math.round(v + (255 - v) * 0.5))})`, dark = `rgb(${col.map(v => Math.round(v * 0.6))})`;
-    for (const d of [-1, 1]) pkPath(c, [[d * 8, 15], [d * 15, 26], [d * 8, 23]], '#e8402c', 1.8);
-    pkRect(c, -9, -8, 18, 34, 4, pkLG(c, -9, 0, 9, 0, ['#1f4ab0', '#4a7ae8', '#1f4ab0']), 2.4);
-    c.fillStyle = '#ffc93a'; c.fillRect(-9, 0, 18, 3.5); c.fillRect(-9, 15, 18, 3.5);
-    pkRect(c, -6, 25, 12, 4, 1.5, '#3a2a22', 2);
-    // the tail, curled in a spiral round the bottom of the rocket
+  { id: 'chameleon', name: 'Chameleon', ride: 'Firework rocket', exhaust: 'fire', nozzles: [[0, 32]], draw(c, st) {
+    const zones = [[90, 200, 74], [58, 184, 200], [255, 138, 58], [176, 90, 224]];
+    const p = (st.t * 0.15) % zones.length, i = Math.floor(p), f = p - i, a = zones[i], b = zones[(i + 1) % zones.length];
+    const col = a.map((v, k) => Math.round(v + (b[k] - v) * f)), skin = `rgb(${col})`, light = `rgb(${col.map(v => Math.round(v + (255 - v) * 0.5))})`, dark = `rgb(${col.map(v => Math.round(v * 0.6))})`;
+    for (const d of [-1, 1]) pkPath(c, [[d * 6, 20], [d * 12, 30], [d * 6, 27]], '#e8402c', 1.8);
+    pkRect(c, -7.5, -12, 15, 40, 3, pkLG(c, -7.5, 0, 7.5, 0, ['#1f4ab0', '#4a7ae8', '#1f4ab0']), 2.2);
+    c.fillStyle = '#ffc93a'; c.fillRect(-7.5, -2, 15, 3); c.fillRect(-7.5, 18, 15, 3);
+    pkPath(c, [[-7.5, -12], [7.5, -12], [0, -25]], '#ffffff', 1.8);
+    pkRect(c, -5.5, 28, 11, 3, 1, '#3a2a22', 1.6);
     c.lineCap = 'round';
-    const spiral = () => { c.beginPath(); for (let t2 = 0; t2 < 3.2 * Math.PI; t2 += 0.2) { const r = 8 - t2 * 0.62, x = -9 + r * Math.cos(t2 + 0.6), y = 18 + r * Math.sin(t2 + 0.6); t2 === 0 ? c.moveTo(x, y) : c.lineTo(x, y); } };
-    spiral(); c.strokeStyle = INK; c.lineWidth = 7; c.stroke(); spiral(); c.strokeStyle = skin; c.lineWidth = 4.4; c.stroke();
-    // the body hugging the front, with a pale belly stripe and gripping feet
-    pkE(c, 1, 4, 13, 14, pkRG(c, 1, 4, 14, [light, skin, dark]), 2.6);
-    pkE(c, 2, 6, 5, 10, light, 0);
-    c.strokeStyle = dark; c.lineWidth = 1.4; for (const yy of [-2, 4, 10]) { c.beginPath(); c.arc(1, yy, 9, 0.3, 1.2); c.stroke(); }
-    for (const [x, y] of [[-11, -3], [-11, 11], [12, -3], [12, 11]]) pkE(c, x, y, 3.4, 2.6, skin, 1.6);
-    // the head: a tall casque, one big turret eye and a grin
-    pkPath(c, [[-6, -17], [1, -33], [11, -19]], dark, 2);
-    pkE(c, 3, -18, 11, 9, pkRG(c, 3, -18, 11, [light, skin, dark]), 2.4);
-    pkE(c, 9, -19, 5.6, 5.6, skin, 1.8);
-    if (st.blink > 0.35) { const ex = 9.5 + Math.sin(st.t * 1.3) * 1.4; pkDot(c, ex, -19, 2, INK); pkDot(c, ex - 0.6, -19.8, 0.7, '#fff'); }
-    pkSmile(c, 2, -13, 3.6, 1.4);
-    pkRim(c, 3, -18, 8, 6);
-    // the light rim: about 2 px on screen, along the lit upper left of the head, body and tail
-    c.strokeStyle = 'rgba(240,255,215,.95)'; c.lineWidth = 1.15;
-    c.beginPath(); c.ellipse(3, -18, 9.6, 7.6, 0, 3.3, 5.4); c.stroke();
-    c.beginPath(); c.ellipse(1, 4, 11.6, 12.6, 0, 2.9, 4.9); c.stroke();
-    c.beginPath(); c.arc(-9, 18, 6.2, 2.2, 3.9); c.stroke();
+    const spiral = () => { c.beginPath(); for (let t2 = 0; t2 < 3.6 * Math.PI; t2 += 0.2) { const r = 9 - t2 * 0.6; const x = -1 + r * Math.cos(t2 + 1.2), y = 19 + r * Math.sin(t2 + 1.2) * 0.7; t2 === 0 ? c.moveTo(x, y) : c.lineTo(x, y); } };
+    spiral(); c.strokeStyle = INK; c.lineWidth = 6; c.stroke(); spiral(); c.strokeStyle = skin; c.lineWidth = 3.6; c.stroke();
+    pkE(c, 3, 0, 10.5, 12.5, pkRG(c, 3, 0, 12.5, [light, skin, dark]), 2.4);
+    pkE(c, 4, 2, 4.5, 9, light, 0);
+    for (const [x, y] of [[-4, -5], [-4, 7], [10, -5], [10, 7]]) pkE(c, x, y, 2.6, 2, skin, 1.4);
+    pkPath(c, [[-3, -18], [3, -31], [10, -18]], skin, 1.8);
+    pkE(c, 4, -16, 8, 7, pkRG(c, 4, -16, 8, [light, skin, dark]));
+    pkE(c, 9, -17, 4.6, 4.6, skin, 1.6);
+    if (st.blink > 0.35) { const ex = 9 + Math.sin(st.t * 1.3) * 1.3; pkDot(c, ex, -17, 1.7, INK); pkDot(c, ex - 0.5, -17.6, 0.6, '#fff'); }
+    pkSmile(c, 4, -12, 3.2, 1.3);
+    pkRim(c, 4, -16, 6, 5);
   } },
 
   { id: 'axolotl', name: 'Axolotl', ride: 'Water-bottle rocket', exhaust: 'water', nozzles: [[0, 32]], draw(c, st) {
@@ -7387,7 +7304,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 $('adBtn').addEventListener('click', () => {
   if (!G || G.reviveUsed) return;
   const nm = monster().label;
-  $('adNote').textContent = `One extra life per run, and it costs half your score so far: ${fmtPts(runScore())} becomes ${fmtPts(Math.ceil(runScore() / 2))}. The ${nm} gets pushed back and the obstacles around you are cleared.`;
+  $('adNote').textContent = `Continue your run from right where you were. The ${nm} gets pushed back and the obstacles around you are cleared. Your run keeps half its score so far.`;
   show('ad');
   const t0 = performance.now(), dur = 3000;
   const tick = () => {
