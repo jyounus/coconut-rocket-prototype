@@ -1416,68 +1416,82 @@ function createLevel(seed, opts) {
 /* LEVELGEN:END */
 /* LEVELGEN:BEGIN */
 // ---------- monster wall grabs ----------
-// The monster's limbs only ever touch the shaft walls. Each wall has one wall-reaching limb (arm, tentacle, vine, leg,
-// wing wrist, fin, pseudopod...) that grows from a shoulder (a body mass below and beside the head), bends at an
-// elbow against the wall under the catch line and climbs the wall face. Above the catch line every bit of it stays
-// inside a band `band` units in from the wall edge (and at most `out` units into the rock), so the open middle of the
-// shaft is never touched: even at the 240-wide minimum the centre lane is 240 - 2 × 32 = 176, far wider than the
-// widest pilot hitbox (about 70). Limb art is built from the same capsules as its hitbox, so the overlay is exact and
-// a pilot hugging a wall where a claw grips dies.
+// The monster's limbs only ever touch the shaft walls. Each wall has one wall-reaching limb of the monster's own kind
+// (GRAB_STYLE.type: a primate's arm, a tentacle, a pincer, a fin, a body coil, a vine, a wing claw, a leg...). It grows
+// from a root on the body (low beside and behind the head, never a ball pasted on), reaches out to the wall under the
+// catch line (the up chain), turns there (the bend: an elbow, a knee, a curl) and climbs the wall face (the fore
+// chain) to its tip (the hand: a fist, a claw, a sucker curl, a fin blade...). Above the catch line every bit of it
+// stays inside a band `band` units in from the wall edge (and at most `out` units into the rock), so the open middle
+// of the shaft is never touched: even at the 240-wide minimum the centre lane is 240 - 2 × 32 = 176, far wider than
+// the widest pilot hitbox (about 70). Limb art is built from the same capsules as its hitbox, so the overlay is exact
+// and a pilot hugging a wall where a claw grips dies.
 // Rig coordinates: x is world x, y = kill line altitude minus altitude (down positive; y = 0 is the catch line).
 const GRAB = {
   band: 32,        // limb art and hitboxes stay within this many units in from the wall edge above the catch line
   out: 7,          // and never more than this far into the rock (so they stay on screen where a wall meets the screen edge)
-  reach: 110,      // a full grab's claw tips top out this far above the catch line (the pilot rides about 200 above the screen bottom)
-  rest: -3,        // at rest the claw tips sit just under the catch line (they bob down another `bob`)
-  bob: 5,
+  reach: 110,      // a full grab's tips top out this far above the catch line (the pilot rides about 200 above the screen bottom)
+  bob: 5,          // the idle bob (each style rests at its own `rest`, always under the catch line)
+  coil: 14,        // the wind-up pulls the tip this much further down (coiling back) before it strikes
   wind: 0.5, strike: 0.12, hold: 0.5, back: 0.4,   // wind-up tell (nothing above the line yet), lunge, grip, let go
   every: [1.3, 2.6],   // seconds between grabs (one wall or the other) while the monster is within `near`
   near: 340,
-  bendY: 40,       // the elbow: where the limb turns from reaching out to the wall to climbing it (under the catch line)
+  bendY: 40,       // the bend: where the limb turns from reaching out to the wall to climbing it (under the catch line)
 };
 const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
-// Each monster's wall limb. limb: how it is drawn and bends ('arm', 'stone', 'leg', 'shell', 'wing', 'fossil' and
-// 'fin' are jointed and bend at the elbow; 'tentacle', 'vine', 'goo', 'flame', 'smoke' and 'feeler' sweep in one
-// curve). hand: the tip (see grabHand). Radii: rr at the shoulder end of the upper arm (its shoulder mass is 1.2 rr),
-// rm mid upper arm, r0 the forearm at the elbow, r1 the wrist. rx: the shoulder's offset from the body's centre line,
-// ry: how far below the elbow it sits. wig: a wave along soft limbs.
+// The limb types. Each shapes the up chain, the fore chain and the tip in its own way:
+//   arm      a primate's or humanoid's arm: a muscled upper arm rising from behind the head to an elbow at the wall
+//   paw      a short, very thick digging forelimb rooted low on the flank;  pad  a thin froggy arm to sticky pads
+//   leg      a thin jointed leg: the femur climbs to a sharp knee at the wall, the shin climbs with a joint kink
+//   talon    a bone leg with a back-bent knee and a taloned foot
+//   wing     a wing arm to a wrist at the wall; the leading finger climbs the wall; membrane and finger bones below
+//   pincer   a segmented shell arm with a big two-part claw
+//   fin      a short thick fin root with a blade raking up the wall
+//   tentacle an S-curve sweeping out low and slapping up the wall, tapering hard to a sucker curl
+//   coil     a loop of the body itself: thick beads dipping low then pressing up the wall to a tail spike
+//   vine     a stem zigzagging up the wall to a tendril curl
+//   goo      a lumpy pseudopod that splats on the rock
+//   flame    a licking tongue of fire;  smoke  a wisp of smoke with claws
+// Radii: rr at the root, rm mid-way out, r0 at the bend, r1 at the wrist. rx: the root's offset from the body's centre
+// line; ry: how far below the bend it sits; rest: where the tip idles (always under the catch line); wig: a wave.
 const GRAB_STYLE = {
-  worm:    { limb: 'feeler', hand: 'spike', rr: 24, rm: 15, r0: 15, r1: 8, rx: 130, ry: 80 },
-  bat:     { limb: 'wing', hand: 'thumb', rr: 22, rm: 11, r0: 13, r1: 8, rx: 92, ry: 78 },
-  gorilla: { limb: 'arm', hand: 'knuckle', rr: 25, rm: 14, r0: 17, r1: 13, rx: 90, ry: 80 },
-  mole:    { limb: 'arm', hand: 'shovel', rr: 24, rm: 15, r0: 17, r1: 14, rx: 126, ry: 80 },
-  golem:   { limb: 'stone', hand: 'slab', rr: 26, rm: 16, r0: 16, r1: 13, rx: 94, ry: 80 },
-  kraken:  { limb: 'tentacle', hand: 'sucker', rr: 26, rm: 18, r0: 15, r1: 6, rx: 110, ry: 96, wig: 5, behind: true },
-  piranha: { limb: 'fin', hand: 'fintip', rr: 22, rm: 13, r0: 13, r1: 8, rx: 122, ry: 78, behind: true },
-  dragon:  { limb: 'wing', hand: 'thumb', rr: 24, rm: 12, r0: 14, r1: 9, rx: 100, ry: 78, behind: true },
-  rex:     { limb: 'fossil', hand: 'bones', rr: 20, rm: 10, r0: 12, r1: 8, rx: 100, ry: 80 },
-  flytrap: { limb: 'vine', hand: 'tendril', rr: 20, rm: 13, r0: 11, r1: 5, rx: 118, ry: 76, wig: 6, behind: true },
-  blob:    { limb: 'goo', hand: 'splat', rr: 28, rm: 19, r0: 15, r1: 8, rx: 128, ry: 78, wig: 3, behind: true },
-  spider:  { limb: 'leg', hand: 'hook', rr: 20, rm: 12, r0: 12, r1: 6, rx: 98, ry: 78 },
-  shark:   { limb: 'fin', hand: 'fintip', rr: 22, rm: 13, r0: 13, r1: 8, rx: 116, ry: 78 },
-  tiki:    { limb: 'stone', hand: 'carved', rr: 24, rm: 15, r0: 15, r1: 12, rx: 108, ry: 80 },
-  spirit:  { limb: 'flame', hand: 'wisp', rr: 24, rm: 16, r0: 14, r1: 7, rx: 110, ry: 78, wig: 3, behind: true },
-  toad:    { limb: 'arm', hand: 'pad', rr: 27, rm: 17, r0: 14, r1: 11, rx: 124, ry: 74, behind: true },
-  giant:   { limb: 'arm', hand: 'fist', rr: 26, rm: 20, r0: 19, r1: 14, rx: 106, ry: 82 },
-  hornet:  { limb: 'leg', hand: 'hook', rr: 18, rm: 8, r0: 9, r1: 5, rx: 92, ry: 78 },
-  crab:    { limb: 'shell', hand: 'pincer', rr: 26, rm: 16, r0: 16, r1: 13, rx: 124, ry: 78, behind: true },
-  shadow:  { limb: 'smoke', hand: 'smokeclaw', rr: 26, rm: 18, r0: 14, r1: 9, rx: 118, ry: 78, wig: 4 },
+  worm:    { type: 'coil',     hand: 'spike',     rr: 30, rm: 26, r0: 15, r1: 11, rx: 112, ry: 70, rest: -40, wig: 4 },
+  bat:     { type: 'wing',     hand: 'thumb',     rr: 16, rm: 11, r0: 10, r1: 6,  rx: 96,  ry: 66, rest: -14, bendY: 46 },
+  gorilla: { type: 'arm',      hand: 'knuckle',   rr: 23, rm: 15, r0: 19, r1: 14, rx: 98,  ry: 74, rest: -20 },
+  mole:    { type: 'paw',      hand: 'shovel',    rr: 25, rm: 20, r0: 17, r1: 15, rx: 112, ry: 46, rest: -34 },
+  golem:   { type: 'arm',      hand: 'slab',      rr: 24, rm: 19, r0: 18, r1: 15, rx: 100, ry: 74, rest: -24 },
+  kraken:  { type: 'tentacle', hand: 'sucker',    rr: 25, rm: 18, r0: 13, r1: 6,  rx: 96,  ry: 92, rest: -30, wig: 6 },
+  piranha: { type: 'fin',      hand: 'spines',    rr: 20, rm: 16, r0: 12, r1: 9,  rx: 118, ry: 52, rest: -36 },
+  dragon:  { type: 'wing',     hand: 'dthumb',    rr: 18, rm: 12, r0: 11, r1: 7,  rx: 100, ry: 66, rest: -12, bendY: 46 },
+  rex:     { type: 'talon',    hand: 'talon',     rr: 17, rm: 11, r0: 10, r1: 7,  rx: 100, ry: 70, rest: -18, bendY: 30 },
+  flytrap: { type: 'vine',     hand: 'tendril',   rr: 18, rm: 12, r0: 10, r1: 6,  rx: 104, ry: 76, rest: -26, wig: 7 },
+  blob:    { type: 'goo',      hand: 'splat',     rr: 28, rm: 20, r0: 15, r1: 10, rx: 108, ry: 72, rest: -34, wig: 3 },
+  spider:  { type: 'leg',      hand: 'hook',      rr: 15, rm: 11, r0: 9,  r1: 6,  rx: 88,  ry: 86, rest: -10, bendY: 18 },
+  shark:   { type: 'fin',      hand: 'sickle',    rr: 22, rm: 18, r0: 13, r1: 11, rx: 112, ry: 52, rest: -40 },
+  tiki:    { type: 'arm',      hand: 'carved',    rr: 20, rm: 15, r0: 15, r1: 12, rx: 98,  ry: 74, rest: -22 },
+  spirit:  { type: 'flame',    hand: 'wisp',      rr: 24, rm: 18, r0: 14, r1: 8,  rx: 100, ry: 76, rest: -24, wig: 4 },
+  toad:    { type: 'pad',      hand: 'pad',       rr: 18, rm: 11, r0: 9,  r1: 7,  rx: 116, ry: 56, rest: -30 },
+  giant:   { type: 'arm',      hand: 'fist',      rr: 25, rm: 19, r0: 18, r1: 13, rx: 102, ry: 76, rest: -26 },
+  hornet:  { type: 'leg',      hand: 'barb',      rr: 11, rm: 7,  r0: 6,  r1: 4,  rx: 84,  ry: 80, rest: -12, bendY: 22 },
+  crab:    { type: 'pincer',   hand: 'pincer',    rr: 21, rm: 15, r0: 14, r1: 12, rx: 112, ry: 64, rest: -28 },
+  shadow:  { type: 'smoke',    hand: 'smokeclaw', rr: 26, rm: 17, r0: 13, r1: 8,  rx: 104, ry: 76, rest: -26, wig: 4 },
 };
-const GRAB_JOINTED = /arm|stone|leg|shell|wing|fossil|fin/;
+// jointed limbs bend at the bend (an elbow or a knee); soft ones sweep through it in one curve
+const GRAB_JOINTED = new Set(['arm', 'paw', 'pad', 'leg', 'talon', 'wing', 'pincer', 'fin']);
 // Hand parts in hand units: u = in from the wall edge (negative is into the rock), v = up from the wrist.
 // [u0, v0, u1, v1, r, role]: role 's' skin, 'c' claw/nail (drawn pointed), 'p' pad or sucker, 'f' flame, 'l' leaf,
-// 'g' goo, 'b' bone, 'x' crystal, 'n' carved stone finger, 'm' fin membrane, 'k' smoke.
-// `grip` (0..1) curls the claws in; every part stays within about 28 units of the wall.
-function grabHand(kind, grip, t) {
+// 'g' goo, 'b' bone, 'n' carved finger, 'm' fin membrane, 'k' smoke, 'o' stone, 'kn' knuckle, 't' claw finger tip,
+// 'ft' a pointed fin tip, 'x' crystal. `grip` (0..1) curls the claws in; `wind` (0..1) is the wind-up (a pincer
+// snaps); every part stays within about 30 units of the wall.
+function grabHand(kind, grip, t, wind = 0) {
   const P = [], s = (u0, v0, u1, v1, r, role = 's') => P.push([u0, v0, u1, v1, r, role]);
   const g = grip;
   switch (kind) {
-    case 'knuckle':   // a gorilla's knuckle fist: four fat curled fingers and a thumb
-      s(12, 0, 12, 10, 13);
-      for (let k = 0; k < 4; k++) { const u = 3.5 + k * 5.7; s(u, 14, u, 18 - Math.abs(k - 1.5), 5.4); s(u - 1, 21.5 - Math.abs(k - 1.5), u - 2 - g * 2, 24 - Math.abs(k - 1.5), 2.1, 'c'); }
-      s(20, 3, 21.5, 9, 4.3);
+    case 'knuckle':   // a gorilla's fist: a broad leathery palm, four fat curled fingers hooked over the ledge, a thumb
+      s(12, 0, 12, 10, 13.5);
+      for (let k = 0; k < 4; k++) { const u = 3.5 + k * 5.8; s(u, 13, u, 18 - Math.abs(k - 1.5), 5.6); s(u - 1, 21.5 - Math.abs(k - 1.5), u - 2 - g * 2, 24 - Math.abs(k - 1.5), 2.6, 'c'); }
+      s(21, 2, 22, 9, 4.6);
       break;
-    case 'fist':      // the giant's big hand: a meaty palm, four thick fingers curled over the rock with knuckle bumps, a broad thumb
+    case 'fist':      // the giant's hand: a meaty palm, four thick fingers curled over the rock with knuckle bumps, a broad thumb
       s(12, 0, 12, 11, 13.5);
       for (let k = 0; k < 4; k++) { const u = 3.5 + k * 5.8, tp = 23 - Math.abs(k - 1.5) * 1.5; s(u, 13, u - g * 2, tp, 5.4); s(u, 14, u, 14, 5.8, 'kn'); s(u - g * 2, tp, u - g * 2, tp, 2.6, 'p'); }
       s(21, 1, 22.5, 11, 5.6);
@@ -1486,48 +1500,58 @@ function grabHand(kind, grip, t) {
       s(12, 0, 12, 9, 15, 'p'); s(6, 7, 17, 7, 11.5, 'p');
       for (let k = 0; k < 5; k++) { const u = 1.5 + k * 5.6; s(u, 13, u - 1 - g * 2, 31 - Math.abs(k - 2) * 2.6, 4.4, 'c'); }
       break;
-    case 'slab':      // the golem's stone fist: a craggy block of a hand, three stubby stone fingers and a thumb
+    case 'slab':      // the golem's stone fist: a craggy block, three stubby stone fingers, a thumb and a crystal knuckle
       s(12, 0, 12, 12, 14, 'o');
       for (let k = 0; k < 3; k++) { const u = 5 + k * 7.5; s(u, 15, u - 0.5 - g, 23, 5.8, 'o'); }
-      s(21.5, 3, 22.5, 11, 5.2, 'o');
+      s(21.5, 3, 22.5, 11, 5.2, 'o'); s(14, 4, 19, -6, 3.2, 'x');
       break;
-    case 'carved':    // the tiki's carved hand: four straight notched fingers
+    case 'carved':    // the tiki's carved hand: four straight notched fingers and a square thumb
       s(12, 0, 12, 10, 12);
       for (let k = 0; k < 4; k++) { const u = 4 + k * 5.8; s(u, 12, u - g * 2, 25 - Math.abs(k - 1.5) * 1.5, 4.3, 'n'); }
       s(21, 2, 21.5, 8, 4);
       break;
-    case 'bones':     // the rex's fossil fingers: long jointed bones tipped with hooked claws
-      s(9, 0, 9, 5, 7, 'b');
-      for (let k = 0; k < 3; k++) { const u = 3 + k * 7; s(u + 1, 5, u, 15, 2.8, 'b'); s(u, 15, u - 2 - g, 24, 2.5, 'b'); s(u - 2 - g, 24, u - 6 - g * 2, 32, 2.3, 'c'); }
+    case 'talon':     // the rex's foot: a bone heel and three long toe bones tipped with big hooked talons dug into the rock
+      s(10, 0, 10, 6, 7.5, 'b');
+      for (let k = 0; k < 3; k++) { const u = 3 + k * 7.5; s(u + 2, 6, u, 16, 3.2, 'b'); s(u, 16, u - 4 - g * 2, 27, 2.8, 'c'); }
       break;
-    case 'pad':       // the toad's sticky fingers: long thin fingers ending in round suction pads
-      s(12, 0, 12, 6, 10.5);
-      for (let k = 0; k < 4; k++) { const ub = 6 + k * 4, ut = -1 + k * 7.2; s(ub, 6, ut, 21, 3); s(ut, 23, ut, 23, 5.4, 'p'); }
+    case 'pad':       // the toad's sticky fingers: long thin fingers splayed wide, each ending in a round suction pad
+      s(12, 0, 12, 6, 10);
+      for (let k = 0; k < 4; k++) { const ub = 6 + k * 4, ut = -0.5 + k * 7.4; s(ub, 6, ut, 21 + (k % 2) * 2, 2.8); s(ut, 23.5 + (k % 2) * 2, ut, 23.5 + (k % 2) * 2, 5.2, 'p'); }
       break;
     case 'sucker': {  // a tentacle tip curling against the rock, suckers along its inside
-      const c = Math.sin(t * 2.4) * 1.5;
-      s(8, 0, 8, 9, 6.5); s(8, 9, 6, 17, 5); s(6, 17, 2, 22 + c, 4); s(2, 22 + c, -2, 19, 3);
+      const c = Math.sin(t * 2.4) * 1.5 - wind * 2;
+      s(8, 0, 8, 9, 6.5); s(8, 9, 6, 17, 5); s(6, 17, 2, 22 + c, 4); s(2, 22 + c, -2, 19, 3); s(-2, 19, -1, 15, 2.2);
       s(11.5, 3, 11.5, 3, 2.6, 'p'); s(10.5, 10, 10.5, 10, 2.2, 'p'); s(8.5, 16, 8.5, 16, 1.8, 'p');
       break;
     }
-    case 'pincer': {  // a crab's huge two-tone claw: a fat shell palm, a fixed finger and a movable one that snaps, pale tips
-      const o = 0.5 + 0.5 * Math.sin(t * 3);
-      s(13, 0, 13, 12, 14);
-      s(6, 15, 3, 25, 7.2); s(3, 25, 2, 32, 4.8, 't');
-      s(20, 15, 21 + o * 2.5, 24, 6.2); s(21 + o * 2.5, 24, 18 + o * 2.5, 31, 4.2, 't');
+    case 'pincer': {  // a crab's huge claw: a fat shell palm, a fixed finger and a movable one that snaps, pale tips
+      const o = wind > 0 ? 0.5 + 0.5 * Math.sin(t * 34) : 1 - 0.85 * g;
+      s(14, 0, 14, 13, 14);
+      s(6, 16, 3, 27, 7); s(3, 27, 2, 35, 4.6, 't');
+      s(20, 15, 20 + o * 2.5, 25, 6.2); s(20 + o * 2.5, 25, 17 + o * 2.5, 33, 4.2, 't');
       break;
     }
-    case 'thumb':     // a wing wrist: the hooked thumb claw on the rock, the folded finger bones running down
+    case 'thumb':     // a bat's wing tip on the rock: the hooked thumb claw over the wing finger's end
       s(10, 0, 10, 8, 6.5);
       s(10, 9, 5, 18, 3.4); s(5, 18, 1 - g * 2, 24, 2.6, 'c'); s(1 - g * 2, 24, -1 - g * 2, 21, 1.8, 'c');
-      s(14, 4, 20, -8, 3.4, 'b'); s(9, 2, 13, -10, 3, 'b');
+      s(14, 4, 19, 12, 2.6, 'c');
       break;
-    case 'fintip':    // a webbed fin-hand fanned flat on the rock: one broad paddle of webbing stretched over its rays
-      s(10, 0, 9, 9, 9);
-      s(4, 9, 1, 25, 7, 'm'); s(10, 10, 10, 29, 7.5, 'm'); s(16, 9, 19, 24, 6.5, 'm'); s(7, 16, 14, 18, 8.5, 'm');
+    case 'dthumb':    // a dragon's wing claw: a thick scaled wrist, a big curved talon and a leathery spur
+      s(10, 0, 10, 9, 7.5);
+      s(10, 10, 5, 20, 4); s(5, 20, 0 - g * 2, 29, 3.2, 'c');
+      s(16, 6, 22, 15, 3, 'c');
       break;
-    case 'tendril':
-      s(7, 0, 7, 12, 4.5); s(7, 12, 3, 20, 3.5); s(3, 20, -1, 18, 2.5);
+    case 'sickle':    // a shark's pectoral fin blade slicing up the wall: broad at the root, swept to a point
+      s(13, 0, 12, 10, 11, 'm'); s(12, 10, 9, 22, 8.5, 'm'); s(9, 22, 6, 31, 5.5, 'm'); s(6, 31, 3, 36, 2.6, 'ft');
+      s(20, 2, 19, 13, 6, 'm');
+      break;
+    case 'spines': {  // a piranha's spiny fin: bony rays fanned up the rock with webbing stretched between them
+      s(12, 0, 12, 7, 9.5, 'm'); s(5, 11, 20, 11, 8, 'm'); s(6, 17, 19, 17, 6, 'm');
+      for (let k = 0; k < 4; k++) { const ub = 5 + k * 5, ut = 1 + k * 7, vt = 29 - Math.abs(k - 1.5) * 3 + Math.sin(t * 9 + k) * wind * 2; s(ub, 8, ut, vt, 2.4, 'c'); }
+      break;
+    }
+    case 'tendril':   // a vine tip: a tendril coiled round a knob of rock, a leaf and two thorns
+      s(7, 0, 7, 12, 4.5); s(7, 12, 3, 20, 3.5); s(3, 20, -1, 18, 2.5); s(-1, 18, 1, 14, 2);
       s(10, 6, 19, 14, 3.8, 'l'); s(5, 9, 0, 13, 1.6, 'c'); s(9, 16, 13, 23, 1.6, 'c');
       break;
     case 'splat':     // a gooey drip spreading flat on the rock
@@ -1538,18 +1562,22 @@ function grabHand(kind, grip, t) {
       for (let k = 0; k < 4; k++) { const u = 2 + k * 6.3, fl = 2.6 * Math.sin(t * 14 + k * 2); s(u + 1, 8, u - 1, 18 + fl * 0.5, 3.4, 'f'); s(u - 1, 18 + fl * 0.5, u - 4 + fl * 0.4, 30 + fl - Math.abs(k - 1.5) * 1.5, 2, 'f'); }
       break;
     }
-    case 'spike':     // a segmented feeler's tip: a long spine with two barbs
-      s(8, 0, 8, 10, 7);
-      s(8, 10, 6, 29, 4, 'c'); s(12, 6, 17, 14, 2.2, 'c'); s(4, 8, -1, 15, 2.2, 'c');
+    case 'spike':     // the worm's tail tip: a basalt spine with two barbs, stabbed into the rock
+      s(8, 0, 8, 10, 8);
+      s(8, 10, 6, 30, 4.5, 'c'); s(14, 8, 19, 16, 2.4, 'c'); s(3, 10, -2, 17, 2.4, 'c');
       break;
     case 'smokeclaw': {   // three long bright claws on a hand of smoke
       s(10, 0, 11, 8, 10, 'k');
       for (let k = 0; k < 3; k++) { const u = 3 + k * 8; s(u + 1, 9, u, 19, 3.6, 'k'); s(u, 19, u - 5 - g * 2, 31, 2.4, 'c'); }
       break;
     }
-    case 'hook':
+    case 'hook':      // a spider's foot: a hairy tarsus ending in a hooked claw stabbed into the rock, a spur behind it
       s(8, 0, 7, 12, 5);
       s(7, 13, 1 - g * 2, 25, 2.8, 'c'); s(10, 7, 15, 13, 2, 'c');
+      break;
+    case 'barb':      // a hornet's foot: a thin tarsus with a double hook
+      s(6, 0, 6, 10, 3.8);
+      s(6, 10, 2 - g, 20, 2.3, 'c'); s(8, 9, 12, 15, 1.8, 'c');
       break;
     default:   // claw
       s(10, 0, 11, 8, 10.5);
@@ -1560,75 +1588,117 @@ function grabHand(kind, grip, t) {
 }
 // The art top of a hand above its wrist (claw tips included).
 const grabTops = {};
-function grabHandTop(kind) { return grabTops[kind] ??= Math.max(...grabHand(kind, 1, 0).concat(grabHand(kind, 0, 0)).map(p => Math.max(p[1], p[3]) + p[4])) + 2; }
-// Where the claw tips sit above the catch line, `ph` seconds into a grab (null: not grabbing). `top` caps the reach.
-// The wind-up keeps everything under the catch line: only after GRAB.wind does anything rise above it.
-function grabPose(ph, t, d, top = GRAB.reach) {
-  const G0 = GRAB, rest = G0.rest - G0.bob * (0.5 + 0.5 * Math.sin(t * 3 + d * 1.7)), reach = Math.min(G0.reach, top);
+function grabHandTop(kind) {
+  if (grabTops[kind] == null) { let m = -Infinity; for (const g of [0, 0.5, 1]) for (const w of [0, 1]) for (let t = 0; t < 7; t += 0.05) for (const p of grabHand(kind, g, t, w)) m = Math.max(m, Math.max(p[1], p[3]) + p[4]); grabTops[kind] = m + 2; }
+  return grabTops[kind];
+}
+// Where the tips sit above the catch line, `ph` seconds into a grab (null: not grabbing). `top` caps the reach.
+// Resting, each style idles at its own height under the catch line; the wind-up coils it back further down (and the
+// limb shudders, see grabRig); only after GRAB.wind does anything rise above the line. st: the limb's GRAB_STYLE.
+function grabPose(ph, t, d, top = GRAB.reach, st = {}) {
+  const G0 = GRAB, r0 = st.rest ?? -3, rest = r0 - G0.bob * (0.5 + 0.5 * Math.sin(t * 3 + d * 1.7)), reach = Math.min(G0.reach, top), low = r0 - G0.bob - G0.coil;
   if (ph == null || ph >= GRAB_TOTAL) return { h: rest, wind: 0, grip: 0.3 + 0.2 * Math.sin(t * 2 + d), live: false };
-  if (ph < G0.wind) { const e = ph / G0.wind; return { h: G0.rest - G0.bob - 3 * e, wind: e, grip: e, live: false }; }
+  if (ph < G0.wind) { const e = ph / G0.wind; return { h: lerp(r0 - G0.bob, low, smooth(0, 0.6, e)), wind: e, grip: e, live: false }; }
   let q = ph - G0.wind;
-  if (q < G0.strike) { const e = q / G0.strike; return { h: lerp(G0.rest - G0.bob - 3, reach, 1 - (1 - e) * (1 - e)), wind: 0, grip: 0, live: true }; }
+  if (q < G0.strike) { const e = q / G0.strike; return { h: lerp(low, reach, 1 - (1 - e) * (1 - e)), wind: 0, grip: 0, live: true }; }
   q -= G0.strike;
   if (q < G0.hold) return { h: reach - 3 * Math.sin(q / G0.hold * Math.PI), wind: 0, grip: smooth(0, 0.12, q), live: true };
   q -= G0.hold;
   return { h: lerp(reach, rest, smooth(0, G0.back, q)), wind: 0, grip: 1 - smooth(0, G0.back, q), live: true };
 }
 // One wall limb: d = -1 left wall, 1 right. wallAt(alt) → [L, R]; kill = catch line altitude; pose from grabPose;
-// bodyX = the body's centre line; scr = the screen's world x range; depth = how far below the catch line the head shows on screen (the shoulder rides
-// higher when little of it shows, so it never drops off the bottom edge). Returns the limb's parts in rig coordinates:
-// sh: the shoulder mass [x, y, r] (always under the catch line, beside and below the head);
-// up: the upper arm from the shoulder to the elbow at the wall (always under the catch line), as [x, y, r] points;
-// fore: the forearm climbing the wall face, [x, y, r] points; hand: parts [x0, y0, x1, y1, r, role].
+// bodyX = the body's centre line; scr = the screen's world x range; depth = how far below the catch line the head
+// shows on screen (the root rides higher when little of it shows); sc = the head's size (it swells as it lunges).
+// Returns the limb's parts in rig coordinates:
+// up: the chain from the root (up[0], low beside and behind the head, always under the catch line) out to the bend
+// at the wall, as [x, y, r] points; fore: the chain climbing the wall face; hand: parts [x0, y0, x1, y1, r, role];
 // caps: every capsule of the limb, [x0, y0, x1, y1, r]: the hitbox, and exactly the art's outline.
 function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0, WORLD_W], sc = 1) {
-  const B = GRAB.band, O = GRAB.out, side = d < 0 ? 0 : 1, wx = y => wallAt(kill - y)[side];
+  const B = GRAB.band, O = GRAB.out, side = d < 0 ? 0 : 1, wx = y => wallAt(kill - y)[side], ty = st.type;
   const ht = grabHandTop(st.hand), tipY = -pose.h, wristY = tipY + ht;
-  const bendY = Math.max(GRAB.bendY, wristY + 4);
-  const jit = pose.wind > 0 ? Math.sin(t * 70) * 1.6 * pose.wind : 0;   // the wind-up shudder
+  const bendY = Math.max(st.bendY ?? GRAB.bendY, wristY + 14);   // (always a stretch of it climbing the wall)
+  const jit = pose.wind > 0 ? Math.sin(t * 70) * 1.8 * pose.wind : 0;   // the wind-up shudder
   const inset = (r, w) => clamp(r - 2 + w, r - O, B - 2 - r);
-  const jointed = GRAB_JOINTED.test(st.limb);
-  // the forearm up the wall face, a point every 6 units, tapering from the elbow to the wrist
+  const jointed = GRAB_JOINTED.has(ty), climb = clamp((bendY - wristY) / 70, 0, 1);
+  // the fore chain up the wall face, a point every 6 units, from the bend to the wrist
   const fore = [], n = Math.max(3, Math.ceil((bendY - wristY) / 6));
+  let prevR = st.r0;
   for (let i = 0; i <= n; i++) {
-    const u = i / n, y = lerp(bendY, wristY, u), r = lerp(st.r0, st.r1, u), rc = lerp(st.r0, st.r1, Math.max(0, i - 1) / n);   // (rc: its capsule's radius)
-    const bow = jointed ? 5 * Math.sin(Math.PI * u) * clamp((bendY - wristY) / 70, 0, 1) : 0;   // a forearm bulges a little
-    const w = (st.wig || 0) * (0.5 + 0.5 * Math.sin(y * 0.09 + t * 2.6 + d)) * Math.sin(Math.PI * u) + bow + jit;
+    const u = i / n, y = lerp(bendY, wristY, u);
+    let r = lerp(st.r0, st.r1, u), w = 0;
+    if (ty === 'tentacle') w = (st.wig || 0) * Math.sin(u * 5.2 - t * 3.2 + d) * Math.sin(Math.PI * u) * climb;   // an S-wave slapping up the rock
+    else if (ty === 'vine') w = (st.wig || 0) * Math.sin(y * 0.12 + t * 1.5 + d) * (1 - smooth(0.75, 1, u));                                   // zigzagging round the knobs of rock
+    else if (ty === 'goo') { r *= 1 + 0.16 * Math.sin(y * 0.21 + t * 2.2 + d); w = (st.wig || 0) * Math.sin(y * 0.07 + t * 2) * (1 - smooth(0.75, 1, u)); }   // lumpy and dripping
+    else if (ty === 'flame' || ty === 'smoke') w = (st.wig || 0) * Math.sin(y * 0.13 + t * (ty === 'flame' ? 9 : 2.6) + d) * Math.sin(Math.PI * u);
+    else if (ty === 'coil') { r *= 1 - 0.1 * Math.abs(Math.sin(i * 1.3)); w = (st.wig || 0) * Math.sin(i * 0.9 + t * 2.4 + d) * (1 - smooth(0.75, 1, u)); }   // body rings pressed to the rock
+    else if (ty === 'leg') w = 7 * smooth(0.25, 0.55, u) * (1 - smooth(0.55, 0.95, u)) * climb;                   // the shin's joint kinks out
+    else if (ty === 'fin') r = lerp(st.r0, st.r1, u) * (1 + 0.25 * Math.sin(Math.PI * u));                       // the fin's leading edge swells
+    else if (jointed) w = 5 * Math.sin(Math.PI * u) * climb;                                                      // a forearm bulges a little
+    const rc = Math.max(r, prevR); prevR = r;   // (its capsule's radius)
     // (measured from the wall's most receded point over the capsule's height, so its whole outline stays in the band)
     let wr = wx(y); for (let yy = y - rc - 6; yy <= y + rc + 6; yy += 3) { const v = wx(yy); wr = side ? Math.max(wr, v) : Math.min(wr, v); }
-    const fx = wr - d * inset(rc, w);
+    const fx = wr - d * inset(rc, w + jit);
     fore.push([side ? Math.min(fx, scr[1] - rc - 0.5) : Math.max(fx, scr[0] + rc + 0.5), y, r]);
-  }
-  // the shoulder: a round deltoid mass low beside the head, overlapping its lower side (it rides up when little of the
-  // head shows, so at least half of it stays on screen); sc: the head's size (it swells as it lunges to bite)
-  const b = fore[0], rs = st.rr * 1.4;
-  const shY = clamp(depth - rs * 0.5, bendY + 10, bendY + st.ry * sc);
-  const rx0 = bodyX + d * st.rx * sc, shX = d > 0 ? Math.min(rx0, b[0] - 46) : Math.max(rx0, b[0] + 46);
-  const sh = [shX, shY, rs];
-  // the upper arm from the shoulder out to the elbow: a jointed arm rises and arrives at the elbow running out to the
-  // wall, so it bends there; a soft limb sweeps out low and curls up into the wall, thick at the root
-  const up = [], N = 14;
-  const cx = jointed ? lerp(shX, b[0], 0.25) : lerp(shX, b[0], 0.9), cy = jointed ? b[1] + 1 : shY + 4;
-  const sway = st.wig ? Math.sin(t * 2.2 + d) * st.wig : 0;
-  for (let i = 0; i <= N; i++) {
-    const u = i / N, a = (1 - u) * (1 - u), m = 2 * u * (1 - u), z = u * u;
-    let r;
-    if (jointed) r = u < 0.7 ? lerp(st.rr, st.rm, smooth(0, 0.7, u)) : lerp(st.rm, st.r0, smooth(0.7, 1, u));   // shoulder, bicep, elbow
-    else r = lerp(st.rr, st.r0, Math.pow(u, 0.8));
-    up.push([a * shX + m * (cx + sway * m) + z * b[0], a * shY + m * cy + z * b[1], r]);
   }
   // the hand, against the wall at its most-receded point over its height (so no part of it is ever more than its own
   // offset in from the wall at any height, and the rest digs into the rock)
   let ref = side ? -Infinity : Infinity;
   for (let y = wristY - ht - 2; y <= wristY + 12; y += 3) { const w = wx(y); ref = side ? Math.max(ref, w) : Math.min(ref, w); }
-  const parts = grabHand(st.hand, pose.grip, t), outMax = Math.max(...parts.map(p => Math.max(p[4] - p[0], p[4] - p[2]))) + 2;
+  const parts = grabHand(st.hand, pose.grip, t, pose.wind), outMax = Math.max(...parts.map(p => Math.max(p[4] - p[0], p[4] - p[2]))) + 2 + Math.abs(jit);
   ref = side ? Math.min(ref, scr[1] - 1 - outMax) : Math.max(ref, scr[0] + 1 + outMax);   // (claws never leave the screen)
   const hand = parts.map(([u0, v0, u1, v1, r, role]) => [ref - d * (u0 + jit), wristY - v0, ref - d * (u1 + jit), wristY - v1, r, role]);
-  const caps = [[shX, shY, shX, shY, rs]];
+  // the wrist meets the hand's base (it sits at the wall's most receded point over the hand, which can differ a little)
+  const hx = hand[0][0];
+  { const n2 = fore.length - 1; for (let i = n2 - 1; i <= n2; i++) { const f = fore[i]; f[0] = lerp(f[0], hx, i === n2 ? 0.8 : 0.35); } }
+  // (where the wall leans hard, extra points keep the chain unbroken)
+  for (let i = 1; i < fore.length; i++) { const p = fore[i - 1], q = fore[i]; if (Math.hypot(q[0] - p[0], q[1] - p[1]) > (p[2] + q[2]) * 0.9) { fore.splice(i, 0, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2]); i--; } }
+  // the root: low beside and behind the head (it rides up when little of the head shows, so the limb never drops off
+  // the bottom edge), and kept well in from the wall
+  const b = fore[0], rs = st.rr;
+  const rootY = clamp(depth - rs * 0.3, bendY + 10, bendY + st.ry * sc);
+  const rx0 = bodyX + d * st.rx * sc, rootX = d > 0 ? Math.min(rx0, b[0] - 50, wx(b[1]) - 50) : Math.max(rx0, b[0] + 50, wx(b[1]) + 50);
+  // the up chain from the root out to the bend, shaped by its type
+  const up = [], N = 16, sway = st.wig ? Math.sin(t * 2.2 + d) * st.wig : 0;
+  let P1, P2;
+  if (ty === 'tentacle') { P1 = [lerp(rootX, b[0], 0.45), Math.max(rs + 4, rootY - 34)]; P2 = [lerp(rootX, b[0], 0.6) + d * sway, b[1] + 78]; }   // rises, dips low, then sweeps up: an S
+  else if (ty === 'coil') { P1 = [rootX + d * 8, rootY + 62]; P2 = [b[0] - d * 18, b[1] + 86]; }                                     // a loop of body dipping deep
+  else if (ty === 'leg') { P1 = [lerp(rootX, b[0], 0.2), b[1] + 6]; P2 = [lerp(rootX, b[0], 0.62), b[1]]; }   // the femur arcs high and arrives level at a sharp knee
+  else if (ty === 'talon') { P1 = [lerp(rootX, b[0], 0.3), lerp(rootY, b[1], 0.4)]; P2 = [lerp(rootX, b[0], 0.7), b[1] + 4]; }   // a thigh bone out to the back-bent knee
+  else if (ty === 'fin' || ty === 'paw' || ty === 'pad') { P1 = [lerp(rootX, b[0], 0.35), rootY + 6]; P2 = [lerp(rootX, b[0], 0.6), b[1] + 2]; }   // short and low
+  else if (jointed) { P1 = [lerp(rootX, b[0], 0.15), lerp(rootY, b[1], 0.55)]; P2 = [lerp(rootX, b[0], 0.45), b[1] + 1]; }      // rises, then runs out to the elbow
+  else { P1 = [lerp(rootX, b[0], 0.5) + sway, rootY + 10]; P2 = [lerp(rootX, b[0], 0.95), rootY + 2]; }                           // sweeps out low and curls up
+  // a jointed limb arrives at its bend turned well away from the way the fore chain climbs (an elbow or a knee that
+  // really bends, even where the wall leans), always from below and from the shaft's side
+  if (jointed || ty === 'leg') {
+    const k = fore.find(p => p[1] <= b[1] - 10) || fore[fore.length - 1], fl = Math.hypot(k[0] - b[0], k[1] - b[1]) || 1, fx = (k[0] - b[0]) / fl, fy = (k[1] - b[1]) / fl;
+    const L = 0.42 * Math.hypot(rootX - b[0], rootY - b[1]), turn = ty === 'leg' ? 1.45 : 1.2;
+    let best = null;
+    for (const sg of [-1, 1]) {
+      const c = Math.cos(sg * turn), s2 = Math.sin(sg * turn), ax = fx * c - fy * s2, ay = fx * s2 + fy * c, q = [b[0] - ax * L, b[1] - ay * L];
+      const score = (q[1] >= b[1] - 2 ? 2 : 0) + ((q[0] - b[0]) * d < 0 ? 1 : 0);
+      if (!best || score > best.score) best = { q, score };
+    }
+    P2 = [best.q[0], Math.max(best.q[1], b[1] - 2)];
+  }
+  for (let i = 0; i <= N; i++) {
+    const u = i / N, a = (1 - u) ** 3, m1 = 3 * u * (1 - u) ** 2, m2 = 3 * u * u * (1 - u), z = u ** 3;
+    let r;
+    if (ty === 'arm') r = u < 0.65 ? lerp(st.rr, st.rm, smooth(0, 0.65, u)) : lerp(st.rm, st.r0, smooth(0.65, 1, u));   // shoulder, biceps, elbow
+    else if (ty === 'coil') r = (u < 0.7 ? lerp(st.rr, st.rm, u / 0.7) : lerp(st.rm, st.r0, smooth(0.7, 1, u))) * (1 - 0.08 * Math.abs(Math.sin(i * 1.4)));   // ringed beads
+    else if (ty === 'goo') r = lerp(st.rr, st.r0, Math.pow(u, 0.8)) * (1 + 0.12 * Math.sin(i * 1.7 + t * 2));
+    else if (jointed) r = u < 0.7 ? lerp(st.rr, st.rm, smooth(0, 0.7, u)) : lerp(st.rm, st.r0, smooth(0.7, 1, u));
+    else r = lerp(st.rr, st.r0, Math.pow(u, 0.8));
+    const x = a * rootX + m1 * P1[0] + m2 * P2[0] + z * b[0];
+    up.push([i === N ? x : clamp(x, scr[0] + r + 0.5, scr[1] - r - 0.5), a * rootY + m1 * P1[1] + m2 * P2[1] + z * b[1], r]);   // (never off the screen's sides)
+  }
+  // (nothing ever leaves the screen's sides: each point kept its capsules' radius in from the edges)
+  for (const ch of [up, fore]) ch.forEach((p, i) => { const r = Math.max(p[2], ch[i - 1]?.[2] ?? 0, ch[i + 1]?.[2] ?? 0) + 0.6; p[0] = clamp(p[0], scr[0] + r, scr[1] - r); });
+  { const r = Math.max(up[N - 1][2], fore[0][2], fore[1]?.[2] ?? 0) + 0.6; fore[0][0] = clamp(fore[0][0], scr[0] + r, scr[1] - r); up[N][0] = fore[0][0]; }
+  const caps = [];
   for (let i = 1; i < up.length; i++) caps.push([up[i - 1][0], up[i - 1][1], up[i][0], up[i][1], Math.max(up[i - 1][2], up[i][2])]);
   for (let i = 1; i < fore.length; i++) caps.push([fore[i - 1][0], fore[i - 1][1], fore[i][0], fore[i][1], Math.max(fore[i - 1][2], fore[i][2])]);
   for (const h of hand) caps.push(h.slice(0, 5));
-  return { sh, up, fore, hand, caps, d, tipY, jointed, sc, squeeze: Math.abs(rx0 - shX) };
+  return { root: up[0], up, fore, hand, caps, d, type: ty, tipY, jointed, sc, wind: pose.wind, squeeze: Math.abs(rx0 - rootX) };
 }
 /* LEVELGEN:END */
 const walls = a => G.level.walls(a);
@@ -2331,7 +2401,7 @@ function updateCamera(dt) {
   const close = G.state === 'play' ? clamp((260 - monsterGap()) / 160, 0, 1) : 0;
   G.camFloat = lerp(G.camFloat, close, Math.min(1, dt * 3));
   let target = G.p.alt - viewH * Math.min(60, cfg.camPos + 7 * G.camFloat) / 100 + lead;
-  if (G.state === 'dead' && G.knock) { target = (G.bite ? G.bite.alt : G.knock.alt) - viewH * (G.knock.frozen ? 0.76 : 0.8); follow = G.knock.frozen ? 5 : 3.5; }
+  if (G.state === 'dead' && G.knock) { target = G.bite ? G.bite.alt - viewH * 0.6 : G.knock.alt - viewH * (G.knock.frozen ? 0.76 : 0.8); follow = G.knock.frozen ? 5 : 3.5; }   // (the bite sits lower, so the whole head stays in frame)
   const prev = G.camAlt;
   G.camAlt += (target - G.camAlt) * Math.min(1, dt * follow);
   const dy = (G.camAlt - prev) * s;
@@ -2637,7 +2707,7 @@ function draw() {
   // a subtle zoom around the rocket while flying flat out (hitboxes share this transform), and a
   // camera punch-in on the bite when the jaws close
   let zx = sx(G.p.x), zy = sy(G.p.alt), zoom = G.zoom;
-  if (G.state === 'dead' && G.bite) { const e = 1 - (1 - G.punch) ** 3; zx = sx(G.bite.x); zy = sy(G.bite.alt); zoom = lerp(G.zoom, 1.22, e); }
+  if (G.state === 'dead' && G.bite) { const e = 1 - (1 - G.punch) ** 3; zx = sx(G.bite.x); zy = sy(G.bite.alt); zoom = lerp(G.zoom, 1.16, e); }
   if (G.state === 'dead' && G.knock && G.knock.frozen) { zx = sx(G.knock.x); zy = sy(G.knock.alt); zoom = lerp(G.zoom, 1.16, smooth(0.1, 0.6, G.deadTimer)); }
   drawPad = zoom < 1 ? viewH * (1 / zoom - 1) + 40 : 0;
   if (zoom < 1) { ctx.fillStyle = rgb(pal('bgBot', G.camAlt)); ctx.fillRect(0, 0, cssW, H); }
@@ -7070,7 +7140,6 @@ const MONSTER_LIMBS = {
 };
 const monLimbs = mon => MONSTER_LIMBS[mon.id] || { kind: 'none', skin: ['#888', '#444', '#111'], claw: '#222' };
 function limbGrad(c, L, y0, y1) { return pkLG(c, 0, y0, 0, y1, L.skin); }
-const LIMB_RIM = 'rgba(255,240,220,.5)';
 // body limbs that are not wall limbs (always under the catch line, inside the walls)
 function drawLimbs(c, mon, m, half, layer = 'back') {
   const L = monLimbs(mon), t = m.t, sk = L.skin, wall = half - 6;
@@ -7258,6 +7327,16 @@ function mCheeks(c, mon, m) {
 function drawMonsterForm(c, mon, m, coilHalf, limbs) {
   const f = monForm(mon), idx = MONSTERS.indexOf(mon);
   mon._t = m.t; mT = m.t; mSeed = 0.37 + idx * 1.618; mRage = m.rage ?? mFlare; mWide = m.wide ?? 0;
+  if (mon.v3) {   // a redesigned monster: under (its other legs, always under the catch line), body, the wall limbs' roots, head
+    const fit = mon.fit || 1, frame = () => { c.scale(fit, fit); c.translate(0, mon.dy || 0); };
+    m.bite ??= -1; m.half = (coilHalf || 230) / fit;
+    if (mon.under) { c.save(); frame(); mon.under(c, m); c.restore(); }
+    if (mon.body) { c.save(); frame(); mon.body(c, m); c.restore(); }
+    if (limbs) limbs('mid');
+    c.save(); frame(); mon.head(c, m); c.restore();
+    if (limbs) limbs('shoulder');
+    return;
+  }
   if (limbs) limbs('back');
   drawLimbs(c, mon, m, coilHalf || 230);
   if (f.coil) drawCoils(c, mon, m, (coilHalf || 230) - 30);
@@ -7285,7 +7364,37 @@ function drawMonsterForm(c, mon, m, coilHalf, limbs) {
 // ---------- wall grab limbs (see GRAB and grabRig) ----------
 // Drawn in rig coordinates (x world, y down from the catch line) in whatever transform the caller set up. The art is
 // built from the rig's own capsules (ink at the capsule's full radius, fill inside it), so the hitbox overlay is exact.
+// Every limb type has its own look (LIMB_ART) in its monster's own colours (LIMB_PAL). Layers: 'mid' (behind the
+// head, over the body: the up chain growing out from behind the head, a wing's membrane, a fin's web), 'front' (the
+// bend, the fore chain up the wall and the hand, in front of everything).
 const GRAB_INK = 2.4;
+const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mixHex = (a, b, k, al = 1) => rgbaA(hexRGB(a).map((v, i) => v + (hexRGB(b)[i] - v) * k | 0), al);
+// skin: [light, mid, dark]; the rest are per type
+const LIMB_PAL = {
+  worm:    { skin: ['#ffb870', '#ec6a20', '#5e1a08'], plate: ['#7a5a50', '#4a302a', '#22140f'], glow: [255, 190, 80], claw: '#f4e6d0' },
+  bat:     { skin: ['#b898f4', '#6e40cc', '#26104e'], bone: '#efe4ff', web: ['#8a58d8', '#3a1a70'], vein: '#ff8ac8', claw: '#fff4ff' },
+  gorilla: { skin: ['#a8acc0', '#5e6278', '#1e2030'], palm: '#3a3644', claw: '#241e26', glow: [255, 140, 40], fur: true },
+  mole:    { skin: ['#e0bc9c', '#946042', '#361a0c'], palm: '#ff9cc4', claw: '#fff4dc', fur: true },
+  golem:   { skin: ['#e0f2f4', '#8eb0bc', '#2e4652'], crystal: ['#eaffff', '#5af0ff', '#1a8aa8'], glow: [90, 230, 255] },
+  kraken:  { skin: ['#ffaa9e', '#e0384a', '#5a0c1e'], sucker: '#ffe8d0' },
+  piranha: { skin: ['#8af0d0', '#1ea888', '#0a3e36'], web: ['#ffc09a', '#ff6a2a'], claw: '#fff6e6' },
+  dragon:  { skin: ['#9ac4ff', '#2a62d8', '#0c1e58'], bone: '#ffe8a8', web: ['#ffb050', '#c8380a'], claw: '#fff8e0' },
+  rex:     { skin: ['#fffaea', '#dccaa0', '#6e5836'], claw: '#fffdf4', glow: [255, 140, 60] },
+  flytrap: { skin: ['#c8f070', '#5aa82a', '#1e4a0c'], leaf: ['#b8f060', '#4a9a22'], claw: '#ff4a6a' },
+  blob:    { skin: ['#ffbcf2', '#e040c0', '#5a0a52'], goo: true },
+  spider:  { skin: ['#66786a', '#2a332c', '#0a0e0c'], band: '#7aff5a', claw: '#d8ffc8', fur: true },
+  shark:   { skin: ['#dce8f2', '#7890a8', '#24344a'], belly: '#f6ecd8', web: ['#a8bccc', '#5a7088'] },
+  tiki:    { skin: ['#ffc880', '#b8742e', '#4a2410'], paint: '#2ae0d0' },
+  spirit:  { skin: ['#fff6c0', '#ff8a1a', '#c0280a'], glow: [255, 170, 60] },
+  toad:    { skin: ['#a8ecff', '#1a9ae0', '#0a2e5a'], palm: '#ffe060', spot: '#0a1838' },
+  giant:   { skin: ['#ffd8bc', '#e0946e', '#6a3420'], cloth: ['#7a9ae0', '#3a5aa0', '#16264e'], palm: '#ffe6d4' },
+  hornet:  { skin: ['#5a4a30', '#1c140a', '#060402'], band: '#ffd23a', claw: '#ffe8a0' },
+  crab:    { skin: ['#b8b0ff', '#5a4ad0', '#1a1250'], tip: '#ff8a3a', claw: '#ece8ff' },
+  shadow:  { skin: ['#44565e', '#141c22', '#04080a'], glow: [58, 255, 224], claw: '#d8fff8' },
+};
+const limbPal = mon => LIMB_PAL[mon.id] || { skin: ['#aaaaaa', '#666666', '#222222'] };
+const LIMB_RIM = 'rgba(255,240,220,.55)';
 // stroke a chain of [x, y, r] points as capsules, each width w(r) at its larger end
 function capStroke(c, pts, col, wf, dx = 0, dy = 0) {
   c.strokeStyle = col;
@@ -7305,33 +7414,36 @@ function litSide(pts, d) {
     return [nx, ny];
   });
 }
-// Several chains as one limb: one ink outline round them all (exactly the capsules), one fill, a shadow on the side
-// away from the light, a lit core and a rim of light on the lit side. fill may be a css colour or a gradient.
-function grabBody(c, chains, fill, d, o = {}) {
+// Chains as one limb: one ink outline round them all (exactly the capsules), then cel shading in solid tones: a shadow
+// tone over the whole limb, the body tone shifted toward the light, a lit core and a thin rim of light on the lit side.
+// o: { alpha, rim, ink, flame, flat, tones: [shadow, body, core] }
+function grabBody(c, chains, sk, d, o = {}) {
   for (const p of chains) capStroke(c, p, o.ink || INK, r => 2 * r);
-  const sk = o.sk, mixC = (a, b, k) => rgbaA(hexRGB(a).map((v, i) => v + (hexRGB(b)[i] - v) * k | 0), o.alpha ?? 1);
-  if (!sk || o.flat) { for (const p of chains) capStroke(c, p, fill, r => 2 * r - 2 * GRAB_INK); return; }
-  if (o.flame) {   // fire: no solid modelling, just bands of heat from a red rim in to a white-hot core
+  if (o.flame) {   // fire: bands of heat from a red rim in to a white-hot core
     for (const p of chains) capStroke(c, p, sk[2], r => 2 * r - 2 * GRAB_INK);
     for (const p of chains) capStroke(c, p, sk[1], r => 1.55 * r - 2 * GRAB_INK);
     for (const p of chains) capStroke(c, p, sk[0], r => 0.95 * r);
     for (const p of chains) capStroke(c, p, 'rgba(255,255,235,.9)', r => 0.38 * r);
     return;
   }
-  // cel shading in solid tones (no see-through overlaps, so no banding where the capsules meet): a shadow tone over the
-  // whole limb, the body tone shifted toward the light, a lit core and a thin rim of light
-  const tones = [mixC(sk[1], sk[2], 0.55), mixC(sk[1], sk[0], 0.15), mixC(sk[1], sk[0], 0.6)];
+  const al = o.alpha ?? 1, tones = o.tones || [mixHex(sk[1], sk[2], 0.55, al), mixHex(sk[1], sk[0], 0.12, al), mixHex(sk[1], sk[0], 0.62, al)];
   for (const p of chains) capStroke(c, p, tones[0], r => 2 * r - 2 * GRAB_INK);
+  if (o.flat) return;
   for (const [k, w, tone] of [[0.16, 0.84, 1], [0.42, 0.42, 2]]) for (const p of chains) {
     if (p.length < 2) { const [x, y, r] = p[0], rr = (r - GRAB_INK) * w; c.fillStyle = tones[tone]; c.beginPath(); c.arc(x - d * r * k * 0.6, y - r * k * 0.8, Math.max(0.5, rr), 0, TWO_PI); c.fill(); continue; }
     const n = litSide(p, d), q = p.map(([x, y, r], i) => [x + n[i][0] * r * k, y + n[i][1] * r * k, r]);
     capStroke(c, q, tones[tone], r => 2 * Math.max(0.5, (r - GRAB_INK) - r * k) * (tone === 2 ? 0.7 : 1));
   }
-  for (const p of chains) if (p.length > 1) {
+  if (o.rim !== false) for (const p of chains) if (p.length > 1) {
     const n = litSide(p, d);
     c.strokeStyle = o.rim || LIMB_RIM; c.lineWidth = 2;
     c.beginPath(); p.forEach(([x, y, r], i) => { const px = x + n[i][0] * (r - GRAB_INK - 2), py = y + n[i][1] * (r - GRAB_INK - 2); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
   }
+}
+// The occlusion shadow where a limb disappears behind the head: its root end darkens (inside its outline).
+function limbRootShade(c, up, k = 0.4) {
+  const n = Math.max(2, Math.round(up.length * k));
+  for (let i = 1; i < n; i++) { const a = 0.55 * (1 - i / n); capStroke(c, [up[i - 1], up[i]], `rgba(8,4,10,${a.toFixed(3)})`, r => 2 * r - 2 * GRAB_INK); }
 }
 // marks across a chain at point i (segment bands, plates, notches)
 function grabAcross(c, pts, i, col, w, k = 0.85, curve = 0) {
@@ -7339,77 +7451,31 @@ function grabAcross(c, pts, i, col, w, k = 0.85, curve = 0) {
   c.strokeStyle = col; c.lineWidth = w; c.beginPath();
   c.moveTo(x - nx * r * k, y - ny * r * k); c.quadraticCurveTo(x + ny * r * curve, y - nx * r * curve, x + nx * r * k, y + ny * r * k); c.stroke();
 }
-// decorations inside a limb's outline, by kind
-function grabDecor(c, kind, pts, L, d, t, part) {
-  const n = litSide(pts, d), N = pts.length;
-  const along = (k, col, w, i0 = 0, i1 = N) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); for (let i = i0; i < i1; i++) { const [x, y, r] = pts[i]; const px = x + n[i][0] * r * k, py = y + n[i][1] * r * k; i > i0 ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke(); };
-  if (kind === 'stone') {
-    // craggy faceted rock: angular cracks zig-zagging across it, lit facet edges, a glowing seam or two
-    for (let i = 2; i < N - 1; i += 3) {
-      const [x, y, r] = pts[i], [nx, ny] = n[i], tx = ny, ty = -nx, j = hash2(i, 61) - 0.5;
-      c.strokeStyle = 'rgba(20,12,10,.7)'; c.lineWidth = 2.2; c.beginPath();
-      c.moveTo(x - nx * r * 0.8, y - ny * r * 0.8); c.lineTo(x - nx * r * 0.2 + tx * r * 0.3 * j, y - ny * r * 0.2 + ty * r * 0.3 * j); c.lineTo(x + nx * r * 0.3 - tx * r * 0.25, y + ny * r * 0.3 - ty * r * 0.25); c.lineTo(x + nx * r * 0.8 + tx * r * 0.1, y + ny * r * 0.8 + ty * r * 0.1); c.stroke();
-      c.strokeStyle = 'rgba(255,250,240,.35)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + nx * r * 0.3 - tx * r * 0.25, y + ny * r * 0.3 - ty * r * 0.25); c.lineTo(x + nx * r * 0.55 - tx * r * 0.7, y + ny * r * 0.55 - ty * r * 0.7); c.stroke();
-      if (L.glow && L.crystal && i % 2) { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(L.glow, 0.55); c.lineWidth = 1.4; c.beginPath(); c.moveTo(x - nx * r * 0.7, y - ny * r * 0.7); c.lineTo(x - nx * r * 0.2 + tx * r * 0.3 * j, y - ny * r * 0.2 + ty * r * 0.3 * j); c.stroke(); c.restore(); }
-    }
-    if (L.paint) for (let i = 2; i < N - 1; i += 5) { const [x, y, r] = pts[i]; c.strokeStyle = L.paint; c.lineWidth = 3; c.beginPath(); for (let k = -2; k <= 2; k++) { const xx = x + n[i][0] * r * 0.25 * k, yy = y + n[i][1] * r * 0.25 * k + (k % 2 ? 3 : -3); k > -2 ? c.lineTo(xx, yy) : c.moveTo(xx, yy); } c.stroke(); }
-  } else if (kind === 'feeler') {
-    for (let i = 1; i < N; i += 2) { grabAcross(c, pts, i, L.band || 'rgba(40,10,4,.7)', 3, 0.92, 0.35); grabAcross(c, pts, Math.min(N - 1, i + 1), 'rgba(255,220,170,.35)', 1.6, 0.7, 0.35); }
-    if (L.glow) { c.save(); c.globalCompositeOperation = 'lighter'; along(0, rgbaA(L.glow, 0.25 + 0.15 * Math.sin(t * 4)), 3); c.restore(); }
-  } else if (kind === 'leg' || kind === 'shell') {
-    if (kind === 'shell') { for (let i = 2; i < N - 1; i += 3) grabAcross(c, pts, i, 'rgba(10,30,40,.6)', 2.2, 0.9, 0.4); for (let i = 1; i < N; i += 3) { const [x, y, r] = pts[i]; pkDot(c, x + n[i][0] * r * 0.3, y + n[i][1] * r * 0.3, Math.max(1.5, r * 0.18), 'rgba(220,255,255,.55)'); } }
-    else {
-      if (L.band) for (let i = (part === 'up' ? N - 3 : 3); i < N && i >= 0; i += 99) grabAcross(c, pts, i, L.band, 3.5, 0.9, 0.2);
-      if (L.fur) for (let i = 1; i < N; i++) { const [x, y, r] = pts[i]; c.strokeStyle = 'rgba(255,210,170,.5)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - n[i][0] * r * 0.3, y - n[i][1] * r * 0.3); c.lineTo(x - n[i][0] * r * 0.85 + (pts[i][1] - pts[i - 1][1]) * 0.2, y - n[i][1] * r * 0.85); c.stroke(); }
-      else { c.save(); c.globalCompositeOperation = 'lighter'; along(0.3, 'rgba(255,255,255,.18)', 1.6); c.restore(); }
-    }
-  } else if (kind === 'tentacle') {
-    // a row of suckers down its underside
-    for (let i = 1; i < N - 1; i += 2) { const [x, y, r] = pts[i]; const sx = x - n[i][0] * r * 0.45, sy = y - n[i][1] * r * 0.45; pkE(c, sx, sy, r * 0.32, r * 0.32, L.sucker, 1.2); pkE(c, sx, sy, r * 0.13, r * 0.13, 'rgba(120,30,30,.5)', 0); }
-  } else if (kind === 'vine') {
-    for (let i = 2; i < N - 1; i += 3) { const [x, y, r] = pts[i]; pkPath(c, [[x - n[i][0] * r * 0.1, y - n[i][1] * r * 0.1 + 2], [x - n[i][0] * r * 0.85, y - n[i][1] * r * 0.85 - 2], [x - n[i][0] * r * 0.1, y - 2]], L.sucker, 1); }
-    along(0, 'rgba(30,70,10,.5)', 1.6);
-  } else if (kind === 'goo') {
-    for (let i = 2; i < N; i += 4) { const [x, y, r] = pts[i]; pkE(c, x + n[i][0] * r * 0.35, y + n[i][1] * r * 0.35, r * 0.2, r * 0.28, 'rgba(255,255,255,.5)', 0); pkE(c, x - n[i][0] * r * 0.2, y - n[i][1] * r * 0.2 + 2, r * 0.12, r * 0.12, 'rgba(255,255,255,.35)', 0); }
-  } else if (kind === 'flame') {
-    c.save(); c.globalCompositeOperation = 'lighter';
-    const col = L.glow || [255, 200, 120];
-    for (let i = 1; i < N; i += 2) { const [x, y, r] = pts[i]; c.fillStyle = `rgba(255,250,210,${0.2 + 0.14 * Math.sin(t * 11 + i * 1.7)})`; c.beginPath(); c.arc(x + Math.sin(t * 7 + i) * r * 0.2, y + Math.cos(t * 5 + i) * r * 0.15, r * 0.4, 0, TWO_PI); c.fill(); }
-    c.globalCompositeOperation = 'source-over';
-    for (let i = 2; i < N - 1; i += 3) { const [x, y, r] = pts[i], n2 = n[i]; const tx = x + n2[0] * r * 0.55, ty = y + n2[1] * r * 0.55; c.fillStyle = 'rgba(255,252,220,.8)'; c.beginPath(); c.moveTo(tx - n2[1] * r * 0.25, ty + n2[0] * r * 0.25); c.quadraticCurveTo(tx + n2[0] * r * 0.1, ty + n2[1] * r * 0.1 - r * 0.3, tx + n2[0] * r * 0.3 + Math.sin(t * 9 + i) * 2, ty + n2[1] * r * 0.3 - r * 0.5); c.quadraticCurveTo(tx, ty, tx + n2[1] * r * 0.25, ty - n2[0] * r * 0.25); c.closePath(); c.fill(); }
-    c.restore();
-  } else if (kind === 'smoke') {
-    c.save(); c.globalCompositeOperation = 'lighter';
-    for (let i = 1; i < N; i += 2) { const [x, y, r] = pts[i]; c.fillStyle = rgbaA(L.glow, 0.08 + 0.06 * Math.sin(t * 5 + i)); c.beginPath(); c.arc(x + Math.sin(t * 3 + i) * r * 0.2, y, r * 0.6, 0, TWO_PI); c.fill(); }
-    c.restore();
-    along(0.6, rgbaA(L.glow, 0.55), 2);
-  } else if (kind === 'wing') {
-    // a bone down the middle of the wing's arm
-    along(0, L.bone || '#fff', Math.max(2, pts[N >> 1][2] * 0.36));
-    along(0.2, 'rgba(255,255,255,.35)', 1.2);
-  } else if (kind === 'fin') {
-    // a fleshy fin-arm: a pale belly stripe down its underside and soft folds across it
-    along(-0.45, L.belly || '#fff', Math.max(2, pts[N >> 1][2] * 0.5));
-    for (let i = 3; i < N - 1; i += 4) grabAcross(c, pts, i, 'rgba(20,20,40,.3)', 1.8, 0.7, 0.5);
-  } else if (kind === 'fossil') {
-    // knobbly vertebra-like joints and dark cracks along a bone
-    for (let i = 4; i < N - 1; i += 5) { grabAcross(c, pts, i, 'rgba(90,70,40,.7)', 2, 0.9, 0.3); grabAcross(c, pts, i + 1 < N ? i + 1 : i, 'rgba(90,70,40,.5)', 1.4, 0.8, 0.3); }
-    along(-0.35, 'rgba(90,70,40,.4)', 1.4); along(0.3, 'rgba(255,255,250,.6)', 2);
-  } else if (kind === 'arm') {
-    if (part === 'fore' && N > 4) { const [x, y, r] = pts[1]; c.strokeStyle = rgbaA([20, 10, 8], 0.5); c.lineWidth = 1.8; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.55, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
-    if (L.fur) for (let i = 1; i < N; i += 1) { const [x, y, r] = pts[i]; c.strokeStyle = 'rgba(255,235,220,.32)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + n[i][0] * r * 0.25, y + n[i][1] * r * 0.25); c.lineTo(x + n[i][0] * r * 0.8, y + n[i][1] * r * 0.8 + 3); c.stroke(); }
-    if (L.glow && part === 'up') mCracks(c, [pts.slice(3, 9).filter((_, i) => i % 2 === 0).map(([x, y, r], i) => [x + (i % 2 ? 3 : -3), y])], L.glow, 2.2);
-  }
+// a line along a chain at a fraction k of its radius toward (k > 0) or away from the light
+function grabAlong(c, pts, d, k, col, w, i0 = 0, i1 = pts.length) {
+  const n = litSide(pts, d); c.strokeStyle = col; c.lineWidth = w; c.beginPath();
+  for (let i = i0; i < i1; i++) { const [x, y, r] = pts[i]; const px = x + n[i][0] * r * k, py = y + n[i][1] * r * k; i > i0 ? c.lineTo(px, py) : c.moveTo(px, py); }
+  c.stroke();
 }
-// the hand: skin parts merge under one ink outline, then claws (pointed, inside their capsules), pads, flames, bones
-function grabHandArt(c, rig, L, mon, t) {
-  const H0 = rig.hand, sk = L.skin, d = rig.d;
-  const soft = H0.filter(p => p[5] !== 'c' && p[5] !== 'x');
-  const palm = H0[0], g = pkRG(c, palm[0] - d * 3, palm[1] - 4, palm[4] * 2.2, sk);
-  const fillOf = role => role === 'p' ? (L.palm || L.sucker || sk[0]) : role === 'l' ? '#6abf3a' : role === 'f' ? rgbaA(L.glow || [255, 170, 60], 1)
-    : role === 'b' ? (L.bone || '#fff4dc') : role === 'm' ? (L.web ? L.web[0] : sk[0]) : role === 'k' ? sk[1] : role === 'g' ? rgbaA(hexRGB(sk[1]), 0.9) : role === 't' ? (L.tip || sk[0]) : g;
+// resample a chain every `step` units along its length (for evenly spaced rings, suckers, hairs)
+function chainEvery(pts, step) {
+  const out = []; let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0, r0] = pts[i - 1], [x1, y1, r1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0);
+    while (acc <= L) { const u = L ? acc / L : 0; out.push([lerp(x0, x1, u), lerp(y0, y1, u), lerp(r0, r1, u), Math.atan2(y1 - y0, x1 - x0)]); acc += step; }
+    acc -= L;
+  }
+  return out;
+}
+// The hand: skin parts merge under one ink outline, then claws (pointed, inside their capsules), pads, flames, bones.
+function grabHandArt(c, rig, P, t) {
+  const H0 = rig.hand, sk = P.skin, d = rig.d;
+  const soft = H0.filter(p => p[5] !== 'c' && p[5] !== 'x' && p[5] !== 'ft');
+  const palm = H0[0], g = pkRG(c, palm[0] - d * 3, palm[1] - 4, palm[4] * 2.2, P.goo ? sk.map(h => mixHex(h, h, 0, 0.88)) : sk);
+  const fillOf = role => role === 'p' ? (P.palm || P.sucker || sk[0]) : role === 'l' ? (P.leaf ? P.leaf[0] : '#6abf3a') : role === 'f' ? rgbaA(P.glow || [255, 170, 60], 1)
+    : role === 'b' ? (P.bone || sk[0]) : role === 'm' ? (P.web ? P.web[0] : sk[0]) : role === 'k' ? sk[1] : role === 'g' ? mixHex(sk[1], sk[0], 0.3, 0.9) : role === 't' ? (P.tip || sk[0]) : role === 'o' ? mixHex(sk[1], sk[0], 0.3) : g;
   for (const pass of [0, 1]) for (const [x0, y0, x1, y1, r, role] of soft) {
-    c.strokeStyle = pass ? fillOf(role) : (L.ink || INK); c.lineWidth = Math.max(0.5, 2 * r - (pass ? 2 * GRAB_INK : 0));
+    c.strokeStyle = pass ? fillOf(role) : (P.ink || INK); c.lineWidth = Math.max(0.5, 2 * r - (pass ? 2 * GRAB_INK : 0));
     c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 + (x1 === x0 && y1 === y0 ? 0.01 : 0), y1); c.stroke();
   }
   for (const [x0, y0, x1, y1, r, role] of soft) {
@@ -7417,111 +7483,256 @@ function grabHandArt(c, rig, L, mon, t) {
       c.save(); c.globalCompositeOperation = 'lighter';
       const fg = c.createLinearGradient(0, y0, 0, y1 - r); fg.addColorStop(0, 'rgba(255,252,225,.7)'); fg.addColorStop(1, 'rgba(255,252,225,0)');
       c.strokeStyle = fg; c.lineWidth = r; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.restore();
-    } else if (role === 'p') pkE(c, x0 - d * r * 0.25, y0 - r * 0.25, r * 0.35, r * 0.3, 'rgba(255,255,255,.5)', 0);
-    else if (role === 'l') { c.strokeStyle = '#2e6a14'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
-    else if (role === 'g') pkE(c, x0 - d * r * 0.3, y0 - r * 0.3, r * 0.25, r * 0.35, 'rgba(255,255,255,.45)', 0);
+    } else if (role === 'p') pkE(c, x0 - d * r * 0.25, y0 - r * 0.25, r * 0.35, r * 0.3, 'rgba(255,255,255,.55)', 0);
+    else if (role === 'l') { c.strokeStyle = P.leaf ? P.leaf[1] : '#2e6a14'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+    else if (role === 'g') pkE(c, x0 - d * r * 0.3, y0 - r * 0.3, r * 0.25, r * 0.35, 'rgba(255,255,255,.5)', 0);
     else if (role === 'b') { pkE(c, x0, y0, r * 0.95, r * 0.95, 'rgba(255,255,250,.6)', 1.2); pkE(c, x1, y1, r * 0.9, r * 0.9, 'rgba(255,255,250,.6)', 1.2); }
     else if (role === 'n') { c.strokeStyle = 'rgba(30,14,4,.8)'; c.lineWidth = 1.8; for (const u of [0.35, 0.7]) { const x = lerp(x0, x1, u), y = lerp(y0, y1, u); c.beginPath(); c.moveTo(x - r * 0.7, y); c.lineTo(x, y + r * 0.4); c.lineTo(x + r * 0.7, y); c.stroke(); } }
-    else if (role === 'm' && Math.abs(y1 - y0) > Math.abs(x1 - x0)) { c.strokeStyle = L.bone || 'rgba(255,255,255,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(lerp(x0, H0[0][0], 0.4), y0 + 4); c.lineTo(x1, y1 - r * 0.7); c.stroke(); }
-    else if (role === 'o') { c.strokeStyle = 'rgba(20,12,10,.6)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x0 - r * 0.6, y0 - r * 0.1); c.lineTo(x0 - r * 0.1, y0 - r * 0.5); c.lineTo(x0 + r * 0.5, y0 - r * 0.2); c.stroke(); c.strokeStyle = 'rgba(255,250,240,.45)'; c.beginPath(); c.moveTo(x1 - r * 0.5, y1 - r * 0.4); c.lineTo(x1 + r * 0.3, y1 - r * 0.6); c.stroke(); }
+    else if (role === 'm' && Math.abs(y1 - y0) > Math.abs(x1 - x0)) { c.strokeStyle = P.bone || 'rgba(255,255,255,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(lerp(x0, H0[0][0], 0.4), y0 + 4); c.lineTo(x1, y1 - r * 0.7); c.stroke(); }
+    else if (role === 'o') { c.strokeStyle = 'rgba(20,12,10,.6)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x0 - r * 0.6, y0 - r * 0.1); c.lineTo(x0 - r * 0.1, y0 - r * 0.5); c.lineTo(x0 + r * 0.5, y0 - r * 0.2); c.stroke(); c.strokeStyle = 'rgba(255,250,240,.5)'; c.beginPath(); c.moveTo(x1 - r * 0.5, y1 - r * 0.4); c.lineTo(x1 + r * 0.3, y1 - r * 0.6); c.stroke(); }
     else if (role === 'kn') { pkE(c, x0 - d * r * 0.2, y0 - r * 0.3, r * 0.4, r * 0.28, 'rgba(255,255,255,.4)', 0); c.strokeStyle = 'rgba(80,30,20,.45)'; c.lineWidth = 1.4; c.beginPath(); c.arc(x0, y0 + r * 0.4, r * 0.5, Math.PI * 1.2, Math.PI * 1.8); c.stroke(); }
-    else if (role === 't') pkE(c, x0 - d * r * 0.25, y0 - r * 0.3, r * 0.3, r * 0.4, 'rgba(255,255,255,.55)', 0);
-    else if (role === 'k') { c.strokeStyle = rgbaA(L.glow || [190, 90, 255], 0.5); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x0 - d * r * 0.5, y0); c.lineTo(x1 - d * r * 0.5, y1); c.stroke(); }
+    else if (role === 't') pkE(c, x0 - d * r * 0.25, y0 - r * 0.3, r * 0.3, r * 0.4, 'rgba(255,255,255,.6)', 0);
+    else if (role === 'k') { c.strokeStyle = rgbaA(P.glow || [190, 90, 255], 0.5); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x0 - d * r * 0.5, y0); c.lineTo(x1 - d * r * 0.5, y1); c.stroke(); }
   }
-  if (!/^[fgkbo]$/.test(palm[5])) { c.strokeStyle = LIMB_RIM; c.lineWidth = 2; c.beginPath(); c.arc(palm[0], palm[1], Math.max(1, palm[4] - GRAB_INK - 2), Math.PI * 1.1, Math.PI * 1.6); c.stroke(); }
-  if (L.glow) mAGlow(c, palm[0], palm[1], palm[4] * 1.6, L.glow, 0.3);
-  // claws and crystals: a pointed blade from the capsule's base to its tip, kept inside the capsule (ink included)
+  if (!/^[fgkbom]$/.test(palm[5])) { c.strokeStyle = LIMB_RIM; c.lineWidth = 2; c.beginPath(); c.arc(palm[0], palm[1], Math.max(1, palm[4] - GRAB_INK - 2), Math.PI * 1.1, Math.PI * 1.6); c.stroke(); }
+  if (P.glow && P.skin && rig.type === 'flame') mAGlow(c, palm[0], palm[1], palm[4] * 1.8, P.glow, 0.35);
+  // claws, fin tips and crystals: a pointed blade from the capsule's base to its tip, kept inside the capsule (ink included)
   for (const [x0, y0, x1, y1, r, role] of H0) {
-    if (role !== 'c' && role !== 'x') continue;
+    if (role !== 'c' && role !== 'x' && role !== 'ft') continue;
     const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, w = r - 0.8;
     const pts = [[x0 - uy * w, y0 + ux * w], [x1 + ux * w, y1 + uy * w], [x0 + uy * w, y0 - ux * w]];
-    if (role === 'x') { mAGlow(c, (x0 + x1) / 2, (y0 + y1) / 2, r * 4, L.glow || [120, 230, 255], 0.5); pkPath(c, pts, pkLG(c, x0, y0, x1, y1, L.crystal || ['#e8fdff', '#5ad8f0', '#1a7aa0']), 1.6); }
-    else pkPath(c, pts, L.claw || '#fff', 1.6);
+    if (role === 'x') { mAGlow(c, (x0 + x1) / 2, (y0 + y1) / 2, r * 4, P.glow || [120, 230, 255], 0.5); pkPath(c, pts, pkLG(c, x0, y0, x1, y1, P.crystal || ['#e8fdff', '#5ad8f0', '#1a7aa0']), 1.6); }
+    else if (role === 'ft') pkPath(c, pts, P.web ? P.web[0] : sk[0], 1.6);
+    else pkPath(c, pts, P.claw || '#fff', 1.6);
   }
 }
-const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-// a wing's membrane, hung from the wing's arm down to the body: below the catch line only (decorative, not a hitbox)
-function grabMembrane(c, rig, L, t) {
-  const d = rig.d, E = rig.up[rig.up.length - 1], S = rig.sh, fl = Math.sin(t * 4.6 + d) * 8;
-  const tips = [[E[0] + d * 2, E[1] + 96 + fl], [lerp(E[0], S[0], 0.4), S[1] + 128 + fl * 0.6], [S[0] - d * 18, S[1] + 92]];
-  const pts = [E];
-  tips.forEach((tp, k) => { const nx = tips[k + 1]; pts.push(tp); if (nx) pts.push([(tp[0] + nx[0]) / 2 - d * 14, (tp[1] + nx[1]) / 2 - 22]); });
-  pts.push([S[0], S[1]]);
-  const web = L.web || [L.skin[1], L.skin[2]];
-  mAShape(c, mAPoly(pts), pkLG(c, 0, E[1], 0, S[1] + 140, web), { rim: 'rgba(255,230,255,.45)', rw: 4, lw: 3.5 });
-  c.strokeStyle = 'rgba(0,0,0,.22)'; c.lineWidth = 2; c.beginPath();
-  for (const tp of tips) { c.moveTo(E[0], E[1]); c.quadraticCurveTo(lerp(E[0], tp[0], 0.5) - d * 10, lerp(E[1], tp[1], 0.5), tp[0], tp[1]); }
-  c.stroke();
-  for (const tp of tips) pkCurve(c, [E[0], E[1]], [lerp(E[0], tp[0], 0.5) - d * 6, lerp(E[1], tp[1], 0.5) - 4], tp, L.bone || '#fff', 4);
-  for (const tp of tips) pkPath(c, [[tp[0] - 4, tp[1] - 2], [tp[0] + d * 3, tp[1] + 10], [tp[0] + 4, tp[1] - 2]], L.claw || '#fff', 1.6);
+// ---- per-type looks ----
+// Each draws one limb's layer: mid(c, rig, P, t) behind the head, front(c, rig, P, t) in front. `arm` is the bend
+// plus the fore chain (the last few up points join the fore chain so the bend has no seam).
+const armChain = rig => [...rig.up.slice(-4, -1), ...rig.fore];
+function limbBase(c, rig, P, layer, o = {}) {
+  const ch = layer === 'mid' ? rig.up : armChain(rig);
+  grabBody(c, [ch], P.skin, rig.d, o);
+  if (layer === 'mid') limbRootShade(c, rig.up, o.shade ?? 0.4);
+  return ch;
 }
-// a pectoral fin's web, swept back from the fin's arm down to the body: below the catch line only (decorative)
-function grabFin(c, rig, L, t) {
-  const d = rig.d, E = rig.up[rig.up.length - 1], S = rig.sh, fl = Math.sin(t * 7 + d) * 6;
-  const pts = [[E[0], E[1]], [E[0] + d * 4, E[1] + 50 + fl], [lerp(E[0], S[0], 0.35), S[1] + 70 + fl], [lerp(E[0], S[0], 0.75), S[1] + 64], [S[0], S[1]]];
-  mAShape(c, mASm(pts), rgbaA(hexRGB(L.skin[0]), 0.5), { rim: 'rgba(255,255,255,.45)', rw: 4, lw: 3 });
-  c.strokeStyle = rgbaA(hexRGB(L.bone || '#ffffff'), 0.75); c.lineWidth = 2.4; c.beginPath();
-  for (const u of [0.15, 0.4, 0.65, 0.88]) { const a = pts[1], b = pts[2], q = pts[3], x = u < 0.5 ? lerp(a[0], b[0], u * 2) : lerp(b[0], q[0], u * 2 - 1), y = u < 0.5 ? lerp(a[1], b[1], u * 2) : lerp(b[1], q[1], u * 2 - 1); c.moveTo(lerp(S[0], E[0], 0.4), lerp(S[1], E[1], 0.4)); c.lineTo(x, y - 6); }
+// a few short strokes of fur along a chain's lit edge
+function limbFur(c, ch, d, col, len = 5, every = 1) {
+  const n = litSide(ch, d); c.strokeStyle = col; c.lineWidth = 1.5; c.beginPath();
+  for (let i = 1; i < ch.length; i += every) { const [x, y, r] = ch[i]; for (const k of [-0.5, 0.2, 0.7]) { const px = x + n[i][0] * r * k, py = y + n[i][1] * r * k; c.moveTo(px, py); c.lineTo(px + n[i][0] * len * 0.5 - (ch[i][0] - ch[i - 1][0]) * 0.25, py + len * 0.6); } }
   c.stroke();
 }
-// One limb, one layer: 'mid' (a wing's membrane or a fin's web, over the body and under the head), 'shoulder' (the
-// deltoid and the upper arm, over the head's lower side), 'front' (the forearm up the wall and the hand). 'back' draws
-// nothing.
-function drawGrabLimb(c, mon, rig, layer, t) {
-  const st = GRAB_STYLE[mon.id], L = monLimbs(mon), sk = L.skin;
-  if (layer === 'back') return;
-  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
-  const kind = st.limb, rim = kind === 'smoke' ? rgbaA(L.glow, 0.5) : LIMB_RIM;
-  const soft = kind === 'goo' ? 0.82 : 1;   // goo is see-through
-  const fillFor = (y0, y1, cols) => { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), soft < 1 ? rgbaA(hexRGB(col), soft) : col)); return g; };
-  if (layer === 'mid') {   // behind the head: a wing's membrane or a fin's web, hung from the arm down to the body
-    if (kind === 'wing') grabMembrane(c, rig, L, t);
-    if (kind === 'fin') grabFin(c, rig, L, t);
-  }
-  const behind = st.behind || rig.behind || rig.sc > 1.05;   // (a lunging, swollen head is in front of its shoulders)
-  if (layer === 'mid' ? behind : layer === 'shoulder' && !behind) {   // the deltoid and the upper arm growing out of it: in front of the head's lower side (behind it for st.behind)
-    const sh = [rig.sh], y0 = Math.min(rig.sh[1] - rig.sh[2], ...rig.up.map(p => p[1] - p[2])), y1 = rig.sh[1] + rig.sh[2];
-    if (kind === 'smoke') {
-      // the upper arm is the body's own smoke: soft dark puffs thickening toward the elbow, still one limb
-      capStroke(c, rig.up, rgbaA([4, 2, 10], 0.55), r => 2 * r);
-      for (let i = 0; i < rig.up.length; i++) { const [x, y, r] = rig.up[i], a = 0.35 + 0.65 * (i / (rig.up.length - 1)); pkE(c, x + Math.sin(t * 3 + i) * 2, y, r * 0.92, r * 0.92, rgbaA(hexRGB(sk[1]), a), 0); }
-      pkE(c, rig.sh[0], rig.sh[1], rig.sh[2] * 0.95, rig.sh[2] * 0.95, rgbaA(hexRGB(sk[1]), 0.5), 0);
-      grabDecor(c, kind, rig.up, L, rig.d, t, 'up');
-    } else {
-      grabBody(c, [sh, rig.up], fillFor(y0, y1, sk), rig.d, { rim, sk, alpha: soft, ink: L.ink, flame: kind === 'flame' });
-      grabDecor(c, kind, rig.up, L, rig.d, t, 'up');
-      grabDeltoid(c, rig, kind, L);
+const LIMB_ART = {
+  arm(c, rig, P, layer, t, mon) {
+    const id = mon.id, d = rig.d;
+    if (id === 'golem') {   // stacked boulders: each chunk its own faceted stone, crystals jutting from the joints
+      const ch = layer === 'mid' ? rig.up : armChain(rig);
+      grabBody(c, [ch], P.skin, d, { rim: 'rgba(240,255,255,.55)' });
+      if (layer === 'mid') limbRootShade(c, rig.up);
+      const beads = chainEvery(ch, 15);
+      beads.forEach(([x, y, r, a], i) => {
+        if (i === 0) return;
+        const nx = -Math.sin(a), ny = Math.cos(a);
+        c.strokeStyle = 'rgba(16,28,34,.75)'; c.lineWidth = 2.6; c.beginPath();
+        c.moveTo(x + nx * (r - 3), y + ny * (r - 3)); c.lineTo(x + Math.cos(a) * 3 + nx * r * 0.2, y + Math.sin(a) * 3 + ny * r * 0.2); c.lineTo(x - nx * (r - 3), y - ny * (r - 3)); c.stroke();
+        c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + nx * (r - 5) + Math.cos(a) * 4, y + ny * (r - 5) + Math.sin(a) * 4); c.lineTo(x + Math.cos(a) * 7, y + Math.sin(a) * 7); c.stroke();
+        if (i % 2 === 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(P.glow, 0.5 + 0.3 * Math.sin(t * 3 + i)); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - nx * r * 0.5, y - ny * r * 0.5); c.lineTo(x + Math.cos(a) * 2, y + Math.sin(a) * 2); c.stroke(); c.restore(); }
+      });
+    } else if (id === 'tiki') {   // carved wood: banded rings, a notched band at each joint, turquoise paint stripes
+      const ch = limbBase(c, rig, P, layer);
+      chainEvery(ch, 11).forEach(([x, y, r, a], i) => {
+        if (i === 0) return;
+        const nx = -Math.sin(a), ny = Math.cos(a), w = r - 2.5;
+        c.strokeStyle = i % 3 ? 'rgba(60,24,6,.55)' : 'rgba(40,14,2,.85)'; c.lineWidth = i % 3 ? 1.6 : 3; c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.lineTo(x - nx * w, y - ny * w); c.stroke();
+        if (i % 3 === 0) { c.strokeStyle = P.paint; c.lineWidth = 3; c.beginPath(); c.moveTo(x + nx * w * 0.8 + Math.cos(a) * 5, y + ny * w * 0.8 + Math.sin(a) * 5); c.lineTo(x - nx * w * 0.8 + Math.cos(a) * 5, y - ny * w * 0.8 + Math.sin(a) * 5); c.stroke(); }
+      });
+      grabAlong(c, ch, d, 0.45, 'rgba(255,230,180,.35)', 2);
+    } else if (id === 'giant') {   // a big human arm: a rolled denim sleeve at the shoulder, a biceps bulge, a forearm, a wrist crease
+      const ch = limbBase(c, rig, P, layer);
+      if (layer === 'mid') {
+        const sl = rig.up.slice(0, Math.ceil(rig.up.length * 0.42));
+        capStroke(c, sl, P.cloth[2], r => 2 * r - 2 * GRAB_INK);
+        capStroke(c, sl.map(([x, y, r]) => [x - d * r * 0.15, y - r * 0.2, r]), P.cloth[1], r => 1.5 * r - 2 * GRAB_INK);
+        capStroke(c, sl.map(([x, y, r]) => [x - d * r * 0.3, y - r * 0.35, r]), P.cloth[0], r => 0.6 * r);
+        grabAcross(c, rig.up, sl.length - 1, INK, 3, 0.95, 0.4); grabAcross(c, rig.up, sl.length - 2, 'rgba(255,255,255,.35)', 2, 0.85, 0.4);
+        c.strokeStyle = 'rgba(120,50,30,.45)'; c.lineWidth = 2; const m = rig.up[Math.round(rig.up.length * 0.7)]; c.beginPath(); c.arc(m[0], m[1] + m[2] * 0.2, m[2] * 0.6, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
+      } else { const w = ch[ch.length - 2]; c.strokeStyle = 'rgba(120,50,30,.5)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(w[0] - w[2] * 0.6, w[1] + 2); c.lineTo(w[0] + w[2] * 0.6, w[1]); c.stroke(); }
+    } else {   // gorilla: shaggy graphite fur, a forearm thicker than the upper arm, ember cracks along the muscles
+      const ch = limbBase(c, rig, P, layer, { rim: 'rgba(225,230,255,.55)' });
+      limbFur(c, ch, d, 'rgba(230,235,255,.45)', 7);
+      if (P.glow) mCracks(c, [chainEvery(ch, 9).slice(1, -1).map(([x, y, r, a], i) => [x + (i % 2 ? 1 : -1) * r * 0.25 * -Math.sin(a), y + (i % 2 ? 1 : -1) * r * 0.25 * Math.cos(a)])], [255, 150, 50], 2.2);
     }
-  } else if (layer === 'front') {
-    const f = rig.fore, y0 = Math.min(...f.map(p => p[1])) - 10, y1 = Math.max(...f.map(p => p[1])) + 10;
-    grabBody(c, [f], fillFor(y0, y1, sk), rig.d, { rim, sk, alpha: soft, ink: L.ink, flame: kind === 'flame' });
-    grabDecor(c, kind, f, L, rig.d, t, 'fore');
-    grabHandArt(c, rig, L, mon, t);
+  },
+  paw(c, rig, P, layer, t) {   // a short, very thick furry digging arm
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(255,240,225,.6)' });
+    limbFur(c, ch, rig.d, 'rgba(255,235,215,.5)', 8);
+    grabAlong(c, ch, rig.d, -0.55, mixHex(P.skin[2], P.skin[1], 0.3, 0.6), 2.4);
+  },
+  pad(c, rig, P, layer) {   // a thin smooth froggy arm: dark spots, a pale underside
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(230,250,255,.7)' });
+    grabAlong(c, ch, rig.d, -0.5, 'rgba(255,240,150,.55)', 2.4);
+    chainEvery(ch, 13).forEach(([x, y, r], i) => { if (i % 2) pkE(c, x + Math.sin(i) * r * 0.3, y, r * 0.32, r * 0.26, P.spot, 0); });
+  },
+  leg(c, rig, P, layer, t, mon) {   // a jointed leg: knobbly joints, bands or hairs
+    const ch = limbBase(c, rig, P, layer, { rim: mon.id === 'spider' ? 'rgba(200,255,190,.5)' : 'rgba(255,240,180,.5)', shade: 0.25 });
+    if (mon.id === 'hornet') {   // black and gold rings
+      chainEvery(ch, 9).forEach(([x, y, r, a], i) => { if (i % 2 || !i) return; const nx = -Math.sin(a), ny = Math.cos(a), w = r - 2; c.strokeStyle = P.band; c.lineWidth = 4.5; c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.lineTo(x - nx * w, y - ny * w); c.stroke(); });
+    } else {   // spider: bristling hairs and acid-green joint bands
+      const n = litSide(ch, rig.d); c.strokeStyle = 'rgba(190,230,190,.55)'; c.lineWidth = 1.2; c.beginPath();
+      for (let i = 1; i < ch.length; i++) { const [x, y, r] = ch[i]; for (const s2 of [1, -1]) { const px = x + n[i][0] * r * s2 * 0.9, py = y + n[i][1] * r * s2 * 0.9; c.moveTo(px, py); c.lineTo(px + n[i][0] * s2 * 4, py + n[i][1] * s2 * 4 + 2); } }
+      c.stroke();
+    }
+    if (layer === 'front') {   // the knee and the shin's joint
+      const k = rig.fore[0]; pkE(c, k[0], k[1], k[2] * 0.95, k[2] * 0.95, mon.id === 'hornet' ? P.skin[1] : P.band, 2);
+      pkE(c, k[0] - rig.d * k[2] * 0.25, k[1] - k[2] * 0.3, k[2] * 0.3, k[2] * 0.25, 'rgba(255,255,255,.5)', 0);
+      const j = rig.fore[Math.round(rig.fore.length * 0.5)]; if (j && rig.fore.length > 4) pkE(c, j[0], j[1], j[2] * 0.85, j[2] * 0.85, mon.id === 'hornet' ? P.band : P.skin[1], 1.8);
+    }
+  },
+  talon(c, rig, P, layer, t) {   // fossil bone: ivory shafts with knobbly joint ends, hairline cracks, an ember glow in the marrow
+    const ch = layer === 'mid' ? rig.up : armChain(rig);
+    grabBody(c, [ch], P.skin, rig.d, { rim: 'rgba(255,255,255,.75)' });
+    if (layer === 'mid') {
+      limbRootShade(c, rig.up, 0.3);
+      const a = rig.up[0], m = rig.up[Math.round(rig.up.length * 0.5)];
+      for (const p of [a, m]) { pkE(c, p[0], p[1], p[2] * 1.05, p[2] * 0.95, P.skin[1], 2.2); pkE(c, p[0] - p[2] * 0.3, p[1] - p[2] * 0.3, p[2] * 0.35, p[2] * 0.3, 'rgba(255,255,255,.6)', 0); }
+    } else { const k = rig.fore[0]; pkE(c, k[0], k[1], k[2] * 1.15, k[2] * 1.15, P.skin[1], 2.2); pkE(c, k[0] - k[2] * 0.3, k[1] - k[2] * 0.35, k[2] * 0.4, k[2] * 0.3, 'rgba(255,255,255,.65)', 0); }
+    grabAlong(c, ch, rig.d, -0.3, 'rgba(110,86,52,.55)', 1.6);
+    c.save(); c.globalCompositeOperation = 'lighter'; grabAlong(c, ch, rig.d, 0, rgbaA(P.glow, 0.22 + 0.1 * Math.sin(t * 3)), 2); c.restore();
+  },
+  wing(c, rig, P, layer, t, mon) {   // a wing arm: membrane and finger bones fanned down to the body (below the line), the leading finger up the wall
+    const d = rig.d;
+    if (layer === 'mid') {
+      // the membrane: from the wing finger where it crosses the catch line down through the fanned finger tips to the body
+      const W = rig.up[rig.up.length - 1], R0 = rig.root, fl = Math.sin(t * 4.6 + d) * 6 + 10 * rig.wind;
+      let top = rig.fore.find(p => p[1] <= 2) || rig.fore[rig.fore.length - 1]; top = [top[0], Math.max(top[1], 2)];
+      const tips = [[W[0] + d * 6, W[1] + 92 + fl], [lerp(W[0], R0[0], 0.38), R0[1] + 110 + fl * 0.6], [lerp(W[0], R0[0], 0.78), R0[1] + 72]];
+      const poly = [top, ...tips.flatMap((tp, k) => { const nx = tips[k + 1]; return nx ? [tp, [(tp[0] + nx[0]) / 2 - d * 4, (tp[1] + nx[1]) / 2 - 24]] : [tp]; }), [R0[0], R0[1] + 10], [R0[0], R0[1]], [W[0], W[1]]];
+      mAShape(c, mAPoly(poly), pkLG(c, 0, W[1] - 20, 0, R0[1] + 130, P.web), { rim: 'rgba(255,220,255,.45)', rw: 4, lw: 3.5 });
+      c.save(); mAPoly(poly)(c); c.clip();
+      if (P.vein) { c.strokeStyle = rgbaA(hexRGB(P.vein), 0.45); c.lineWidth = 1.6; c.beginPath(); for (const tp of tips) { c.moveTo(lerp(W[0], tp[0], 0.2), lerp(W[1], tp[1], 0.2)); c.quadraticCurveTo(lerp(W[0], tp[0], 0.5) + d * 12, lerp(W[1], tp[1], 0.5), lerp(W[0], tp[0], 0.85), lerp(W[1], tp[1], 0.85)); } c.stroke(); }
+      c.fillStyle = 'rgba(0,0,0,.18)'; c.beginPath(); c.ellipse(R0[0], R0[1], 50, 60, 0, 0, TWO_PI); c.fill();
+      c.restore();
+      for (const tp of tips) pkCurve(c, [W[0], W[1]], [lerp(W[0], tp[0], 0.5) - d * 8, lerp(W[1], tp[1], 0.5) - 6], tp, P.bone, 4.5);
+      for (const tp of tips) pkPath(c, [[tp[0] - 4, tp[1] - 3], [tp[0] + d * 2, tp[1] + 9], [tp[0] + 4, tp[1] - 3]], P.claw, 1.6);
+      grabBody(c, [rig.up], P.skin, d, {});
+      limbRootShade(c, rig.up, 0.35);
+      grabAlong(c, rig.up, d, 0, P.bone, 2.6, 3);
+      if (mon.id === 'dragon') chainEvery(rig.up, 12).forEach(([x, y, r, a], i) => { if (i % 2) return; const nx = -Math.sin(a), ny = Math.cos(a); pkPath(c, [[x + nx * r * 0.3 - Math.cos(a) * 4, y + ny * r * 0.3 - Math.sin(a) * 4], [x - nx * (r - 3), y - ny * (r - 3)], [x + nx * r * 0.3 + Math.cos(a) * 4, y + ny * r * 0.3 + Math.sin(a) * 4]], P.bone, 1.2); });
+    } else {
+      const ch = armChain(rig);
+      grabBody(c, [ch], P.skin, d, {});
+      grabAlong(c, ch, d, 0, P.bone, Math.max(2, ch[ch.length >> 1][2] * 0.38));
+      const k = rig.fore[0]; pkE(c, k[0], k[1], k[2] * 1.05, k[2] * 1.05, P.skin[1], 2.2); pkE(c, k[0] - d * 2, k[1] - 3, k[2] * 0.4, k[2] * 0.32, 'rgba(255,255,255,.5)', 0);
+    }
+  },
+  pincer(c, rig, P, layer, t) {   // a segmented shell arm: joint rings, spikes along the top edge, glossy highlights
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(235,230,255,.7)', shade: 0.3 });
+    const n = litSide(ch, rig.d);
+    chainEvery(ch, 16).forEach(([x, y, r, a], i) => {
+      if (!i) return;
+      const nx = -Math.sin(a), ny = Math.cos(a), w = r - 2.5;
+      c.strokeStyle = 'rgba(14,10,50,.7)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.quadraticCurveTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4, x - nx * w, y - ny * w); c.stroke();
+    });
+    for (let i = 2; i < ch.length - 1; i += 3) { const [x, y, r] = ch[i], [nx, ny] = n[i]; pkPath(c, [[x + nx * (r - 6) - ny * 3, y + ny * (r - 6) + nx * 3], [x + nx * (r - 2.6), y + ny * (r - 2.6)], [x + nx * (r - 6) + ny * 3, y + ny * (r - 6) - nx * 3]], P.claw, 1.2); pkE(c, x + nx * r * 0.2, y + ny * r * 0.2, r * 0.22, r * 0.16, 'rgba(255,255,255,.5)', 0); }
+  },
+  fin(c, rig, P, layer, t, mon) {   // a fin: a fleshy root, a web swept back from it (below the line), a pale underside
+    const d = rig.d;
+    if (layer === 'mid') {
+      const E = rig.up[rig.up.length - 1], S = rig.root, fl = Math.sin(t * 7 + d) * 5;
+      const pts = [[E[0], E[1]], [E[0] + d * 6, E[1] + 44 + fl], [lerp(E[0], S[0], 0.4), S[1] + 58 + fl], [lerp(E[0], S[0], 0.8), S[1] + 40], [S[0], S[1]]];
+      const web = P.web || P.skin;
+      mAShape(c, mASm(pts), pkLG(c, 0, E[1], 0, S[1] + 60, web), { rim: 'rgba(255,255,255,.5)', rw: 4, lw: 3.4 });
+      c.strokeStyle = mon.id === 'piranha' ? P.claw : 'rgba(255,255,255,.45)'; c.lineWidth = 2.2; c.beginPath();
+      for (const u of [0.2, 0.45, 0.7]) { const a = pts[1], b = pts[2], q = pts[3], x = u < 0.5 ? lerp(a[0], b[0], u * 2) : lerp(b[0], q[0], u * 2 - 1), y = u < 0.5 ? lerp(a[1], b[1], u * 2) : lerp(b[1], q[1], u * 2 - 1); c.moveTo(lerp(S[0], E[0], 0.45), lerp(S[1], E[1], 0.45)); c.lineTo(x, y - 5); }
+      c.stroke();
+    }
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(255,255,255,.65)', shade: 0.3 });
+    grabAlong(c, ch, d, -0.5, P.belly || P.skin[0], Math.max(2, ch[ch.length >> 1][2] * 0.45));
+    if (mon.id === 'piranha') chainEvery(ch, 10).forEach(([x, y, r, a], i) => { if (!i) return; c.strokeStyle = 'rgba(6,40,34,.45)'; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r * 0.55, a + Math.PI * 0.6, a + Math.PI * 1.4); c.stroke(); });
+  },
+  tentacle(c, rig, P, layer, t) {   // a tentacle: a lighter underside lined with suckers, the root shaded where it leaves the mantle
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(255,235,230,.7)', shade: 0.35 });
+    grabAlong(c, ch, rig.d, -0.45, mixHex(P.skin[0], P.sucker, 0.4, 0.8), Math.max(2, ch[0][2] * 0.5));
+    const n = litSide(ch, rig.d);
+    chainEvery(ch, 10).forEach(([x, y, r], i) => {
+      if (i === 0 || r < 3.5) return;
+      let best = 0, bd = 1e9; ch.forEach((p, j) => { const dd = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (dd < bd) { bd = dd; best = j; } });
+      const [nx, ny] = n[best], sx = x - nx * r * 0.5, sy2 = y - ny * r * 0.5, sr = Math.max(1.4, r * 0.3);
+      pkE(c, sx, sy2, sr, sr, P.sucker, 1.3); pkE(c, sx, sy2, sr * 0.42, sr * 0.42, 'rgba(150,30,40,.6)', 0);
+    });
+  },
+  coil(c, rig, P, layer, t) {   // a loop of the worm's own body: alternating basalt-plated and fleshy rings, lava glowing in the seams
+    const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d, pulse = 0.7 + 0.3 * Math.sin(t * 3);
+    grabBody(c, [ch], P.skin, d, { rim: 'rgba(255,220,180,.6)' });
+    if (layer === 'mid') limbRootShade(c, rig.up, 0.3);
+    chainEvery(ch, 13).forEach(([x, y, r, a], i) => {
+      const nx = -Math.sin(a), ny = Math.cos(a), w = r - 2.4, plated = i % 2 === 0, ca = Math.cos(a), sa = Math.sin(a);
+      if (plated) {   // a basalt plate across the ring
+        c.save(); c.translate(x, y); c.rotate(a);
+        c.beginPath(); c.ellipse(0, 0, 4.6, w, 0, 0, TWO_PI); c.fillStyle = P.plate[1]; c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+        c.strokeStyle = 'rgba(255,220,200,.35)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(-1, 0, 2.4, w * 0.8, 0, Math.PI * 0.9, Math.PI * 1.5); c.stroke();
+        c.restore();
+      } else {
+        c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(P.glow, 0.5 * pulse); c.lineWidth = 3;
+        c.beginPath(); c.moveTo(x + nx * w * 0.8 + ca * 2, y + ny * w * 0.8 + sa * 2); c.lineTo(x - nx * w * 0.8 + ca * 2, y - ny * w * 0.8 + sa * 2); c.stroke(); c.restore();
+      }
+    });
+  },
+  vine(c, rig, P, layer, t) {   // a woody green stem with thorn buds, leaves sprouting from it below the catch line
+    const ch = limbBase(c, rig, P, layer, { rim: 'rgba(235,255,200,.6)', shade: 0.3 });
+    grabAlong(c, ch, rig.d, 0.1, 'rgba(30,70,10,.5)', 1.6);
+    const n = litSide(ch, rig.d);
+    for (let i = 3; i < ch.length - 1; i += 3) { const [x, y, r] = ch[i], s2 = (i / 3) % 2 ? 1 : -1, [nx, ny] = n[i]; pkPath(c, [[x + nx * s2 * (r - 5) - ny * 2.5, y + ny * s2 * (r - 5) + nx * 2.5], [x + nx * s2 * (r - 1.8), y + ny * s2 * (r - 1.8)], [x + nx * s2 * (r - 5) + ny * 2.5, y + ny * s2 * (r - 5) - nx * 2.5]], P.claw, 1); }
+    if (layer === 'mid') {   // leaves (decorative, always under the catch line)
+      chainEvery(rig.up, 34).forEach(([x, y, r, a], i) => {
+        if (!i || y < r + 26) return;
+        const s2 = i % 2 ? 1 : -1, ang = a + s2 * 1.9 + Math.sin(t * 1.8 + i) * 0.15;
+        c.save(); c.translate(x + Math.cos(ang) * r * 0.8, y + Math.sin(ang) * r * 0.8); c.rotate(ang);
+        mAShape(c, mASm([[0, 0], [10, -9], [26, -8], [34, 0], [24, 7], [10, 7]]), pkLG(c, 0, -9, 0, 7, P.leaf), { lw: 2.4 });
+        c.strokeStyle = P.leaf[1]; c.lineWidth = 1.2; c.beginPath(); c.moveTo(2, 0); c.lineTo(30, 0); c.stroke();
+        c.restore();
+      });
+    }
+  },
+  goo(c, rig, P, layer, t) {   // see-through goo: a glossy lumpy pseudopod with bubbles rising inside and a drip hanging off it
+    const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d;
+    grabBody(c, [ch], P.skin, d, { alpha: 0.86, rim: 'rgba(255,240,255,.8)' });
+    chainEvery(ch, 12).forEach(([x, y, r], i) => { const p = (t * 0.7 + i * 0.37) % 1; pkE(c, x + Math.sin(i * 2.3) * r * 0.35, y + (0.5 - p) * 10, r * 0.15 + 1, r * 0.15 + 1, `rgba(255,255,255,${0.55 * Math.sin(p * Math.PI)})`, 0); });
+    grabAlong(c, ch, d, 0.5, 'rgba(255,255,255,.55)', 2.4);
+  },
+  flame(c, rig, P, layer, t) {   // a licking tongue of fire: heat bands to a white core, flickers racing up it
+    const ch = layer === 'mid' ? rig.up : armChain(rig);
+    c.save(); c.globalCompositeOperation = 'lighter'; capStroke(c, ch, rgbaA(P.glow, 0.25 + 0.4 * rig.wind), r => 2 * r + 10); c.restore();
+    grabBody(c, [ch], P.skin, rig.d, { flame: true, ink: '#5a0e04' });
+    c.save(); c.globalCompositeOperation = 'lighter';
+    chainEvery(ch, 9).forEach(([x, y, r], i) => { const f = (t * 3 + i * 0.29) % 1; c.fillStyle = `rgba(255,250,210,${0.35 * Math.sin(f * Math.PI)})`; c.beginPath(); c.arc(x + Math.sin(t * 9 + i) * r * 0.25, y - f * 6, r * 0.45, 0, TWO_PI); c.fill(); });
+    c.restore();
+  },
+  smoke(c, rig, P, layer, t) {   // a wisp of dark smoke thickening from the body, a teal glow along its edge, fading toward the claws
+    const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d;
+    capStroke(c, ch, rgbaA([2, 6, 8], 0.85), r => 2 * r);
+    capStroke(c, ch, P.skin[1], r => 2 * r - 2 * GRAB_INK);
+    chainEvery(ch, 8).forEach(([x, y, r], i) => { pkE(c, x + Math.sin(t * 3 + i) * r * 0.2, y + Math.cos(t * 2.4 + i) * r * 0.15, r * 0.7, r * 0.7, rgbaA(hexRGB(P.skin[0]), 0.35 + 0.2 * Math.sin(t * 4 + i)), 0); });
+    c.save(); c.globalCompositeOperation = 'lighter'; grabAlong(c, ch, d, 0.65, rgbaA(P.glow, 0.55 + 0.3 * rig.wind), 2.2); grabAlong(c, ch, d, -0.7, rgbaA(P.glow, 0.18), 1.6); c.restore();
+  },
+};
+// One limb, one layer ('mid' behind the head, 'front' in front of everything). 'back' and 'shoulder' draw nothing.
+function drawGrabLimb(c, mon, rig, layer, t) {
+  if (layer !== 'mid' && layer !== 'front') return;
+  const st = GRAB_STYLE[mon.id], P = limbPal(mon), art = LIMB_ART[st.type];
+  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  art(c, rig, P, layer, t, mon);
+  if (layer === 'front') {
+    if (rig.wind > 0) {   // the wind-up: the limb glows hot in its monster's colour as it coils back
+      c.save(); c.globalCompositeOperation = 'lighter'; capStroke(c, armChain(rig), rgbaA(mon.haze, 0.3 * rig.wind * (0.6 + 0.4 * Math.sin(t * 30))), r => 2 * r - 2 * GRAB_INK); c.restore();
+    }
+    grabHandArt(c, rig, P, t);
   }
   c.restore();
 }
-// the deltoid's modelling: a crescent of light over its top and a crease where the upper arm swells out of it
-function grabDeltoid(c, rig, kind, L) {
-  const [x, y, r] = rig.sh, d = rig.d, q = rig.up[Math.min(4, rig.up.length - 1)], a = Math.atan2(q[1] - y, q[0] - x);
-  c.lineCap = 'round';
-  c.strokeStyle = 'rgba(255,248,235,.55)'; c.lineWidth = 3.4; c.beginPath(); c.arc(x, y, r - GRAB_INK - 4, -Math.PI / 2 - d * 0.2 - 0.9, -Math.PI / 2 - d * 0.2 + 0.7); c.stroke();
-  if (/tentacle|vine|goo|flame|smoke/.test(kind)) return;
-  if (kind === 'fossil') {   // a ball-and-socket bone joint, cracked with age
-    c.strokeStyle = 'rgba(110,90,60,.6)'; c.lineWidth = 2.6; c.beginPath(); c.arc(x, y, r * 0.66, 0, TWO_PI); c.stroke();
-    c.strokeStyle = 'rgba(110,90,60,.45)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x - r * 0.3, y - r * 0.5); c.lineTo(x - r * 0.1, y - r * 0.2); c.lineTo(x - r * 0.25, y + r * 0.1); c.stroke();
-    return;
-  }
-  if (kind === 'stone') {   // a boulder of a shoulder: angular facets, no round joint
-    c.strokeStyle = 'rgba(20,12,10,.5)'; c.lineWidth = 2.4; c.beginPath();
-    c.moveTo(x - r * 0.75, y - r * 0.2); c.lineTo(x - r * 0.15, y - r * 0.35); c.lineTo(x + r * 0.3, y + r * 0.15); c.lineTo(x + r * 0.2, y + r * 0.75);
-    c.moveTo(x - r * 0.15, y - r * 0.35); c.lineTo(x + r * 0.1, y - r * 0.85); c.moveTo(x + r * 0.3, y + r * 0.15); c.lineTo(x + r * 0.85, y - r * 0.05); c.stroke();
-    c.fillStyle = 'rgba(255,250,240,.18)'; c.beginPath(); c.moveTo(x - r * 0.15, y - r * 0.35); c.lineTo(x + r * 0.1, y - r * 0.85); c.lineTo(x - r * 0.6, y - r * 0.6); c.lineTo(x - r * 0.75, y - r * 0.2); c.closePath(); c.fill();
-    return;
-  }
-  c.strokeStyle = 'rgba(20,8,6,.42)'; c.lineWidth = 2.6; c.beginPath(); c.arc(x, y, r * 0.62, a - 0.95, a + 0.95); c.stroke();
-}
 // The wind-up tell, on the wall itself: the rock glows and cracks up the stretch the claw is about to grab (inside the
-// rock, outside the shaft), pulsing faster as the grab comes.
+// rock, outside the shaft), pulsing faster as the grab comes, with fresh scratches where the claws will land and grit
+// trickling down.
 function drawGrabTell(c, mon, rig, wallX, wind, reach, t) {
   if (wind <= 0) return;
   const d = rig.d, pulse = 0.55 + 0.45 * Math.sin(t * (14 + 20 * wind));
@@ -7531,16 +7742,16 @@ function drawGrabTell(c, mon, rig, wallX, wind, reach, t) {
     c.strokeStyle = rgbaA(mon.haze, a * wind * pulse); c.lineWidth = w;
     c.beginPath(); for (let y = 6; y >= -reach; y -= 6) { const x = wallX(y) + d * 3; y === 6 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
   }
-  const palm = rig.hand[0];   // and the claw itself flares as it coils
+  const palm = rig.hand[0];   // and the tip itself flares as it coils
   const fg = c.createRadialGradient(palm[0], palm[1], 1, palm[0], palm[1], 34); fg.addColorStop(0, rgbaA(mon.haze, 0.6 * wind * pulse)); fg.addColorStop(1, rgbaA(mon.haze, 0));
   c.fillStyle = fg; c.beginPath(); c.arc(palm[0], palm[1], 34, 0, TWO_PI); c.fill();
   c.restore();
-  // three fresh scratch marks where the claws will land
-  c.strokeStyle = rgbaA([255, 240, 210], 0.7 * wind); c.lineWidth = 1.6;
-  for (let k = 0; k < 3; k++) { const y = -reach + 8 + k * 7, x = wallX(y) + d * 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x + d * 5, y - 5); c.stroke(); }
+  c.strokeStyle = rgbaA([255, 240, 210], 0.75 * wind); c.lineWidth = 1.8;
+  for (let k = 0; k < 3; k++) { const y = -reach + 8 + k * 7, x = wallX(y) + d * 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x + d * 6, y - 6); c.stroke(); }
+  for (let k = 0; k < 4; k++) { const p = (t * 1.6 + k * 0.25) % 1, y = -reach + 10 + p * (reach - 4), x = wallX(y) + d * (1 + k % 2); c.fillStyle = `rgba(255,236,200,${0.6 * wind * (1 - p)})`; c.beginPath(); c.arc(x, y, 1.6, 0, TWO_PI); c.fill(); }
 }
 // This moment's limb frame: the catch line the limbs hang from, the body's centre line, how much of the head shows
-// below that line on screen, and a cap on how high a claw may reach. In play the limbs hang from the real catch line
+// below that line on screen, and a cap on how high a tip may reach. In play the limbs hang from the real catch line
 // (or, while the monster is below the screen, from the top of the head peeking over the bottom edge, capped well
 // below the pilot). While the monster swallows the pilot they ride on the lunging head (see drawWorm).
 function grabFrame() {
@@ -7558,19 +7769,15 @@ function grabFrame() {
 }
 // the limbs for a frame: [left, right], each { rig, pose, alpha }. They fade out (and stop grabbing) when too little of
 // the head shows for their roots to be on screen.
-const shTuck = [false, false];
 function grabRigs(fr, mon = monster(), t = G.t) {
-  if (!fr) return [];
+  if (!fr || fr.hide) return [];
   const alpha = smooth(40, 64, fr.avail), st = GRAB_STYLE[mon.id];
   if (alpha <= 0 || !st) return [];
   const wallAt = a => walls(a);
   return [-1, 1].map(d => {
     const gb = G.grab && G.grab.side === d && G.state === 'play' ? G.grab.t : null;
-    const pose = grabPose(gb, t, d, fr.top);
+    const pose = grabPose(gb, t, d, fr.top, st);
     const rig = grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail, undefined, fr.sc || 1);
-    // where the shaft squeezes a shoulder in over the face, it tucks behind the head (with a little hysteresis, so it
-    // doesn't flicker)
-    const k = d < 0 ? 0 : 1; shTuck[k] = rig.squeeze > 16 ? true : rig.squeeze < 8 ? false : shTuck[k]; rig.behind = shTuck[k];
     return { rig, pose, alpha, kill: fr.kill, top: fr.top };
   });
 }
@@ -7580,9 +7787,9 @@ function grabShapes(rigs = grabRigs(grabFrame())) {
   for (const { rig, kill } of rigs) for (const [x0, y0, x1, y1, r] of rig.caps) S.push({ k: 's', x0, a0: kill - y0, x1, a1: kill - y1, r });
   return S;
 }
-// Draw a frame's limbs in screen space (layer 'mid', 'shoulder' or 'front'; the wind-up tell goes with the front layer).
+// Draw a frame's limbs in screen space (layer 'mid' or 'front'; the wind-up tell goes with the front layer).
 function drawGrabWorld(rigs, layer) {
-  if (!rigs.length || layer === 'back') return;
+  if (!rigs.length || (layer !== 'mid' && layer !== 'front')) return;
   const mon = monster();
   for (const { rig, pose, alpha, kill, top } of rigs) {
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(sx(0), sy(kill)); ctx.scale(s, s);
@@ -7613,13 +7820,12 @@ function updateGrab(dt) {
   }
 }
 // The limbs in a portrait (picker cards, key art): drawn in the monster's art frame against walls at ±half (world
-// units), resting with their claws just under the catch line.
+// units), resting with their tips under the catch line.
 function drawGrabPortrait(c, mon, t, half, layer) {
-  const st = GRAB_STYLE[mon.id]; if (!st || layer === 'back') return;
+  const st = GRAB_STYLE[mon.id]; if (!st || (layer !== 'mid' && layer !== 'front')) return;
   c.save(); c.scale(1 / MON_SCALE, 1 / MON_SCALE);
   for (const d of [-1, 1]) {
-    const rig = grabRig(st, d, () => [-half, half], 0, grabPose(null, t, d), t, 0, Infinity, [-half - 40, half + 40]);
-    rig.behind = Math.abs(rig.sh[0]) < st.rx * 0.95;   // (in a small card the walls squeeze the shoulders in over the face: they go behind it)
+    const rig = grabRig(st, d, () => [-half, half], 0, grabPose(null, t, d, GRAB.reach, st), t, 0, Infinity, [-half - 40, half + 40]);
     drawGrabLimb(c, mon, rig, layer, t);
   }
   c.restore();
@@ -7656,18 +7862,9 @@ function monsterRumble() {
   const g = monsterGap();
   return 0.2 * clamp(1 - (g - 250) / 450, 0, 1) + 0.8 * clamp(1 - (g - 40) / 210, 0, 1);
 }
-const eyeCache = {}, eyeScratch = document.createElement('canvas').getContext('2d');
-function monsterEyes(mon) {
-  if (!eyeCache[mon.id]) {
-    mEyeLog = [];
-    try { mon.draw(eyeScratch, { t: 0, open: 0.5, look: 0 }); } catch {}
-    eyeCache[mon.id] = mEyeLog.sort((p, q) => q[2] - p[2]).slice(0, mon.id === 'spider' || mon.id === 'shadow' ? 4 : 2);
-    mEyeLog = null;
-  }
-  return eyeCache[mon.id];
-}
 // The mouth's centre in the monster's art frame, after its form's tilt and stretch (see drawMonsterForm).
 function mouthArt(mon) {
+  if (mon.v3) { const mo = mon.mouth, q = mon.fit || 1; return [mo[0] * q, (mo[1] + (mon.dy || 0)) * q]; }
   const mo = mon.mouth || [0, 150, 100, 50], f = monForm(mon), x = mo[0] * (f.sx || 1), y = mo[1] * (f.sy || 1), a = f.tilt || 0;
   const ox0 = f.dx || 0, oy0 = f.dy || 0, q = f.fit || 1;
   const [px, py] = a ? [ox0 - a * 90 + x * Math.cos(a) - y * Math.sin(a), oy0 + 40 * Math.abs(a) + x * Math.sin(a) + y * Math.cos(a)] : [ox0 + x, oy0 + y];
@@ -7712,7 +7909,10 @@ function drawWorm() {
   const T0 = ctx.getTransform();   // (the frame's screen transform, for its wall limbs' upper arms)
   G.biteInMouth = false;
   mMouthHook = b ? (c, path) => { c.save(); path(c); c.clip(); c.setTransform(T0); G.biteInMouth = true; drawKnock(true); c.restore(); } : null;
-  const chew = b ? smooth(0.38, 0.48, b.t) : 0, chewP = chew * Math.sin((b ? b.t - 0.38 : 0) * 13);
+  const chew = b ? smooth(0.38, 0.48, b.t) : 0, chewP = mon.v3 ? 0 : chew * Math.sin((b ? b.t - 0.38 : 0) * 13);
+  // where the pilot is right now in the head's art frame (it flies into the mouth: see drawKnock)
+  let prey = null;
+  if (b && G.knock && G.biteGeo) { const e = smooth(0.02, 0.2, b.t), g = G.biteGeo, fit = mon.fit || 1; prey = [(lerp(sx(G.knock.x), g.mx, e) - tx) / k / fit, (lerp(sy(G.knock.alt), g.my + g.ry * 0.12, e) - y) / k / fit - (mon.dy || 0)]; }
   // a zone-contrasting back-light behind it (soft and unclipped: no hard band at the catch line)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const hr = 300 * k, hy = y + 120 * k;
@@ -7734,7 +7934,7 @@ function drawWorm() {
   mFlare = b ? 1 : crouch;
   const [wl, wr] = walls(W.alt + 100), coilHalf = ((wr - wl) / 2) / ((k / s) * (1 + 0.04 * surge));   // (its body limbs reach the walls at any size)
   const rage = b ? 1 : Math.max(crouch, surge);
-  drawMonsterForm(ctx, mon, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1), rage, wide: b ? 1 - 0.6 * smooth(0.5, 1.2, b.t) : 0, gape: b ? 1 - smooth(0.3, 0.4, b.t) : 0, chew, chewP, chewT: b ? b.t : 0 }, coilHalf, layer => midLimbs(layer, rigs, T0));
+  drawMonsterForm(ctx, mon, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1), rage, wide: b ? 1 - 0.6 * smooth(0.5, 1.2, b.t) : 0, gape: b ? 1 - smooth(0.3, 0.4, b.t) : 0, chew, chewP, chewT: b ? b.t : 0, bite: b ? b.t : -1, prey }, coilHalf, layer => midLimbs(layer, rigs, T0));
   mFlare = 0; mMouthHook = null;
   ctx.restore();
   ctx.restore(); ctx.save();          // (end of the clip)
@@ -7782,6 +7982,7 @@ function ellGlow(x, y, rx, ry, stops) {
 // (soft drifting puffs break the line), and a low lava glow wells up from under it with embers rising.
 function drawMonsterDepths(mon, y, k, tx) {
   // the body dissolves into a long fog, lit from below by lava, that starts well above where any body ends
+  y += (mon.v3 ? (G.state === 'dead' && G.bite ? 300 : 120) : 0) * k;   // (redesigned bodies show more of their form before the fog takes them)
   const gy0 = y + 230 * k, gy1 = y + 620 * k, dark = mon.haze.map(v => v * 0.09 | 0), P = drawPad * s + 40;
   if (gy0 > H + 40) return;
   ctx.save();
@@ -8433,13 +8634,16 @@ tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); fitCards('pilot
 
 // monster picker: each card shows the monster alone, jaws open, lit from below
 const monsterCards = [];
+// the preview and the menu button's thumbnail render at the device's pixel ratio too
+for (const id of ['monsterPreview', 'monsterMini']) { const cv = $(id), k = Math.min(3, Math.max(2, window.devicePixelRatio || 1)); if (cv && !cv.dataset.hi) { cv.width *= k; cv.height *= k; cv.dataset.hi = 1; } }
 function buildMonsters() {
   const grid = $('monsterGrid'); grid.innerHTML = ''; monsterCards.length = 0;
   MONSTERS.forEach((mn, i) => {
     const b = document.createElement('button');
     b.className = 'pcard'; b.id = 'monster-' + mn.id; b.setAttribute('aria-pressed', String(i === monsterIndex));
     b.style.setProperty('--tint', mn.haze.join(','));
-    b.innerHTML = `<canvas width="120" height="120" aria-hidden="true"></canvas><span>${mn.name}</span>`;
+    const px = Math.round(120 * Math.min(3, Math.max(2, window.devicePixelRatio || 1)));   // (drawn at the device's pixel ratio, so cards stay crisp)
+    b.innerHTML = `<canvas width="${px}" height="${px}" aria-hidden="true"></canvas><span>${mn.name}</span>`;
     b.addEventListener('click', () => selectMonster(i));
     grid.appendChild(b); monsterCards.push(b.querySelector('canvas'));
   });
@@ -8467,16 +8671,17 @@ function monsterPortrait(c, mn, t, w, h, k, top, open) {
   drawMonsterForm(c, mn, { t, open, look: Math.sin(t * 0.7) * 0.5, rage: 0.3 }, undefined, layer => { if (layer === 'mid') drawGrabPortrait(c, mn, t, hw, 'mid'); else if (layer === 'shoulder') { drawGrabPortrait(c, mn, t, hw, 'shoulder'); drawGrabPortrait(c, mn, t, hw, 'front'); } });
   mFlare = 0;
   c.restore();
-  // lava light welling up from under it
+  // a soft warm glow welling up from under it (an oval below the frame, so it never washes out the art)
   c.save(); c.globalCompositeOperation = 'lighter';
-  const lg = c.createLinearGradient(0, h * 0.45, 0, h);
-  lg.addColorStop(0, rgbaA(mn.haze, 0)); lg.addColorStop(1, rgbaA(mn.haze, 0.6));
-  c.fillStyle = lg; c.fillRect(0, h * 0.45, w, h * 0.55); c.restore();
+  c.translate(w / 2, h * 1.08); c.scale(1, 0.4);
+  const lg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.6);
+  lg.addColorStop(0, rgbaA(mn.haze, 0.28)); lg.addColorStop(1, rgbaA(mn.haze, 0));
+  c.fillStyle = lg; c.fillRect(-w, -w, w * 2, w * 2); c.restore();
 }
 function drawMonsterThumb(cv, mn, t, mini) {
   const c = cv.getContext('2d'), w = cv.width, h = cv.height;
   c.setTransform(1, 0, 0, 1, 0, 0);
-  const f = monForm(mn), wide = f.heads ? 1.5 : f.coil ? 1.25 : 1;   // pull back for the wider silhouettes
+  const f = mn.v3 ? {} : monForm(mn), wide = f.heads ? 1.5 : f.coil ? 1.25 : 1;   // pull back for the wider silhouettes
   const k = w > h * 1.5 ? h / (300 * Math.min(wide, 1.2)) : w / ((mini ? 330 : 330) * wide);   // (cards: the head fills ~70% of the card)   // the wide preview fits by height
   monsterPortrait(c, mn, t, w, h, k, h * (f.heads ? 0.2 : 0.1), 0.75 + 0.25 * Math.sin(t * 2.6));
 }

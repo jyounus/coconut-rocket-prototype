@@ -551,30 +551,61 @@ for (const cfg of CONFIGS) {
 // the wind-up lasts at least 0.4 s; a full grab tops out at GRAB.reach; and with both walls grabbing at once the
 // centre lane stays wider than the widest pilot hitbox plus 60. Checked for all 20 monsters on real shafts.
 const lerp = (a, b, t) => a + (b - a) * t;
-const grabStats = { limbs: 0, worstIn: 0, worstOut: 0, minLane: Infinity, maxTop: -Infinity, minTaper: Infinity, minBend: Infinity };
-// Every wall limb is a real arm: it grows from a shoulder mass under the catch line, further from the wall than its
-// elbow; its upper arm runs from that shoulder to the elbow, wholly under the catch line, and joins the forearm there;
-// it tapers (the shoulder end at least 1.4x the wrist); a jointed limb really bends at the elbow (20° or more).
-function armCheck(id, st, rig, wallAt, kill) {
-  const { sh, up, fore, d } = rig, side = d < 0 ? 0 : 1, wall = wallAt(kill - fore[0][1])[side];
-  if (sh[1] - sh[2] < 0) fail('the shoulder sits under the catch line', id);
-  if (Math.abs(sh[0] - wall) < Math.abs(fore[0][0] - wall) + 30) fail('the shoulder sits well in from the wall, beside the head', `${id}: ${Math.abs(sh[0] - wall).toFixed(0)}`);
-  if (up.some(([, y, r]) => y - r < 0)) fail('the upper arm stays under the catch line', id);
-  if (Math.hypot(up[0][0] - sh[0], up[0][1] - sh[1]) > 0.01 || Math.hypot(up[up.length - 1][0] - fore[0][0], up[up.length - 1][1] - fore[0][1]) > 0.01) fail('the upper arm joins the shoulder and the forearm', id);
-  const taper = up[0][2] / fore[fore.length - 1][2];
-  grabStats.minTaper = Math.min(grabStats.minTaper, taper);
-  if (taper < 1.4) fail('limbs taper from shoulder to wrist', `${id}: ${taper.toFixed(2)}`);
-  if (rig.jointed) {
-    const a = up[up.length - 1], b = up[up.length - 4], f = fore[Math.min(3, fore.length - 1)];
-    const v1 = [a[0] - b[0], a[1] - b[1]], v2 = [f[0] - a[0], f[1] - a[1]];
-    const ang = Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2) || 1)))) * 180 / Math.PI;
+const grabStats = { limbs: 0, worstIn: 0, worstOut: 0, minLane: Infinity, maxTop: -Infinity, types: new Set(), minTaper: Infinity, minBend: Infinity, minKnee: Infinity, minCoil: Infinity };
+const angleAt = (a, b, c) => { const v1 = [b[0] - a[0], b[1] - a[1]], v2 = [c[0] - b[0], c[1] - b[1]]; return Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2) || 1)))) * 180 / Math.PI; };
+// Every wall limb is whole and anchored: its root sits on the body under the catch line, well in from the wall; the up
+// chain runs from the root to the bend wholly under the catch line and joins the fore chain there; every chain is
+// unbroken (each capsule overlaps the next) and the hand grows from the wrist; the hitbox is exactly its capsules.
+// Then each limb type keeps its own anatomy: a jointed limb (arm, paw, pad, wing, pincer, fin, talon) bends at its
+// elbow; a leg bends sharply at its knee and stays thin; a tentacle tapers hard and sweeps through an S; a body coil
+// stays thick all the way to its tip; a pincer has two claw fingers; a fin has a membrane blade; a wing has its claw.
+function limbCheck(id, st, rig, wallAt, kill) {
+  const { root, up, fore, hand, d } = rig, side = d < 0 ? 0 : 1, wall = wallAt(kill - fore[0][1])[side];
+  grabStats.types.add(st.type);
+  if (root[1] - root[2] < 0) fail('the root sits under the catch line', id);
+  if (Math.abs(root[0] - wall) < Math.abs(fore[0][0] - wall) + 30) fail('the root sits well in from the wall, beside the head', `${id}: ${Math.abs(root[0] - wall).toFixed(0)}`);
+  if (up.some(([, y, r]) => y - r < 0)) fail('the up chain stays under the catch line', id);
+  if (Math.hypot(up[up.length - 1][0] - fore[0][0], up[up.length - 1][1] - fore[0][1]) > 0.01) fail('the up chain joins the fore chain at the bend', id);
+  for (const ch of [up, fore]) for (let i = 1; i < ch.length; i++) if (Math.hypot(ch[i][0] - ch[i - 1][0], ch[i][1] - ch[i - 1][1]) > ch[i][2] + ch[i - 1][2]) fail('limb chains are unbroken', `${id} at ${i}`);
+  const w = fore[fore.length - 1];
+  if (Math.hypot(hand[0][0] - w[0], hand[0][1] - w[1]) > hand[0][4] + w[2] + 2) fail('the hand grows from the wrist', `${id}: ${Math.hypot(hand[0][0] - w[0], hand[0][1] - w[1]).toFixed(1)}`);
+  if (rig.caps.length !== up.length - 1 + fore.length - 1 + hand.length) fail('the hitbox is exactly the drawn capsules', id);
+  const ty = st.type, taper = up[0][2] / w[2];
+  const roles = hand.map(p => p[5]);
+  if (ty === 'tentacle') {
+    grabStats.minTaper = Math.min(grabStats.minTaper, taper);
+    if (taper < 2.5) fail('tentacles taper hard from root to tip', `${id}: ${taper.toFixed(2)}`);
+    // an S: the up chain's turn changes direction at least once
+    let sgn = 0, flips = 0;
+    for (let i = 2; i < up.length; i++) { const cr = (up[i - 1][0] - up[i - 2][0]) * (up[i][1] - up[i - 1][1]) - (up[i - 1][1] - up[i - 2][1]) * (up[i][0] - up[i - 1][0]); const s2 = Math.sign(Math.round(cr * 100)); if (s2 && sgn && s2 !== sgn) flips++; if (s2) sgn = s2; }
+    if (flips < 1) fail('tentacles sweep through an S-curve', id);
+  } else if (ty === 'coil') {
+    const minR = Math.min(...up.map(p => p[2]), ...fore.map(p => p[2]));
+    grabStats.minCoil = Math.min(grabStats.minCoil, minR / up[0][2]);
+    if (minR < up[0][2] * 0.3) fail('body coils stay thick to the tip', `${id}: ${minR.toFixed(1)}`);
+    if (Math.max(...up.map(p => p[1])) < up[0][1] + 20) fail('body coils loop down below their root', id);
+  } else if (ty === 'leg') {
+    const ang = angleAt(up[up.length - 4], up[up.length - 1], fore.find(p => p[1] <= fore[0][1] - 10) || fore[fore.length - 1]);
+    grabStats.minKnee = Math.min(grabStats.minKnee, ang);
+    if (ang < 25) fail('legs bend sharply at the knee', `${id}: ${ang.toFixed(0)}°`);
+    if (w[2] > 8) fail('legs stay thin', id);
+  } else if (GRAB_JOINTED_T.has(ty)) {
+    grabStats.minTaper = Math.min(grabStats.minTaper, taper);
+    if (taper < 1.2) fail('jointed limbs taper from root to wrist', `${id}: ${taper.toFixed(2)}`);
+    const ang = angleAt(up[up.length - 4], up[up.length - 1], fore.find(p => p[1] <= fore[0][1] - 10) || fore[fore.length - 1]);
     grabStats.minBend = Math.min(grabStats.minBend, ang);
-    if (ang < 20) fail('jointed limbs bend at the elbow', `${id}: ${ang.toFixed(0)}°`);
-  }
+    if (ang < (ty === 'fin' ? 15 : 20)) fail('jointed limbs bend at the elbow', `${id}: ${ang.toFixed(0)}°`);
+  } else if (taper < 1.4) fail('soft limbs taper from root to tip', `${id}: ${taper.toFixed(2)}`);
+  if (ty === 'pincer' && roles.filter(r => r === 't').length < 2) fail('pincers have two claw fingers', id);
+  if (ty === 'fin' && roles.filter(r => r === 'm').length < 2) fail('fins have a membrane blade', id);
+  if (ty === 'wing' && !roles.includes('c')) fail('wings have a claw', id);
 }
+const GRAB_JOINTED_T = new Set(['arm', 'paw', 'pad', 'wing', 'pincer', 'fin', 'talon']);
 {
   if (Object.keys(GRAB_STYLE).length !== 20) fail('all 20 monsters have a wall limb', `${Object.keys(GRAB_STYLE).length}`);
-  if (GRAB.wind < 0.4) fail('every grab has a wind-up tell of at least 0.4 s', `${GRAB.wind}`);
+  if (GRAB.wind < 0.5) fail('every grab has a wind-up tell of at least 0.5 s', `${GRAB.wind}`);
+  for (const [id, st] of Object.entries(GRAB_STYLE)) if (!(st.rest < -3)) fail('every limb idles under the catch line', id);
+  if (new Set(Object.values(GRAB_STYLE).map(st => st.type)).size < 12) fail('the monsters climb with many different limb types', '');
   if (RULES.minWidth - 2 * GRAB.band < PILOT_W + 60) fail('the grab bands leave a centre lane wider than the widest pilot plus 60', '');
   // every point on a capsule's outline (sampled), in world units: [x, alt]
   const outline = (c, kill, f) => { const [x0, y0, x1, y1, r] = c; for (let i = 0; i <= 3; i++) { const u = i / 3, x = lerp(x0, x1, u), y = lerp(y0, y1, u); for (let k = 0; k < 12; k++) { const a = k / 12 * 6.2832; f(x + Math.cos(a) * r, kill - (y + Math.sin(a) * r)); } } };
@@ -585,11 +616,11 @@ function armCheck(id, st, rig, wallAt, kill) {
       for (const [id, st] of Object.entries(GRAB_STYLE)) {
         const t = kill * 0.37 + sd;
         for (const ph of phases) {
-          const rigs = [-1, 1].map(d => { const pose = grabPose(ph, t, d); return { pose, rig: grabRig(st, d, wallAt, kill, pose, t, 200) }; });
+          const rigs = [-1, 1].map(d => { const pose = grabPose(ph, t, d, GRAB.reach, st); return { pose, rig: grabRig(st, d, wallAt, kill, pose, t, 200) }; });
           for (const { pose, rig } of rigs) {
             grabStats.limbs++;
             const side = rig.d < 0 ? 0 : 1;
-            armCheck(id, st, rig, wallAt, kill);
+            limbCheck(id, st, rig, wallAt, kill);
             for (const c of rig.caps) {
               // on screen: never past the world edge (walls never come closer than about 8 to it)
               if (Math.min(c[0], c[2]) - c[4] < 0 || Math.max(c[0], c[2]) + c[4] > WORLD_W) fail('limbs stay on screen', `${id} kill ${kill}: ${(Math.min(c[0], c[2]) - c[4]).toFixed(1)} ${(Math.max(c[0], c[2]) + c[4]).toFixed(1)} walls ${wallAt(kill).map(v => v.toFixed(0))}`);
@@ -657,4 +688,4 @@ if (failures.size) {
 }
 const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
-console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; every limb a shoulder-to-hand arm tapering ${grabStats.minTaper.toFixed(2)}x or more, elbows bent ${grabStats.minBend.toFixed(0)}° or more`);
+console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
