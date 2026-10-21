@@ -1454,7 +1454,7 @@ const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
 // Radii: rr at the root, rm mid-way out, r0 at the bend, r1 at the wrist. rx: the root's offset from the body's centre
 // line; ry: how far below the bend it sits; rest: where the tip idles (always under the catch line); wig: a wave.
 const GRAB_STYLE = {
-  worm:    { type: 'parapod',  hand: 'chaetae',   rr: 27, rm: 20, r0: 14, r1: 10, rx: 118, ry: 70, rest: -46, wig: 3 },
+  worm:    { type: 'parapod',  hand: 'chaetae',   rr: 24, rm: 19, r0: 15, r1: 12, rx: 64, ry: 76, rest: -46, wig: 3 },   // Scissorjaw: a parapod growing out of its first body ring, a big glass-bristle fan for a hand
   bat:     { type: 'wing',     hand: 'vclaw',     rr: 18, rm: 12, r0: 11, r1: 7,  rx: 104, ry: 70, rest: -14, bendY: 46 },
   gorilla: { type: 'arm',      hand: 'apegrip',   rr: 38, rm: 28, r0: 21, r1: 16, rx: 100, ry: 74, rest: -50, lean: 12 },   // Cinderback: huge shaggy arms, one hand braced high, one low on the walls (lean), elbows out
   mole:    { type: 'paw',      hand: 'spade',     rr: 30, rm: 23, r0: 17, r1: 14, rx: 118, ry: 66, rest: -36 },
@@ -1571,10 +1571,12 @@ function grabHand(kind, grip, t, wind = 0) {
       for (let k = 0; k < 4; k++) { const u = 2 + k * 6.3, fl = 2.6 * Math.sin(t * 14 + k * 2); s(u + 1, 8, u - 1, 18 + fl * 0.5, 3.4, 'f'); s(u - 1, 18 + fl * 0.5, u - 4 + fl * 0.4, 30 + fl - Math.abs(k - 1.5) * 1.5, 2, 'f'); }
       break;
     }
-    case 'chaetae':   // the Scissorjaw's parapod tip: a fleshy lobe, a black hooked spine and a fan of glass bristles stabbed into the rock
-      s(10, 0, 10, 7, 10);
-      s(14, 7, 8 - g * 3, 19, 3.4, 'c');
-      for (let k = 0; k < 4; k++) { const ub = 4 + k * 3.6, ut = -1 + k * 6.6 + Math.sin(t * 30 + k) * wind * 1.2, vt = 25 - Math.abs(k - 1.5) * 2.6; s(ub, 9, ut - g * 1.5, vt, 2.3, 'x'); }
+    case 'chaetae':   // the Scissorjaw's parapod tip: a big fleshy lobe, a black hooked spine and a wide fan of long glass
+      // bristles stabbed into the rock (about twice the old size, still inside the wall band)
+      s(13, 0, 13, 11, 13);
+      s(21, 9, 15 - g * 3, 30, 4.8, 'c');
+      for (let k = 0; k < 5; k++) { const ub = 4 + k * 4.3, ut = -1 + k * 6.2 + Math.sin(t * 30 + k) * wind * 1.4, vt = 44 - Math.abs(k - 2) * 4.5; s(ub, 12, ut - g * 1.8, vt, 3.2, 'x'); }
+      s(5, 6, -1 - g, 20, 2.6, 'x');
       break;
     case 'smokeclaw': {   // three long bright claws on a hand of smoke
       s(10, 0, 11, 8, 10, 'k');
@@ -6195,6 +6197,38 @@ function sjTuft(c, x, y, d, sc, t, k) {
   pkE(c, 6, 0, 16, 11, pkRG(c, 4, -4, 16, [SJ.flesh[0], SJ.flesh[1], SJ.flesh[2]]), 3.5);
   c.restore();
 }
+// one body ring k (segs from the body; the ring in front of it is segs[k - 1]): banded and lit like a cylinder
+function sjRingArt(c, segs, k) {
+  const S = segs[k], dk = 0.22 * S.u, P = k > 0 ? segs[k - 1] : null;   // (farther rings only a little darker: rim light keeps them reading to the tail's tip)
+  // two violets alternating ring by ring, for rhythm: [top highlight, lit, mid, core shadow]
+  const A = k % 2 ? ['#f2deff', '#b47cf2', '#7a3cc8', '#3a1268'] : ['#e4c8ff', '#9658e0', '#5e26a6', '#2a0a52'];
+  const ring = mAEl(S.x, S.y, S.w, S.h);
+  // the band that shows runs from just under the ring in front of it down to this ring's own lower edge: lit on
+  // top, rolling into a core shadow, with warm bounce light at its very bottom (a cylinder lit from above)
+  const yt = P ? P.y + P.h - 4 : S.y - S.h * 0.6, yb = S.y + S.h;
+  const g = c.createLinearGradient(0, yt, 0, yb);
+  g.addColorStop(0, mixHex(A[1], '#14052a', dk)); g.addColorStop(0.3, mixHex(A[2], '#14052a', dk)); g.addColorStop(0.72, mixHex(A[3], '#14052a', dk)); g.addColorStop(0.9, mixHex(A[3], '#08020e', dk + 0.15)); g.addColorStop(1, mixHex(A[2], '#14052a', dk + 0.1));
+  mAShape(c, ring, g, { rim: false, lw: 4.5 });
+  c.save(); ring(c); c.clip();
+  c.lineCap = 'round';
+  // the occlusion right under the ring in front, then the band's top highlight just below it
+  if (P) {
+    c.strokeStyle = 'rgba(10,2,20,.55)'; c.lineWidth = 9; c.beginPath(); c.ellipse(P.x, P.y + 3, P.w * 0.99, P.h, 0, 0.05, Math.PI - 0.05); c.stroke();
+    c.strokeStyle = rgbaA(hexRGB(A[0]), 0.85 - 0.2 * S.u); c.lineWidth = 6.5; c.beginPath(); c.ellipse(P.x, P.y + 11, P.w * 0.94, P.h, 0, 0.35, Math.PI - 0.35); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2.4; c.beginPath(); c.ellipse(P.x, P.y + 10, P.w * 0.9, P.h, 0, Math.PI * 0.55, Math.PI * 0.78); c.stroke();
+  }
+  // the core shadow rolling round its lower half, and the warm bounce light along its bottom edge
+  c.strokeStyle = 'rgba(16,2,30,.5)'; c.lineWidth = 12; c.beginPath(); c.ellipse(S.x, S.y - 12, S.w * 0.97, S.h, 0, 0.12, Math.PI - 0.12); c.stroke();
+  c.strokeStyle = rgbaA([255, 150, 90], 0.55); c.lineWidth = 3.5; c.beginPath(); c.ellipse(S.x, S.y - 2.5, S.w * 0.99, S.h, 0, 0.3, Math.PI - 0.3); c.stroke();
+  // rim light down both flanks: cool cyan on the lit left, warm on the right (keeps every ring off the background)
+  c.strokeStyle = rgbaA(SJ.sheen, 0.6); c.lineWidth = 4.5; c.beginPath(); c.ellipse(S.x + 4, S.y, S.w, S.h, 0, Math.PI * 0.66, Math.PI * 1.06); c.stroke();
+  c.strokeStyle = rgbaA([255, 190, 120], 0.6); c.lineWidth = 4; c.beginPath(); c.ellipse(S.x - 4, S.y, S.w, S.h, 0, -Math.PI * 0.12, Math.PI * 0.38); c.stroke();
+  // a dorsal sheen and two glowing pores on each side
+  if (P) { pkE(c, S.x - S.w * 0.18, P.y + P.h + 9, S.w * 0.16, 3.4, 'rgba(255,255,255,.4)', 0, -0.05); c.strokeStyle = rgbaA(SJ.pink, 0.4); c.lineWidth = 2.4; c.beginPath(); c.ellipse(P.x, P.y + 17, P.w * 0.7, P.h, 0, 0.6, Math.PI - 0.6); c.stroke(); }
+  for (const d of [-1, 1]) for (const f of [0.55, 0.78]) { const px = S.x + d * S.w * f, py = S.y + S.h * 0.25; mAGlow(c, px, py, 10, SJ.seam, 0.5 + 0.4 * S.sw); pkE(c, px, py, 4, 3, rgbaA(SJ.hot, 0.9), 1.5); }
+  if (S.sw > 0.05) mAGlow(c, S.x, S.y, S.w * 0.8, [255, 170, 80], 0.55 * S.sw);
+  c.restore();
+}
 // ---- the geode vampire (monster slot 1, id 'bat') ----
 // A colossal vampire bat that has roosted so long in the crystal caves that citrine has grown through its skull and
 // chest. Dark plum fur, a pale pink-lilac muzzle and collar, two tall pointed ears of thin glowing teal membrane
@@ -7051,6 +7085,7 @@ const MONSTERS = [
       const t = m.t, bt = m.bite, N = 13, segs = [];
       if (bt >= 0) c.scale(1 - 0.12 * smooth(0, 0.12, bt), 1);   // (it draws itself in tight as it lunges, so all of it stays on screen in the bite's zoom)
       const lump = bt > 0.42 ? smooth(0.42, 1.5, bt) * (N + 1) - 0.5 : -9;
+      SJ.last = { segs, pin: bt >= 0 ? 1 - 0.12 * smooth(0, 0.12, bt) : 1 };   // (the parapods redraw the rings they grow out of over their roots)
       for (let k = 0; k < N; k++) {
         const u = k / (N - 1);
         const y = 172 + k * 46 - k * k * 0.5, x = Math.sin(k * 0.55 - t * 1.7) * 70 * Math.pow(u, 1.2);
@@ -7064,24 +7099,12 @@ const MONSTERS = [
           c.lineCap = 'round'; c.strokeStyle = sjInk; c.lineWidth = 5; c.beginPath(); c.moveTo(tx, ty); c.lineTo(ex, ey); c.stroke(); c.strokeStyle = pkLG(c, tx, ty, ex, ey, ['#6a8aa8', '#a8dcf0']); c.lineWidth = 2.6; c.stroke(); }
         mAShape(c, mASm([[tx - 30, ty - 10], [tx, ty - 18], [tx + 30, ty - 10], [tx + 14, ty + 40], [tx + 2, ty + 96], [tx - 12, ty + 40]]), pkLG(c, tx - 30, ty, tx + 30, ty + 60, [SJ.plate[3], SJ.plate[4], '#08020e']), { lw: 4, rim: 'rgba(170,255,240,.3)', rw: 3 }); }
       for (let k = N - 1; k >= 0; k--) {
-        const S = segs[k], dk = 0.75 * S.u;   // farther rings sink into the dark (opaque all the way to the tail's tip)
-        // tufts behind the ring's flanks
-        for (const d of [-1, 1]) sjTuft(c, S.x + d * S.w * 0.9, S.y + S.h * 0.15, d, 1.1 - 0.55 * S.u, t, k + d);
+        const S = segs[k];
+        // tufts behind the ring's flanks (bright glass, so the lower rings still read)
+        for (const d of [-1, 1]) sjTuft(c, S.x + d * S.w * 0.9, S.y + S.h * 0.15, d, 1.1 - 0.5 * S.u, t, k + d);
         // molten light welling up from the gap above this ring
-        mAGlow(c, S.x, S.y - S.h * 0.6, S.w * 0.9, SJ.seam, 0.32 * (1 - S.u * 0.6) + 0.5 * S.sw);
-        const ring = mAEl(S.x, S.y, S.w, S.h);
-        const g = c.createRadialGradient(S.x - S.w * 0.18, S.y - S.h * 0.7, 4, S.x, S.y, S.w * 1.05);
-        g.addColorStop(0, mixHex(SJ.plate[1], SJ.plate[4], dk)); g.addColorStop(0.45, mixHex(SJ.plate[2], SJ.plate[4], dk)); g.addColorStop(0.85, mixHex(SJ.plate[3], SJ.plate[4], dk)); g.addColorStop(1, SJ.plate[4]);
-        mAShape(c, ring, g, { rim: rgbaA(SJ.sheen, 0.5 * (1 - S.u * 0.7)), rw: 5, under: 'rgba(255,140,60,.35)', uw: 8, lw: 4.5 });
-        c.save(); ring(c); c.clip();
-        // a dorsal plate down the ring's middle and two glowing pores on each side
-        pkE(c, S.x, S.y - S.h * 0.15, S.w * 0.36, S.h * 0.62, mixHex(SJ.plate[1], SJ.plate[4], dk + 0.1, 0.8), 3);
-        c.strokeStyle = rgbaA(SJ.pink, 0.35 * (1 - S.u)); c.lineWidth = 3; c.beginPath(); c.ellipse(S.x, S.y - S.h * 0.15, S.w * 0.3, S.h * 0.5, 0, 3.6, 5.2); c.stroke();
-        for (const d of [-1, 1]) for (const f of [0.55, 0.78]) { const px = S.x + d * S.w * f, py = S.y - S.h * 0.05; mAGlow(c, px, py, 10, SJ.seam, 0.5 + 0.4 * S.sw); pkE(c, px, py, 4, 3, rgbaA(SJ.hot, 0.9), 1.5); }
-        // the shadow cast by the ring in front of it
-        if (k > 0) { const P = segs[k - 1]; c.fillStyle = 'rgba(10,2,20,.45)'; c.beginPath(); c.ellipse(P.x, P.y + P.h * 0.55, P.w * 0.98, P.h * 0.75, 0, 0, TWO_PI); c.fill(); }
-        if (S.sw > 0.05) mAGlow(c, S.x, S.y, S.w * 0.8, [255, 170, 80], 0.55 * S.sw);
-        c.restore();
+        mAGlow(c, S.x, S.y - S.h * 0.6, S.w * 0.9, SJ.seam, 0.3 * (1 - S.u * 0.5) + 0.5 * S.sw);
+        sjRingArt(c, segs, k);
       }
     },
     head(c, m) {
@@ -7115,21 +7138,13 @@ const MONSTERS = [
       sjMandible(c, 1, aR, heat);
       sjMandible(c, -1, aL, heat);
       if (bt > 0.36) mCrumbs(c, 0, 232, bt - 0.36);
-      // ---- cheek guards: armoured lobes over the mandible hinges and the parapods' roots ----
+      // ---- cheek plates: flat, swept armour over the mandible hinges (the parapods grow from the body ring below) ----
       for (const d of [-1, 1]) {
-        sjTuft(c, d * 222, 170, d, 1.15, t, 3 + d);
-        const cx = d * 184, cy2 = 150, gp2 = mAEl(cx, cy2, 56, 42, d * 0.35);
-        mShade(c, cx, cy2 + 30, 60, 22, 0.4);
-        mAShape(c, gp2, pkRG(c, cx - d * 10, cy2 - 16, 60, [SJ.plate[1], SJ.plate[2], SJ.plate[3], SJ.plate[4]]), { rim: 'rgba(170,255,240,.6)', rw: 5, under: 'rgba(255,150,70,.45)', uw: 7, lw: 4.5 });
-        sjSeam(c, [[cx - d * 34, cy2 - 4], [cx, cy2 + 10], [cx + d * 36, cy2 + 4]], 0.5 + 0.3 * Math.sin(t * 2.4) + 0.4 * rage, 0.8);
-        // the shoulder socket on the guard's upper outer rim, where the parapod's ball joint sits: a dark cup with a
-        // thick lit lip and molten light in its gap
-        { const sx = cx + d * 34, sy = cy2 - 26, rot = -d * 0.55;
-          pkE(c, sx, sy, 30, 17, pkRG(c, sx, sy + 4, 30, ['#2a0a3a', '#12041e', '#08020e']), 4, rot);
-          sjSeam(c, [[sx - d * 22, sy + 4], [sx, sy + 10], [sx + d * 22, sy - 2]], 0.6 + 0.3 * Math.sin(t * 3 + d), 0.7);
-          c.strokeStyle = SJ.plate[1]; c.lineWidth = 4; c.beginPath(); c.ellipse(sx, sy, 27, 14, rot, Math.PI * 0.05, Math.PI * 0.95); c.stroke();
-          c.strokeStyle = 'rgba(200,170,255,.6)'; c.lineWidth = 1.8; c.beginPath(); c.ellipse(sx, sy, 27, 14, rot, Math.PI * 0.25, Math.PI * 0.75); c.stroke(); }
-        pkE(c, cx - d * 14, cy2 - 20, 14, 7, 'rgba(255,255,255,.28)', 0, d * 0.35);
+        const cx = d * 166, cy2 = 140, gp2 = mASm([[cx - d * 46, cy2 - 18], [cx - d * 6, cy2 - 30], [cx + d * 38, cy2 - 26], [cx + d * 54, cy2 - 6], [cx + d * 30, cy2 + 18], [cx - d * 14, cy2 + 24], [cx - d * 48, cy2 + 8]]);
+        mShade(c, cx, cy2 + 24, 56, 18, 0.4);
+        mAShape(c, gp2, pkLG(c, cx, cy2 - 30, cx, cy2 + 24, [SJ.plate[0], SJ.plate[1], SJ.plate[2], SJ.plate[3]]), { rim: 'rgba(170,255,240,.6)', rw: 4, under: 'rgba(255,150,70,.45)', uw: 6, lw: 4.5 });
+        sjSeam(c, [[cx - d * 34, cy2 + 2], [cx, cy2 + 10], [cx + d * 34, cy2 + 2]], 0.5 + 0.3 * Math.sin(t * 2.4) + 0.4 * rage, 0.8);
+        pkE(c, cx - d * 10, cy2 - 16, 16, 5, 'rgba(255,255,255,.35)', 0, d * 0.12);
       }
       // ---- the horns and the helmet ----
       { const pinB = bt >= 0 ? smooth(0, 0.12, bt) : 0; c.save(); c.scale(1 - 0.14 * pinB, 1); for (const d of [-1, 1]) sjHorn(c, d, t, rage); c.restore(); }
@@ -9231,24 +9246,46 @@ function limbFur(c, ch, d, col, len = 5, every = 1) {
 const LIMB_ART = {
   parapod(c, rig, P, layer, t, mon) {   // the Scissorjaw's parapod: a ringed violet arm, molten seams glowing between its armour rings, glass bristles along it
     const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d;
+    let joint = -1, redraw = null;
+    if (layer === 'mid') {
+      // it grows out of the body: its root sits inside a body ring's flank, the rings' own edges wrap back over it
+      // (redrawn here over the root: body art, below the catch line) and a fat fleshy joint ring sits where it comes out
+      const st = GRAB_STYLE.worm, sc = rig.sc || 1, bx = rig.root[0] + d * (rig.squeeze || 0) - d * st.rx * sc, K = MON_SCALE * sc;
+      const L0 = SJ.last;
+      if (L0) {
+        const toArt = ([x, y]) => [(x - bx) / (K * L0.pin), y / K], inRing = (S, [ax, ay]) => ((ax - S.x) / S.w) ** 2 + ((ay - S.y) / S.h) ** 2 < 1;
+        const under = q => L0.segs.some(S => inRing(S, toArt(q)));
+        if (under(rig.up[0])) {
+          // it comes out where it leaves the rings' outline, or (when it lies across their front) just past its own root
+          const r0 = rig.up[0][2], ex = rig.up.findIndex(q => !under(q)), near = rig.up.findIndex(q => Math.hypot(q[0] - rig.up[0][0], q[1] - rig.up[0][1]) > r0 * 1.3);
+          joint = ex < 0 ? near : near < 0 ? ex : Math.min(ex, near);
+          if (joint >= 2) redraw = { bx, K, pin: L0.pin, segs: L0.segs, kmax: L0.segs.reduce((m, S, k) => inRing(S, toArt(rig.up[0])) ? k : m, 0) };
+          else joint = -1;
+        }
+      }
+      const [rx0, ry0, rr0] = rig.up[0];
+      mShade(c, rx0, ry0, rr0 * 1.8, rr0 * 1.3, 0.55);
+    }
     grabBody(c, [ch], P.skin, d, { rim: 'rgba(150,255,236,.65)' });
     if (layer === 'mid') limbRootShade(c, rig.up, 0.2);
-    if (layer === 'mid') {
-      // the shoulder joint: where the arm comes out from under the cheek guard it sits in a socket, a ball of chitin
-      // in a dark cup with a thick collar ring and molten light in the gap (inside the arm's own outline)
-      const st = GRAB_STYLE.worm, sc = rig.sc || 1, bx = rig.root[0] + d * (rig.squeeze || 0) - d * st.rx * sc, k = MON_SCALE * sc;
-      const gx = bx + d * 184 * k, gy = 150 * k, R = 50 * k;
-      let j = rig.up.findIndex(([x, y]) => Math.hypot(x - gx, (y - gy) * 1.25) > R);
-      if (j < 1) j = 1;
-      const [x, y, r] = rig.up[j], q = rig.up[Math.min(rig.up.length - 1, j + 1)], a = Math.atan2(q[1] - y, q[0] - x), nx = -Math.sin(a), ny = Math.cos(a), w = r - GRAB_INK - 0.5, ux = Math.cos(a), uy = Math.sin(a);
-      const band = (o, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(x + ux * o + nx * w, y + uy * o + ny * w); c.quadraticCurveTo(x + ux * (o + r * 0.35), y + uy * (o + r * 0.35), x + ux * o - nx * w, y + uy * o - ny * w); c.stroke(); };
-      band(-2, 'rgba(10,2,24,.85)', 9);                                    // the cup's dark rim
-      c.save(); c.globalCompositeOperation = 'lighter'; band(3, rgbaA(SJ.seam, 0.6 + 0.3 * Math.sin(t * 3 + d)), 3); c.restore();
-      band(9, SJ.plate[2], 7); band(9, 'rgba(10,2,24,.6)', 1.6); band(6, 'rgba(200,170,255,.55)', 1.6);   // the collar ring, lit along its edge
-      pkE(c, x + ux * 20 + nx * w * 0.35 * -d, y + uy * 20 + ny * w * 0.35 * -d, w * 0.32, w * 0.2, 'rgba(230,210,255,.45)', 0, a);   // the ball's sheen
+    if (redraw) {
+      // the body rings over the arm's root, clipped round it (back to front, exactly as the body draws them)
+      const [x0, y0, r0] = rig.up[0], j = rig.up[joint];
+      c.save(); c.beginPath(); c.arc(x0, y0, Math.hypot(j[0] - x0, j[1] - y0) + r0 * 0.4, 0, TWO_PI); c.clip();
+      c.translate(redraw.bx, 0); c.scale(redraw.K * redraw.pin, redraw.K);
+      for (let k = Math.min(redraw.segs.length - 1, redraw.kmax + 1); k >= 0; k--) { const S = redraw.segs[k]; mAGlow(c, S.x, S.y - S.h * 0.6, S.w * 0.9, SJ.seam, 0.3 * (1 - S.u * 0.5) + 0.5 * S.sw); sjRingArt(c, redraw.segs, k); }
+      c.restore();
+      // the fleshy joint ring where it comes out of the ring: a fat roll of pink flesh round the arm (inside its outline)
+      const [x, y, r] = j, q = rig.up[Math.min(rig.up.length - 1, joint + 1)], a = Math.atan2(q[1] - y, q[0] - x), nx = -Math.sin(a), ny = Math.cos(a), ux = Math.cos(a), uy = Math.sin(a);
+      const band = (o, col, lw, w = r - 0.8) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(x + ux * o + nx * w, y + uy * o + ny * w); c.quadraticCurveTo(x + ux * (o + r * 0.4), y + uy * (o + r * 0.4), x + ux * o - nx * w, y + uy * o - ny * w); c.stroke(); };
+      c.save(); cbCapPath(c, [rig.up], []); c.clip();
+      band(2, INK, 17); band(2, SJ.flesh[2], 12.5, r - GRAB_INK); band(0.5, SJ.flesh[1], 7, r - GRAB_INK - 1); band(-1, 'rgba(255,220,232,.9)', 2.6, r - GRAB_INK - 3);
+      band(12, INK, 3.4); band(14, 'rgba(255,214,226,.6)', 1.6, r - GRAB_INK - 2);   // a second, thinner fold
+      c.restore();
     }
     chainEvery(ch, 12).forEach(([x, y, r, a], i) => {
       if (i === 0) return;
+      if (joint > 0 && Math.hypot(x - rig.up[0][0], y - rig.up[0][1]) < Math.hypot(rig.up[joint][0] - rig.up[0][0], rig.up[joint][1] - rig.up[0][1]) + 14) return;   // (no armour rings under the ring's edge or on the joint)
       const nx = -Math.sin(a), ny = Math.cos(a), w = r - GRAB_INK - 0.6, bx = x + Math.cos(a) * r * 0.4, by = y + Math.sin(a) * r * 0.4;
       c.strokeStyle = 'rgba(16,4,36,.75)'; c.lineWidth = 3;
       c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.quadraticCurveTo(bx, by, x - nx * w, y - ny * w); c.stroke();
