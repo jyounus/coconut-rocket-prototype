@@ -4908,7 +4908,7 @@ const TWO_PI = Math.PI * 2;
 function pkE(c, x, y, rx, ry, fill, lw = 2, rot = 0) {
   c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI);
   if (fill) { c.fillStyle = fill; c.fill(); }
-  if (lw) { c.strokeStyle = INK; c.lineWidth = lw; c.stroke(); }
+  if (lw) { if (pkSoft && !fill) { c.strokeStyle = pkSoft; c.lineWidth = lw * 0.85; } else { c.strokeStyle = INK; c.lineWidth = lw; } c.stroke(); }
 }
 function pkRG(c, x, y, r, stops) {
   const g = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.05, x, y, r * 1.15);
@@ -4921,20 +4921,83 @@ function pkLG(c, x0, y0, x1, y1, stops) {
 function pkPath(c, pts, fill, lw = 2) {
   c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
   if (fill) { c.fillStyle = fill; c.fill(); }
-  if (lw) { c.strokeStyle = INK; c.lineWidth = lw; c.stroke(); }
+  if (lw) { if (pkSoft && !fill) { c.strokeStyle = pkSoft; c.lineWidth = lw * 0.85; } else { c.strokeStyle = INK; c.lineWidth = lw; } c.stroke(); }
 }
-function pkRect(c, x, y, w, h, r, fill, lw = 2) { c.beginPath(); c.roundRect(x, y, w, h, r); if (fill) { c.fillStyle = fill; c.fill(); } if (lw) { c.strokeStyle = INK; c.lineWidth = lw; c.stroke(); } }
+function pkRect(c, x, y, w, h, r, fill, lw = 2) { c.beginPath(); c.roundRect(x, y, w, h, r); if (fill) { c.fillStyle = fill; c.fill(); } if (lw) { if (pkSoft && !fill) { c.strokeStyle = pkSoft; c.lineWidth = lw * 0.85; } else { c.strokeStyle = INK; c.lineWidth = lw; } c.stroke(); } }
 function pkRim(c, x, y, rx, ry, a0 = 3.7, a1 = 4.9, al = 0.55) { c.strokeStyle = `rgba(255,255,255,${al})`; c.lineWidth = 1.6; c.beginPath(); c.ellipse(x, y, rx, ry, 0, a0, a1); c.stroke(); }
 function pkLine(c, pts, col, w, outline = true) {
   const trace = () => { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); };
-  if (outline) { trace(); c.strokeStyle = INK; c.lineWidth = w + 2.4; c.stroke(); }
+  if (outline) { trace(); c.strokeStyle = pkSoft ? pkShadeOf(col) : INK; c.lineWidth = w + (pkSoft ? 1 : 2.4); c.stroke(); }
   trace(); c.strokeStyle = col; c.lineWidth = w; c.stroke();
 }
 function pkCurve(c, p0, p1, p2, col, w, outline = true) {
   const trace = () => { c.beginPath(); c.moveTo(...p0); c.quadraticCurveTo(...p1, ...p2); };
-  if (outline) { trace(); c.strokeStyle = INK; c.lineWidth = w + 2.4; c.stroke(); }
+  if (outline) { trace(); c.strokeStyle = pkSoft ? pkShadeOf(col) : INK; c.lineWidth = w + (pkSoft ? 1 : 2.4); c.stroke(); }
   trace(); c.strokeStyle = col; c.lineWidth = w; c.stroke();
 }
+// No-border pilots (noInk: '<line colour>'): while one draws, pkSoft holds its line colour and the ink outline
+// turns into colour. A shape's ink edge becomes a thin line in a darker shade of that shape's own fill (gradients
+// use their darkest stop), loose ink linework (brows, lids, mouth lines) is drawn in the pilot's own deep line
+// colour, and an ink under-stroke beneath a coloured line shrinks away under it. Nothing is ever black.
+let pkSoft = '';
+function pkRGBA(col) {
+  if (typeof col !== 'string') return null;
+  let m = col.match(/^#([0-9a-f]{3,8})$/i);
+  if (m) { let h = m[1]; if (h.length <= 4) h = [...h].map(ch => ch + ch).join(''); const n = parseInt(h.slice(0, 6), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255, h.length === 8 ? parseInt(h.slice(6), 16) / 255 : 1]; }
+  m = col.match(/^rgba?\(([^)]+)\)$/i);
+  if (m) { const v = m[1].split(/[ ,/]+/).filter(Boolean).map(parseFloat); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; }
+  return null;
+}
+function pkHSL([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1)), h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+// a darker, richer shade of a colour; greys and whites borrow the pilot's line hue so they never go grey-black
+function pkShade(col) {
+  const v = pkRGBA(col);
+  if (!v) return pkSoft;
+  let [h, s, l] = pkHSL(v);
+  if (s < 0.12) { const [kh, ks] = pkHSL(pkRGBA(pkSoft) || [90, 70, 80]); h = kh; s = Math.max(s, ks * 0.45); }
+  const l2 = l < 0.2 ? l : Math.max(0.18, Math.min(l * 0.56, l - 0.14));
+  return `hsla(${h.toFixed(1)},${(Math.min(1, s * 1.1 + 0.08) * 100).toFixed(1)}%,${(l2 * 100).toFixed(1)}%,${(v[3] * 0.95).toFixed(3)})`;
+}
+// whites and pale greys (eyeballs, teeth, cream trim): their edge is the pilot's line colour, a little wider
+function pkPale(st) { const v = pkRGBA(st); if (!v) return false; const [, sat, l] = pkHSL(v); return sat < 0.25 && l > 0.82; }
+function pkShadeOf(st) {
+  if (typeof st === 'string') return pkShade(st);
+  const stops = st && st.__s;
+  if (!stops || !stops.length) return pkSoft;
+  let best = null, bl = 2;
+  for (const col of stops) { const v = pkRGBA(col); if (!v || v[3] < 0.25) continue; const L = (0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2]) / 255; if (L < bl) { bl = L; best = col; } }
+  return best ? pkShade(best) : pkSoft;
+}
+{ const add = CanvasGradient.prototype.addColorStop;   // gradients made during a no-border draw remember their colours
+  CanvasGradient.prototype.addColorStop = function (o, col) { if (pkSoft) (this.__s || (this.__s = [])).push(col); return add.call(this, o, col); }; }
+const CTX2D = CanvasRenderingContext2D.prototype, CTX_SS = Object.getOwnPropertyDescriptor(CTX2D, 'strokeStyle'), CTX_FS = Object.getOwnPropertyDescriptor(CTX2D, 'fillStyle');
+// Swap ink for colour on this context for the length of one no-border draw (removed again afterwards).
+function pkSoftOn(c) {
+  if (Object.prototype.hasOwnProperty.call(c, 'stroke')) return false;
+  let mode = 0, edge = '', k = 0.6;      // 1: ink set on a filled shape's path; 2: ink set, then a fresh path (loose linework)
+  Object.defineProperty(c, 'strokeStyle', { configurable: true, get() { return CTX_SS.get.call(c); }, set(v) {
+    if (v === INK) { const f = CTX_FS.get.call(c), pale = pkPale(f); k = pale ? 0.8 : 0.6; CTX_SS.set.call(c, pale ? pkSoft : pkShadeOf(f)); edge = CTX_SS.get.call(c); mode = 1; }
+    else { mode = 0; CTX_SS.set.call(c, v); }
+  } });
+  c.beginPath = function () { if (mode === 1 && CTX_SS.get.call(c) === edge) mode = 2; return CTX2D.beginPath.call(c); };
+  c.stroke = function (path) {
+    const cur = CTX_SS.get.call(c);
+    if (!mode || cur !== edge) return path ? CTX2D.stroke.call(c, path) : CTX2D.stroke.call(c);
+    const w = c.lineWidth;
+    if (mode === 2) CTX_SS.set.call(c, pkSoft);
+    c.lineWidth = w * (mode === 2 ? 0.85 : k);
+    path ? CTX2D.stroke.call(c, path) : CTX2D.stroke.call(c);
+    c.lineWidth = w; CTX_SS.set.call(c, cur);
+  };
+  return true;
+}
+function pkSoftOff(c) { delete c.strokeStyle; delete c.beginPath; delete c.stroke; }
 // Pilot expressions, set around each pilot draw: '' (calm), 'grin' (thrusting) or 'panic'
 // (falling or the monster is close); pkLookDown turns the pupils toward the monster below.
 let pkMood = '', pkLookDown = 0;
@@ -5892,7 +5955,7 @@ function ffyScarfTail(c, t, k, fast) {
 }
 
 const PILOTS = [
-  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket', exhaust: 'fire', nozzles: [[0, 33]], draw(c, st) {
+  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket', noInk: '#45325a', exhaust: 'fire', nozzles: [[0, 33]], draw(c, st) {
     const t = st.t, panic = pkMood === 'panic', thr = st.thrust ? 1 : 0, fall = !thr && pkLookDown && !panic ? 1 : 0;
     lmEase(st, thr, fall);
     const k = LM.k, f = LM.f;
@@ -5926,7 +5989,7 @@ const PILOTS = [
     c.strokeStyle = 'rgba(255,236,200,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 9, 16, 15, 0, -0.5, 0.6); c.stroke();
   } },
 
-  { id: 'ember', name: 'Ember the dragon', ride: 'Potbelly stove rocket', exhaust: 'fire', nozzles: [[0, 31]], draw(c, st) {
+  { id: 'ember', name: 'Ember the dragon', ride: 'Potbelly stove rocket', noInk: '#0e2f78', exhaust: 'fire', nozzles: [[0, 31]], draw(c, st) {
     const t = st.t, thr = !!st.thrust, mood = pkMood, panic = mood === 'panic', grin = mood === 'grin';
     const det = thr && !panic && !grin, falling = !thr && !panic && !grin;
     const fl = 0.75 + 0.25 * Math.sin(t * 23) * Math.sin(t * 9.7);          // coal flicker
@@ -6102,11 +6165,11 @@ const PILOTS = [
     c.strokeStyle = 'rgba(170,225,255,.6)'; c.lineWidth = 1.1; c.beginPath(); c.ellipse(0, -0.4, 11.3, 9.9, 0, -0.15, 0.55); c.stroke();
     c.restore();
   } },
-  { id: 'snail', name: 'Shellby the snail', ride: 'Turbo shell', exhaust: 'fire', nozzles: [[0, 36]], draw(c, st) { snlDraw(c, st); } },
+  { id: 'snail', name: 'Shellby the snail', ride: 'Turbo shell', noInk: '#0a5650', exhaust: 'fire', nozzles: [[0, 36]], draw(c, st) { snlDraw(c, st); } },
 
-  { id: 'puffer', name: 'Captain Puff', ride: 'Fishbowl water-jet', exhaust: 'water', nozzles: [[0, 29]], draw(c, st) { pfDraw(c, st); } },
+  { id: 'puffer', name: 'Captain Puff', ride: 'Fishbowl water-jet', noInk: '#6a3412', exhaust: 'water', nozzles: [[0, 29]], draw(c, st) { pfDraw(c, st); } },
 
-  { id: 'firefly', name: 'Lumo the firefly', ride: 'Jam-jar lantern', exhaust: 'glow', nozzles: [[0, 30]], draw(c, st) {
+  { id: 'firefly', name: 'Lumo the firefly', ride: 'Jam-jar lantern', noInk: '#2e2660', exhaust: 'glow', nozzles: [[0, 30]], draw(c, st) {
     const t = st.t, thr = !!st.thrust, panic = pkMood === 'panic', grin = pkMood === 'grin';
     const alarm = !thr && !panic && pkLookDown > 0;                 // dropping: eyes wide, scarf flies up
     const fall = !thr ? 1 : 0;
@@ -6587,6 +6650,13 @@ const PILOTS = [
     pkRim(c, -2, 2, 9, 12, 3.4, 4.2, 0.6);
   } },
 ];
+for (const pl of PILOTS) if (pl.noInk) {
+  const draw = pl.draw;
+  pl.draw = function (c, st) {
+    const was = pkSoft, own = pkSoftOn(c); pkSoft = pl.noInk;
+    try { return draw.call(this, c, st); } finally { pkSoft = was; if (own) pkSoftOff(c); }
+  };
+}
 let pilotIndex = Math.max(0, PILOTS.findIndex(p => p.id === settings.pilot));
 const pilot = () => PILOTS[pilotIndex];
 
@@ -6624,7 +6694,7 @@ function drawSweat(c) {
     const k = (G.t * 2.4 + ph) % 1;
     c.save(); c.translate(x + Math.sign(x) * k * 5, y + k * 8); c.globalAlpha = 1 - k;
     c.beginPath(); c.moveTo(0, -5); c.quadraticCurveTo(4, 1, 0, 3.5); c.quadraticCurveTo(-4, 1, 0, -5);
-    c.fillStyle = '#9ae4ff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 1.2; c.stroke(); c.restore();
+    c.fillStyle = '#9ae4ff'; c.fill(); c.strokeStyle = pilot().noInk ? '#2a7ab0' : INK; c.lineWidth = pilot().noInk ? 0.8 : 1.2; c.stroke(); c.restore();
   }
 }
 const pcv = document.createElement('canvas'), pcx = pcv.getContext('2d');
@@ -6643,6 +6713,16 @@ function drawPilotOutlined(x, y, rot, kx, ky, fn, white) {
   if (white) { scx.fillStyle = '#ffffff'; scx.fillRect(0, 0, D, D); for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(scv, x0 + dx * 2, y0 + dy * 2, S, S); ctx.drawImage(scv, x0, y0, S, S); return; }
   // a coloured rim halo all round (outside the ink), then the strong dark outline
   const rim = pal('rim', G.camAlt + viewH / 2).map(v => Math.min(255, v + 50) | 0);
+  if (pilot().noInk) {   // no-border pilots: a soft, low drop shadow and a faint zone-tinted rim light instead
+    scx.fillStyle = 'rgb(16,10,14)'; scx.fillRect(0, 0, D, D);
+    ctx.save(); ctx.globalAlpha = 0.075;
+    for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(scv, x0 + 1.5 + dx * 2.4, y0 + 3.5 + dy * 2.4, S, S);
+    ctx.globalAlpha = 0.14; scx.fillStyle = rgb(rim); scx.fillRect(0, 0, D, D);
+    for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(scv, x0 + dx * 1.3, y0 + dy * 1.3, S, S);
+    ctx.restore();
+    ctx.drawImage(pcv, x0, y0, S, S);
+    return;
+  }
   scx.fillStyle = rgb(rim); scx.fillRect(0, 0, D, D);
   ctx.save(); ctx.globalAlpha = 0.85;
   for (const [dx, dy] of OUTLINE_DIRS) ctx.drawImage(scv, x0 + dx * (o + 2.2), y0 + dy * (o + 2.2), S, S);
