@@ -7229,15 +7229,19 @@ function mTrunk(c, y0, w0, w1, cols, o = {}) {
 function mCheeks(c, mon, m) {
   const [mx, my, rx, ry] = mon.mouth || [0, 150, 100, 50], sk = mon.cheek || monLimbs(mon).skin, e = m.chew, P = Math.max(0, m.chewP || 0);
   const R = (ry * 0.62 + 14) * e * (1 + 0.16 * P), oy = mon.shut ?? my - ry * 0.5;
-  if (mon.cheek !== false) for (const d of [-1, 1]) {
-    const x = d * (rx * 0.82 + 6) + mx, y = oy - P * 3;
-    mAShape(c, mAEl(x, y, R * 1.05, R * (0.92 - 0.08 * P)), pkRG(c, x - d * R * 0.3, y - R * 0.4, R * 1.3, sk), { rim: 'rgba(255,245,230,.7)', rw: 4, lw: 4 });
-    if (mon.blush !== false) pkE(c, x + d * R * 0.1, y + R * 0.15, R * 0.55, R * 0.38, 'rgba(255,120,140,.28)', 0);
-    pkE(c, x - d * R * 0.35, y - R * 0.4, R * 0.28, R * 0.18, 'rgba(255,255,255,.55)', 0, -d * 0.4);
-    c.strokeStyle = 'rgba(20,6,4,.45)'; c.lineWidth = 3; c.beginPath(); c.arc(x + d * R * 0.1, y + R * 0.1, R * 0.62, d > 0 ? 0.4 : Math.PI - 1.4, d > 0 ? 1.4 : Math.PI - 0.4); c.stroke();
+  if (mon.cheek !== false) {
+    // one puffed-out lower face: two round cheek lobes stuffed full either side of the shut mouth, joined under it
+    const w = rx * 0.95 + 8, sq = 1 - 0.08 * P, cheeks = mASm([[-w * 1.28, oy - R * 0.5], [-w * 0.7, oy - R * 1.05], [-w * 0.18, oy - R * 0.45], [0, oy - R * 0.2], [w * 0.18, oy - R * 0.45], [w * 0.7, oy - R * 1.05], [w * 1.28, oy - R * 0.5],
+      [w * 1.34, oy + R * 0.55 * sq], [w * 0.78, oy + R * 1.15 * sq], [0, oy + R * 0.85 * sq], [-w * 0.78, oy + R * 1.15 * sq], [-w * 1.34, oy + R * 0.55 * sq]]);
+    mAShape(c, cheeks, pkRG(c, mx, oy - R * 0.6, w * 1.4, sk), { rim: 'rgba(255,245,230,.7)', rw: 5, lw: 4 });
+    for (const d of [-1, 1]) {
+      const x = mx + d * w * 0.78, y = oy + R * 0.1;
+      if (mon.blush !== false) pkE(c, x + d * R * 0.1, y + R * 0.2, R * 0.5, R * 0.34, 'rgba(255,120,140,.3)', 0);
+      pkE(c, x - d * R * 0.3, y - R * 0.5, R * 0.3, R * 0.18, 'rgba(255,255,255,.55)', 0, -d * 0.4);
+    }
   }
-  // a tight shut line between them, bowed down by the mouthful
-  if (mon.cheek !== false) c.strokeStyle = INK; else c.strokeStyle = 'rgba(0,0,0,0)'; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); c.moveTo(mx - rx * 0.62, oy - 4); c.quadraticCurveTo(mx, oy + 10 + 6 * P, mx + rx * 0.62, oy - 4); c.stroke();
+  // a tight shut line across the middle, bowed down by the mouthful
+  if (mon.cheek !== false) { c.strokeStyle = INK; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); c.moveTo(mx - rx * 0.55, oy - R * 0.2); c.quadraticCurveTo(mx, oy + R * 0.25 + 6 * P, mx + rx * 0.55, oy - R * 0.2); c.stroke(); }
   // crumbs of rocket falling from the corners
   const T = Math.max(0, (m.chewT || 0) - 0.4), cols = ['#ffd23a', '#ff7a2a', '#f4f4f4', '#8a5a3a', '#5ad0ff'];
   for (let k = 0; k < 7; k++) {
@@ -7248,8 +7252,9 @@ function mCheeks(c, mon, m) {
   }
 }
 // One monster in its full silhouette, in its own art frame (y = 0 is the kill line). Order: its body limbs, its body
-// (mon.body), then its wall limbs' shoulders and upper arms (limbs('mid'), so they grow from its shoulders in front of
-// its torso but behind its head), then its head (mon.draw); side heads sit lower and further out.
+// (mon.body), limbs('mid') (wing membranes and fin webs, and the shoulders that sit behind the head), its side heads,
+// its head (mon.draw, with the chew's cheeks), then limbs('shoulder'): the deltoids and upper arms over the head's
+// lower side.
 function drawMonsterForm(c, mon, m, coilHalf, limbs) {
   const f = monForm(mon), idx = MONSTERS.indexOf(mon);
   mon._t = m.t; mT = m.t; mSeed = 0.37 + idx * 1.618; mRage = m.rage ?? mFlare; mWide = m.wide ?? 0;
