@@ -6956,17 +6956,21 @@ function drawStatus() {
 function drawKnock(inMouth) {
   const k = G.knock;
   if (!k) return;
-  const b = G.bite, geo = G.biteGeo;
-  let x = sx(k.x), y = sy(k.alt), sc = 1;
+  const b = G.bite, geo = G.biteGeo, pl = pilot(), pose = !!(b && pl.bitePose);
+  let x = sx(k.x), y = sy(k.alt), sc = 1, rot = b ? 0.3 * Math.sin(G.t * 14) : k.rot;
   if (b && geo) {
     if (geo.open < 0.08) return;                   // swallowed
     const e = smooth(0.02, 0.2, b.t), deep = e > 0.72;
     if (inMouth ? !deep : deep && G.biteInMouth) return;
-    x = lerp(x, geo.mx, e); y = lerp(y, geo.my + geo.ry * 0.12, e); sc = 1 - 0.42 * e;
+    // bitePose pilots: a bigger, dedicated swallowed pose (st.bite), tipped over, sunk low in the mouth so the lower
+    // lip and teeth (drawn after the pilot, over the clipped cavity) cut across the bottom of the vehicle
+    x = lerp(x, geo.mx, e); y = lerp(y, geo.my + geo.ry * (pose ? 0.12 + ((monster().biteDrop ?? 0.46) - 0.12) * e : 0.12), e); sc = 1 - (pose ? 0.25 : 0.42) * e;
+    if (pose) rot = lerp(k.rot, 0.32, e) + 0.07 * Math.sin(G.t * 11);
   } else if (inMouth) return;
-  drawPilotOutlined(x, y, b ? 0.3 * Math.sin(G.t * 14) : k.rot, sc, sc, c => {
+  drawPilotOutlined(x, y, rot, sc, sc, c => {
     pkMood = 'panic'; pkLookDown = 1;
-    c.save(); drawPilot(c, pilot(), pilotState(G.t, 0, false)); c.restore();
+    const st = pilotState(G.t, 0, false); if (pose) st.bite = b.t;
+    c.save(); drawPilot(c, pl, st); c.restore();
     pkMood = ''; pkLookDown = 0;
     drawSweat(c);
   }, G.whiteT > 0);
@@ -8453,7 +8457,7 @@ function gkArm(c, rig, P, layer, t) {
   }
 }
 const MONSTERS = [
-  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], halfW: 262,
+  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], biteDrop: 0.8, halfW: 262,
     // its ringed body: armoured segments shrinking away down the shaft in a slow S, a glass bristle tuft on each side
     // of each ring and molten light in the gaps; on the swallow a glowing lump slides down it ring by ring
     body(c, m) {
