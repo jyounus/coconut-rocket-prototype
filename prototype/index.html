@@ -1458,7 +1458,7 @@ const GRAB_STYLE = {
   bat:     { type: 'wing',     hand: 'vclaw',     rr: 18, rm: 12, r0: 11, r1: 7,  rx: 104, ry: 70, rest: -14, bendY: 46 },
   gorilla: { type: 'arm',      hand: 'apegrip',   rr: 38, rm: 28, r0: 21, r1: 16, rx: 100, ry: 74, rest: -50, lean: 12 },   // Cinderback: huge shaggy arms, one hand braced high, one low on the walls (lean), elbows out
   mole:    { type: 'paw',      hand: 'spade',     rr: 30, rm: 23, r0: 17, r1: 14, rx: 118, ry: 66, rest: -36 },
-  golem:   { type: 'arm',      hand: 'geode',     rr: 27, rm: 20, r0: 19, r1: 14, rx: 110, ry: 52, rest: -24 },
+  golem:   { type: 'arm',      hand: 'geode',     rr: 27, rm: 20, r0: 19, r1: 14, rx: 110, ry: 52, rest: -44 },   // the Geode King braces its palms flat on both walls
   kraken:  { type: 'tentacle', hand: 'sucker',    rr: 25, rm: 18, r0: 13, r1: 6,  rx: 96,  ry: 92, rest: -30, wig: 6 },
   piranha: { type: 'fin',      hand: 'spines',    rr: 20, rm: 16, r0: 12, r1: 9,  rx: 118, ry: 52, rest: -36 },
   dragon:  { type: 'wing',     hand: 'dthumb',    rr: 18, rm: 12, r0: 11, r1: 7,  rx: 100, ry: 66, rest: -12, bendY: 46 },
@@ -1508,10 +1508,12 @@ function grabHand(kind, grip, t, wind = 0) {
       s(12, 0, 12, 10, 14.5, 'p');
       for (let k = 0; k < 5; k++) { const u = 2.5 + k * 4.9, kv = 15 - Math.abs(k - 2) * 1.2, tv = 37 - Math.abs(k - 1.6) * 2.6; s(u + 0.5, 9, u, kv, 4.6, 'p'); s(u, kv, Math.max(-1, u - 4.5 - 2.5 * g), tv, 3.9, 'c'); }
       break;
-    case 'geode':     // the Geode King's fist: a boulder palm, three blunt stone fingers dug into the rock, a thumb and a pink crystal shard on the knuckles
-      s(13, 0, 13, 11, 14.5, 'o');
-      for (let k = 0; k < 3; k++) { const u = 4.5 + k * 8, tp = 24 - Math.abs(k - 1) * 3; s(u, 13, u - 1 - g * 2.5, tp, 6, 'o'); }
-      s(23.5, 1, 24.5, 10, 5.4, 'o'); s(15, 10, 21, 19, 3.2, 'x');
+    case 'geode':     // the Geode King's hand pressed flat on the wall, as if holding the shaft open: a boulder palm,
+      // three thick stone fingers splayed up the rock (their tips pressing in as it grips), a thumb braced out low and a
+      // pink crystal growing from the back of the hand
+      s(11, 0, 10, 12, 13.5, 'o');
+      s(5, 12, 1 - g, 30, 5.8, 'o'); s(10, 14, 6 - g, 34, 5.8, 'o'); s(15, 12, 11.5 - g, 29, 5.4, 'o');
+      s(19, 3, 23, -1, 5, 'o'); s(13, 4, 17, 14, 3.2, 'x');
       break;
     case 'carved':    // the tiki's carved hand: four straight notched fingers and a square thumb
       s(12, 0, 12, 10, 12);
@@ -6887,12 +6889,29 @@ function gkStone(c, path, bx, o = {}) {
   path(c); c.fillStyle = pkLG(c, x0 + w * 0.2, y0 + h * 0.05, x0 + w * 0.7, y1, cols); c.fill();
   c.save(); path(c); c.clip();
   if (o.strata !== false) {
-    const sp = o.sp || 26, bow = o.bow ?? h * 0.12, tilt = (o.tilt || 0) * 0.5 + 0.2, sd = o.seed || 3;   // (the beds all dip the same way, like real rock)
-    for (let k = 0, y = y0 + (o.so ?? 6); y < y1 + sp; y += sp, k++) {
-      const th = sp * (0.18 + 0.3 * hash2(k + 9, sd)), yl = y - tilt * w * 0.5, yr = y + tilt * w * 0.5;
-      c.fillStyle = GK.strata[(k + sd) % 3];
-      c.beginPath(); c.moveTo(x0 - 4, yl); c.quadraticCurveTo((x0 + x1) / 2, y + bow, x1 + 4, yr);
-      c.lineTo(x1 + 4, yr + th); c.quadraticCurveTo((x0 + x1) / 2, y + bow + th * 1.15, x0 - 4, yl + th); c.closePath(); c.fill();
+    // faceted rock: chipped planes broken off the block (a lit upper plane, a mid chip, a shadowed lower plane), each
+    // with a crisp lit edge, and a couple of hairline cracks
+    const sd = o.seed || 3, H = (k, a, b) => lerp(a, b, hash2(k, sd + 17)), P = (u, v) => [x0 + w * u, y0 + h * v];
+    const planes = [
+      [[P(-0.05, H(1, 0.3, 0.45)), P(H(2, 0.3, 0.45), -0.05), P(H(3, 0.62, 0.8), H(4, 0.08, 0.22)), P(H(5, 0.42, 0.56), H(6, 0.4, 0.55))], 'rgba(255,250,236,.26)'],
+      [[P(H(5, 0.42, 0.56), H(6, 0.4, 0.55)), P(H(3, 0.62, 0.8), H(4, 0.08, 0.22)), P(1.05, H(7, 0.3, 0.45)), P(H(8, 0.66, 0.8), H(9, 0.66, 0.8))], 'rgba(255,240,226,.1)'],
+      [[P(-0.05, H(10, 0.68, 0.8)), P(H(5, 0.42, 0.56), H(6, 0.4, 0.55)), P(H(8, 0.66, 0.8), H(9, 0.66, 0.8)), P(H(11, 0.5, 0.7), 1.05), P(-0.05, 1.05)], 'rgba(70,18,58,.2)'],
+      [[P(H(8, 0.66, 0.8), H(9, 0.66, 0.8)), P(1.05, H(7, 0.3, 0.45)), P(1.05, 1.05), P(H(11, 0.5, 0.7), 1.05)], 'rgba(58,12,48,.32)'],
+    ];
+    c.lineJoin = 'round';
+    for (const [pl, col] of planes) { c.fillStyle = col; c.beginPath(); pl.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); c.fill(); }
+    // the ridges between the planes: a dark crease with a lit edge above it
+    const r0 = planes[0][0], r1 = planes[3][0];
+    for (const [a, b] of [[r0[2], r0[3]], [r0[3], r0[0]], [r0[3], r1[0]], [r1[0], planes[2][0][3]], [r1[0], r1[1]]]) {
+      c.strokeStyle = 'rgba(70,20,60,.35)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(a[0], a[1] + 1.5); c.lineTo(b[0], b[1] + 1.5); c.stroke();
+      c.strokeStyle = 'rgba(255,250,236,.55)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(a[0], a[1] - 1); c.lineTo(b[0], b[1] - 1); c.stroke();
+    }
+    // hairline cracks
+    for (let k = 0; k < (w * h > 9000 ? 2 : 1); k++) {
+      let x = x0 + w * H(20 + k, 0.2, 0.8), y = y0 + h * H(21 + k, 0.05, 0.3); const pts = [[x, y]];
+      for (let j = 0; j < 4; j++) { x += w * H(22 + k * 5 + j, -0.08, 0.08); y += h * H(27 + k * 5 + j, 0.08, 0.16); pts.push([x, y]); }
+      c.strokeStyle = 'rgba(40,8,34,.6)'; c.lineWidth = 2; c.beginPath(); pts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py)); c.stroke();
+      c.strokeStyle = 'rgba(255,248,236,.4)'; c.lineWidth = 1; c.beginPath(); pts.forEach(([px, py], i) => i ? c.lineTo(px + 1.5, py + 1) : c.moveTo(px + 1.5, py + 1)); c.stroke();
     }
   }
   if (o.speck !== false) {   // pits and grains in the stone
@@ -6966,7 +6985,7 @@ function gkShoulder(c, d, x, y, T, charge, seed) {
   gkMoss(c, [[x - d * 50, y - 60], [x - d * 28, y - 72], [x - d * 4, y - 78], [x + d * 22, y - 74]], 12, seed);
   const g = 0.45 + 0.2 * Math.sin(T * 2.4 + d) + 0.6 * charge;
   mAGlow(c, x + d * 14, y - 70, 40, GK.glow, 0.25 + 0.4 * charge);
-  const big = d > 0 ? 1 : 0.86;
+  const big = (d > 0 ? 1 : 0.86) * 0.72;   // (kept modest, so the face stays the focus)
   for (const [u, v, a, len, w] of [[30, -64, 0.62, 40, 9], [-14, -74, -0.28, 48, 10], [46, -50, 0.95, 26, 7], [14, -78, 0.2, 66, 14], [-36, -62, -0.72, 30, 8]]) gkCrystal(c, x + u * d, y + v, a * d, len * big, w * big, g);
   gkGlint(c, x + d * 6, y - 116 + 4 * Math.sin(T * 1.7 + d), 7, 0.8 * Math.max(0, Math.sin(T * 2.1 + d * 2)));
 }
@@ -7020,19 +7039,6 @@ function gkArm(c, rig, P, layer, t) {
         }
       }
     }
-  }
-}
-// a ring of boulders orbiting its waist on crystal light (front: the near half, drawn over the torso)
-function gkOrbit(c, m, front) {
-  const T = m.t, half = m.half || 230, R = lerp(Math.min(234, half + 6), 206, m.bite >= 0 ? smooth(0, 0.15, m.bite) : 0), cy = 600;
-  for (let k = 0; k < 5; k++) {
-    const a = T * 0.45 + k / 5 * TWO_PI, s2 = Math.sin(a); if ((s2 > 0) !== front) continue;
-    const x = Math.cos(a) * R, y = cy + s2 * 46 + Math.sin(T * 1.7 + k) * 5, r = (24 + 10 * hash2(k, 2)) * (0.8 + 0.2 * s2);
-    const ca = Math.cos(k + T * 0.6), sa = Math.sin(k + T * 0.6);
-    const P = [[-1, -0.4], [-0.3, -1], [0.7, -0.75], [1, 0.2], [0.35, 0.9], [-0.8, 0.65]].map(([u, v]) => [x + (u * ca - v * sa) * r, y + (u * sa + v * ca) * r, r * 0.3]);
-    mAGlow(c, x, y + r * 0.9, r * 2, GK.glow, 0.4);
-    gkStone(c, gkRP(P), gkBox(P), { sp: 9, bow: 3, seed: k, rw: 4, lw: 3.4, ao: 0.6, coreW: 14, under: 'rgba(255,110,210,.6)', speck: false });
-    if (k % 2) gkCrystal(c, x + ca * r * 0.3, y - r * 0.5, sa * 0.6, r * 0.9, r * 0.24, 0.7);
   }
 }
 const MONSTERS = [
@@ -7600,36 +7606,38 @@ const MONSTERS = [
     head(c, m) { moleHead(c, m); },
   },
   { id: 'golem', name: 'Geode King', label: 'geode king', haze: [255, 84, 210], v3: true, mouth: [0, 238, 96, 50], fit: 0.9, halfW: 280,
-    under(c, m) {
-      // the back half of a ring of boulders orbiting its waist, held up by crystal light
-      gkOrbit(c, m, false);
-    },
     body(c, m) {
-      // a torso of banded sandstone, two pectoral slabs, and in its chest a geode split open round a pulsing crystal
-      // heart. After the bite the pilot's glow sinks down its throat and ends up sealed inside the heart crystal.
-      const T = m.t, b = m.bite, beat = 0.5 + 0.5 * Math.sin(T * 3.1), bob = Math.sin(T * 1.4) * 4;
+      // one massive body of chipped stone: the chest boulder split open by the geode, a belly block and a broad pelvis
+      // all locked together, a spine of crystal running down its front between them with crystals growing out of it,
+      // crystal clusters bursting from its back and hips, and two great legs sinking into the dark. After the bite the
+      // pilot's glow sinks down its throat and ends up sealed inside the heart crystal.
+      const T = m.t, b = m.bite, beat = 0.5 + 0.5 * Math.sin(T * 3.1), bob = Math.sin(T * 1.4) * 3;
       const swal = b >= 0 ? smooth(0.85, 1.1, b) * (1 - smooth(2.4, 3.2, b)) : 0, hot = 0.5 + 0.5 * beat + swal;
-      // the body is boulders stacked on crystal light: a tapering hip stone sinking into the dark, a belly stone, the
-      // chest; pink light blazes in the gaps between them
-      const pin = b >= 0 ? smooth(0, 0.15, b) : 0;
-      // the haunches: two boulders sinking into the dark either side of a crystal cluster
-      for (const [x, a, len, w] of [[-40, -0.5, 90, 16], [40, 0.45, 96, 16], [0, 0.05, 120, 20]]) gkCrystal(c, x, 800, a, len, w, 0.5 + 0.3 * beat);
+      const pin = b >= 0 ? smooth(0, 0.15, b) : 0, dark = ['#e0a476', '#9a5446', '#4e1e3c', '#200a1e'];
+      // crystal clusters bursting out of its back, past the flanks (they draw in as it lunges)
+      for (const d of [-1, 1]) for (const [x, y, a, len, w] of [[188, 330, 0.95, 74, 15], [200, 420, 1.25, 64, 14], [176, 474, 1.7, 48, 11], [156, 300, 0.55, 62, 13]]) gkCrystal(c, d * x * (1 - 0.18 * pin), y, d * a * (1 - 0.45 * pin), len * (1 - 0.2 * pin), w, 0.45 + 0.3 * beat);
+      // the legs: two great columns of stone under the pelvis, sinking into the dark
       for (const d of [-1, 1]) {
-        const P = gkMove([[-60, -44, 26], [30, -56, 24], [78, -10, 26], [70, 80, 30], [30, 260, 40], [-40, 300, 40], [-74, 60, 30]], d * 96, 790 + bob * 2 + d * 6, d, 1);
-        gkStone(c, gkRP(d > 0 ? P : P.slice().reverse()), gkBox(P), { cols: ['#e8b07a', '#a8604a', '#5a2440', '#2a0c24'], sp: 26, bow: 14, seed: 8 + d, ao: 0.5, under: false });
+        const P = [[d * 40, 760, 30], [d * 170, 760, 30], [d * 186, 900, 36], [d * 160, 1200, 40], [d * 60, 1200, 40], [d * 50, 900, 36]];
+        gkStone(c, gkRP(d > 0 ? P : P.slice().reverse()), gkBox(P), { cols: dark, seed: 8 + d, ao: 0.5, under: false });
       }
-      const BP = gkMove([[-176, 572, 26], [-124, 540, 24], [-30, 548, 22], [60, 532, 24], [150, 546, 26], [186, 604, 26], [170, 674, 28], [108, 722, 26], [10, 736, 24], [-98, 726, 26], [-162, 690, 28], [-188, 630, 26]], 0, bob), belly = gkRP(BP);
-      for (const [y, a] of [[534 + bob, 1], [716 + bob * 1.5, 0.6]]) { mAGlow(c, 0, y, 210, GK.glow, (0.4 + 0.25 * beat) * a); mAGlow(c, 0, y, 90, [255, 220, 250], 0.25 * a); }
-      gkStone(c, belly, [-188, 532 + bob, 186, 736 + bob], { sp: 24, bow: 24, seed: 6, ao: 0.4, rw: 6,
-        facet: c2 => { c2.beginPath(); c2.moveTo(-150, 576 + bob); c2.quadraticCurveTo(-40, 548 + bob, 140, 560 + bob); c2.quadraticCurveTo(60, 590 + bob, -150, 576 + bob); c2.closePath(); } });
-      c.save(); belly(c); c.clip(); mCracks(c, [[[-20, 548 + bob], [-34, 590 + bob], [-18, 630 + bob]], [[60, 560 + bob], [84, 610 + bob], [70, 650 + bob]]], GK.glow, 2.6 + hot); c.restore();
-      // crystal clusters bursting out of its back, past the flanks
-      for (const d of [-1, 1]) for (const [x, y, a, len, w] of [[196, 330, 0.95, 84, 16], [206, 420, 1.25, 74, 15], [180, 470, 1.7, 56, 12], [160, 300, 0.55, 70, 14]]) gkCrystal(c, d * x * (1 - 0.18 * pin), y, d * a * (1 - 0.45 * pin), len * (1 - 0.2 * pin), w, 0.45 + 0.3 * beat);
+      // the belly and pelvis: one great mass of chipped stone under the chest, widest at the hips, crystals growing from them
+      const AB = mASm(mAMirror([[0, 450], [150, 452], [204, 500], [212, 600], [222, 720], [196, 820], [130, 878], [0, 892]]));
+      gkStone(c, AB, [-222, 450, 222, 892], { cols: ['#f2c290', '#c07a56', '#6a2c4a', '#2a0c26'], seed: 12, ao: 0.4, rw: 6,
+        dark: c2 => { c2.beginPath(); for (const d of [-1, 1]) { c2.moveTo(d * 230, 600); c2.quadraticCurveTo(d * 160, 700, d * 190, 860); c2.lineTo(d * 260, 860); c2.closePath(); } } });
+      c.save(); AB(c); c.clip(); mCracks(c, [[[-60, 560], [-90, 600], [-80, 650], [-120, 700]], [[70, 620], [100, 660], [96, 720]]], GK.glow, 2 + hot); c.restore();
+      for (const d of [-1, 1]) for (const [x, y, a, len, w] of [[206, 700, 1.15, 50, 12], [212, 760, 1.5, 38, 10], [196, 640, 0.8, 36, 9]]) gkCrystal(c, d * x, y, d * a, len, w, 0.5 + 0.3 * beat);
+      // the crystal spine: a vein of pink crystal running down the front from the geode to the pelvis, crystals growing out of it
+      c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+      const sp = [[0, 500], [-8, 560], [6, 620], [-4, 690], [4, 760], [0, 830]];
+      for (const [lw, col] of [[22, INK], [16, GK.cry[2]], [8, GK.cry[1]], [3, GK.cry[0]]]) { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); sp.forEach(([x, y], i) => i ? c.lineTo(x, y + bob) : c.moveTo(x, y + bob)); c.stroke(); }
+      c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(GK.glow, 0.35 + 0.3 * hot); c.lineWidth = 30; c.beginPath(); sp.forEach(([x, y], i) => i ? c.lineTo(x, y + bob) : c.moveTo(x, y + bob)); c.stroke();
+      c.restore();
+      for (const [x, y, a, len, w] of [[-8, 566, -0.7, 34, 9], [8, 600, 0.75, 30, 8], [-6, 680, -0.9, 28, 8], [6, 720, 0.8, 34, 9], [0, 800, -0.5, 26, 7]]) gkCrystal(c, x, y + bob, a, len, w, 0.55 + 0.35 * beat);
       // the chest: one great boulder split open by the geode
-      const chest = mASm(mAMirror([[0, 214], [110, 208], [192, 236], [230, 300], [226, 384], [196, 456], [124, 506], [0, 520]]));
-      gkStone(c, chest, [-230, 208, 230, 520], { sp: 28, bow: 34, ao: 0.4, under: 'rgba(255,110,210,.5)', seed: 5, rw: 7,
+      const chest = mASm(mAMirror([[0, 214], [110, 208], [192, 236], [230, 300], [226, 384], [200, 460], [130, 512], [0, 524]]));
+      gkStone(c, chest, [-230, 208, 230, 524], { ao: 0.4, under: 'rgba(255,110,210,.5)', seed: 5, rw: 7,
         dark: c2 => { c2.beginPath(); for (const d of [-1, 1]) { c2.moveTo(d * 230, 300); c2.quadraticCurveTo(d * 170, 380, d * 196, 470); c2.lineTo(d * 260, 470); c2.closePath(); } } });
-      // energy veins: cracks running out from the chest geode
       c.save(); chest(c); c.clip();
       mCracks(c, [[[-80, 420], [-120, 400], [-150, 430], [-196, 410]], [[-120, 400], [-130, 360]], [[84, 430], [128, 452], [160, 430], [204, 446]], [[128, 452], [138, 490]], [[-30, 480], [-44, 516]], [[40, 476], [54, 516]]], GK.glow, 3 + 1.5 * hot);
       c.restore();
@@ -7637,7 +7645,7 @@ const MONSTERS = [
       for (const d of [-1, 1]) {
         const P = gkMove([[-70, -36, 16], [36, -46, 14], [84, -10, 16], [70, 36, 14], [-20, 48, 16], [-78, 14, 14]], d * 112, 352, d, 1);
         mShade(c, d * 112, 396, 80, 30, 0.4);
-        gkStone(c, gkRP(d > 0 ? P : P.slice().reverse()), gkBox(P), { sp: 20, bow: 10, seed: 7 + d, tilt: d * 0.1 });
+        gkStone(c, gkRP(d > 0 ? P : P.slice().reverse()), gkBox(P), { seed: 7 + d });
       }
       // the chest geode: agate bands round a crystal-lined hollow
       const gy = 430, ring = (k, col, lw = 0) => { const p = mASm([[0, gy - 74 * k], [78 * k, gy - 48 * k], [104 * k, gy], [70 * k, gy + 52 * k], [0, gy + 66 * k], [-70 * k, gy + 52 * k], [-104 * k, gy], [-78 * k, gy - 48 * k]]); p(c); c.fillStyle = col; c.fill(); if (lw) { c.strokeStyle = INK; c.lineWidth = lw; c.stroke(); } return p; };
@@ -7675,8 +7683,6 @@ const MONSTERS = [
       }
       c.restore();
       gkGlint(c, -10, gy - 30, 12, 0.5 + 0.5 * Math.sin(T * 2.3));
-      // the front half of the boulder ring
-      gkOrbit(c, m, true);
     },
     head(c, m) {
       // the shoulders, then a broad sandstone skull cracked open on top like a geode: rings of agate round a bowl of
@@ -7717,39 +7723,41 @@ const MONSTERS = [
       gkStone(c, skull, [-172, 18, 172, 216], { sp: 24, bow: 26, seed: 4, ao: 0.3, aoA: 0.35, rw: 7,
         facet: c2 => { c2.beginPath(); c2.moveTo(-150, 84); c2.quadraticCurveTo(-120, 64, -60, 70); c2.quadraticCurveTo(-110, 100, -158, 130); c2.closePath(); },
         dark: c2 => { c2.beginPath(); c2.moveTo(150, 84); c2.quadraticCurveTo(140, 150, 120, 214); c2.lineTo(200, 214); c2.lineTo(200, 84); c2.closePath(); c2.moveTo(-158, 150); c2.quadraticCurveTo(-140, 190, -110, 214); c2.lineTo(-200, 214); c2.closePath(); } });
-      c.save(); skull(c); c.clip();
-      // the geode: agate rings round the open bowl at the top of the skull
-      const cv = (rx, ry, col, lw) => { c.beginPath(); c.ellipse(0, 26, rx, ry, 0, 0, TWO_PI); c.fillStyle = col; c.fill(); if (lw) { c.strokeStyle = INK; c.lineWidth = lw; c.stroke(); } };
-      cv(132, 58, GK.agate[3], 4); cv(124, 52, GK.agate[0]); cv(117, 47, GK.agate[1]); cv(111, 43, GK.agate[0]); cv(105, 39, GK.agate[2]);
-      cv(98, 35, pkRG(c, 0, 30, 110, ['#8a1c72', '#46083c', GK.deep]), 3);
       const cg = 0.5 + 0.25 * Math.sin(T * 2.6) + 0.3 * rage + 0.4 * chg;
-      mAGlow(c, 0, 40, 100, GK.glow, 0.3 + 0.3 * cg);
-      for (let k = 0; k < 11; k++) { const u = (k + 0.5) / 11, x = lerp(-90, 90, u); gkCrystal(c, x, 60 - 6 * Math.sin(u * Math.PI), (u - 0.5) * 1.6, 18 + 8 * hash2(k, 6), 6, cg * 0.7); }
-      // pink-lit cracks running down from the bowl
-      mCracks(c, [[[-6, 62], [4, 78], [-4, 90]], [[-118, 62], [-130, 84], [-122, 100], [-138, 118]], [[118, 60], [132, 80], [126, 98]], [[-150, 150], [-136, 172], [-150, 188]], [[150, 140], [140, 166], [152, 180]]], GK.glow, 2.8 + 1.2 * cg);
+      c.save(); skull(c); c.clip();
+      mCracks(c, [[[-118, 62], [-130, 84], [-122, 100], [-138, 118]], [[-150, 150], [-136, 172], [-150, 188]]], GK.glow, 2.4 + cg);
+      // the split: the right side of its face has broken away like a geode, an agate-banded hollow brimming with pink
+      // crystals, and its right eye blazing deep inside it
+      const SP = [[58, 14], [80, 46], [50, 80], [38, 110], [44, 146], [32, 176], [56, 200], [96, 222], [190, 222], [190, 14]];
+      const split = c2 => { c2.beginPath(); SP.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); c2.closePath(); };
+      split(c); c.fillStyle = pkRG(c, 110, 130, 110, ['#9a2a86', '#4e0a44', GK.deep]); c.fill();
+      c.save(); split(c); c.clip();
+      c.lineJoin = 'round';
+      for (const [lw, col] of [[34, GK.agate[3]], [26, GK.agate[0]], [19, GK.agate[1]], [13, GK.agate[0]], [8, GK.agate[2]]]) { c.strokeStyle = col; c.lineWidth = lw; split(c); c.stroke(); }
+      mAGlow(c, 100, 134, 110, GK.glow, 0.35 + 0.35 * cg);
+      for (let k = 0; k < 9; k++) { const i = k % (SP.length - 1), p0 = SP[i], p1 = SP[i + 1], x = lerp(p0[0], p1[0], 0.5), y = lerp(p0[1], p1[1], 0.5); if (x > 176 || y < 18 || y > 214) continue; gkCrystal(c, x, y, Math.atan2(134 - y, 100 - x) + Math.PI / 2, 22 + 10 * hash2(k, 7), 6 + 2 * hash2(k, 8), cg * 0.8); }
+      for (const [x, y, a, len, w] of [[150, 60, -2.4, 30, 8], [160, 190, -0.9, 26, 7], [120, 210, 0.1, 24, 7], [140, 30, -2.9, 22, 6]]) gkCrystal(c, x, y, a, len, w, cg * 0.8);
       c.restore();
-      // the crown: great crystals blazing up out of the bowl (their tips stay under the catch line)
-      for (const [x, a, len, w] of [[-66, -0.7, 32, 9], [64, 0.62, 44, 11], [-38, -0.36, 52, 14], [36, 0.3, 36, 10], [4, 0.04, 56, 16], [-14, -0.14, 30, 8], [20, 0.18, 24, 7]]) gkCrystal(c, x, 62, a, len, w, cg);
-      for (let k = 0; k < 3; k++) { const p = (T * 0.5 + k / 3) % 1; gkGlint(c, [-30, 6, 40][k], [26, 14, 30][k], 9 * Math.sin(p * Math.PI), Math.sin(p * Math.PI)); }
-      // eye sockets, the eyes, then the brow slab over them
-      for (const d of [-1, 1]) {
-        pkE(c, d * 64, 134, 42, 31, pkRG(c, d * 64, 140, 44, ['#5a1450', '#300a2c', GK.deep]), 0);
-        mAGlow(c, d * 64, 136, 48, GK.glow, 0.35 + 0.3 * rage);
-      }
-      for (const d of [-1, 1]) {
-        const mine = gs && gs.d === d;
-        mEyeC(c, d * 64, 134, 26, 20, m.look, { sc: '#fffbea', iris: ['#ffffff', '#ffe46a', '#ff8a1a'], ir: 0.66, pupil: 'round', lid: '#d08a5a', squint: 0.28 + (mine ? 0.35 * gs.wind : 0), slant: 0.9, glow: [255, 196, 80], socket: false, rot: d * 0.08, lw: 3.6 });
-      }
+      // the broken stone lip round the hollow: lit where the rock snapped, dark ink
+      c.strokeStyle = 'rgba(255,248,236,.75)'; c.lineWidth = 3; c.beginPath(); SP.slice(0, 8).forEach(([x, y], i) => i ? c.lineTo(x - 3, y) : c.moveTo(x - 3, y)); c.stroke();
+      c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); SP.slice(0, 8).forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+      c.restore();
+      // the crown: a short ridge of crystals along its brow line (small, so its face stays the focus)
+      for (const [x, a, len, w] of [[-70, -0.5, 22, 7], [-44, -0.25, 30, 9], [-18, -0.08, 36, 10], [8, 0.08, 30, 9], [30, 0.3, 22, 7]]) gkCrystal(c, x, 36, a, len, w, cg * 0.8);
+      // its left eye: deep in a socket under a heavy scowling brow; its right eye: a crystal orb glaring out of the hollow
+      pkE(c, -64, 134, 40, 30, pkRG(c, -64, 140, 44, ['#5a1450', '#300a2c', GK.deep]), 0);
+      mAGlow(c, -64, 136, 46, [255, 196, 80], 0.3 + 0.3 * rage);
+      { const mine = gs && gs.d === -1;
+        mEyeC(c, -64, 134, 24, 18, m.look, { sc: '#fffbea', iris: ['#ffffff', '#ffe46a', '#ff8a1a'], ir: 0.66, pupil: 'round', lid: '#d08a5a', squint: 0.36 + (mine ? 0.3 * gs.wind : 0), slant: 1.0, glow: [255, 196, 80], socket: false, rot: -0.1, lw: 3.6 }); }
+      { const mine = gs && gs.d === 1;
+        mAGlow(c, 100, 132, 60, GK.glow, 0.5 + 0.3 * cg);
+        mEyeC(c, 100, 132, 31, 27, m.look, { sc: '#fff2fc', iris: ['#ffffff', '#ff92ea', '#b0108a'], ir: 0.78, pupil: 'slit', lid: '#7a1a6a', squint: 0.1 + (mine ? 0.3 * gs.wind : 0), slant: 0.5, glow: GK.glow, socket: false, rot: 0.06, lw: 4 }); }
       const by = 4 * rage - 12 * wide, bv = 1 - 0.7 * wide;
-      // the brows: two heavy boulders slanting down hard toward the nose (they lift and part on the bite)
-      for (const d of [-1, 1]) {
-        const iy = by + 12 * bv, BR = [[12, 106 + iy, 8], [26, 88 + iy, 10], [94, 66 + by, 18], [160, 78 + by, 14], [168, 98 + by, 10], [102, 112 + by, 16], [40, 120 + iy, 10]].map(([x, y, r]) => [d * x, y, r]);
-        mShade(c, d * 90, 118 + by, 80, 14, 0.5);
-        gkStone(c, gkRP(d > 0 ? BR : BR.slice().reverse()), gkBox(BR), { sp: 12, bow: 4, seed: 9 + d, ao: 0.6, rw: 5, under: 'rgba(255,90,200,.4)',
-          facet: c2 => { c2.beginPath(); c2.moveTo(d * 30, 92 + iy); c2.lineTo(d * 94, 72 + by); c2.lineTo(d * 150, 82 + by); c2.lineTo(d * 96, 84 + by); c2.closePath(); } });
-      }
+      // the left brow: one heavy boulder slanting down hard toward the nose (it lifts on the bite)
+      { const d = -1, iy = by + 12 * bv, BR = [[8, 110 + iy, 8], [24, 90 + iy, 10], [94, 64 + by, 18], [166, 74 + by, 14], [172, 98 + by, 10], [102, 114 + by, 16], [40, 124 + iy, 10]].map(([x, y, r]) => [d * x, y, r]);
+        mShade(c, d * 90, 120 + by, 84, 16, 0.55);
+        gkStone(c, gkRP(BR.slice().reverse()), gkBox(BR), { seed: 10, ao: 0.6, rw: 5, under: 'rgba(255,90,200,.4)' }); }
       gkMoss(c, [[-150, 80 + by], [-126, 72 + by], [-100, 68 + by]], 11, 3);
-      gkMoss(c, [[104, 68 + by], [130, 74 + by]], 10, 5);
       // the nose
       const NP = [[0, 116, 6], [26, 148, 10], [30, 168, 10], [0, 180, 12], [-30, 168, 10], [-26, 148, 10]];
       gkStone(c, gkRP(NP), gkBox(NP), { sp: 14, bow: 5, seed: 1, ao: 0.5, rw: 4, facet: c2 => { c2.beginPath(); c2.moveTo(-2, 122); c2.lineTo(-22, 150); c2.lineTo(-20, 164); c2.lineTo(-4, 158); c2.closePath(); } });
@@ -9536,7 +9544,7 @@ function drawGrabPortrait(c, mon, t, half, layer) {
 // one-line taglines for the picker
 const MONSTER_TAGS = {
   worm: 'Glass bristles on the walls, golden scissor jaws for you', bat: 'Crystal-crowned, wrapped in its wings, and starving', gorilla: 'A volcanic silverback that climbs knuckles-first',
-  mole: 'A star-nosed mole whose golden drill splits into jaws', golem: "A crystal crown, a floating jaw, fists of stone", kraken: 'Tentacles slap the walls; the beak waits',
+  mole: 'A star-nosed mole whose golden drill splits into jaws', golem: "Half its face split open like a geode, and hungry", kraken: 'Tentacles slap the walls; the beak waits',
   piranha: 'An underbite full of razor teeth', dragon: 'Wing claws on the walls, fire in its throat', rex: 'Bone talons and a skull full of teeth',
   flytrap: 'Vines climb ahead; the lobes snap shut', blob: 'Goo up the walls, and you can see inside', spider: 'Eight eyes, eight legs, two big fangs',
   shark: 'Fins slice up the walls, then the jaw drops', tiki: 'Carved fists and a mouth like a box', spirit: 'A living flame behind an obsidian mask',
