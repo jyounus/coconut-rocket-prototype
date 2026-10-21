@@ -615,6 +615,8 @@ const GRAB_JOINTED_T = new Set(['arm', 'paw', 'pad', 'wing', 'pincer', 'fin', 't
   if (Object.keys(GRAB_STYLE).length !== 20) fail('all 20 monsters have a wall limb', `${Object.keys(GRAB_STYLE).length}`);
   if (GRAB.wind < 0.5) fail('every grab has a wind-up tell of at least 0.5 s', `${GRAB.wind}`);
   for (const [id, st] of Object.entries(GRAB_STYLE)) if (!(st.rest < -3)) fail('every limb idles under the catch line', id);
+  // a climbing ape keeps its hands braced high up the walls even at rest (never tucked down beside its head)
+  if (GRAB_STYLE.gorilla.rest - Math.abs(GRAB_STYLE.gorilla.lean || 0) < -32) fail('the climbing ape rests its hands high on the walls', `${GRAB_STYLE.gorilla.rest}`);
   if (new Set(Object.values(GRAB_STYLE).map(st => st.type)).size < 12) fail('the monsters climb with many different limb types', '');
   if (RULES.minWidth - 2 * GRAB.band < PILOT_W + 60) fail('the grab bands leave a centre lane wider than the widest pilot plus 60', '');
   // every point on a capsule's outline (sampled), in world units: [x, alt]

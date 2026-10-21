@@ -1456,7 +1456,7 @@ const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
 const GRAB_STYLE = {
   worm:    { type: 'parapod',  hand: 'chaetae',   rr: 24, rm: 19, r0: 15, r1: 12, rx: 64, ry: 76, rest: -46, wig: 3 },   // Scissorjaw: a parapod growing out of its first body ring, a big glass-bristle fan for a hand
   bat:     { type: 'wing',     hand: 'vclaw',     rr: 18, rm: 12, r0: 11, r1: 7,  rx: 104, ry: 70, rest: -14, bendY: 46 },
-  gorilla: { type: 'arm',      hand: 'apegrip',   rr: 38, rm: 28, r0: 21, r1: 16, rx: 100, ry: 74, rest: -50, lean: 12 },   // Cinderback: huge shaggy arms, one hand braced high, one low on the walls (lean), elbows out
+  gorilla: { type: 'arm',      hand: 'apegrip',   rr: 36, rm: 28, r0: 21, r1: 16, rx: 116, ry: 64, rest: -18, lean: 10 },   // Cinderback: huge shaggy arms climbing the walls, hands braced high up the rock (one higher than the other: lean), elbows out
   mole:    { type: 'paw',      hand: 'spade',     rr: 30, rm: 23, r0: 17, r1: 14, rx: 118, ry: 66, rest: -36 },
   golem:   { type: 'arm',      hand: 'geode',     rr: 27, rm: 20, r0: 19, r1: 14, rx: 110, ry: 52, rest: -44 },   // the Geode King braces its palms flat on both walls
   kraken:  { type: 'tentacle', hand: 'sucker',    rr: 25, rm: 18, r0: 13, r1: 6,  rx: 96,  ry: 92, rest: -30, wig: 6 },
@@ -6457,12 +6457,12 @@ function gvWing(c, rig, P, layer, t, mon) {
 // up in there). Its arms are huge and shaggy and its hands grip the rock knuckles-first, fingers curled over the stone.
 // Every helper here starts with cb.
 const CB = {
-  fur: ['#c9cbd6', '#7c7e8e', '#3c3d4a', '#16161d'],        // ash → charcoal fur, light → dark
+  fur: ['#d6deee', '#8a94b0', '#444c66', '#181c2a'],        // cool ash-blue → charcoal fur, light → dark (lit warm from the lava below)
   tip: ['#fff1a8', '#ffb238', '#f0601a'],                     // the glowing ends of the longest locks
   obs: ['#a49aac', '#3e3446', '#19121e', '#08060a'],          // obsidian: a warm grey sheen → glassy black
   face: ['#c2a69c', '#7e625e', '#43323a', '#1c1216'],         // dark leather face, light → dark
   lava: [255, 140, 40], hot: [255, 214, 110], white: [255, 250, 220],
-  limb: ['#bfc1ce', '#6c6e7e', '#2a2a36'],                    // the arms' fur (light, mid, dark)
+  limb: ['#ccd4e8', '#76809e', '#2c3248'],                    // the arms' fur (light, mid, dark)
 };
 const cbH = (i, s) => hash2(i, 300 + s);
 // a glowing magma crack along a polyline: a soft halo, a hot core and a white-hot thread (k: 0..1 brightness)
@@ -6577,8 +6577,20 @@ function cbFurChain(c, ch, d, t, o = {}) {
 // upper arm from behind the shoulders, its deltoid bulging at the root, lava seams between the fur clumps; 'front': the
 // elbow, the thick furred forearm up the wall face (long hair hanging off its shaft side, a lava crack along it) and the
 // hand gripping the rock knuckles-first.
-function cbLimb(c, rig, P, layer, t) {
+function cbLimb(c, rig, P, layer, t, inFront = false) {
   const d = rig.d;
+  // 'shoulder' (over the head): when the whole arm shows (the bite's pull-back, the picker), the upper arm is drawn
+  // again in front, from its shoulder out to the elbow, so it reads all the way from shoulder to hand
+  if (layer === 'shoulder') {
+    const show = rig.portrait ? 1 : smooth(1.02, 1.1, rig.sc || 1);
+    if (show <= 0) return;
+    c.save(); c.globalAlpha *= show; cbLimb(c, rig, P, 'mid', t, true);
+    // long locks hanging off the upper arm's underside, smouldering at their tips
+    const n = litSide(rig.up, d);
+    for (let i = 3; i < rig.up.length - 2; i += 3) { const [x, y, r] = rig.up[i]; cbTuft(c, x - n[i][0] * r * 0.7, y - n[i][1] * r * 0.7, Math.PI / 2 - d * 0.25, r * 0.95, r * 0.8, { forks: 2, seed: i + d * 5 + 140, cols: [CB.limb[2], CB.limb[1]], glow: 0.35, lw: 2.4 }); }
+    c.restore();
+    return;
+  }
   if (layer === 'mid') {
     const ch = rig.up;
     grabBody(c, [ch], CB.limb, d, { rim: 'rgba(240,242,255,.7)' });
@@ -6592,7 +6604,7 @@ function cbLimb(c, rig, P, layer, t) {
     const heat = 0.5 + 0.25 * Math.sin(t * 3 + d) + 0.5 * rig.wind;
     for (let i = 5; i < ch.length - 2; i += 4) { const [x, y, r] = ch[i], [nx, ny] = n[i]; cbCrack(c, [[x + nx * r * 0.6, y + ny * r * 0.6], [x + ny * r * 0.2, y - nx * r * 0.2], [x - nx * r * 0.4 - ny * r * 0.3, y - ny * r * 0.4 + nx * r * 0.3]], 2.2, Math.min(1, heat)); }
     c.restore();
-    limbRootShade(c, ch, 0.3);
+    if (!inFront) limbRootShade(c, ch, 0.3);
     return;
   }
   const ch = armChain(rig), fore = rig.fore, wind = rig.wind, grip = smooth(-5, -35, rig.tipY);
@@ -7425,60 +7437,77 @@ const MONSTERS = [
       c.restore();
     } },
   { id: 'gorilla', name: 'Cinderback', label: 'cinderback', haze: [255, 130, 50], v3: true, mouth: [0, 278, 100, 70], fit: 0.9, halfW: 290,
-    limbArt: cbLimb, ownHands: true,
+    limbArt: cbLimb, ownHands: true, shoulderArt: true,
     body(c, m) {
-      // a hunched silverback's torso: a mountain of trapezius behind the head, huge rounded shoulders (the wall arms grow
-      // out of them), a broad chest of cracked obsidian with lava in its seams and a furnace heart glowing through it,
-      // the ribs and waist tapering away under broad clumps of ash-grey fur. After it swallows, the glow drops down the
-      // throat and the furnace roars (the pilot is seen trapped inside it)
-      const T = m.t, br = Math.sin(T * 2.4), b = m.bite, sh = br * 3, F = CB.fur;
-      if (b >= 0) c.scale(1 - 0.18 * smooth(0, 0.12, b), 1);   // (it hunches in tight as it lunges, so all of it stays on screen in the bite's zoom)
-      const half = [[0, 120], [110, 118 + sh], [200, 140 + sh], [258, 196 + sh], [276, 268], [262, 352], [226, 450], [184, 560], [156, 680], [150, 820], [146, 1000], [118, 1300], [70, 1800], [0, 2100]];
-      const path = gvTufts(gvFur(mAMirror(half), 2, 24, (x, y) => y > 170 && y < 1300 ? 1 : 0, 0.5, 31));
-      mAShape(c, path, pkLG(c, 0, 120, 0, 1100, [F[1], F[2], F[3], '#0c0c10']), { rim: 'rgba(240,242,255,.7)', rw: 7, lw: 4.5 });
+      // a hunched silverback seen from the front as it climbs: a great barrel chest under one cracked slab of obsidian
+      // (lava glowing in its seams, a furnace heart burning through its middle), round shoulders the wall arms grow
+      // out of, a broad pot belly of bare ember-veined leather and two massive thighs folded under it (its lap),
+      // cool ash-blue fur lit warm from the lava below, every long lock tipped with embers. After it swallows, the glow
+      // drops down the throat and the furnace roars (the pilot is seen trapped inside it)
+      const T = m.t, br = Math.sin(T * 2.4), b = m.bite, sh = br * 3, F = CB.fur, S = CB.face;
+      if (b >= 0) c.scale(1 - 0.16 * smooth(0, 0.12, b), 1);   // (it hunches in tight as it lunges, so all of it stays on screen in the bite's zoom)
+      const warm = 'rgba(255,130,50,.3)', rim = 'rgba(220,232,255,.8)';
+      // 1. the torso: a barrel of dark shaggy fur from the shoulders to the hips
+      const half = [[0, 116], [110, 116 + sh], [190, 138 + sh], [232, 190], [244, 262], [236, 350], [222, 440], [226, 520], [206, 590], [150, 640], [0, 650]];
+      const path = gvTufts(gvFur(mAMirror(half), 2, 18, (x, y) => y > 200 && y < 620 ? 1 : 0, 0.5, 31));
+      mAShape(c, path, pkLG(c, 0, 120, 0, 650, [F[1], F[2], F[3], F[3]]), { rim, rw: 7, lw: 4.5 });
       c.save(); path(c); c.clip();
-      // the shoulders: two great rounded masses of muscle under shaggy fur (the arms' roots), lit along the top
+      cbFurMass(c, -170, 420, 70, 170, 26, 35); cbFurMass(c, 170, 420, 70, 170, 26, 36);
+      // the shoulders: two great rounded masses where the wall arms grow out, lit cool along the top
       for (const d of [-1, 1]) {
-        const sp = gvTufts(gvFur([[d * 110, 200], [d * 180, 170], [d * 262, 200], [d * 290, 280], [d * 262, 360], [d * 190, 380], [d * 120, 330]].map(p => p), 2, 16, (x, y) => y > 290 ? 1 : 0, 0.4, 33 + d));
-        mShade(c, d * 196, 380, 100, 30, 0.5);
-        mAShape(c, sp, pkRG(c, d * 180, 210, 140, [F[0], F[1], F[2]]), { lw: 4, rim: 'rgba(245,246,255,.75)', rw: 6 });
-        c.save(); sp(c); c.clip(); cbFurMass(c, d * 196, 290, 90, 80, 22, 40 + d); c.restore();
-        cbCrack(c, [[d * 150, 230], [d * 176, 250], [d * 172, 276], [d * 204, 300]], 2.4, 0.55 + 0.2 * Math.sin(T * 2.6 + d));
+        const sp = gvTufts(gvFur([[d * 120, 196], [d * 176, 160], [d * 236, 182], [d * 262, 246], [d * 240, 312], [d * 180, 330], [d * 128, 290]], 2, 13, (x, y) => y > 270 ? 1 : 0, 0.4, 33 + d));
+        mShade(c, d * 190, 330, 90, 26, 0.5);
+        mAShape(c, sp, pkRG(c, d * 176, 186, 130, [F[0], F[1], F[2]]), { lw: 4, rim: 'rgba(235,242,255,.85)', rw: 6, under: warm, uw: 6 });
+        c.save(); sp(c); c.clip(); cbFurMass(c, d * 190, 250, 70, 64, 18, 40 + d); c.restore();
+        cbCrack(c, [[d * 150, 210], [d * 174, 230], [d * 168, 254], [d * 198, 276]], 2.4, 0.6 + 0.2 * Math.sin(T * 2.6 + d));
       }
-      // broad fur down the flanks and the belly: soft strands in big clumps
-      cbFurMass(c, 0, 700, 170, 240, 70, 35);
-      for (const d of [-1, 1]) cbCrack(c, [[d * 30, 520], [d * 70, 560], [d * 64, 610], [d * 104, 650], [d * 96, 700]], 2.2, 0.45 + 0.2 * Math.sin(T * 2 + d));
-      cbCrack(c, [[-70, 640], [-96, 686], [-88, 730], [-124, 772]], 2.4, 0.4 + 0.2 * Math.sin(T * 2.2));
-      cbCrack(c, [[76, 650], [104, 700], [132, 716]], 2.2, 0.35 + 0.2 * Math.sin(T * 2.2 + 1));
-      // the chest: two broad slabs of cracked obsidian, faceted, lava glowing in the seams between the shards
-      c.save(); c.translate(0, 84);   // (the chest sits below the beard)
-      const fy = 470, gy = mGulpY(m, 250, fy, 0.95, 1.35), roar = b >= 0 ? smooth(1.25, 1.45, b) * (1 - smooth(2.2, 3, b)) : 0;
-      const heat = 0.55 + 0.2 * Math.sin(T * 3) + 0.4 * roar;
-      // the chest: one broad breastplate of obsidian broken into angular shards, lava glowing in the cracks between them
-      const pl = mASm(mAMirror([[0, 312], [70, 304], [150, 310], [204, 334], [216, 384], [196, 438], [140, 468], [70, 462], [0, 476]]));
-      mShade(c, 0, 480, 220, 30, 0.5);
-      mAShape(c, pl, pkRG(c, 0, 390, 200, ['#fff0a0', '#ff9a30', '#c03a10', '#5a1004']), { lw: 0 });
+      c.restore();
+      // 2. its lap: two massive thighs folded up in front of its hips, knees out, ember-tipped fur hanging off them
       for (const d of [-1, 1]) {
-        c.save(); pl(c); c.clip();
-        mAGlow(c, d * 100, 390, 110, CB.lava, 0.25 + 0.25 * heat);
-        const sh = [[[6, 306], [96, 300], [100, 350], [62, 386], [6, 380]], [[100, 300], [222, 326], [216, 372], [136, 388], [104, 352]], [[6, 386], [62, 390], [70, 480], [6, 480]],
-          [[66, 390], [104, 356], [134, 392], [126, 480], [74, 480]], [[138, 392], [220, 378], [220, 480], [130, 480]]];
-        sh.forEach((poly, k) => {
-          const P = poly.map(([x, y]) => [d * x, y]), cx = P.reduce((a, p) => a + p[0], 0) / P.length, cy = P.reduce((a, p) => a + p[1], 0) / P.length;
-          const Q = P.map(([x, y]) => [cx + (x - cx) * 0.9, cy + (y - cy) * 0.9]);
-          pkPath(c, Q, pkLG(c, cx - d * 30, cy - 40, cx + d * 20, cy + 40, k < 2 ? [CB.obs[0], CB.obs[1], CB.obs[2]] : [CB.obs[1], CB.obs[2], CB.obs[3]]), 3);
-          c.save(); c.beginPath(); Q.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); c.clip();
-          c.fillStyle = 'rgba(236,228,250,.22)'; c.beginPath(); c.moveTo(Q[0][0], Q[0][1]); c.lineTo(Q[1][0], Q[1][1]); c.lineTo(cx, cy); c.closePath(); c.fill();
-          c.restore();
-          c.strokeStyle = 'rgba(255,250,255,.55)'; c.lineWidth = 2; c.beginPath(); c.moveTo(lerp(Q[0][0], Q[1][0], 0.15), lerp(Q[0][1], Q[1][1], 0.15) + 3); c.lineTo(lerp(Q[0][0], Q[1][0], 0.7), lerp(Q[0][1], Q[1][1], 0.7) + 3); c.stroke();
-        });
-        c.restore();
+        const th = gvTufts(gvFur([[d * 24, 600], [d * 100, 566], [d * 200, 570], [d * 262, 616], [d * 266, 680], [d * 214, 726], [d * 120, 730], [d * 40, 690]], 2, 12, (x, y) => y > 680 ? 1 : 0.25, 0.4, 61 + d));
+        mShade(c, d * 150, 730, 130, 30, 0.5);
+        mAShape(c, th, pkRG(c, d * 200, 600, 200, [F[0], F[1], F[2], F[3]]), { rim, rw: 6, under: warm, uw: 8, lw: 4.5 });
+        c.save(); th(c); c.clip(); cbFurMass(c, d * 150, 650, 100, 60, 18, 70 + d); mShade(c, d * 60, 700, 90, 40, 0.4); c.restore();
+        cbCrack(c, [[d * 120, 612], [d * 170, 630], [d * 196, 660], [d * 236, 668]], 2.2, 0.5 + 0.2 * Math.sin(T * 2.4 + d));
+        for (let k = 0; k < 5; k++) { const u = k / 4; cbTuft(c, d * lerp(70, 236, u), lerp(722, 700, u * u), Math.PI / 2 + d * (0.15 + 0.35 * u), 32 + 6 * Math.sin(k * 2.1), 26, { forks: 2, seed: k + d * 9 + 90, cols: [F[2], F[1]], glow: 0.35, lw: 2.6 }); }
       }
+      // 3. the pot belly resting on its lap: a broad round swell of lighter fur, rolling into shadow underneath, an
+      // ember vein round its curve
+      const belly = gvTufts(gvFur(mAMirror([[0, 470], [90, 474], [158, 500], [192, 548], [184, 600], [140, 636], [70, 654], [0, 658]]), 2, 9, (x, y) => y > 600 ? 1 : 0, 0.4, 77));
+      mShade(c, 0, 664, 170, 22, 0.55);
+      mAShape(c, belly, pkRG(c, -50, 520, 230, [F[0], F[1], F[2], F[3]]), { rim: 'rgba(235,242,255,.8)', rw: 6, under: warm, uw: 8, lw: 4.5 });
+      c.save(); belly(c); c.clip();
+      cbFurMass(c, 0, 560, 150, 70, 30, 78); mShade(c, 50, 650, 170, 40, 0.45);
+      cbCrack(c, [[-170, 560], [-110, 590], [-40, 602], [20, 596], [60, 612], [120, 610], [176, 576]], 2.4, 0.6 + 0.2 * Math.sin(T * 2.2));
+      cbCrack(c, [[-40, 602], [-52, 640]], 2, 0.5); cbCrack(c, [[120, 610], [132, 644]], 2, 0.5);
+      c.restore();
+      // 3. the chest slab and the furnace
+      c.save(); c.translate(0, 84);
+      const fy = 360, gy = mGulpY(m, 166, fy, 0.95, 1.35), roar = b >= 0 ? smooth(1.25, 1.45, b) * (1 - smooth(2.2, 3, b)) : 0;
+      const heat = 0.6 + 0.2 * Math.sin(T * 3) + 0.4 * roar;
+      // a fringe of fur round the belly's top, ember-tipped
+      for (let i = 0; i < 9; i++) { const u = i / 8, x = lerp(-170, 170, u); cbTuft(c, x, 440 - 46 * Math.sin(u * Math.PI), Math.PI / 2 + (u - 0.5) * 0.7, 30 + 8 * Math.sin(u * Math.PI), 30, { forks: 2, seed: i + 50, cols: [F[3], F[2]], glow: 0.35, lw: 2.6 }); }
+      // 4. the chest: one broad slab of glassy obsidian across both pecs, chipped at its edges, cracked right through by
+      // seams of lava that branch out from the furnace burning in its middle
+      const pl = gkRP([[0, 250, 8], [44, 240, 10], [118, 252, 12], [184, 268, 16], [214, 312, 14], [196, 362, 12], [150, 392, 10], [96, 404, 10], [40, 426, 10], [-10, 418, 8], [-58, 430, 10], [-112, 400, 10], [-164, 384, 12], [-206, 350, 14], [-212, 300, 14], [-176, 266, 14], [-120, 248, 12], [-52, 244, 10]], 10);
+      mShade(c, 0, 436, 210, 24, 0.55);
+      mAShape(c, pl, pkLG(c, -120, 246, 100, 430, [CB.obs[1], CB.obs[2], CB.obs[3], CB.obs[2]]), { lw: 0 });
+      c.save(); pl(c); c.clip();
+      // big glassy facets: a cool lit plane across the top, a darker one below, a crisp ridge between them
+      pkPath(c, [[-230, 230], [230, 230], [230, 286], [60, 312], [-40, 300], [-230, 334]], pkLG(c, 0, 236, 0, 320, ['rgba(214,224,255,.5)', 'rgba(150,160,200,.12)']), 0);
+      pkPath(c, [[-230, 380], [-60, 350], [70, 368], [230, 346], [230, 450], [-230, 450]], 'rgba(0,0,0,.3)', 0);
+      c.strokeStyle = 'rgba(230,236,255,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-200, 334); c.lineTo(-40, 300); c.lineTo(60, 312); c.lineTo(210, 288); c.stroke();
+      pkE(c, -110, 272, 40, 7, 'rgba(255,255,255,.5)', 0, -0.12);
+      mAGlow(c, 0, fy - 40, 160, CB.lava, 0.25 + 0.2 * heat);
+      // the lava seams: branching cracks from the furnace out to the slab's edges (glowing, never a grid)
+      const seams = [[[0, fy], [-26, 380], [-70, 350], [-118, 336], [-170, 302], [-214, 290]], [[-70, 350], [-84, 302], [-62, 256]], [[0, fy], [30, 374], [88, 360], [132, 332], [190, 340], [220, 350]], [[88, 360], [104, 312], [150, 280], [176, 250]],
+        [[0, fy - 20], [-8, 330], [10, 308], [-6, 260], [4, 240]], [[-118, 336], [-150, 380], [-180, 410]], [[132, 332], [160, 386], [140, 430]]];
+      for (const sm of seams) cbCrack(c, sm, 3.4, heat);
+      c.restore();
       pl(c); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke();
-      // the sternum seam between the slabs: a molten line down to the furnace
-      cbCrack(c, [[0, 318], [4, 360], [-3, 400], [0, fy - 40]], 3, heat);
-      // the furnace: a ragged hole below the chest, a molten core inside, pulsing like a heartbeat
-      const beat = Math.pow(Math.max(0, Math.sin(T * 3.2)), 6), fr = 38 + 3 * beat + 8 * roar;
+      c.save(); pl(c); c.clip(); c.translate(-3, 6); pl(c); c.strokeStyle = 'rgba(220,230,255,.6)'; c.lineWidth = 6; c.stroke(); c.restore();   // a cool rim along its upper edge
+      // the furnace: a ragged hole burning through the slab's middle, a molten core inside, pulsing like a heartbeat
+      const beat = Math.pow(Math.max(0, Math.sin(T * 3.2)), 6), fr = 36 + 3 * beat + 8 * roar;
       const hole = mASm([[0, fy - fr], [fr * 0.7, fy - fr * 0.8], [fr * 1.05, fy - fr * 0.1], [fr * 0.8, fy + fr * 0.75], [0, fy + fr * 1.02], [-fr * 0.85, fy + fr * 0.7], [-fr * 1.0, fy], [-fr * 0.66, fy - fr * 0.78]]);
       hole(c); c.fillStyle = pkRG(c, 0, fy, fr * 1.1, ['#fffbe6', '#ffd25a', '#ff7a1a', '#a01e08']); c.fill();
       if (b >= 1.25) { c.save(); hole(c); c.clip(); mInBelly(c, 0, fy + 6, 0.42, smooth(1.25, 1.5, b), Math.sin(T * 6) * 0.2); c.restore(); }   // (the pilot, trapped in the furnace)
@@ -7489,10 +7518,8 @@ const MONSTERS = [
       for (let k = 0; k < 7; k++) { const a = k / 7 * TWO_PI + 0.2, x = Math.cos(a) * fr * 0.98, y = fy + Math.sin(a) * fr * 0.98; cbShard(c, x, y, a + Math.PI, 12 + 6 * cbH(k, 82), 13, { lw: 2.4 }); }
       c.strokeStyle = INK; c.lineWidth = 4.5; hole(c); c.stroke();
       mAGlow(c, 0, fy, fr * (2 + 0.8 * roar), CB.lava, 0.4 + 0.25 * beat + 0.4 * roar);
-      for (let k = 0; k < 6; k++) { const a = k / 6 * TWO_PI + 0.4, r1 = fr * 1.05, r2 = fr * (1.5 + 0.3 * cbH(k, 3)); cbCrack(c, [[Math.cos(a) * r1, fy + Math.sin(a) * r1], [Math.cos(a + 0.1) * (r1 + r2) / 2, fy + Math.sin(a + 0.1) * (r1 + r2) / 2], [Math.cos(a - 0.05) * r2, fy + Math.sin(a - 0.05) * r2]], 2.2, 0.6 + 0.4 * beat + 0.4 * roar); }
       if (gy != null) { mAGlow(c, 0, gy, 70, CB.hot, 0.55); mAShape(c, mAEl(0, gy, 30, 24), pkRG(c, -8, gy - 8, 34, ['#ffe0a0', '#ff8a3a', CB.fur[2]]), { lw: 3.5 }); }
       if (roar > 0) cbSmoke(c, 0, fy + fr * 0.6, T, 0, roar, 5, 1.4);
-      c.restore();
       c.restore();
     },
     head(c, m) {
@@ -7503,12 +7530,12 @@ const MONSTERS = [
       const Cy = 236 + 10 * Math.min(J, 1.3), D = 112 * J;                       // mouth corners, gape
       // 1. the hunched shoulders and the trapezius rising behind the head: a broad mountain of ash-grey fur
       c.save(); if (m.bite >= 0) c.scale(1 - 0.1 * smooth(0, 0.12, m.bite), 1);   // (it hunches in tight as it lunges, so all of it stays on screen in the bite's zoom)
-      const trap = gvTufts(gvFur(mAMirror([[0, 70], [96, 80], [196, 128], [256, 196], [270, 270], [236, 324], [120, 344], [0, 344]]), 2, 22 + 2 * br, (x, y) => y > 120 ? 1 : 0, 0.5, 21));
+      const trap = gvTufts(gvFur(mAMirror([[0, 70], [92, 80], [174, 118], [218, 176], [228, 246], [204, 306], [110, 336], [0, 340]]), 2, 18 + 2 * br, (x, y) => y > 120 ? 1 : 0, 0.5, 21));
       mShade(c, 0, 300, 280, 80, 0.5);
-      mAShape(c, trap, pkRG(c, -70, 110, 320, [F[0], F[1], F[2], F[3]]), { rim: 'rgba(245,246,255,.8)', rw: 7, lw: 5 });
+      mAShape(c, trap, pkRG(c, -70, 110, 300, [F[0], F[1], F[2], F[3]]), { rim: 'rgba(230,238,255,.85)', rw: 7, under: 'rgba(255,130,50,.45)', uw: 10, lw: 5 });
       c.save(); trap(c); c.clip();
-      cbFurMass(c, 0, 230, 270, 110, 70, 21);
-      for (const d of [-1, 1]) cbCrack(c, [[d * 150, 176], [d * 186, 200], [d * 200, 236], [d * 236, 252]], 2.4, 0.5 + 0.2 * Math.sin(T * 2.4 + d) + 0.3 * rage);
+      cbFurMass(c, 0, 230, 220, 100, 60, 21);
+      for (const d of [-1, 1]) cbCrack(c, [[d * 150, 176], [d * 178, 200], [d * 190, 236], [d * 214, 256]], 2.4, 0.55 + 0.2 * Math.sin(T * 2.4 + d) + 0.3 * rage);
       c.restore();
       c.restore();
       // 2. the skull: a domed head rising to a tall sagittal crest (the silverback's peak), its ridge split by a lava
@@ -9103,7 +9130,7 @@ const mixHex = (a, b, k, al = 1) => rgbaA(hexRGB(a).map((v, i) => v + (hexRGB(b)
 const LIMB_PAL = {
   worm:    { skin: ['#d4a8ff', '#8444cc', '#2e0f56'], crystal: ['#f6feff', '#b4f2ff', '#3a9ad8'], glow: [150, 240, 255], claw: '#ffd04a' },
   bat:     { skin: ['#e0c4ff', '#9466d6', '#3a1c70'], claw: '#fff6e0', bone: '#fff4dc', glow: [255, 200, 70] },
-  gorilla: { skin: ['#bfc1ce', '#6c6e7e', '#2a2a36'], palm: '#c2a69c', claw: '#fff0d8', glow: [255, 150, 40], fur: true },
+  gorilla: { skin: ['#ccd4e8', '#76809e', '#2c3248'], palm: '#c2a69c', claw: '#fff0d8', glow: [255, 150, 40], fur: true },
   mole:    { skin: ['#9a7a6c', '#4e342a', '#1e110c'], palm: '#ff94aa', claw: '#fff4de', clawFx: moleClawFx },
   golem:   { skin: ['#fbe8cc', '#c8926e', '#5a2e42'], crystal: ['#fff4fd', '#ff92ea', '#e02cb4'], glow: [255, 84, 210] },
   kraken:  { skin: ['#ffaa9e', '#e0384a', '#5a0c1e'], sucker: '#ffe8d0' },
@@ -9481,7 +9508,7 @@ const LIMB_ART = {
 };
 // One limb, one layer ('mid' behind the head, 'front' in front of everything). 'back' and 'shoulder' draw nothing.
 function drawGrabLimb(c, mon, rig, layer, t) {
-  if (layer !== 'mid' && layer !== 'front') return;
+  if (layer !== 'mid' && layer !== 'front' && !(layer === 'shoulder' && mon.shoulderArt)) return;   // ('shoulder', over the head, only for a monster whose limbArt draws one)
   const st = GRAB_STYLE[mon.id], P = limbPal(mon), art = mon.limbArt || LIMB_ART[st.type];   // (a monster may draw its wall limbs its own way, from the same rig)
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
   art(c, rig, P, layer, t, mon);
@@ -9552,8 +9579,8 @@ function grabShapes(rigs = grabRigs(grabFrame())) {
 }
 // Draw a frame's limbs in screen space (layer 'mid' or 'front'; the wind-up tell goes with the front layer).
 function drawGrabWorld(rigs, layer) {
-  if (!rigs.length || (layer !== 'mid' && layer !== 'front')) return;
   const mon = monster();
+  if (!rigs.length || (layer !== 'mid' && layer !== 'front' && !(layer === 'shoulder' && mon.shoulderArt))) return;
   for (const { rig, pose, alpha, kill, top } of rigs) {
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(sx(0), sy(kill)); ctx.scale(s, s);
     if (layer === 'front') drawGrabTell(ctx, mon, rig, y => walls(kill - y)[rig.d < 0 ? 0 : 1], pose.wind, Math.min(GRAB.reach, top), G.t);
@@ -9585,10 +9612,11 @@ function updateGrab(dt) {
 // The limbs in a portrait (picker cards, key art): drawn in the monster's art frame against walls at ±half (world
 // units), resting with their tips under the catch line.
 function drawGrabPortrait(c, mon, t, half, layer) {
-  const st = GRAB_STYLE[mon.id]; if (!st || (layer !== 'mid' && layer !== 'front')) return;
+  const st = GRAB_STYLE[mon.id]; if (!st || (layer !== 'mid' && layer !== 'front' && !(layer === 'shoulder' && mon.shoulderArt))) return;
   c.save(); c.scale(1 / MON_SCALE, 1 / MON_SCALE);
   for (const d of [-1, 1]) {
     const rig = grabRig(st, d, () => [-half, half], 0, grabPose(null, t, d, GRAB.reach, st), t, 0, Infinity, [-half - 40, half + 40]);
+    rig.portrait = true;
     drawGrabLimb(c, mon, rig, layer, t);
   }
   c.restore();
