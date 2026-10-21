@@ -600,6 +600,7 @@ function limbCheck(id, st, rig, wallAt, kill) {
   if (ty === 'fin' && roles.filter(r => r === 'm').length < 2) fail('fins have a membrane blade', id);
   if (ty === 'wing' && !roles.includes('c')) fail('wings have a claw', id);
   if (ty === 'paw' && roles.filter(r => r === 'c').length < 3) fail('digging paws have long claws', id);
+  if (ty === 'paw' && up[0][2] < 34) fail('digging forearms are huge shovels', `${id}: ${up[0][2]}`);
   if (st.hand === 'apegrip' && roles.filter(r => r === 'ft2').length < 4) fail('a gripping ape hand curls four fingers over the rock', id);
   if (st.hand === 'vclaw') {   // the geode vampire's thumb claw: big and bold enough to read on the wall at phone size
     const L = Math.max(...hand.filter(p => p[5] === 'c').map(p => Math.hypot(p[2] - p[0], p[3] - p[1]) + p[4]));
