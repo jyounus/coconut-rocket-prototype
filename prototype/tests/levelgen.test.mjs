@@ -602,9 +602,10 @@ function limbCheck(id, st, rig, wallAt, kill) {
   if (ty === 'paw' && roles.filter(r => r === 'c').length < 3) fail('digging paws have long claws', id);
   if (ty === 'paw' && up[0][2] < 34) fail('digging forearms are huge shovels', `${id}: ${up[0][2]}`);
   if (st.hand === 'apegrip' && roles.filter(r => r === 'ft2').length < 4) fail('a gripping ape hand curls four fingers over the rock', id);
-  if (st.hand === 'vclaw') {   // the geode vampire's thumb claw: big and bold enough to read on the wall at phone size
+  if (st.hand === 'vwing') {   // the geode vampire's wing-wrist: a big thumb claw that reads at phone size, finger bones and a membrane
     const L = Math.max(...hand.filter(p => p[5] === 'c').map(p => Math.hypot(p[2] - p[0], p[3] - p[1]) + p[4]));
     if (L < 28) fail('the wing thumb claw is big (28+ long)', `${id}: ${L.toFixed(0)}`);
+    if (roles.filter(r => r === 'b').length < 3 || roles.filter(r => r === 'm').length < 2) fail('the wing-wrist folds three finger bones and a membrane down the wall', id);
   }
   if (st.hand === 'geode' && roles.filter(r => r === 'o').length < 6) fail('the stone hand is an open palm (palm, four fingers, thumb)', id);
   if (st.hand === 'parahook') {   // the Scissorjaw's parapod ends in ring segments and a big hooked claw that reads at phone size

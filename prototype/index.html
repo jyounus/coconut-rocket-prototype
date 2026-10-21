@@ -1455,7 +1455,7 @@ const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
 // line; ry: how far below the bend it sits; rest: where the tip idles (always under the catch line); wig: a wave.
 const GRAB_STYLE = {
   worm:    { type: 'parapod',  hand: 'parahook',  rr: 24, rm: 19, r0: 15, r1: 12, rx: 64, ry: 76, rest: -46, wig: 3 },   // Scissorjaw: a ringed parapod growing out of its first body ring, ending in a gold hooked claw
-  bat:     { type: 'wing',     hand: 'vclaw',     rr: 18, rm: 12, r0: 11, r1: 7,  rx: 104, ry: 70, rest: -14, bendY: 46 },
+  bat:     { type: 'wing',     hand: 'vwing',     rr: 20, rm: 15, r0: 13, r1: 9, rx: 104, ry: 70, rest: -14, bendY: 46 },   // the geode vampire: a strong wing-wrist on the rock, thumb claw up, finger bones and membrane folded down
   gorilla: { type: 'arm',      hand: 'apegrip',   rr: 36, rm: 28, r0: 21, r1: 16, rx: 116, ry: 64, rest: -18, lean: 10 },   // Cinderback: huge shaggy arms climbing the walls, hands braced high up the rock (one higher than the other: lean), elbows out
   mole:    { type: 'paw',      hand: 'spade',     rr: 36, rm: 28, r0: 17, r1: 14, rx: 128, ry: 92, rest: -36 },   // the Auger mole: huge shovel forearms from low on its flanks
   golem:   { type: 'arm',      hand: 'geode',     rr: 30, rm: 22, r0: 19, r1: 14, rx: 118, ry: 60, rest: -30 },   // the Geode King presses its open stone palms flat on both walls
@@ -1541,11 +1541,13 @@ function grabHand(kind, grip, t, wind = 0) {
       s(20, 15, 20 + o * 2.5, 25, 6.2); s(20 + o * 2.5, 25, 17 + o * 2.5, 33, 4.2, 't');
       break;
     }
-    case 'vclaw':     // the geode vampire's wrist on the rock: a padded heel, a thick thumb and a huge hooked claw raking up
-      // the wall (bold, so it reads at phone size), two finger spurs
-      s(12, 0, 12, 10, 9.5);
-      s(13, 10, 10, 21, 6.4); s(10, 21, 1 - g * 2, 41, 5.6, 'c'); s(1 - g * 2, 41, -3 - g * 2, 33, 3, 'c');
-      s(16, 6, 21, 15, 3.4, 'c'); s(17, 0, 22, 3, 2.8, 'c');
+    case 'vwing':     // the geode vampire's wing-wrist braced on the rock: a big knuckled wrist, a thick thumb ending in a
+      // huge hooked claw raking up the wall and curling into the rock, and three long finger bones folded back down the
+      // wall with the membrane stretched between them and the forearm (the wing gripping the rock, folded)
+      s(13, 0, 13, 6, 10.5);
+      s(13, 6, 11, 14, 6.8); s(11, 14, 3 - g * 2, 32, 5.6, 'c'); s(3 - g * 2, 32, -3 - g * 2, 28, 3.2, 'c');
+      s(17, -2, 16, -42, 9, 'm'); s(9, -6, 8, -38, 8.5, 'm');
+      s(16, 2, 23, -28, 3, 'b'); s(14, 1, 15, -46, 3.2, 'b'); s(11, 0, 5, -38, 2.8, 'b');
       break;
     case 'dthumb':    // a dragon's wing claw: a thick scaled wrist, a big curved talon and a leathery spur
       s(10, 0, 10, 9, 7.5);
@@ -1655,9 +1657,10 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
   }
   // the hand, against the wall at its most-receded point over its height (so no part of it is ever more than its own
   // offset in from the wall at any height, and the rest digs into the rock)
+  const parts = grabHand(st.hand, pose.grip, t, pose.wind), below = Math.max(12, ...parts.map(p => p[4] - Math.min(p[1], p[3])));   // (a hand may fold parts down below its wrist: a wing's fingers)
   let ref = side ? -Infinity : Infinity;
-  for (let y = wristY - ht - 2; y <= wristY + 12; y += 3) { const w = wx(y); ref = side ? Math.max(ref, w) : Math.min(ref, w); }
-  const parts = grabHand(st.hand, pose.grip, t, pose.wind), outMax = Math.max(...parts.map(p => Math.max(p[4] - p[0], p[4] - p[2]))) + 2 + Math.abs(jit);
+  for (let y = wristY - ht - 2; y <= wristY + below; y += 3) { const w = wx(y); ref = side ? Math.max(ref, w) : Math.min(ref, w); }
+  const outMax = Math.max(...parts.map(p => Math.max(p[4] - p[0], p[4] - p[2]))) + 2 + Math.abs(jit);
   ref = side ? Math.min(ref, scr[1] - 1 - outMax) : Math.max(ref, scr[0] + 1 + outMax);   // (claws never leave the screen)
   const hand = parts.map(([u0, v0, u1, v1, r, role]) => [ref - d * (u0 + jit), wristY - v0, ref - d * (u1 + jit), wristY - v1, r, role]);
   // the wrist meets the hand's base (it sits at the wall's most receded point over the hand, which can differ a little)
@@ -6238,7 +6241,8 @@ function sjRingArt(c, segs, k) {
 // line, the face fills y 50..240 and the ear tips reach up to y = 8; its body is wrapped in its folded magenta wings
 // like a cloak, a citrine geode glinting at its chest.
 const GV = {
-  fur: ['#f0e2ff', '#bc96f2', '#7e58c4', '#3e2476'],      // lilac-violet fur: lit, body, shade, deep
+  fur: ['#9d7fd6', '#4b2d80', '#28154a', '#0f0620'],      // deep violet-black fur: lit, body, shade, deep (a lavender rim light picks it out)
+  rim: 'rgba(206,176,255,.95)',
   cream: ['#ffe4f0', '#ffb2d2', '#e0729e', '#8a2c5a'],    // the bare pink snout, lips and cheeks
   ear: ['#ffe2f0', '#ff86c0', '#d83c8c', '#6a0c40'],      // the ears' thin membrane, light shining through it
   leaf: ['#9cf6e6', '#26b4ac', '#0c5c66', '#06282e'],     // the noseleaf
@@ -6246,6 +6250,7 @@ const GV = {
   crystal: ['#fffbd8', '#ffd84a', '#f08a14', '#8a3a06'],  // citrine
   glow: [255, 200, 70], eye: [255, 214, 90], throat: ['#ffd27a', '#ff6a3a', '#b0142a', '#3a0410'],
   gum: '#e0465e', tongue: ['#ff9aa8', '#e04a66'], tooth: ['#fffdf6', '#f2e2c4'],
+  lift: 30,
 };
 const gvH = (i, s = 0) => { const v = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return v - Math.floor(v); };
 // sample a smooth closed curve through the midpoints of control points (like mASm), `per` samples per control point
@@ -6314,7 +6319,7 @@ function gvCrystal(c, x, y, len, w, ang, gl = 0.6, ink = 3) {
 // of the left one)
 function gvEar(c, d, a, gl) {
   const F = GV.fur, E = GV.ear;
-  c.save(); c.translate(d * 70, 112); c.rotate(d * (0.12 + a)); c.scale(d, 1);
+  c.save(); c.translate(d * 70, 116); c.rotate(d * (0.12 + a)); c.scale(d * 0.8, 0.8);   // (a little smaller than it was, so the whole face fits higher on the screen)
   // (the ear's frame: its root at the origin, its tip straight up at (12, -108))
   const tip = [12, -108];
   const outer = [[-28, 22], [-28, -12], [-17, -56], [-3, -90], tip, [26, -80], [40, -40], [47, -2], [40, 26], [6, 34]];
@@ -6341,11 +6346,11 @@ function gvEar(c, d, a, gl) {
   c.restore();
   inner(c); c.strokeStyle = 'rgba(70,20,90,.7)'; c.lineWidth = 2.4; c.stroke();
   // rim light down its outer edge and up the front edge, then the ink
-  c.save(); path(c); c.clip(); c.translate(-3, 3); path(c); c.strokeStyle = 'rgba(255,240,226,.85)'; c.lineWidth = 4; c.stroke(); c.restore();
+  c.save(); path(c); c.clip(); c.translate(-3, 3); path(c); c.strokeStyle = GV.rim; c.lineWidth = 5; c.stroke(); c.restore();
   path(c); c.strokeStyle = INK; c.lineWidth = 4.4; c.lineJoin = 'round'; c.stroke();
   pkPath(c, [[-4, 30], [4, -8], [14, 28]], pkLG(c, 0, 30, 4, -8, [E[2], E[0]]), 2.2);   // tragus
   // fur round its root
-  mAShape(c, gvPoly(gvFur([[-40, 10], [-8, 24], [34, 32], [44, 52], [-30, 52]], 4, 9, () => 1, 0.5, 3)), pkLG(c, 0, 10, 0, 52, [F[1], F[2]]), { rim: 'rgba(255,236,250,.6)', rw: 4, lw: 3.5 });
+  mAShape(c, gvPoly(gvFur([[-40, 10], [-8, 24], [34, 32], [44, 52], [-30, 52]], 4, 9, () => 1, 0.5, 3)), pkLG(c, 0, 10, 0, 52, [F[1], F[2]]), { rim: GV.rim, rw: 4, lw: 3.5 });
   c.restore();
 }
 // eye (d = -1 left, 1 right) at (x, y): a slanted almond of molten gold under a heavy brow; lid = 0 open .. 1 shut,
@@ -6381,7 +6386,7 @@ function gvEye(c, d, x, y, o) {
   // the brow: a heavy ridge of fur slanting down to the noseleaf, tufted at its outer end
   const bl = o.brow;
   const brow = gvFur([[d * 10, y - 6 + bl * 6], [d * 30, y - 24 + bl * 3], [d * 70, y - 36], [d * 104, y - 40 - 4 * (1 - bl)], [d * 92, y - 22], [d * 56, y - 18 + bl * 3], [d * 24, y - 6 + bl * 7]], 3, 6, (px2) => Math.abs(px2) > 60 ? 1 : 0.2, 0.6, 7 + d);
-  mAShape(c, gvPoly(brow), pkLG(c, 0, y - 40, 0, y - 6, [F[1], F[2], F[3]]), { rim: 'rgba(255,214,170,.7)', rw: 3.5, lw: 3.2 });
+  mAShape(c, gvPoly(brow), pkLG(c, 0, y - 40, 0, y - 6, [F[0], F[1], F[2]]), { rim: GV.rim, rw: 3.5, lw: 3.2 });
 }
 // a fang from a lip: base p0..p1, tip, bowed; ivory with a shine
 function gvFang(c, p0, p1, tip, bow, lw = 2.6) {
@@ -6439,15 +6444,42 @@ function gvWing(c, rig, P, layer, t, mon) {
     grabAlong(c, up, d, 0.45, 'rgba(255,236,250,.4)', 1.6, n0, up.length);
   } else if (layer === 'front') {
     const ch = armChain(rig);
-    grabBody(c, [ch], P.skin, d, { rim: 'rgba(255,230,250,.65)' });
+    gvWingHand(c, rig, P, t, 'web');   // (the folded membrane behind the forearm)
+    grabBody(c, [ch], P.skin, d, { rim: 'rgba(206,176,255,.8)' });
     chainEvery(ch, 9).forEach(([x, y, r, a], i) => {   // leather wrinkles across the wrist and thumb
       if (i === 0) return; const nx = -Math.sin(a), ny = Math.cos(a), w = (r - GRAB_INK) * 0.7;
       c.strokeStyle = 'rgba(50,10,70,.45)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.quadraticCurveTo(x + Math.cos(a) * 2, y + Math.sin(a) * 2, x - nx * w, y - ny * w); c.stroke();
     });
-    const k = ch[3] || ch[0];   // the wrist knuckle at the bend
-    pkE(c, k[0] - d * 2, k[1] - 2, k[2] * 0.4, k[2] * 0.3, 'rgba(255,240,252,.55)', 0);
+    const k = ch[3] || ch[0];   // the elbow knuckle at the bend
+    pkE(c, k[0], k[1], k[2] * 0.8, k[2] * 0.8, P.skin[1], 2.4); pkE(c, k[0] - d * 2, k[1] - 3, k[2] * 0.35, k[2] * 0.28, 'rgba(230,210,255,.6)', 0);
     if (rig.wind > 0) { c.save(); c.globalCompositeOperation = 'lighter'; capStroke(c, ch, rgbaA(GV.glow, 0.25 * rig.wind), r => r); c.restore(); }
+    gvWingHand(c, rig, P, t, 'bones');
   }
+}
+// the wing-wrist on the rock: the membrane folded down the wall between the forearm and three long finger bones (each
+// part exactly its capsule), the knuckled wrist and thumb, and the big ivory thumb claw hooked into the rock
+function gvWingHand(c, rig, P, t, part) {
+  const H0 = rig.hand, d = rig.d, by = r => H0.filter(p => p[5] === r);
+  const seg = (list, col, k = 0) => { for (const [x0, y0, x1, y1, r] of list) { c.strokeStyle = col; c.lineWidth = Math.max(0.5, 2 * r - k); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 + (x1 === x0 && y1 === y0 ? 0.01 : 0), y1); c.stroke(); } };
+  const mem = by('m'), bones = by('b'), skin = by('s');
+  if (part === 'web') {
+  seg(mem, INK); seg(mem, P.web[1], 2 * GRAB_INK);
+  c.save(); cbCapPath(c, [], mem, GRAB_INK); c.clip();
+  const [wx, wy] = skin[0];
+  const g = c.createRadialGradient(wx, wy, 2, wx, wy + 40, 60); g.addColorStop(0, P.web[0]); g.addColorStop(1, P.web[1]); c.fillStyle = g; c.fillRect(wx - 60, wy - 10, 120, 90);
+  c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(GV.glow, 0.35 + 0.2 * Math.sin(t * 2.6 + d)); c.lineWidth = 1.3; c.beginPath();
+  for (const [x0, y0, x1, y1] of bones) for (const f of [0.35, 0.7]) { const px = lerp(x0, x1, f), py = lerp(y0, y1, f); c.moveTo(px, py); c.quadraticCurveTo(px + d * 4, py + 6, px + d * 8, py + 4); }
+  c.stroke(); c.restore();
+  c.strokeStyle = 'rgba(60,4,40,.5)'; c.lineWidth = 3; for (const [x0, y0, x1, y1, r] of mem) { c.beginPath(); c.moveTo(x1 - r, y1 + r * 0.4); c.quadraticCurveTo(x1, y1 - r * 0.6, x1 + r, y1 + r * 0.4); c.stroke(); }   // the folds' scalloped hem
+  c.restore();
+  c.strokeStyle = 'rgba(255,210,240,.6)'; c.lineWidth = 2; for (const [x0, y0, x1, y1, r] of mem) { c.beginPath(); c.moveTo(x0 - d * (r - 3.5), y0); c.lineTo(x1 - d * (r - 3.5), y1); c.stroke(); }   // its lit edge
+  return;
+  }
+  seg(bones, INK); seg(bones, P.bone, 2 * GRAB_INK);
+  for (const [x0, y0, x1, y1, r] of bones) { pkE(c, lerp(x0, x1, 0.45), lerp(y0, y1, 0.45), r - 0.3, r - 0.3, P.bone, 1.4); }   // a knuckle part way down each finger
+  seg(skin, INK); seg(skin, P.skin[1], 2 * GRAB_INK);
+  for (const [x0, y0, x1, y1, r] of skin) pkE(c, x0 - d * r * 0.25, y0 - r * 0.3, r * 0.4, r * 0.3, 'rgba(206,176,255,.55)', 0);
+  hookRuns(c, by('c'), ['#fff8ec', '#fff2dc', '#e8d2b0', '#a07a50'], 2.4);
 }
 // ---------- Cinderback (monster slot 2, id 'gorilla') ----------
 // A colossal volcanic silverback: ash-grey and charcoal fur cracked with lava seams (the tips of its longest locks glow
@@ -7262,8 +7294,8 @@ const MONSTERS = [
       mPuffs(c, 176, 80, t * 0.8 + 0.5, 0.6, [240, 220, 255], 3);
     },
   },
-  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, hazeK: 0.45, mouth: [0, 232, 86, 58], halfW: 236,
-    limbArt: gvWing,
+  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, hazeK: 0.45, mouth: [0, 202, 86, 58], halfW: 236, fit: 0.88,
+    limbArt: gvWing, ownHands: true,
     // the body under the head (seen as it swallows): wrapped in its folded wings like a cloak (finger bones running down
     // the magenta membrane to a scalloped hem that ends it cleanly, a thumb claw hooked over each shoulder), the lilac
     // furred chest showing in the gap between them with a citrine geode glowing in it
@@ -7272,9 +7304,17 @@ const MONSTERS = [
       const gulp = bt > 0 ? smooth(1.02, 1.22, bt) : 0, fed = bt > 0 ? smooth(1.18, 1.35, bt) : 0;
       const sway = Math.sin(t * 1.4) * 4, br = Math.sin(t * 2.4);
       // the furred torso behind the wings (it shows in the gap down the front)
-      const torso = gvTufts(gvFur(mAMirror([[0, 150], [120, 160], [170, 220], [160, 330], [110, 440], [60, 500], [0, 512]]), 2, 12, (x, y) => y > 300 ? 1 : 0.2, 0.3, 11));
-      mAShape(c, torso, pkLG(c, 0, 160, 0, 500, [F[1], F[2], F[3]]), { lw: 4 });
-      c.save(); torso(c); c.clip(); gvStrokes(c, 0, 360, 90, 140, 40, 'rgba(255,200,230,.25)', 14, 1.6, 5, 200); gvStrokes(c, 0, 380, 100, 150, 40, 'rgba(10,0,8,.4)', 16, 2, 9, 200); c.restore();
+      const torso = gvTufts(gvFur(mAMirror([[0, 150], [120, 160], [172, 220], [168, 330], [132, 440], [86, 512], [0, 530]]), 2, 13, (x, y) => y > 260 ? 1 : 0.2, 0.3, 11));
+      // clawed hind feet hanging under it (a bat's feet, gripping nothing)
+      for (const d of [-1, 1]) { const fx = d * 46, fy = 516; mAShape(c, gvTufts(gvFur([[fx - 18, fy - 10], [fx + 18, fy - 10], [fx + 16, fy + 22], [fx - 16, fy + 22]], 2, 5, () => 1, 0.3, 40 + d)), pkLG(c, fx, fy, fx, fy + 24, [F[1], F[3]]), { lw: 3.4, rim: GV.rim, rw: 3 }); for (const k of [-1, 0, 1]) mHook(c, [fx + k * 9 - 3, fy + 18], [fx + k * 9 + 3, fy + 18], [fx + k * 11 - d * 2, fy + 40], -d * 3, '#fff4dc', 2); }
+      mAShape(c, torso, pkLG(c, 0, 160, 0, 520, [F[1], F[2], F[3]]), { lw: 4.5, rim: GV.rim, rw: 6 });
+      c.save(); torso(c); c.clip();
+      // a pale lavender bib of chest fur down its front (so the torso has form between the wings)
+      const bib = gvTufts(gvFur(mAMirror([[0, 230], [70, 250], [92, 320], [74, 420], [40, 480], [0, 500]]), 2, 10, (x, y) => y > 300 ? 1 : 0.4, 0.25, 13));
+      mAShape(c, bib, pkRG(c, -20, 300, 200, ['#c8b0ee', '#8a6cc4', '#4a2e80']), { lw: 0 });
+      c.save(); bib(c); c.clip(); gvStrokes(c, 0, 380, 80, 130, 50, 'rgba(255,240,255,.4)', 13, 1.6, 5, 220); gvStrokes(c, 0, 400, 80, 120, 40, 'rgba(40,16,80,.45)', 14, 1.8, 6, 220); c.restore();
+      gvStrokes(c, 0, 360, 160, 160, 60, 'rgba(6,0,16,.45)', 16, 2, 9, 200); gvStrokes(c, -60, 300, 80, 120, 24, 'rgba(200,170,255,.4)', 14, 1.6, 15, 200);
+      c.restore();
       // the geode: a crack in the chest lined with citrine, glowing from within (brighter once fed)
       const gx = 0, gy = 362, pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
       mAGlow(c, gx, gy, 90, GV.glow, 0.2 + 0.1 * pulse + 0.3 * fed);
@@ -7289,17 +7329,17 @@ const MONSTERS = [
       // the wings wrapped round it like a cloak: the right one first, the left one overlapping it in front
       for (const d of [1, -1]) {
         const hug = 1 + 0.02 * br, wx = d * 192, wy = 214;
-        const tips = [[d * 196 * hug, 548], [d * 122, 590], [d * 44, 582], [-d * 16, 548]];
-        const inner = [[-d * 16, 548], [d * 14, 440], [d * 44, 330], [d * 70, 270], [d * 120, 236]];
+        const tips = [[d * 200 * hug, 552], [d * 160, 594], [d * 118, 590], [d * 88, 560]];
+        const inner = [[d * 88, 560], [d * 104, 450], [d * 118, 340], [d * 128, 276], [d * 150, 240]];   // (folded back so the furred torso shows between them)
         const wing = c2 => {
           c2.beginPath(); c2.moveTo(wx, wy);
-          c2.quadraticCurveTo(d * 214 * hug, 360, tips[0][0], tips[0][1]);
+          c2.quadraticCurveTo(d * 232 * hug, 380, tips[0][0], tips[0][1]);
           for (let k = 1; k < tips.length; k++) { const p = tips[k - 1], q = tips[k]; c2.quadraticCurveTo((p[0] + q[0]) / 2, Math.min(p[1], q[1]) - 34, q[0], q[1]); }
           c2.bezierCurveTo(inner[1][0], inner[1][1], inner[2][0], inner[2][1], inner[3][0], inner[3][1]);
           c2.quadraticCurveTo(inner[4][0], inner[4][1], wx, wy); c2.closePath();
         };
         mShade(c, d * 40, 420, 120, 160, 0.4);
-        wing(c); c.fillStyle = pkLG(c, wx, wy, d * 20, 590, [L[1], L[2], L[3], '#22061e']); c.fill();
+        wing(c); c.fillStyle = pkLG(c, wx, wy, d * 120, 590, ['#e86cb8', L[1], L[2], '#4a0e40']); c.fill();
         c.save(); wing(c); c.clip();
         // the membrane catching the light between the bones, gold veins glowing in it
         for (let k = 0; k < tips.length; k++) {
@@ -7310,7 +7350,11 @@ const MONSTERS = [
         for (let k = 0; k < tips.length - 1; k++) { const q = tips[k], n = tips[k + 1], mx = (q[0] + n[0]) / 2, my = (q[1] + n[1]) / 2 - 30; c.moveTo(lerp(wx, mx, 0.35), lerp(wy, my, 0.35)); c.quadraticCurveTo(lerp(wx, mx, 0.7) + d * 8, lerp(wy, my, 0.7), mx, my); }
         c.stroke(); c.restore();
         c.restore();
+        // pink veins branching across the membrane between the bones
+        c.save(); wing(c); c.clip(); c.strokeStyle = 'rgba(255,150,210,.55)'; c.lineWidth = 1.8; c.beginPath();
+        for (let k = 0; k < 9; k++) { const u = 0.2 + 0.08 * k, x0 = lerp(wx, d * 120, u), y0 = lerp(wy, 560, u); c.moveTo(x0, y0); c.quadraticCurveTo(x0 + d * 16, y0 + 18, x0 + d * (6 + 10 * gvH(k, 7)), y0 + 40); c.moveTo(x0 + d * 10, y0 + 14); c.lineTo(x0 + d * 22, y0 + 24); } c.stroke(); c.restore();
         wing(c); c.strokeStyle = INK; c.lineWidth = 4.5; c.stroke();
+        c.save(); wing(c); c.clip(); c.translate(-d * 3, 2); wing(c); c.strokeStyle = GV.rim; c.lineWidth = 4; c.stroke(); c.restore();   // a lavender rim light round it
         // the finger bones running from the wrist down to the hem's points
         for (const q of tips.slice(0, 3)) {
           const mx = lerp(wx, q[0], 0.5) + d * 10, my = lerp(wy, q[1], 0.5);
@@ -7340,31 +7384,32 @@ const MONSTERS = [
       const chomp = chompS * (1 - smooth(0.9, 1.02, bt || 0)), gulp = inBite ? smooth(1.0, 1.08, bt) * (1 - smooth(1.18, 1.3, bt)) : 0;
       const stuffed = inBite ? smooth(0.4, 0.48, bt) * (1 - smooth(1.0, 1.1, bt)) : 0;
       let mo;
-      if (inBite) mo = bt < 0.4 ? m.gape : 0.03 + 0.34 * chomp;
+      if (inBite) mo = bt < 0.4 ? m.gape : 0.03 + 0.52 * chomp;
       else mo = 0.2 + 0.42 * clamp(m.open, 0, 1) + 0.25 * rage + 0.2 * gw.k + 0.04 * br;
       const gape = inBite ? m.gape : 0, h = inBite && bt < 0.4 ? 124 * mo : 74 * mo;
       const lick = inBite ? smooth(1.25, 1.36, bt) * (1 - smooth(1.62, 1.76, bt)) : 0;
       const glow = 0.55 + 0.15 * br + 0.4 * rage + (inBite ? 0.6 * (1 - smooth(0.4, 0.9, bt)) + 0.8 * smooth(1.15, 1.3, bt) * (1 - smooth(1.4, 1.9, bt)) : 0);
       // squash and stretch: wide and short on each chomp, tall and thin on the gulp
-      { const sx = 1 + 0.06 * chomp - 0.04 * gulp, sy = 1 - 0.07 * chomp + 0.05 * gulp; c.scale(sx, sy); }   // (about the catch line, so nothing ever rises above it)
+      { const sx = 1 + 0.13 * chomp - 0.04 * gulp, sy = 1 - 0.15 * chomp + 0.05 * gulp; c.scale(sx, sy); }   // (about the catch line, so nothing ever rises above it)
+      c.translate(0, -GV.lift);   // (the whole face sits higher in its head, so its fangs and open mouth show above the screen's bottom edge)
       // ears: a slow sway, sharp twitches, a flick on every chomp, swung out and back as it lunges, bites or grabs
       const earA = d => clamp(0.03 * Math.sin(t * 1.6 + d) + 0.12 * Math.pow(Math.max(0, Math.sin(t * 0.83 + d * 2.1)), 40) + 0.16 * rage + (inBite ? 0.34 * (1 - smooth(0.4, 0.6, bt)) + 0.14 * chomp + 0.1 * gulp : 0) + (gw.d === d ? 0.24 * gw.k : 0), -0.06, 0.6);
       // 1. a short ruff of darker fur behind the head (the neck, under the ears)
       const ruff = gvFur(mAMirror([[0, 172], [86, 172], [126, 190], [142, 218], [136, 244], [110, 262], [70, 274], [0, 278]]), 2, 8 + 1.5 * br, (x, y) => y > 200 ? 1 : 0, 0.6, 2);
       mShade(c, 0, 250, 220, 80, 0.45);
-      mAShape(c, gvTufts(ruff), pkRG(c, -30, 200, 190, [F[1], F[2], F[3]]), { rim: 'rgba(255,230,250,.75)', rw: 5, lw: 4.5 });
-      c.save(); gvTufts(ruff)(c); c.clip(); gvStrokes(c, 0, 236, 150, 50, 50, 'rgba(30,10,60,.35)', 15, 2, 21, 160); gvStrokes(c, -40, 228, 100, 40, 22, 'rgba(255,236,255,.4)', 12, 1.6, 23, 160); c.restore();
+      mAShape(c, gvTufts(ruff), pkRG(c, -30, 200, 190, [F[1], F[2], F[3]]), { rim: GV.rim, rw: 5, lw: 4.5 });
+      c.save(); gvTufts(ruff)(c); c.clip(); gvStrokes(c, 0, 236, 150, 50, 50, 'rgba(30,10,60,.35)', 15, 2, 21, 160); gvStrokes(c, -40, 228, 100, 40, 22, 'rgba(200,170,255,.45)', 12, 1.6, 23, 160); c.restore();
       // 2. the ears, behind the skull
       gvEar(c, -1, earA(-1), glow); gvEar(c, 1, earA(1), glow);
       // 3. the skull: a round lilac head with tufted cheeks
       const skullPts = mAMirror([[0, 104], [42, 106], [82, 116], [112, 136], [132, 160], [144, 184], [134, 210], [104, 228], [58, 238], [0, 242]]);
       const skull = gvTufts(gvFur(skullPts, 2, 9, (x, y) => (y > 150 && Math.abs(x) > 100) ? 1 : 0, 0.5, 4));
-      mAShape(c, skull, pkRG(c, -40, 90, 210, [F[0], F[1], F[2], F[3]]), { rim: 'rgba(255,240,226,.9)', rw: 6, under: 'rgba(255,150,200,.35)', lw: 4.5 });
+      mAShape(c, skull, pkRG(c, -40, 90, 210, [F[0], F[1], F[2], F[3]]), { rim: GV.rim, rw: 7, under: 'rgba(255,150,200,.4)', lw: 4.5 });
       c.save(); skull(c); c.clip();
-      gvStrokes(c, 0, 150, 130, 60, 40, 'rgba(60,24,110,.32)', 11, 1.8, 31, 80);
-      gvStrokes(c, -46, 120, 64, 30, 18, 'rgba(255,246,255,.55)', 9, 1.5, 37, 80);
+      gvStrokes(c, 0, 150, 130, 60, 40, 'rgba(6,0,16,.4)', 11, 1.8, 31, 80);
+      gvStrokes(c, -46, 120, 64, 30, 18, 'rgba(200,170,255,.55)', 9, 1.5, 37, 80);
       // a darker violet mask round the eyes, so the gold eyes burn out of it
-      for (const d of [-1, 1]) mShade(c, d * 52, 144, 52, 28, 0.45);
+      for (const d of [-1, 1]) mShade(c, d * 52, 144, 52, 28, 0.55);
       { const wp = c.createLinearGradient(0, 104, 0, 146); wp.addColorStop(0, 'rgba(70,30,120,.4)'); wp.addColorStop(1, 'rgba(70,30,120,0)'); c.fillStyle = wp; mASm([[0, 104], [24, 106], [12, 132], [0, 146], [-12, 132], [-24, 106]])(c); c.fill(); }
       // claw scars across the right brow
       c.strokeStyle = 'rgba(70,24,110,.75)'; c.lineWidth = 3;
@@ -7391,7 +7436,7 @@ const MONSTERS = [
       const ly = cy0 + 2 + h;
       // the lower jaw: a compact furred chin round the mouth, a pink lower lip (no beard)
       const chin = gvFur(mAMirror([[0, cy0 - 8], [cw + 12, cy0 - 6], [cw + 8, cy0 + 14 + h * 0.6], [cw * 0.62, ly + 16], [cw * 0.28, ly + 24], [0, ly + 27]]), 2, 7, (x, y) => y > ly + 8 ? 1 : 0, 0.3, 6);
-      mAShape(c, gvTufts(chin), pkLG(c, 0, cy0, 0, ly + 26, [F[1], F[2], F[3]]), { rim: 'rgba(255,236,250,.6)', rw: 4, lw: 4 });
+      mAShape(c, gvTufts(chin), pkLG(c, 0, cy0, 0, ly + 26, [F[1], F[2], F[3]]), { rim: GV.rim, rw: 4, lw: 4 });
       const U = mSmooth(upper, 28), Lw = mSmooth(lower, 28);
       const mpath = c2 => { c2.beginPath(); U.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); for (let i = Lw.length - 1; i >= 0; i--) c2.lineTo(Lw[i][0], Lw[i][1]); c2.closePath(); };
       const mh = (ly - 192) / 2, mcy = (192 + ly) / 2;
@@ -7454,12 +7499,7 @@ const MONSTERS = [
       }
       // 8. the chew: cheeks stuffed round beside the mouth, squashing out on every chomp (furred, a pink blush), crumbs
       // of rocket from the corners (the gulp's lump slides down its chest: see body)
-      if (stuffed > 0.02) for (const d of [-1, 1]) {
-        const r = (20 + 9 * chomp) * stuffed, x = d * (cw + 4 + 6 * chomp), y = cy0 + 6;
-        const ch = gvTufts(gvFur([[x - d * r * 0.9, y - r * 0.6], [x, y - r], [x + d * r, y - r * 0.2], [x + d * r * 0.9, y + r * 0.6], [x, y + r * 0.9], [x - d * r * 0.8, y + r * 0.5]], 2, 4, () => 1, 0.4, 9 + d));
-        mAShape(c, ch, pkRG(c, x - d * r * 0.3, y - r * 0.4, r * 1.4, [F[0], F[1], F[2]]), { rim: 'rgba(255,240,255,.7)', rw: 3, lw: 3.4 });
-        pkE(c, x + d * r * 0.15, y + r * 0.15, r * 0.45, r * 0.3, 'rgba(255,110,170,.45)', 0);
-      }
+      // (no stuffed-cheek blobs: the whole head squashes on each chomp instead)
       if (chewOn) for (const d of [-1, 1]) mCrumbs(c, d * (cw - 6), cy0 + 4, bt - 0.42, d, 3);
       // 9. the screech: sonar rings pulsing out of the noseleaf as it lunges (they fade before the catch line)
       const scr = Math.max(rage, inBite && bt < 0.3 ? 1 : 0, gw.k * 0.6);
@@ -9173,7 +9213,7 @@ const mixHex = (a, b, k, al = 1) => rgbaA(hexRGB(a).map((v, i) => v + (hexRGB(b)
 // skin: [light, mid, dark]; the rest are per type
 const LIMB_PAL = {
   worm:    { skin: ['#d4a8ff', '#8444cc', '#2e0f56'], crystal: ['#f6feff', '#b4f2ff', '#3a9ad8'], glow: [150, 240, 255], claw: '#ffd04a' },
-  bat:     { skin: ['#e0c4ff', '#9466d6', '#3a1c70'], claw: '#fff6e0', bone: '#fff4dc', glow: [255, 200, 70] },
+  bat:     { skin: ['#8f72c8', '#40246e', '#140a28'], claw: '#fff6e0', bone: '#ffe0f0', web: ['#e070b8', '#7a1e66'], glow: [255, 200, 70] },
   gorilla: { skin: ['#ccd4e8', '#76809e', '#2c3248'], palm: '#c2a69c', claw: '#fff0d8', glow: [255, 150, 40], fur: true },
   mole:    { skin: ['#e6c2a2', '#9a6a4c', '#3a2014'], palm: '#ff94aa', claw: '#fff4de', clawFx: moleClawFx },
   golem:   { skin: ['#fff2dc', '#d0a07e', '#4e2440'], crystal: ['#fff4fd', '#ff92ea', '#e02cb4'], glow: [255, 84, 210] },
@@ -9358,7 +9398,11 @@ function sjPodHand(c, rig, t) {
   for (const [x0, y0, x1, y1, r] of glass) { const pts = [[x0 - 1.4, y0], [x1, y1], [x0 + 1.4, y0]]; mAGlow(c, x1, y1, 8, [150, 240, 255], 0.5); pkPath(c, pts, '#c8f6ff', 1.2); }
   const chain = segs.map(([x0, y0, x1, y1, r]) => [[x0, y0, r], [x1, y1, r]]).flat();
   sjPod(c, chain, d, t, rig.wind, false);
-  // the hooks: the main one is a chain of claw capsules (each starting where the last ended), the spur is the last
+  hookRuns(c, hook, [SJ.jaw[2], SJ.jaw[1], SJ.jaw[0], SJ.tip[0], SJ.tip[1]]);
+}
+// Claws drawn as curved, tapering hooks: each run of claw capsules (each starting where the last ended) becomes one
+// blade that tapers to a point at its last capsule's end, kept inside the capsules (cols: base → tip).
+function hookRuns(c, hook, cols, lw = 2.4) {
   const runs = []; for (const p of hook) { const last = runs[runs.length - 1]; if (last && Math.hypot(last[last.length - 1][2] - p[0], last[last.length - 1][3] - p[1]) < 0.5) last.push(p); else runs.push([p]); }
   for (const run of runs) {
     const pts = [[run[0][0], run[0][1], run[0][4]], ...run.map(p => [p[2], p[3], p[4]])], L = [], Rr = [];
@@ -9370,7 +9414,7 @@ function sjPodHand(c, rig, t) {
     }
     const poly = [...L, ...Rr.slice(0, -1).reverse()];
     const [bx, by] = pts[0], [ex, ey] = pts[n];
-    pkPath(c, poly, pkLG(c, bx, by, ex, ey, [SJ.jaw[2], SJ.jaw[1], SJ.jaw[0], SJ.tip[0], SJ.tip[1]]), 2.4);
+    pkPath(c, poly, pkLG(c, bx, by, ex, ey, cols), lw);
     c.strokeStyle = 'rgba(255,252,220,.75)'; c.lineWidth = 1.6; c.beginPath(); L.slice(0, -1).forEach(([x, y], i) => { const q = pts[i]; const px = lerp(x, q[0], 0.45), py = lerp(y, q[1], 0.45); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
   }
 }
