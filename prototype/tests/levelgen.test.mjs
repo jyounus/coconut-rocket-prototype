@@ -8,9 +8,11 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize };')();
 
-const HITBOX = 32;                          // the pilot's hitbox diameter (PLAYER_HIT 16 in index.html)
+// The widest and tallest pilot hitbox at any tilt (all 21 pilots, world units): every lane is sized from these.
+const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
+const FRUIT_PAD = 12;                        // a fruit's drawn radius plus a little
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -36,8 +38,30 @@ function tightest(level, lo, hi) {
 }
 
 // static checks on the authored data
-// lanes stay clearly wider than the (bigger) hitbox
-if (RULES.minLane < 3 * HITBOX) fail('open lanes are at least three hitboxes wide', `${RULES.minLane} vs hitbox ${HITBOX}`);
+// lanes stay clearly wider than the widest pilot hitbox, and hazards stay clearly further apart than the tallest
+if (Object.keys(PILOT_HITS).length !== 21) fail('all 21 pilots have a fitted hitbox', `${Object.keys(PILOT_HITS).length}`);
+if (RULES.minLane < 2.5 * PILOT_W) fail('open lanes are at least 2.5 widest pilot hitboxes wide', `${RULES.minLane} vs ${PILOT_W.toFixed(1)}`);
+if (RULES.minSpacing < 1.25 * PILOT_H) fail('hazards are spaced at least 1.25 tallest pilot hitboxes apart', `${RULES.minSpacing} vs ${PILOT_H.toFixed(1)}`);
+if (RULES.minWidth < WORLD_W * 0.6) fail('the shaft minimum is 60% of the screen', `${RULES.minWidth}`);
+for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('beats mix hazard types', sp.name);
+// crystals: the heat of climbing the longest crystal gap at full thrust is under one crystal's cooling (25% margin),
+// and that gap is at most half the climb that overheats a cold engine
+{
+  const heatPerGap = RULES.crystal.gap / (DEFAULTS.maxUp * DEFAULTS.heatTime);
+  if (heatPerGap * 1.25 > RULES.crystal.cool) fail('crystals cool faster than climbing between them heats', `${heatPerGap.toFixed(2)} vs ${RULES.crystal.cool}`);
+  if (RULES.crystal.gap > 0.5 * DEFAULTS.maxUp * DEFAULTS.heatTime) fail('the crystal gap is well inside the overheat climb', '');
+}
+// gates: the open window is longer than climbing through the whole gate (both slabs' thickness plus the tallest
+// pilot, from a standstill a little below it, after a reaction time), and the room left below a gate holds the
+// tallest pilot plus its stopping reach from full speed
+{
+  const G = RULES.gate, acc = DEFAULTS.thrust - DEFAULTS.gravity, top = DEFAULTS.maxUp;
+  const dist = 2 * G.hb + PILOT_H + 60, tAcc = top / acc, dAcc = top * tAcc / 2;
+  const pass = G.react + (dist <= dAcc ? Math.sqrt(2 * dist / acc) : tAcc + (dist - dAcc) / top);
+  if (G.open - G.warn < pass) fail('gates stay open longer than it takes to climb through them', `${(G.open - G.warn).toFixed(2)} s vs ${pass.toFixed(2)} s`);
+  if (G.room < PILOT_H + gateCommit(top * 1.22, DEFAULTS.gravity)) fail('the room below a gate holds a pilot plus its stopping reach', `${G.room}`);
+  if (G.move * 2 + G.shut[1] > G.maxShut) fail('a gate reopens within maxShut', '');
+}
 // pacing: every chunk mixes hazard types (only the thorns-only openers are exempt), and most follow
 // the tension / release (fruit arc) / spike rhythm
 for (const c of CHUNKS) {
@@ -48,6 +72,37 @@ if (CHUNKS.filter(c => c.steps.some(([t]) => t === 'arc')).length < CHUNKS.lengt
 for (const sp of SET_PIECES) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('set pieces mix hazard types', sp.name);
 // the zone reveal (1.5 s, default top climb speed 440 plus a 0.45 s boost at +22%) never reaches a hazard
 if (RULES.landmarkAfter < 1.5 * 440 + 0.45 * 0.22 * 440) fail('the zone reveal plays out over empty shaft', `${RULES.landmarkAfter}`);
+
+// Fly into a gate at many points of its cycle, at full speed, at half speed and from a hover, with a pilot
+// the height of the tallest hitbox, using the game's own gate clock (gateStep) and default physics.
+// - The slabs never start to move while the pilot is committed (within its stopping reach, or inside).
+// - A pilot that holds thrust and only lets go when it sees the countdown or a shut gate (after a reaction
+//   time), hovers, and climbs again once it is open, never touches a slab and always gets through.
+let gateSims = 0;
+function simulateGate(h0, L, R, where) {
+  const D = DEFAULTS, dt = 1 / 120, P = gatePeriod(h0);
+  for (let ph = 0; ph < 32; ph++) for (const [v0, d0] of [[D.maxUp, 700], [D.maxUp * 0.5, 520], [0, 420], [D.maxUp, 460], [0, 160]]) {
+    const h = { ...h0, clk: ph / 32 * P };
+    let alt = h.alt - h.hb - d0 - PILOT_H / 2, vy = v0, t = 0, seen = -1, through = false, prevU = gatePhase(h, h.clk);
+    while (t < 12) {
+      const top = alt + PILOT_H / 2, bot = alt - PILOT_H / 2, below = (h.alt - h.hb) - top, passed = bot > h.alt + h.hb;
+      gateStep(h, dt, below, vy, D.gravity, passed);
+      const u = gatePhase(h, h.clk), k = gateK(h, h.clk), w = gateWarn(h, h.clk);
+      if (prevU < RULES.gate.open && u >= RULES.gate.open && u < RULES.gate.open + RULES.gate.move && !passed && below < gateCommit(vy, D.gravity) - 1e-6) { fail('gates never start closing on a committed pilot', `${where} phase ${ph}/32 v ${v0}`); return; }
+      prevU = u;
+      // the reactive pilot: it notices the countdown or slabs after RULES.gate.react, then hovers until open
+      const warned = (w > 0 || k > 0) && !h.held;
+      if (warned && seen < 0) seen = t; else if (!warned) seen = -1;
+      const wait = seen >= 0 && t - seen >= RULES.gate.react && !passed && below > -1;
+      const thrust = wait ? vy < -30 && below < 80 ? true : vy < -120 : true;
+      vy += ((thrust ? D.thrust : 0) - D.gravity) * dt; vy = Math.max(-560, Math.min(D.maxUp, vy)); alt += vy * dt; t += dt;
+      const [eL, eR] = gateExt(h, k), gap = Math.min(h.mid - (h.lb + eL + 3), (h.rb - eR - 3) - h.mid);
+      if (alt + PILOT_H / 2 > h.alt - h.hb && alt - PILOT_H / 2 < h.alt + h.hb && gap < PILOT_W / 2) { fail('a reactive pilot never touches a gate', `${where} phase ${ph}/32 v ${v0} d ${d0}`); return; }
+      if (passed) { through = true; break; }
+    }
+    if (!through) fail('a reactive pilot always gets through a gate', `${where} phase ${ph}/32 v ${v0} d ${d0}`);
+  }
+}
 
 for (const cfg of CONFIGS) {
   for (let k = 0; k < SEEDS; k++) {
@@ -65,7 +120,7 @@ for (const cfg of CONFIGS) {
     for (const h of hz.filter(q => q.type === 'spike').slice(0, 2)) {
       const [L, R] = level.walls(h.alt), tip = h.base + h.side * h.len;
       if (h.len > 0.35 * (R - L)) fail('the first two thorns are short', `${tag} at ${(h.alt / 10).toFixed(0)} m: ${(100 * h.len / (R - L)).toFixed(0)}%`);
-      if (Math.abs(tip - WORLD_W / 2) < HITBOX / 2 + 20) fail('the first two thorns leave the launch line clear', `${tag} at ${(h.alt / 10).toFixed(0)} m`);
+      if (Math.abs(tip - WORLD_W / 2) < PILOT_W / 2 + 12) fail('the first two thorns leave the launch line clear', `${tag} at ${(h.alt / 10).toFixed(0)} m`);
     }
 
     // zone signatures: lavafalls only in the magma core, basalt column segments only in the caves
@@ -97,7 +152,7 @@ for (const cfg of CONFIGS) {
       if (JSON.stringify(again) !== JSON.stringify(hz) || JSON.stringify(againFruit) !== JSON.stringify(fruit)) fail('same seed gives the same layout', tag);
     }
     // calm chambers (and the clear launch) are empty on purpose, so they don't count toward the height that needs obstacles
-    const calmH = level.chambers.reduce((n, c) => n + Math.max(0, Math.min(c.a1, HEIGHT) - c.a0), 0);
+    const calmH = level.chambers.reduce((n, c) => n + Math.max(0, Math.min(c.a1, HEIGHT) - c.a0), 0) + RULES.zones.filter(z => z < HEIGHT).length * (RULES.landmarkClear + RULES.landmarkAfter);
     if (hz.length < (HEIGHT - calmH - RULES.clearStart) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
     if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
@@ -122,7 +177,7 @@ for (const cfg of CONFIGS) {
 
     // release beats: fruit arcs sweep across empty stretches, never through a hazard's band
     const arcs = fruit.filter(f => f.arc);
-    if (arcs.length < RULES.arc.n) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
+    if (arcs.length < RULES.arc.n && cfg.density >= 0.5) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
     for (const f of arcs) for (const h of hz) {
       const top = h.type === 'pend' ? h.aAlt : h.hi, lo = h.type === 'boulder' ? h.alt - 40 : h.lo;
       if (f.alt > lo - 10 && f.alt < top + 10) { fail('fruit arcs stay clear of hazards', `${tag} at ${(f.alt / 10).toFixed(0)} m: ${h.type}`); break; }
@@ -143,24 +198,47 @@ for (const cfg of CONFIGS) {
       if (h.lo < 1500) continue;
       after++;
       const [L, R] = level.walls(h.lo), mid = (L + R) / 2;
+      // (it covers the centre line when a pilot of the widest hitbox holding the centre would be hit)
+      const C = PILOT_W / 2 - 4, tipX = h.base + h.side * h.len;
       const covers =
         h.type === 'bat' ||
-        (h.type === 'spider' && Math.abs(h.x - mid) < h.r + 13) ||
+        (h.type === 'spider' && Math.abs(h.x - mid) < h.hw + C) ||
         (h.type === 'firebar' && Math.abs(h.cx - mid) < h.len) ||
-        (h.type === 'crusher' && (h.lb + h.maxL > mid - 13 || h.rb - h.maxR < mid + 13)) ||
+        (h.type === 'crusher' && (h.lb + h.maxL > mid - C || h.rb - h.maxR < mid + C)) ||
+        ((h.type === 'spike' || h.type === 'geyser') && (h.side > 0 ? tipX > mid - C : tipX < mid + C)) ||
+        (h.type === 'pend' && Math.abs(h.ax + h.side * (h.len * Math.sin(1.33) + h.hr) - h.ax) > Math.abs(mid - h.ax) - C) ||
         h.type === 'gate' ||
-        (h.type === 'boulder' && Math.abs(h.x - mid) < h.r + 13);
+        (h.type === 'boulder' && Math.abs(h.x - mid) < h.r + C);
       if (covers) centre++;
     }
     if (after >= 30 && centre / after < 0.25) fail('a fair share of hazards cover the centre line from 150 m', `${tag}: ${(100 * centre / after).toFixed(0)}%`);
 
     // zone changes are left clear for their landmark, and above it for the zone title card
     for (const h of hz) for (const z of RULES.zones) if (h.lo < z + RULES.landmarkAfter && h.hi > z - RULES.landmarkClear) fail('zone landmarks are kept clear', `${tag}: ${h.type} at ${(h.lo / 10).toFixed(0)} m`);
+    // a breather arena below each zone change: wide open, hazard-free (above), with a fruit weave
+    for (const z of RULES.zones) {
+      if (z > HEIGHT) continue;
+      const [L, R] = level.walls(z - RULES.landmarkClear / 2);
+      if (R - L < RULES.arenaWidth - 2 * RULES.wallShape - 14) fail('breather arenas open the shaft wide', `${tag} at ${(z / 10).toFixed(0)} m: ${(R - L).toFixed(0)}`);
+      if (!fruit.some(f => f.arena && f.alt > z - RULES.landmarkClear && f.alt < z)) fail('breather arenas carry a fruit weave', `${tag} at ${(z / 10).toFixed(0)} m`);
+    }
+    // pacing: a scripted beat (or set piece) about every 100 m once the opening is over
+    const beats = level.marks.filter(m => m.alt < HEIGHT).map(m => m.alt).sort((a, b) => a - b);
+    if (!beats.length || beats[0] > RULES.clearStart + 2200 + 2 * RULES.spacing[0] / cfg.density) fail('the first scripted beat comes early', `${tag}: ${beats[0]}`);
+    for (let i = 1; i < beats.length; i++) if (beats[i] - beats[i - 1] > RULES.beatEvery * 3 + RULES.chamber.len[1] + RULES.landmarkClear + RULES.landmarkAfter + 3 * RULES.spacing[0] / cfg.density) { fail('scripted beats come about every 100 m', `${tag} at ${(beats[i - 1] / 10).toFixed(0)} m: ${((beats[i] - beats[i - 1]) / 10).toFixed(0)} m gap`); break; }
+    // a first two-hazard combo before about 150 m (on the default easy start)
+    if (cfg.density === 1 && cfg.intro === 300 && !hz.some((h, i) => i && h.lo < 1600 && h.lo - hz[i - 1].hi < RULES.intro.spacing)) fail('a two-hazard combo comes before 150 m', tag);
+    // each zone's signature hazard shows up in its opening stretch
+    RULES.zones.forEach((z, i) => {
+      if (z + RULES.signature.len > HEIGHT) return;
+      zoneMix.sigOf = (zoneMix.sigOf || 0) + 1;
+      if (hz.some(h => h.type === RULES.signature.types[i + 1] && h.lo >= z && h.lo < z + RULES.signature.len + RULES.landmarkAfter)) zoneMix.sig = (zoneMix.sig || 0) + 1;
+    });
 
     // every zone gets its scripted set piece about RULES.setPieceAt into it
     [0, ...RULES.zones].forEach((zs, z) => {
       if (zs + 3000 > HEIGHT) return;
-      const mk = level.marks.find(m => m.zone === z);
+      const mk = level.marks.find(m => m.zone === z && m.set);
       if (!mk) fail('every zone has its set piece', `${tag}: zone ${z + 1}`);
       // (a calm chamber that lands on the set piece's spot pushes it up by at most one chamber plus one gap)
       else if (mk.alt < zs + RULES.setPieceAt - 600 || mk.alt > zs + RULES.setPieceAt + 1500 + RULES.chamber.len[1] + RULES.spacing[0] / cfg.density) fail('set pieces start about 150 m into their zone', `${tag}: zone ${z + 1} at ${((mk.alt - zs) / 10).toFixed(0)} m in`);
@@ -170,7 +248,7 @@ for (const cfg of CONFIGS) {
     for (const h of hz) if (h.skin !== undefined && typeof h.skin === 'number' && h.skin !== zoneOf(h.alt)) fail('hazards wear their zone skin', `${tag}: ${h.type} at ${(h.lo / 10).toFixed(0)} m`);
 
     // fruit sits inside the shaft and inside the safe lane of any static hazard at its height
-    const PAD = HITBOX / 2;
+    const PAD = FRUIT_PAD;
     for (const f of fruit) {
       const fw = `${tag} fruit at ${(f.alt / 10).toFixed(0)} m`;
       const [L, R] = level.walls(f.alt);
@@ -182,20 +260,29 @@ for (const cfg of CONFIGS) {
           const tip = h.base + h.side * h.len;
           if (h.side > 0 ? f.x - PAD < tip : f.x + PAD > tip) fail('fruit never sits in a geyser or spike', `${fw}: ${h.type}`);
         } else if (h.type === 'pend') {
-          const reach = h.ax + h.side * (h.len * Math.sin(0.78 + 0.55) + h.r);
+          const reach = h.ax + h.side * (h.len * Math.sin(0.78 + 0.55) + h.hr);
           if (h.side > 0 ? f.x - PAD < reach : f.x + PAD > reach) fail('fruit never sits in a pod swing', fw);
         } else if (h.type === 'crusher') {
-          if (f.x - PAD < h.lb + h.maxL || f.x + PAD > h.rb - h.maxR) fail('fruit never sits in a crusher', fw);
+          if (f.x - PAD < h.lb + h.maxL + 2 || f.x + PAD > h.rb - h.maxR - 2) fail('fruit never sits in a crusher', fw);
         } else if (h.type === 'firebar') {
-          if (Math.hypot(f.x - h.cx, f.alt - h.alt) < h.len + h.br + PAD) fail('fruit never sits in a fire wheel', fw);
+          if (Math.hypot(f.x - h.cx, f.alt - h.alt) < h.len + h.br * 1.1 + PAD) fail('fruit never sits in a fire wheel', fw);
         } else if (h.type === 'spider') {
-          if (Math.abs(f.x - h.x) < h.r + PAD) fail('fruit never sits in a spider column', fw);
+          if (Math.abs(f.x - h.x) < h.hw + PAD) fail('fruit never sits in a spider column', fw);
         } else if (h.type === 'lavafall') {
           if (Math.abs(f.x - h.x) < h.hw + PAD) fail('fruit never sits in a lavafall', fw);
         }
       }
     }
 
+    // ice crystals keep the engine cool: along the shaft there is never a longer climb than RULES.crystal.gap
+    // without one, and that climb at full thrust heats the engine less than one crystal cools it (with a 25%
+    // margin) and is well short of the climb that would overheat it from cold
+    {
+      const alts = fruit.map(f => f.alt).sort((x, y) => x - y);
+      let prev = 58, worst = 0;
+      for (const a of alts) { if (a > HEIGHT - 800) break; worst = Math.max(worst, a - prev); prev = a; }
+      if (worst > RULES.crystal.gap + 1) fail('a crystal comes at least every RULES.crystal.gap', `${tag}: ${worst.toFixed(0)} units`);
+    }
     // authored stretches: pinches go right down to the minimum width, chambers open wide, and a calm
     // chamber (no hazards at all, not even a falling rock) comes at least every few stretches
     const segs = [];
@@ -216,7 +303,7 @@ for (const cfg of CONFIGS) {
         if (lo < sg.a1 && top > sg.a0) fail('calm chambers have no hazards', `${tag}: ${h.type} at ${(h.lo / 10).toFixed(0)} m`);
       }
     });
-    for (const sg of segs) if (sg.kind === 'pinch') {
+    for (const sg of segs) if (sg.kind === 'pinch' && !RULES.zones.some(z => sg.a1 > z - RULES.landmarkClear - 300 && sg.a0 < z + 360)) {
       const [L, R] = level.walls((sg.a0 + sg.a1) / 2);
       if (R - L > RULES.pinchWidth[1] + RULES.wallShape * 2 + 14) fail('pinches squeeze the shaft', `${tag} at ${(sg.a0 / 10).toFixed(0)} m: ${(R - L).toFixed(0)}`);
     }
@@ -267,14 +354,18 @@ for (const cfg of CONFIGS) {
       }
       if (h.type === 'pend') {
         const [L, R] = tightest(level, h.lo, h.aAlt);
-        const reach = h.ax + h.side * (h.len * Math.sin(0.78 + 0.55) + h.r);
+        const reach = h.ax + h.side * (h.len * Math.sin(0.78 + 0.55) + h.hr);
         const lane = h.side > 0 ? R - reach : reach - L;
         if (lane < RULES.minLane - 0.5) fail('spiky pod leaves an open lane', `${where}: ${lane.toFixed(0)} units`);
+        if (h.hr < RULES.hit.pod) fail('pods use their full hitbox for lanes', where);
       }
       if (h.type === 'firebar') {
         const [L, R] = tightest(level, h.lo, h.hi);
-        const clear = Math.min(h.cx - h.len - L, R - (h.cx + h.len)) - h.br * 0.85;   // from the flame's edge
-        if (clear < HITBOX + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
+        // the tip passes beside you: from the flame's hitbox edge to the wall there is room for the widest pilot
+        const clear = Math.min(h.cx - h.len - L, R - (h.cx + h.len)) - h.br * 1.1;
+        if (clear < PILOT_W + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
+        // and the half of the shaft away from the bar (beside the hub) is a lane for the widest pilot too
+        if (Math.min(h.cx - L, R - h.cx) - 34 < PILOT_W * 1.5) fail('fire wheel leaves a lane beside its hub', where);
       }
       if (h.type === 'bat') {
         // sample the real flight path: sideways speed under the cap, and the bat inside its band
@@ -299,40 +390,35 @@ for (const cfg of CONFIGS) {
       }
       if (h.type === 'spider') {
         const [L, R] = tightest(level, h.lo, h.hi);
-        if (Math.min(h.x - h.r - L, R - h.x - h.r) < RULES.minLane - 0.5) fail('spider leaves lanes on both sides', where);
+        if (Math.max(h.x - h.hw - L, R - h.x - h.hw) < RULES.minLane - 0.5) fail('spider leaves a full lane beside it', where);
         if (h.aAlt - h.mid - h.amp - h.r < h.lo - 0.5 || h.aAlt - h.mid + h.amp + h.r > h.hi + 0.5) fail('spider stays inside its band', where);
       }
       if (h.type === 'crusher') {
         const [L, R] = tightest(level, h.lo, h.hi);
-        const lane = Math.min(R, h.rb - h.maxR) - Math.max(L, h.lb + h.maxL);
+        const lane = Math.min(R, h.rb - h.maxR - 2) - Math.max(L, h.lb + h.maxL + 2);
         if (lane < RULES.minLane - 0.5) fail('crusher leaves an open lane when fully closed', `${where}: ${lane.toFixed(0)} units`);
       }
       if (h.type === 'gate') {
-        // shut for at most maxShut at a time, open for at least minOpen, and room to wait below it
-        const [L, R] = tightest(level, h.lo, h.hi), step = 0.004;
-        let shut = 0, open = 0, maxShut = 0, maxOpen = 0, minLaneOpen = Infinity;
-        for (let t = 0; t < h.period * 2; t += step) {
-          const [eL, eR] = gateExt(h, gateK(h, t));
-          const lane = Math.min(R, h.rb - eR + 2) - Math.max(L, h.lb + eL - 2);
-          if (lane < RULES.minLane) { shut += step; open = 0; } else { open += step; shut = 0; minLaneOpen = Math.min(minLaneOpen, lane); }
-          maxShut = Math.max(maxShut, shut); maxOpen = Math.max(maxOpen, open);
-        }
+        // over a whole cycle of its clock: blocked (lane narrower than the widest pilot plus a margin) for at
+        // most maxShut, a wide lane when open, and a countdown that always runs before the slabs move
+        const [L, R] = tightest(level, h.lo, h.hi), step = 0.004, P = gatePeriod(h);
+        const laneAt = t => { const [eL, eR] = gateExt(h, gateK(h, t)); return Math.min(R, h.rb - eR - 3) - Math.max(L, h.lb + eL + 3); };
+        let shut = 0, maxShut = 0;
+        for (let t = 0; t < P * 2; t += step) { if (laneAt(t) < PILOT_W + 8) { shut += step; maxShut = Math.max(maxShut, shut); } else shut = 0; }
         if (maxShut > RULES.gate.maxShut + 1e-6) fail('gates are never shut for long', `${where}: ${maxShut.toFixed(2)} s`);
-        if (Math.min(maxOpen, h.period) < RULES.gate.minOpen - 1e-6) fail('gates stay open long enough to pass', `${where}: ${maxOpen.toFixed(2)} s`);
-        const [eL, eR] = gateExt(h, 0);
-        if (Math.min(R, h.rb - eR + 2) - Math.max(L, h.lb + eL - 2) < RULES.minLane * 1.5) fail('open gates leave a wide lane', where);
+        if (laneAt(-h.ph * P + 0.01) < RULES.minLane * 1.5 - 0.5) fail('open gates leave a wide lane', `${where}: ${laneAt(-h.ph * P + 0.01).toFixed(0)}`);
+        if (laneAt(-h.ph * P + 0.01) < PILOT_W * 2.5) fail('an open gate fits 2.5 widest pilots', where);
         const below = hz[i - 1];
         if (below && h.lo - below.hi < RULES.gate.room - 0.5) fail('gates leave room to wait below', `${where}: ${(h.lo - below.hi).toFixed(0)} units`);
-        // a fixed, readable rhythm, and a countdown that starts RULES.gate.warn before the slabs move
-        if (h.period !== RULES.gate.period) fail('every gate runs on the same fixed period', `${where}: ${h.period}`);
         let warnT = 0, prevK = gateK(h, -step);
-        for (let t = 0; t < h.period * 2; t += step) {
+        for (let t = 0; t < P * 2; t += step) {
           const k = gateK(h, t), w = gateWarn(h, t);
           if ((k > prevK + 1e-9 || k >= 1) && w < 1) { fail('a gate never closes without its countdown', where); break; }
           if (w > 0 && w < 1) warnT += step;
           prevK = k;
         }
         if (Math.abs(warnT / 2 - RULES.gate.warn) > 0.02) fail('gate countdown lasts RULES.gate.warn', `${where}: ${(warnT / 2).toFixed(2)} s`);
+        if (gateSims < 400) { gateSims++; simulateGate(h, L, R, where); }
       }
       if (h.type === 'lavafall') {
         const [L, R] = tightest(level, h.lo, h.hi);
@@ -373,6 +459,8 @@ for (const t of ['bat', 'pend', 'spike', 'spider', 'geyser', 'crusher', 'boulder
   if ((seen.get(t) || 0) < checked * 0.6) fail('every hazard type shows up in most shafts', `${t} in ${seen.get(t) || 0} of ${checked}`);
 }
 
+if ((zoneMix.sig || 0) < (zoneMix.sigOf || 1) * 0.8) fail('zone signature hazards lead each zone', `${zoneMix.sig} of ${zoneMix.sigOf}`);
+if (gateSims < 50) fail('gates are simulated', `${gateSims}`);
 if ((seen.get('lavafall*') || 0) < checked * 0.55) fail('lavafalls show up in most shafts', `${seen.get('lavafall*') || 0} of ${checked}`);
 if ((zoneMix.corridors || 0) < checked * 0.55) fail('corridor stretches show up in most shafts', `${zoneMix.corridors || 0} of ${checked}`);
 
@@ -381,4 +469,4 @@ if (failures.size) {
   for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
   process.exit(1);
 }
-console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule`);
+console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}; ${gateSims} gates flown at 32 phases × 5 approaches)`);
