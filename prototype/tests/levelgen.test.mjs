@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateReopenIn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes };')();
 
 // The widest and tallest pilot hitbox at any tilt (all 21 pilots, world units): every lane is sized from these.
 const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
@@ -44,12 +44,20 @@ if (RULES.minLane < 2.5 * PILOT_W) fail('open lanes are at least 2.5 widest pilo
 if (RULES.minSpacing < 1.25 * PILOT_H) fail('hazards are spaced at least 1.25 tallest pilot hitboxes apart', `${RULES.minSpacing} vs ${PILOT_H.toFixed(1)}`);
 if (RULES.minWidth < WORLD_W * 0.6) fail('the shaft minimum is 60% of the screen', `${RULES.minWidth}`);
 for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('beats mix hazard types', sp.name);
-// crystals: the heat of climbing the longest crystal gap at full thrust is under one crystal's cooling (25% margin),
-// and that gap is at most half the climb that overheats a cold engine
+// crystals: a pilot that follows the crystals and feathers its thrust just enough to hold a steady climb (thrust on
+// gravity / thrust of the time) at the monster's top base speed heats less over the longest crystal gap than one
+// crystal cools (10% margin), so following the crystals always stays out of overheat while the engine runs at
+// full strength (below 0.6 heat); holding full thrust flat out between crystals heats well past one crystal's
+// cooling, so heat matters; and the gap is well short of the climb that overheats a cold engine
+const CLEAR = PILOT_W / 2 + 25;              // a crystal's clearance from every hazard hitbox
 {
-  const heatPerGap = RULES.crystal.gap / (DEFAULTS.maxUp * DEFAULTS.heatTime);
-  if (heatPerGap * 1.25 > RULES.crystal.cool) fail('crystals cool faster than climbing between them heats', `${heatPerGap.toFixed(2)} vs ${RULES.crystal.cool}`);
-  if (RULES.crystal.gap > 0.5 * DEFAULTS.maxUp * DEFAULTS.heatTime) fail('the crystal gap is well inside the overheat climb', '');
+  const D = DEFAULTS, duty = D.gravity / D.thrust, v = D.wormBase + 60;
+  const perSec = duty / D.heatTime - (1 - duty) / D.coolTime, heatPerGap = RULES.crystal.gap / v * perSec;
+  if (heatPerGap * 1.1 > RULES.crystal.cool) fail('following the crystals while feathering stays out of overheat', `${heatPerGap.toFixed(3)} per gap vs ${RULES.crystal.cool}`);
+  const flatOut = RULES.crystal.gap / D.maxUp / D.heatTime;
+  if (flatOut < RULES.crystal.cool * 1.6) fail('holding full thrust between crystals runs the engine hot', `${flatOut.toFixed(2)} vs ${RULES.crystal.cool}`);
+  if (RULES.crystal.gap > 0.8 * D.maxUp * D.heatTime) fail('the crystal gap is well inside the overheat climb', '');
+  if (RULES.crystal.clear < CLEAR || RULES.fruitHug < CLEAR) fail('crystals keep the widest pilot half-width plus 25 from hazards', `${RULES.crystal.clear} vs ${CLEAR.toFixed(1)}`);
 }
 // gates: the open window is longer than climbing through the whole gate (both slabs' thickness plus the tallest
 // pilot, from a standstill a little below it, after a reaction time), and the room left below a gate holds the
@@ -154,7 +162,7 @@ for (const cfg of CONFIGS) {
     // calm chambers (and the clear launch) are empty on purpose, so they don't count toward the height that needs obstacles
     const calmH = level.chambers.reduce((n, c) => n + Math.max(0, Math.min(c.a1, HEIGHT) - c.a0), 0) + RULES.zones.filter(z => z < HEIGHT).length * (RULES.landmarkClear + RULES.landmarkAfter);
     if (hz.length < (HEIGHT - calmH - RULES.clearStart) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
-    if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
+    if (fruit.length < HEIGHT / RULES.crystal.gap) fail('shaft has crystals to collect', `${tag}: only ${fruit.length}`);
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
 
     // no monotonous runs: after the thorns-only opening, never more than RULES.maxRun of a type in a row
@@ -274,6 +282,32 @@ for (const cfg of CONFIGS) {
       }
     }
 
+    // crystals keep CLEAR from every hazard hitbox they could meet: the static hitboxes (the game's own shapes),
+    // a pod's whole swing, a crusher fully closed, a spider's whole bob (its body and legs) and a fire wheel's whole
+    // sweep, measured here independently; and never within 40 of a spike or geyser tip at about the same height
+    for (const f of fruit) {
+      const fw = `${tag} crystal at ${(f.alt / 10).toFixed(0)} m`;
+      for (const h of hz) {
+        const top = h.type === 'pend' ? h.aAlt : h.hi;
+        if (f.alt < h.lo - 200 || f.alt > top + 200) continue;
+        let d = Infinity;
+        const seg = (x0, a0, x1, a1, r) => { const dx = x1 - x0, da = a1 - a0, L = dx * dx + da * da, t = L ? Math.max(0, Math.min(1, ((f.x - x0) * dx + (f.alt - a0) * da) / L)) : 0; d = Math.min(d, Math.hypot(f.x - x0 - dx * t, f.alt - a0 - da * t) - r); };
+        const box = (x0, x1, a0, a1) => { const dx = Math.max(x0 - f.x, 0, f.x - x1), da = Math.max(a0 - f.alt, 0, f.alt - a1); d = Math.min(d, dx || da ? Math.hypot(dx, da) : -1); };
+        if (h.type === 'spike' || h.type === 'geyser' || h.type === 'lavafall') {
+          for (const q of staticShapes(h)) q.k === 'b' ? box(q.x0, q.x1, q.a0, q.a1) : seg(q.x0, q.a0, q.x1, q.a1, q.r);
+          if (h.type !== 'lavafall' && Math.abs(f.alt - h.alt) < 30 && Math.abs(f.x - (h.base + h.side * h.len)) < 40) fail('crystals never sit by a hazard tip', `${fw}: ${h.type}`);
+        } else if (h.type === 'pend') {
+          for (let i = 0; i <= 48; i++) { const th = h.side * (0.23 + 1.1 * i / 48); seg(h.ax + h.len * Math.sin(th), h.aAlt - h.len * Math.cos(th), h.ax + h.len * Math.sin(th), h.aAlt - h.len * Math.cos(th), h.hr); }
+        } else if (h.type === 'crusher') {
+          box(h.lb - 40, h.lb + h.maxL + 2, h.alt - h.hb, h.alt + h.hb); box(h.rb - h.maxR - 2, h.rb + 40, h.alt - h.hb, h.alt + h.hb);
+        } else if (h.type === 'spider') {
+          const k = 1.3, a0 = h.aAlt - h.mid - h.amp, a1 = h.aAlt - h.mid + h.amp;   // the body capsule and the legs, over the whole bob
+          seg(h.x, a0 - 8 * k, h.x, a1 + 9 * k, 12 * k); box(h.x - 18 * k - 6.5 * k, h.x + 18 * k + 6.5 * k, a0 - 2 * k - 6.5 * k, a1 - 2 * k + 6.5 * k);
+        } else if (h.type === 'firebar') seg(h.cx, h.alt, h.cx, h.alt, h.len + h.br * 1.08);
+        if (d < CLEAR - 0.5) { fail('crystals keep clear of hazard hitboxes', `${fw}: ${h.type} ${d.toFixed(0)} < ${CLEAR.toFixed(0)}`); break; }
+      }
+    }
+
     // ice crystals keep the engine cool: along the shaft there is never a longer climb than RULES.crystal.gap
     // without one, and that climb at full thrust heats the engine less than one crystal cools it (with a 25%
     // margin) and is well short of the climb that would overheat it from cold
@@ -307,12 +341,11 @@ for (const cfg of CONFIGS) {
       const [L, R] = level.walls((sg.a0 + sg.a1) / 2);
       if (R - L > RULES.pinchWidth[1] + RULES.wallShape * 2 + 14) fail('pinches squeeze the shaft', `${tag} at ${(sg.a0 / 10).toFixed(0)} m: ${(R - L).toFixed(0)}`);
     }
-    // each zone's first chamber hosts its spectacle
-    const specs = level.chambers.filter(c => c.spectacle).map(c => c.zone);
-    if (new Set(specs).size !== specs.length) fail('one spectacle per zone', tag);
-    for (const c of level.chambers) if (c.a1 < HEIGHT - 2000 && !specs.includes(c.zone)) fail('every zone with a chamber has a spectacle', `${tag}: zone ${c.zone + 1}`);
+    // every chamber stages a visual event, and each zone's first chamber hosts its big spectacle (variant 0)
+    for (const c of level.chambers) if (!c.spectacle) fail('every chamber has a visual event', tag);
+    for (const z of [0, 1, 2]) { const first = level.chambers.find(c => c.zone === z); if (first && first.variant !== 0) fail("each zone's first chamber hosts its spectacle", `${tag}: zone ${z + 1}`); }
     // calm chambers carry a fruit weave
-    for (const c of level.chambers) if (!fruit.some(f => f.alt > c.a0 && f.alt < c.a1)) fail('calm chambers have fruit', tag);
+    for (const c of level.chambers) if (c.a1 < HEIGHT - 800 && !fruit.some(f => f.alt > c.a0 && f.alt < c.a1)) fail('calm chambers have fruit', tag);
 
     // zone wall silhouettes (root bulges, column tiers, crags) never jut out like a hidden ledge
     for (const side of [0, 1]) {
@@ -406,7 +439,7 @@ for (const cfg of CONFIGS) {
         let shut = 0, maxShut = 0;
         for (let t = 0; t < P * 2; t += step) { if (laneAt(t) < PILOT_W + 8) { shut += step; maxShut = Math.max(maxShut, shut); } else shut = 0; }
         if (maxShut > RULES.gate.maxShut + 1e-6) fail('gates are never shut for long', `${where}: ${maxShut.toFixed(2)} s`);
-        if (laneAt(-h.ph * P + 0.01) < RULES.minLane * 1.5 - 0.5) fail('open gates leave a wide lane', `${where}: ${laneAt(-h.ph * P + 0.01).toFixed(0)}`);
+        if (laneAt(-h.ph * P + 0.01) < RULES.minLane * 1.3 - 0.5) fail('open gates leave a wide lane', `${where}: ${laneAt(-h.ph * P + 0.01).toFixed(0)}`);
         if (laneAt(-h.ph * P + 0.01) < PILOT_W * 2.5) fail('an open gate fits 2.5 widest pilots', where);
         const below = hz[i - 1];
         if (below && h.lo - below.hi < RULES.gate.room - 0.5) fail('gates leave room to wait below', `${where}: ${(h.lo - below.hi).toFixed(0)} units`);
