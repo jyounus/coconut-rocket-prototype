@@ -1452,11 +1452,11 @@ const GRAB_STYLE = {
   dragon:  { limb: 'wing', hand: 'thumb', rr: 24, rm: 12, r0: 14, r1: 9, rx: 100, ry: 78, behind: true },
   rex:     { limb: 'fossil', hand: 'bones', rr: 20, rm: 10, r0: 12, r1: 8, rx: 100, ry: 80 },
   flytrap: { limb: 'vine', hand: 'tendril', rr: 20, rm: 13, r0: 11, r1: 5, rx: 118, ry: 76, wig: 6, behind: true },
-  blob:    { limb: 'goo', hand: 'splat', rr: 28, rm: 19, r0: 15, r1: 8, rx: 128, ry: 78, wig: 3 },
+  blob:    { limb: 'goo', hand: 'splat', rr: 28, rm: 19, r0: 15, r1: 8, rx: 128, ry: 78, wig: 3, behind: true },
   spider:  { limb: 'leg', hand: 'hook', rr: 20, rm: 12, r0: 12, r1: 6, rx: 98, ry: 78 },
   shark:   { limb: 'fin', hand: 'fintip', rr: 22, rm: 13, r0: 13, r1: 8, rx: 116, ry: 78 },
   tiki:    { limb: 'stone', hand: 'carved', rr: 24, rm: 15, r0: 15, r1: 12, rx: 108, ry: 80 },
-  spirit:  { limb: 'flame', hand: 'wisp', rr: 24, rm: 16, r0: 14, r1: 7, rx: 110, ry: 78, wig: 3 },
+  spirit:  { limb: 'flame', hand: 'wisp', rr: 24, rm: 16, r0: 14, r1: 7, rx: 110, ry: 78, wig: 3, behind: true },
   toad:    { limb: 'arm', hand: 'pad', rr: 27, rm: 17, r0: 14, r1: 11, rx: 124, ry: 74, behind: true },
   giant:   { limb: 'arm', hand: 'fist', rr: 26, rm: 20, r0: 19, r1: 14, rx: 106, ry: 82 },
   hornet:  { limb: 'leg', hand: 'hook', rr: 18, rm: 8, r0: 9, r1: 5, rx: 92, ry: 78 },
@@ -1628,7 +1628,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
   for (let i = 1; i < up.length; i++) caps.push([up[i - 1][0], up[i - 1][1], up[i][0], up[i][1], Math.max(up[i - 1][2], up[i][2])]);
   for (let i = 1; i < fore.length; i++) caps.push([fore[i - 1][0], fore[i - 1][1], fore[i][0], fore[i][1], Math.max(fore[i - 1][2], fore[i][2])]);
   for (const h of hand) caps.push(h.slice(0, 5));
-  return { sh, up, fore, hand, caps, d, tipY, jointed, sc };
+  return { sh, up, fore, hand, caps, d, tipY, jointed, sc, squeeze: Math.abs(rx0 - shX) };
 }
 /* LEVELGEN:END */
 const walls = a => G.level.walls(a);
@@ -5989,7 +5989,9 @@ const MONSTERS = [
     for (const d of [-1, 1]) {
       const fy = 400 - (d > 0 ? beat : 8 - beat), fx = d * 74;
       const arm = []; for (let k = 0; k <= 12; k++) { const u = k / 12, a = (1 - u) * (1 - u), b = 2 * u * (1 - u), z = u * u; arm.push([a * d * 226 + b * d * 236 + z * (fx + d * 44), a * 300 + b * 470 + z * (fy + 26)]); }
+      mAShape(c, mAEl(arm[0][0], arm[0][1], 40, 40), pkRG(c, arm[0][0] - d * 8, arm[0][1] - 10, 44, ['#7e7072', '#3e3436']), { rim: 'rgba(255,215,190,.5)', rw: 5, lw: 4.5 });   // (the elbow)
       mATaper(c, arm, 74, 56, pkLG(c, 0, 300, 0, 480, ['#6e6264', '#3e3436', '#1c1618']), { rim: 'rgba(255,215,190,.5)', rw: 5, lw: 4.5 });
+      pkE(c, arm[0][0], arm[0][1], 34, 34, pkRG(c, arm[0][0] - d * 8, arm[0][1] - 10, 40, ['#7e7072', '#4e4446']), 0);
       mAFur(c, arm.filter((_, i) => i % 3 === 0).slice(0, 4).map(([x, y]) => [x + d * 30, y]), 12, 'rgba(255,225,205,.4)', 3, d);
       // the fist: four knuckles forward, a thumb wrapped over, lava glowing between the fingers
       mAShape(c, mASm([[fx - 56, fy - 30], [fx, fy - 46], [fx + 56, fy - 30], [fx + 64, fy + 20], [fx + 30, fy + 52], [fx - 30, fy + 52], [fx - 64, fy + 20]]), pkRG(c, fx - 10, fy - 20, 70, ['#8a7c7c', '#4e4446', '#241c1e']), { rim: 'rgba(255,225,205,.65)', rw: 5, lw: 4.5 });
@@ -6272,7 +6274,7 @@ const MONSTERS = [
       for (let k = 1; k < 5; k++) { const u = k / 5, x0 = lerp(d * 40, d * 196, u), y0 = lerp(70, 12, u) + 10 * Math.sin(u * Math.PI) * -1.2; c.beginPath(); c.moveTo(x0, y0 - 4 + u * 4); c.lineTo(x0 + d * 6, y0 + 16 - u * 12); c.stroke(); }
     }
     // spiky webbed frills behind the jaw
-    for (const d of [-1, 1]) mAShape(c, mAPoly([[d * 120, 120], [d * 184, 112], [d * 152, 140], [d * 194, 160], [d * 150, 176], [d * 178, 206], [d * 112, 204]]), pkLG(c, 0, 112, 0, 206, ['#ffb060', '#d0501a']), { rim: 'rgba(255,230,180,.5)', rw: 3, lw: 3.5 });
+    for (const d of [-1, 1]) mAShape(c, mAPoly([[d * 124, 124], [d * 166, 118], [d * 146, 142], [d * 172, 160], [d * 140, 172], [d * 156, 196], [d * 114, 196]]), pkLG(c, 0, 118, 0, 196, ['#ffb060', '#d0501a']), { rim: 'rgba(255,230,180,.5)', rw: 3, lw: 3.5 });
     // the lower jaw, behind the head: it swings down from hinges under the cheeks
     const jaw = mASm(mAMirror([[0, 276 + drop], [48, 268 + drop], [92, 232 + drop * 0.75], [118, 188 + drop * 0.3], [118, 150], [60, 196]]));
     mAShape(c, jaw, pkRG(c, 0, 230 + drop, 140, ['#6ae08a', '#1e8a48', '#0a3a22']), { rim: 'rgba(200,255,210,.6)', rw: 5, under: 'rgba(255,190,80,.45)', uw: 10, lw: 4.5 });
@@ -6336,7 +6338,7 @@ const MONSTERS = [
       for (const dd of [-1, 1]) pkCurve(c, [dd * 26, y], [dd * (R * 0.9), y - 30], [dd * (R * 0.82), y + 90], '#f0e6d0', 12);
     }
     // collarbones from the base of the neck out to the shoulder joints of its great bone arms
-    for (const d of [-1, 1]) mATaper(c, [[-80, 300], [d * 60 - 20, 254], [d * 176, 214]], 34, 24, pkLG(c, 0, 200, 0, 300, ['#fffaf0', '#dccca8', '#8a7a5a']), { rim: 'rgba(255,255,245,.7)', rw: 4, lw: 4 });
+    for (const d of [-1, 1]) { mATaper(c, [[-80, 300], [d * 60 - 20, 254], [d * 176, 214]], 34, 24, pkLG(c, 0, 200, 0, 300, ['#fffaf0', '#dccca8', '#8a7a5a']), { rim: 'rgba(255,255,245,.7)', rw: 4, lw: 4 }); pkE(c, d * 176, 214, 18, 16, pkRG(c, d * 172, 208, 18, ['#fffaf0', '#c8b890']), 3.5); }
     pkE(c, -80, 300, 24, 18, pkRG(c, -84, 294, 24, ['#fffaf0', '#c8b890']), 3.5);
     // the tiny arms, waving
     for (const dd of [-1, 1]) {
@@ -6877,7 +6879,7 @@ const MONSTERS = [
     mInMouth(c, mo);
     // two big hooked mandibles, serrated on their inner edges, scissoring open round the mouth
     for (const d of [-1, 1]) {
-      c.save(); c.translate(d * (50 + 36 * gp), 188 - 8 * gp); c.rotate(d * (0.05 + o * 0.4 + gp * 0.6));
+      c.save(); c.translate(d * (50 + 58 * gp), 188 - 14 * gp); c.rotate(d * (0.05 + o * 0.4 + gp * 1.0));
       const md = mASm([[d * 20, -12], [d * 26, 34], [d * 8, 78], [-d * 30, 104], [-d * 56, 96], [-d * 30, 82], [-d * 8, 52], [-d * 10, 4]]);
       mAShape(c, md, pkLG(c, 0, -12, 0, 104, ['#8a6a32', '#2a1c08', '#0a0602']), { rim: 'rgba(255,220,150,.65)', rw: 3.5, lw: 4 });
       for (let k = 0; k < 3; k++) pkPath(c, [[-d * (2 + k * 9), 48 + k * 13], [-d * (12 + k * 9), 52 + k * 13], [-d * (6 + k * 9), 58 + k * 13]], '#ffe8b0', 1.6);
@@ -7025,7 +7027,7 @@ const MONSTER_FORMS = {
   golem:   { dy: 4, fit: 0.86 },
   kraken:  { sx: 0.9, sy: 1.08, dy: 2, fit: 0.92 },
   piranha: { dy: 4, fit: 0.88 },
-  dragon:  { heads: 3, headX: 206, headY: 92, headS: 0.48, headR: 0.34, dy: 4, fit: 0.84 },
+  dragon:  { heads: 3, headX: 212, headY: 74, headS: 0.48, headR: 0.36, dy: 4, fit: 0.84 },
   rex:     { dy: 6, fit: 0.9 },   // a long neck, the skull side-on
   flytrap: { dy: 2, fit: 0.9 },
   blob:    { sx: 1.06, sy: 0.94, fit: 0.92 },
@@ -7471,7 +7473,7 @@ function drawGrabLimb(c, mon, rig, layer, t) {
     if (kind === 'wing') grabMembrane(c, rig, L, t);
     if (kind === 'fin') grabFin(c, rig, L, t);
   }
-  const behind = st.behind || rig.sc > 1.05;   // (a lunging, swollen head is in front of its shoulders)
+  const behind = st.behind || rig.behind || rig.sc > 1.05;   // (a lunging, swollen head is in front of its shoulders)
   if (layer === 'mid' ? behind : layer === 'shoulder' && !behind) {   // the deltoid and the upper arm growing out of it: in front of the head's lower side (behind it for st.behind)
     const sh = [rig.sh], y0 = Math.min(rig.sh[1] - rig.sh[2], ...rig.up.map(p => p[1] - p[2])), y1 = rig.sh[1] + rig.sh[2];
     if (kind === 'smoke') {
@@ -7551,6 +7553,7 @@ function grabFrame() {
 }
 // the limbs for a frame: [left, right], each { rig, pose, alpha }. They fade out (and stop grabbing) when too little of
 // the head shows for their roots to be on screen.
+const shTuck = [false, false];
 function grabRigs(fr, mon = monster(), t = G.t) {
   if (!fr) return [];
   const alpha = smooth(40, 64, fr.avail), st = GRAB_STYLE[mon.id];
@@ -7559,7 +7562,11 @@ function grabRigs(fr, mon = monster(), t = G.t) {
   return [-1, 1].map(d => {
     const gb = G.grab && G.grab.side === d && G.state === 'play' ? G.grab.t : null;
     const pose = grabPose(gb, t, d, fr.top);
-    return { rig: grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail, undefined, fr.sc || 1), pose, alpha, kill: fr.kill, top: fr.top };
+    const rig = grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail, undefined, fr.sc || 1);
+    // where the shaft squeezes a shoulder in over the face, it tucks behind the head (with a little hysteresis, so it
+    // doesn't flicker)
+    const k = d < 0 ? 0 : 1; shTuck[k] = rig.squeeze > 16 ? true : rig.squeeze < 8 ? false : shTuck[k]; rig.behind = shTuck[k];
+    return { rig, pose, alpha, kill: fr.kill, top: fr.top };
   });
 }
 // The limbs' hitboxes in world units (capsules), exactly what is drawn: the game and the overlay both use these.
@@ -7607,6 +7614,7 @@ function drawGrabPortrait(c, mon, t, half, layer) {
   c.save(); c.scale(1 / MON_SCALE, 1 / MON_SCALE);
   for (const d of [-1, 1]) {
     const rig = grabRig(st, d, () => [-half, half], 0, grabPose(null, t, d), t, 0, Infinity, [-half - 40, half + 40]);
+    rig.behind = Math.abs(rig.sh[0]) < st.rx * 0.95;   // (in a small card the walls squeeze the shoulders in over the face: they go behind it)
     drawGrabLimb(c, mon, rig, layer, t);
   }
   c.restore();
