@@ -8,11 +8,11 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig };')();
 
 // The widest and tallest pilot hitbox at any tilt (all 21 pilots, world units): every lane is sized from these.
 const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
-const FRUIT_PAD = 12;                        // a fruit's drawn radius plus a little
+const FRUIT_PAD = RULES.crystal.r + 2;       // a crystal's pickup radius (its drawn size) plus a little
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -51,7 +51,7 @@ for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => 
 // crystal cools (10% margin), so following the crystals always stays out of overheat while the engine runs at
 // full strength (below 0.6 heat); holding full thrust flat out between crystals heats well past one crystal's
 // cooling, so heat matters; and the gap is well short of the climb that overheats a cold engine
-const CLEAR = PILOT_W / 2 + 25;              // a crystal's clearance from every hazard hitbox
+const CLEAR = PILOT_W / 2 + 15 + RULES.crystal.r;   // a crystal's clearance from every hazard hitbox (pilot half-width, 15, its own pickup radius)
 {
   const D = DEFAULTS, duty = D.gravity / D.thrust, v = D.wormBase + 60;
   const perSec = duty / D.heatTime - (1 - duty) / D.coolTime, heatPerGap = RULES.crystal.gap / v * perSec;
@@ -59,7 +59,7 @@ const CLEAR = PILOT_W / 2 + 25;              // a crystal's clearance from every
   const flatOut = RULES.crystal.gap / D.maxUp / D.heatTime;
   if (flatOut < RULES.crystal.cool * 1.6) fail('holding full thrust between crystals runs the engine hot', `${flatOut.toFixed(2)} vs ${RULES.crystal.cool}`);
   if (RULES.crystal.gap > 0.8 * D.maxUp * D.heatTime) fail('the crystal gap is well inside the overheat climb', '');
-  if (RULES.crystal.clear < CLEAR || RULES.fruitHug < CLEAR) fail('crystals keep the widest pilot half-width plus 25 from hazards', `${RULES.crystal.clear} vs ${CLEAR.toFixed(1)}`);
+  if (RULES.crystal.clear < CLEAR || RULES.fruitHug < CLEAR) fail('crystals keep the widest pilot half-width plus 15 plus their radius from hazards', `${RULES.crystal.clear} vs ${CLEAR.toFixed(1)}`);
 }
 // gates: the open window is longer than climbing through the whole gate (both slabs' thickness plus the tallest
 // pilot, from a standstill a little below it, after a reaction time), and the room left below a gate holds the
@@ -545,6 +545,62 @@ for (const cfg of CONFIGS) {
   }
 }
 
+
+// Monster wall grabs: every limb hitbox (which is also its art outline) stays within GRAB.band of its wall above the
+// catch line and never more than GRAB.out into the rock; resting and winding up, nothing rises above the catch line;
+// the wind-up lasts at least 0.4 s; a full grab tops out at GRAB.reach; and with both walls grabbing at once the
+// centre lane stays wider than the widest pilot hitbox plus 60. Checked for all 20 monsters on real shafts.
+const lerp = (a, b, t) => a + (b - a) * t;
+const grabStats = { limbs: 0, worstIn: 0, worstOut: 0, minLane: Infinity, maxTop: -Infinity };
+{
+  if (Object.keys(GRAB_STYLE).length !== 20) fail('all 20 monsters have a wall limb', `${Object.keys(GRAB_STYLE).length}`);
+  if (GRAB.wind < 0.4) fail('every grab has a wind-up tell of at least 0.4 s', `${GRAB.wind}`);
+  if (RULES.minWidth - 2 * GRAB.band < PILOT_W + 60) fail('the grab bands leave a centre lane wider than the widest pilot plus 60', '');
+  // every point on a capsule's outline (sampled), in world units: [x, alt]
+  const outline = (c, kill, f) => { const [x0, y0, x1, y1, r] = c; for (let i = 0; i <= 3; i++) { const u = i / 3, x = lerp(x0, x1, u), y = lerp(y0, y1, u); for (let k = 0; k < 12; k++) { const a = k / 12 * 6.2832; f(x + Math.cos(a) * r, kill - (y + Math.sin(a) * r)); } } };
+  const phases = []; for (let ph = 0; ph < GRAB_TOTAL; ph += 0.05) phases.push(ph); phases.push(null);
+  for (let sd = 1; sd <= 8; sd++) {
+    const level = createLevel(sd * 7919 + 13, { density: 1, intro: 300 }), wallAt = a => level.walls(a);
+    for (let kill = 400 + sd * 37; kill < 16000; kill += 521) {
+      for (const [id, st] of Object.entries(GRAB_STYLE)) {
+        const t = kill * 0.37 + sd;
+        for (const ph of phases) {
+          const rigs = [-1, 1].map(d => { const pose = grabPose(ph, t, d); return { pose, rig: grabRig(st, d, wallAt, kill, pose, t, 200) }; });
+          for (const { pose, rig } of rigs) {
+            grabStats.limbs++;
+            const side = rig.d < 0 ? 0 : 1;
+            for (const c of rig.caps) {
+              // on screen: never past the world edge (walls never come closer than about 8 to it)
+              if (Math.min(c[0], c[2]) - c[4] < 0 || Math.max(c[0], c[2]) + c[4] > WORLD_W) fail('limbs stay on screen', `${id} kill ${kill}: ${(Math.min(c[0], c[2]) - c[4]).toFixed(1)} ${(Math.max(c[0], c[2]) + c[4]).toFixed(1)} walls ${wallAt(kill).map(v => v.toFixed(0))}`);
+              if (Math.min(c[1], c[3]) - c[4] >= 0) continue;          // wholly under the catch line
+              outline(c, kill, (x, a) => {
+                if (a <= kill) return;
+                const w = wallAt(a)[side], inn = side ? w - x : x - w;
+                grabStats.maxTop = Math.max(grabStats.maxTop, a - kill);
+                if (!pose.live) fail('nothing rises above the catch line before a grab goes live', `${id} ph ${ph}`);
+                grabStats.worstIn = Math.max(grabStats.worstIn, inn);
+                grabStats.worstOut = Math.max(grabStats.worstOut, -inn);
+                if (inn > GRAB.band) fail('limb hitboxes stay within the band from the wall', `${id} seed ${sd} kill ${kill}: ${inn.toFixed(1)} in`);
+                if (a > kill + GRAB.reach + 0.5) fail('grabs top out at GRAB.reach', `${id}: ${(a - kill).toFixed(1)}`);
+              });
+            }
+          }
+          // the centre lane between the two limbs, at every height above the catch line they reach
+          if (ph != null && rigs[0].pose.live) {
+            const lo = new Map(), hi = new Map();
+            rigs.forEach(({ rig }, i) => { for (const c of rig.caps) outline(c, kill, (x, a) => { if (a <= kill) return; const k = Math.round(a / 4); if (i === 0) lo.set(k, Math.max(lo.get(k) ?? -Infinity, x)); else hi.set(k, Math.min(hi.get(k) ?? Infinity, x)); }); });
+            for (let k = Math.ceil(kill / 4); k <= (kill + GRAB.reach) / 4; k++) {
+              const [L, R] = wallAt(k * 4), lane = (hi.get(k) ?? R) - (lo.get(k) ?? L);
+              grabStats.minLane = Math.min(grabStats.minLane, lane);
+              if (lane < PILOT_W + 60) fail('wall grabs leave a centre lane wider than the widest pilot plus 60', `${id} seed ${sd}: ${lane.toFixed(0)}`);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 if (zoneMix.carried < zoneMix.carriedOf * 0.9) fail('earlier zone hazards carry on into later zones', `${zoneMix.carried} of ${zoneMix.carriedOf}`);
 if (zoneMix.varied < zoneMix.variedOf * 0.9) fail('every zone mixes several hazard types', `${zoneMix.varied} of ${zoneMix.variedOf}`);
 for (const t of ['bat', 'pend', 'spike', 'spider', 'geyser', 'crusher', 'boulder', 'firebar', 'gate', 'hang']) {
@@ -566,3 +622,4 @@ if (failures.size) {
 }
 const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
+console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s`);

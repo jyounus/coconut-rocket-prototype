@@ -545,6 +545,9 @@ resize();
 // ---------- world shape & level layout ----------
 let G = null;
 /* LEVELGEN:BEGIN */
+// An ice crystal's pickup radius: its drawn shards (at CRYSTAL_ART scale, ink included) fit inside this circle, and a
+// pilot capsule touching it picks it up (the same circle shows in the hitbox overlay).
+const CRYSTAL_R = 19, CRYSTAL_ART = 1.8;
 // Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m, and the widest
 // pilot hitbox at full tilt is about 70 across (pilotMaxSize). Every hazard must pass these before
 // it is placed, so a layout can be hard but never impossible. Everything is measured in height, never time,
@@ -624,13 +627,13 @@ const RULES = {
   // engine by `cool`; a risky one off the main line (beside a hazard, out on an arc, through a bat's path) cools
   // `bonus` more. Wherever the shaft goes `gap` without one, one is placed near the centre line, so following
   // the crystals while feathering the thrust always keeps the engine out of overheat (see the test). Every
-  // crystal keeps `clear` from every hazard's hitbox (the widest pilot's half-width plus 25), so following
-  // them with normal steering lag never clips a pod or a spike.
-  crystal: { gap: 680, cool: 0.26, bonus: 0.12, clear: Math.ceil(laneSize().w / 2 + 25) },
+  // crystal keeps `clear` from every hazard's hitbox (the widest pilot's half-width plus 15 plus the crystal's own
+  // pickup radius `r`), so following them with normal steering lag never clips a pod or a spike.
+  crystal: { gap: 680, cool: 0.26, bonus: 0.12, r: CRYSTAL_R, clear: Math.ceil(laneSize().w / 2 + 15 + CRYSTAL_R) },
   fruitStep: 38,               // height between fruit in an arc
   fruitMargin: 24,             // fruit keep at least this far from the walls
   fruitChance: 0.12,           // share of hazards that get a risky crystal beside their safe lane
-  fruitHug: Math.ceil(laneSize().w / 2 + 25),   // racing-line crystals sit exactly the clearance from a hazard's reach
+  fruitHug: Math.ceil(laneSize().w / 2 + 15 + CRYSTAL_R),   // racing-line crystals sit exactly the clearance from a hazard's reach
   // Release beats: after a chunk's tension steps, a fruit arc sweeps across an empty stretch of shaft.
   arc: { gap: 70, n: 3, every: 3, step: 60, pause: 30 },   // every third release beat carries a short ice-crystal arc
                                // (the others are just a short `pause`)
@@ -1409,6 +1412,174 @@ function createLevel(seed, opts) {
   };
 }
 /* LEVELGEN:END */
+/* LEVELGEN:BEGIN */
+// ---------- monster wall grabs ----------
+// The monster's limbs only ever touch the shaft walls. Each wall has one wall-reaching limb (arm, tentacle, vine, leg,
+// wing claw, fin, pseudopod...) that comes out from behind the head, runs to the wall under the catch line and climbs
+// the wall face. Above the catch line every bit of it stays inside a band `band` units in from the wall edge (and at
+// most `out` units into the rock), so the open middle of the shaft is never touched: even at the 240-wide minimum the
+// centre lane is 240 - 2 × 32 = 176, far wider than the widest pilot hitbox (about 70). Limb art is built from the same
+// capsules as its hitbox, so the overlay is exact and a pilot hugging a wall where a claw grips dies.
+// Rig coordinates: x is world x, y = kill line altitude minus altitude (down positive; y = 0 is the catch line).
+const GRAB = {
+  band: 32,        // limb art and hitboxes stay within this many units in from the wall edge above the catch line
+  out: 7,          // and never more than this far into the rock (so they stay on screen where a wall meets the screen edge)
+  reach: 110,      // a full grab's claw tips top out this far above the catch line (the pilot rides about 200 above the screen bottom)
+  rest: -3,        // at rest the claw tips sit just under the catch line (they bob down another `bob`)
+  bob: 5,
+  wind: 0.5, strike: 0.12, hold: 0.5, back: 0.4,   // wind-up tell (nothing above the line yet), lunge, grip, let go
+  every: [1.3, 2.6],   // seconds between grabs (one wall or the other) while the monster is within `near`
+  near: 340,
+  bendY: 40,       // where the limb turns from running to the wall to climbing it (under the catch line)
+};
+const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
+// Each monster's wall-reaching limb: limb kind, hand (tip) kind, radius at the bend r0 and at the wrist r1, root radius
+// rr (behind the head) and root offset rx from the body's centre line.
+const GRAB_STYLE = {
+  worm:    { limb: 'leg', hand: 'hook', r0: 9, r1: 7, rr: 15, rx: 38 },
+  bat:     { limb: 'bone', hand: 'thumb', r0: 10, r1: 7, rr: 15, rx: 46 },
+  gorilla: { limb: 'arm', hand: 'knuckle', r0: 13, r1: 11, rr: 18, rx: 44 },
+  mole:    { limb: 'arm', hand: 'shovel', r0: 12, r1: 10, rr: 17, rx: 44 },
+  golem:   { limb: 'stone', hand: 'claw', r0: 13, r1: 11, rr: 18, rx: 44 },
+  kraken:  { limb: 'tentacle', hand: 'curl', r0: 12, r1: 7, rr: 16, rx: 40, wig: 5 },
+  piranha: { limb: 'fin', hand: 'fintip', r0: 11, r1: 8, rr: 15, rx: 44 },
+  dragon:  { limb: 'bone', hand: 'thumb', r0: 11, r1: 8, rr: 16, rx: 46 },
+  rex:     { limb: 'arm', hand: 'talon', r0: 10, r1: 8, rr: 15, rx: 32 },
+  flytrap: { limb: 'vine', hand: 'tendril', r0: 8, r1: 5, rr: 12, rx: 40, wig: 6 },
+  blob:    { limb: 'goo', hand: 'splat', r0: 13, r1: 10, rr: 18, rx: 44, wig: 3 },
+  spider:  { limb: 'leg', hand: 'hook', r0: 8, r1: 6, rr: 13, rx: 30 },
+  shark:   { limb: 'fin', hand: 'fintip', r0: 11, r1: 8, rr: 15, rx: 34 },
+  tiki:    { limb: 'stone', hand: 'claw', r0: 12, r1: 10, rr: 17, rx: 40 },
+  spirit:  { limb: 'flame', hand: 'flame', r0: 12, r1: 9, rr: 16, rx: 40, wig: 3 },
+  toad:    { limb: 'arm', hand: 'pad', r0: 11, r1: 9, rr: 16, rx: 48 },
+  giant:   { limb: 'arm', hand: 'knuckle', r0: 13, r1: 11, rr: 18, rx: 44 },
+  hornet:  { limb: 'leg', hand: 'hook', r0: 8, r1: 6, rr: 13, rx: 30 },
+  crab:    { limb: 'shell', hand: 'pincer', r0: 12, r1: 10, rr: 17, rx: 44 },
+  shadow:  { limb: 'smoke', hand: 'claw', r0: 12, r1: 9, rr: 17, rx: 40, wig: 4 },
+};
+// Hand parts in hand units: u = in from the wall edge (negative is into the rock), v = up from the wrist.
+// [u0, v0, u1, v1, r, role]: role 's' skin, 'c' claw/nail (drawn pointed), 'p' pad, 'f' flame, 'l' leaf, 'g' goo.
+// `grip` (0..1) curls the claws in; every hand's art top (v + r) is about 36.
+function grabHand(kind, grip, t) {
+  const P = [], s = (u0, v0, u1, v1, r, role = 's') => P.push([u0, v0, u1, v1, r, role]);
+  const g = grip;
+  switch (kind) {
+    case 'knuckle':
+      s(10, 0, 11, 8, 11);
+      for (let k = 0; k < 3; k++) { const u = 4 + k * 7.5; s(u + 1, 12, u, 19 - k, 4.6); s(u - 1, 21 - k, u - 3 - g * 2, 25.5 - k, 2.2, 'c'); }
+      s(20, 4, 23, 11, 4);
+      break;
+    case 'shovel':
+      s(11, 0, 11, 6, 10);
+      for (let k = 0; k < 5; k++) { const u = 1 + k * 5.4; s(u, 9, u - 2 - g * 2, 25 + (k % 2) * 2 - Math.abs(k - 2), 2.6, 'c'); }
+      break;
+    case 'talon':
+      s(9, 0, 10, 6, 8);
+      for (let k = 0; k < 3; k++) { const u = 3 + k * 7.5; s(u, 7, u, 15, 3); s(u, 15, u - 5 - g * 2, 27, 2.4, 'c'); }
+      break;
+    case 'pad':
+      s(11, 0, 12, 6, 9.5);
+      for (let k = 0; k < 4; k++) { const ub = 6 + k * 4, ut = -1 + k * 7.6; s(ub, 6, ut, 22, 2.8); s(ut, 23.5, ut, 23.5, 5, 'p'); }
+      break;
+    case 'flame':
+      s(10, 0, 11, 7, 10);
+      for (let k = 0; k < 4; k++) { const u = 2 + k * 6.8, fl = 2 * Math.sin(t * 14 + k * 2); s(u, 8, u - 2, 25 + fl - Math.abs(k - 1.5), 4, 'f'); }
+      break;
+    case 'pincer': {
+      const o = 0.5 + 0.5 * Math.sin(t * 3);   // the movable jaw snaps open and shut
+      s(12, 0, 12, 9, 11);
+      s(6, 12, 2, 22, 5.5); s(2, 22, 1, 27, 3.2, 'c');
+      s(19, 12, 20 + o * 3, 20, 4.5); s(20 + o * 3, 20, 17 + o * 2, 25, 2.6, 'c');
+      break;
+    }
+    case 'hook':
+      s(8, 0, 7, 12, 5);
+      s(7, 13, 1 - g * 2, 25, 2.8, 'c'); s(10, 7, 15, 13, 2, 'c');
+      break;
+    case 'thumb':
+      s(10, 0, 9, 10, 5);
+      s(9, 11, 3, 21, 3, 'c'); s(3, 21, -1, 25, 2, 'c'); s(14, 4, 20, 10, 2.2, 'c');
+      break;
+    case 'fintip':
+      s(9, 0, 8, 12, 8);
+      s(2, 8, -1, 24, 2, 'c'); s(8, 12, 6, 27, 2.4, 'c'); s(14, 9, 14, 22, 2, 'c');
+      break;
+    case 'curl': {
+      const c = Math.sin(t * 2.4) * 1.5;
+      s(8, 0, 8, 9, 6); s(8, 9, 6, 17, 5); s(6, 17, 2, 22 + c, 4); s(2, 22 + c, -2, 19, 3);
+      break;
+    }
+    case 'tendril':
+      s(7, 0, 7, 12, 4.5); s(7, 12, 3, 20, 3.5); s(3, 20, -1, 18, 2.5);
+      s(10, 6, 19, 14, 3.8, 'l'); s(5, 9, 0, 13, 1.6, 'c'); s(9, 16, 13, 23, 1.6, 'c');
+      break;
+    case 'splat':
+      s(10, 0, 10, 9, 11, 'g'); s(4, 10, 2, 18, 4.5, 'g'); s(14, 12, 17, 19, 3.5, 'g'); s(2, 18, 0, 22, 2.5, 'g');
+      break;
+    default:   // claw
+      s(10, 0, 11, 8, 10.5);
+      for (let k = 0; k < 3; k++) { const u = 3 + k * 8; s(u, 10, u - 1, 18, 3.8); s(u - 1, 18, u - 5 - g * 2, 26.5, 2.4, 'c'); }
+      s(19, 3, 23, 10, 3.4);
+  }
+  return P.map(([u0, v0, u1, v1, r, role]) => [u0, v0 * 1.25, u1, v1 * 1.25, r * 1.08, role]);   // (drawn a little taller)
+}
+// The art top of a hand above its wrist (claw tips included).
+const grabTops = {};
+function grabHandTop(kind) { return grabTops[kind] ??= Math.max(...grabHand(kind, 1, 0).concat(grabHand(kind, 0, 0)).map(p => Math.max(p[1], p[3]) + p[4])) + 2; }
+// Where the claw tips sit above the catch line, `ph` seconds into a grab (null: not grabbing). `top` caps the reach.
+// The wind-up keeps everything under the catch line: only after GRAB.wind does anything rise above it.
+function grabPose(ph, t, d, top = GRAB.reach) {
+  const G0 = GRAB, rest = G0.rest - G0.bob * (0.5 + 0.5 * Math.sin(t * 3 + d * 1.7)), reach = Math.min(G0.reach, top);
+  if (ph == null || ph >= GRAB_TOTAL) return { h: rest, wind: 0, grip: 0.3 + 0.2 * Math.sin(t * 2 + d), live: false };
+  if (ph < G0.wind) { const e = ph / G0.wind; return { h: G0.rest - G0.bob - 3 * e, wind: e, grip: e, live: false }; }
+  let q = ph - G0.wind;
+  if (q < G0.strike) { const e = q / G0.strike; return { h: lerp(G0.rest - G0.bob - 3, reach, 1 - (1 - e) * (1 - e)), wind: 0, grip: 0, live: true }; }
+  q -= G0.strike;
+  if (q < G0.hold) return { h: reach - 3 * Math.sin(q / G0.hold * Math.PI), wind: 0, grip: smooth(0, 0.12, q), live: true };
+  q -= G0.hold;
+  return { h: lerp(reach, rest, smooth(0, G0.back, q)), wind: 0, grip: 1 - smooth(0, G0.back, q), live: true };
+}
+// One wall limb: d = -1 left wall, 1 right. wallAt(alt) → [L, R]; kill = catch line altitude; pose from grabPose;
+// bodyX = the body's centre line; depth = how far below the catch line the head shows on screen (the root sits higher
+// when little of it shows, so it never drops off the bottom edge). Returns the limb's three parts in rig coordinates (see above):
+// up: the arm from its root behind the head to the bend at the wall (always below the catch line), as [x, y, r] points;
+// fore: the part climbing the wall face, [x, y, r] points; hand: parts [x0, y0, x1, y1, r, role].
+// caps: every capsule of the limb, [x0, y0, x1, y1, r]: the hitbox, and exactly the art's outline.
+function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity) {
+  const B = GRAB.band, O = GRAB.out, side = d < 0 ? 0 : 1, wx = y => wallAt(kill - y)[side];
+  const ht = grabHandTop(st.hand), tipY = -pose.h, wristY = tipY + ht;
+  const bendY = Math.max(GRAB.bendY, wristY + 4), rootY = clamp(depth - st.rr - 4, bendY + 6, bendY + (st.ry ?? 22));
+  const jit = pose.wind > 0 ? Math.sin(t * 70) * 1.6 * pose.wind : 0;   // the wind-up shudder
+  const inset = (r, w) => clamp(r - 2 + w, r - O, B - 2 - r);
+  // the climb up the wall face, a point every 6 units
+  const fore = [], n = Math.max(1, Math.ceil((bendY - wristY) / 6));
+  for (let i = 0; i <= n; i++) {
+    const u = i / n, y = lerp(bendY, wristY, u), r = lerp(st.r0, st.r1, u);
+    const bow = /arm|stone|leg|shell|bone|fin/.test(st.limb) ? 6 * Math.sin(Math.PI * u) * clamp((bendY - wristY) / 70, 0, 1) : 0;   // a jointed limb bends at its elbow
+    const w = (st.wig || 0) * (0.5 + 0.5 * Math.sin(y * 0.09 + t * 2.6 + d)) * Math.sin(Math.PI * u) + bow + jit;
+    fore.push([wx(y) + -d * inset(r, w), y, r]);
+  }
+  // the arm from behind the head out to the bend
+  const b = fore[0], rx0 = bodyX + d * st.rx, rootX = d > 0 ? Math.min(rx0, b[0] - 24) : Math.max(rx0, b[0] + 24);
+  const up = [];
+  for (let i = 0; i <= 8; i++) {
+    const u = i / 8, cx = lerp(rootX, b[0], 0.65), cy = rootY + 6;
+    up.push([(1 - u) * (1 - u) * rootX + 2 * u * (1 - u) * cx + u * u * b[0], (1 - u) * (1 - u) * rootY + 2 * u * (1 - u) * cy + u * u * b[1], lerp(st.rr, st.r0, u)]);
+  }
+  // the hand, against the wall at its most-receded point over its height (so no part of it is ever more than its own
+  // offset in from the wall at any height, and the rest digs into the rock)
+  let ref = side ? -Infinity : Infinity;
+  for (let y = wristY - ht - 2; y <= wristY + 12; y += 3) { const w = wx(y); ref = side ? Math.max(ref, w) : Math.min(ref, w); }
+  const parts = grabHand(st.hand, pose.grip, t), outMax = Math.max(...parts.map(p => Math.max(p[4] - p[0], p[4] - p[2]))) + 2;
+  ref = side ? Math.min(ref, WORLD_W - 1 - outMax) : Math.max(ref, 1 + outMax);   // (claws never leave the screen)
+  const hand = parts.map(([u0, v0, u1, v1, r, role]) => [ref - d * (u0 + jit), wristY - v0, ref - d * (u1 + jit), wristY - v1, r, role]);
+  const caps = [];
+  for (let i = 1; i < up.length; i++) caps.push([up[i - 1][0], up[i - 1][1], up[i][0], up[i][1], Math.max(up[i - 1][2], up[i][2])]);
+  for (let i = 1; i < fore.length; i++) caps.push([fore[i - 1][0], fore[i - 1][1], fore[i][0], fore[i][1], Math.max(fore[i - 1][2], fore[i][2])]);
+  for (const h of hand) caps.push(h.slice(0, 5));
+  return { up, fore, hand, caps, d, tipY };
+}
+/* LEVELGEN:END */
 const walls = a => G.level.walls(a);
 const leftWall = a => walls(a)[0];
 const rightWall = a => walls(a)[1];
@@ -1945,6 +2116,8 @@ function update(rawDt) {
     if (G.rubbleT <= 0) { G.rubbleT = lerp(1.1, 0.16, prox) * (0.6 + 0.8 * Math.random()); if (gap < 900) wallBreak(prox > 0.6 ? 2 : 1, prox > 0.7); }
     // caught: the pilot's lowest point drops below the monster's catch line (its visible top edge)
     if (gap < 0) { p.invuln = 0; die('worm'); }
+    // a claw gripping the wall where the pilot hugs it (its wall limbs' hitboxes, exactly as drawn)
+    if (G.state === 'play' && grabShapes().some(shapeHits)) die('worm');
 
     // walls: no pilot capsule may cross a wall at its own height (ends and middle)
     let dL = Infinity, dR = Infinity;
@@ -1963,11 +2136,11 @@ function update(rawDt) {
       }
     }
 
-    // ice crystals: touching one (anywhere on the pilot's hitbox, plus its glow) cools the engine
+    // ice crystals: touching one (anywhere on the pilot's hitbox against its pickup circle, CRYSTAL_R) cools the engine
     for (let i = G.fruit.length - 1; i >= 0; i--) {
       const f = G.fruit[i];
       if (Math.abs(f.alt - p.alt) > 90 || G.state !== 'play') continue;
-      if (pCaps.some(c => ptSeg(f.x, f.alt, c.x0, c.a0, c.x1, c.a1) < c.r + 10)) { G.fruit.splice(i, 1); pickCrystal(f); }
+      if (pCaps.some(c => ptSeg(f.x, f.alt, c.x0, c.a0, c.x1, c.a1) < c.r + CRYSTAL_R)) { G.fruit.splice(i, 1); pickCrystal(f); }
     }
   }
 
@@ -2026,7 +2199,7 @@ function update(rawDt) {
     }
   }
   G.surgeWarn = Math.max(0, (G.surgeWarn || 0) - dt / (CHASE.warn + 0.3));
-  updateRoar(dt); updateTell(dt);
+  updateRoar(dt); updateGrab(dt);
   if (G.state === 'play' && monsterGap() < 200 && G.worm.snap <= 0 && Math.random() < dt * 0.8) G.worm.snap = 1;
   // jaws: a slow chew, wide open during a lunge, shutting hard on a snap
   const chew = 0.5 + 0.5 * Math.sin(G.t * 3.2);
@@ -3256,11 +3429,12 @@ function drawFruit() {
   const midA = G.camAlt + viewH / 2, [t1, t2] = zoneT(midA), heatGlow = 0.45 + 0.25 * t1 + 0.4 * t2;
   for (const f of G.fruit) {
     const y = sy(f.alt);
-    if (y < -24 || y > H + 24) continue;
-    const ph = f.alt * 0.05, x = sx(f.x), bob = Math.sin(G.t * 3.5 + ph) * 2 * s, spin = Math.sin(G.t * 1.6 + ph) * 0.25;
-    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s, s);
+    if (y < -40 || y > H + 40) continue;
+    // drawn at CRYSTAL_ART scale, centred on its pickup circle (the bob stays inside it)
+    const ph = f.alt * 0.05, x = sx(f.x), bob = Math.sin(G.t * 3.5 + ph) * 1.2 * s, spin = Math.sin(G.t * 1.6 + ph) * 0.12;
+    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * CRYSTAL_ART, s * CRYSTAL_ART); ctx.translate(0, 1);
     ctx.globalCompositeOperation = 'lighter';
-    const R = 22 + 6 * t2, gl = ctx.createRadialGradient(0, 0, 1, 0, 0, R);
+    const R = (22 + 6 * t2) / 1.3, gl = ctx.createRadialGradient(0, 0, 1, 0, 0, R);   // (a soft halo of light round it)
     gl.addColorStop(0, `rgba(170,235,255,${0.55 * heatGlow})`); gl.addColorStop(0.5, `rgba(80,180,255,${0.22 * heatGlow})`); gl.addColorStop(1, 'rgba(60,140,255,0)');
     ctx.fillStyle = gl; ctx.fillRect(-R, -R, R * 2, R * 2);
     ctx.globalCompositeOperation = 'source-over';
@@ -3276,7 +3450,7 @@ function drawFruit() {
     const tw = Math.max(0, Math.sin(G.t * 4 + ph * 3));
     if (tw > 0.6) {
       ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(230,250,255,${(tw - 0.6) * 2.4})`;
-      ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, rr = k % 2 ? 1.2 : 6; ctx.lineTo(4 + Math.cos(a) * rr, -9 + Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
+      ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, rr = k % 2 ? 1 : 4; ctx.lineTo(2 + Math.cos(a) * rr, -6 + Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   }
@@ -5400,8 +5574,8 @@ function drawKnock() {
 // ---------- chaser monsters ----------
 // Drawn in world units around the kill line: y = 0 is exactly where the monster catches you.
 // Every monster is seen from above as it surges up the shaft toward you: predators lunge jaws-first,
-// the rest look up at you in three-quarter view. Nothing reaches up with hands, so the top edge is
-// always the head itself. x = 0 is the shaft's centre; the shaft is 400 wide; the body fills below.
+// the rest look up at you in three-quarter view. Only their wall limbs (drawGrabLimb) climb above the head,
+// and only up the wall faces. x = 0 is the shaft's centre; the shaft is 400 wide; the body fills below.
 let mNoFill = false;          // side heads skip the flat fill under the body
 function mFill(c, y0, col) { if (mNoFill) return; c.fillStyle = col; c.fillRect(-320, y0, 640, 4000); }
 function mFang(c, x, y, w, len, col = '#f7ead0', lw = 1.8) { pkPath(c, [[x - w / 2, y], [x, y + len], [x + w / 2, y]], col, lw); }
@@ -6392,10 +6566,10 @@ const MONSTER_FORMS = {
 };
 const monForm = mon => MONSTER_FORMS[mon.id] || {};
 
-// Limbs: how each monster climbs. Arms with clawed hands grip the shaft walls and haul it up hand over hand,
-// tentacles and vines reach up the walls, wings beat across the full width, legs step up the rock, and the
-// hornet sends drones buzzing at its flanks. Everything stays at or below the catch line (y = 0, where it is
-// clipped), so the visible top edge is always exactly where it catches you.
+// Limbs: how each monster climbs. Its top limb on each side is its wall limb (GRAB_STYLE, drawGrabLimb): it runs out
+// from behind the head to the wall and climbs the wall face, whole and unclipped, and grabs up the wall. The rest of
+// its tentacles, vines, wings, fins and legs and the hornet's drones are drawn here, inside the body, always well
+// under the catch line and inside the walls, so nothing of them is ever cut off.
 const MONSTER_LIMBS = {
   worm:    { kind: 'legs', n: 6, short: true, skin: ['#d8602a', '#7a2210', '#2e0a06'], claw: '#2a120a' },
   bat:     { kind: 'wings', skin: ['#8a56c8', '#45207a', '#1e0a3a'], bone: '#c8a0f0' },
@@ -6421,63 +6595,15 @@ const MONSTER_LIMBS = {
 const monLimbs = mon => MONSTER_LIMBS[mon.id] || { kind: 'arms', hand: 'claw', skin: ['#888', '#444', '#111'], claw: '#222' };
 function limbGrad(c, L, y0, y1) { return pkLG(c, 0, y0, 0, y1, L.skin); }
 const LIMB_RIM = 'rgba(255,240,220,.5)';
-// a hand gripping the wall at (hx, hy), fingers pointing up the wall, d = which wall (-1 left, 1 right)
-function drawHand(c, L, d, hx, hy, t) {
-  const sk = L.skin, claw = L.claw;
-  const hs = L.hs || 1.5;
-  c.save(); c.translate(hx, hy); c.scale(d * hs, hs);
-  if (L.hand === 'knuckle') {
-    mAShape(c, mASm([[-30, 18], [-34, -10], [-14, -30], [10, -30], [20, -10], [14, 20]]), pkRG(c, -6, -8, 34, sk), { rim: LIMB_RIM, rw: 4, lw: 4 });
-    for (let k = 0; k < 3; k++) { pkE(c, -18 + k * 12, -26, 6, 5, sk[0], 2.5); pkPath(c, [[-21 + k * 12, -28], [-18 + k * 12, -40], [-14 + k * 12, -28]], claw, 2); }
-  } else if (L.hand === 'shovel') {
-    mAShape(c, mAEl(-6, 0, 30, 20), pkRG(c, -6, -4, 30, sk), { rim: LIMB_RIM, rw: 4, lw: 4 });
-    if (L.palm) pkE(c, -6, 4, 16, 9, L.palm, 0);
-    for (let k = 0; k < 5; k++) { const x = -30 + k * 12; pkPath(c, [[x - 5, -10], [x - 1 + k * 1.2, -46 - (k % 2) * 6], [x + 6, -10]], claw, 2.4); }
-  } else if (L.hand === 'talon') {
-    mAShape(c, mAEl(-4, 2, 22, 16), pkRG(c, -4, 0, 22, sk), { rim: LIMB_RIM, rw: 3, lw: 3.5 });
-    for (let k = 0; k < 3; k++) { const x = -18 + k * 13; pkPath(c, [[x - 5, -6], [x - 3, -30], [x + 7, -50], [x + 4, -28], [x + 5, -6]], claw, 2.4); }
-  } else if (L.hand === 'pad') {
-    for (let k = 0; k < 4; k++) { const a = -2.3 + k * 0.42, ex = Math.cos(a) * 40, ey = Math.sin(a) * 40; pkLine(c, [[-4, 0], [ex, ey]], sk[1], 9); pkE(c, ex, ey, 9, 8, L.claw, 2.6); }
-    mAShape(c, mAEl(-4, 4, 22, 16), pkRG(c, -4, 0, 22, sk), { rim: LIMB_RIM, rw: 3, lw: 3.5 });
-  } else if (L.hand === 'flame') {
-    c.save(); c.globalCompositeOperation = 'lighter';
-    for (let k = 0; k < 4; k++) {
-      const x = -24 + k * 14, fl = Math.sin(t * 14 + k * 2) * 6, g = c.createLinearGradient(0, 10, 0, -50 - fl);
-      g.addColorStop(0, 'rgba(255,120,30,.9)'); g.addColorStop(0.6, 'rgba(255,210,90,.85)'); g.addColorStop(1, 'rgba(255,250,210,0)');
-      c.fillStyle = g; c.beginPath(); c.moveTo(x - 8, 6); c.quadraticCurveTo(x - 6, -24, x + 2, -48 - fl); c.quadraticCurveTo(x + 8, -24, x + 8, 6); c.closePath(); c.fill();
-    }
-    c.restore();
-    mAShape(c, mAEl(-4, 6, 24, 16), pkRG(c, -4, 2, 24, sk), { rim: 'rgba(255,250,210,.7)', rw: 3, lw: 3.5 });
-  } else if (L.hand === 'pincer') {
-    const o = 0.25 + 0.2 * Math.sin(t * 3);
-    c.save(); c.rotate(-o); mAShape(c, mASm([[-6, 6], [-30, -20], [-14, -54], [0, -30], [6, 0]]), pkLG(c, 0, -54, 0, 6, sk), { rim: LIMB_RIM, rw: 4, lw: 4 }); c.restore();
-    c.save(); c.rotate(o); mAShape(c, mASm([[-4, 6], [14, -16], [8, -44], [22, -26], [16, 4]]), pkLG(c, 0, -44, 0, 6, sk), { rim: LIMB_RIM, rw: 3, lw: 3.5 }); c.restore();
-    pkPath(c, [[-14, -50], [-10, -60], [-6, -48]], claw, 1.8);
-  } else {   // claw
-    mAShape(c, mASm([[-26, 14], [-30, -6], [-12, -22], [12, -20], [22, -2], [14, 18]]), pkRG(c, -4, -2, 28, sk), { rim: LIMB_RIM, rw: 4, lw: 4 });
-    for (let k = 0; k < 3; k++) { const x = -20 + k * 14; pkPath(c, [[x - 5, -16], [x - 2, -34], [x + 8, -52], [x + 4, -32], [x + 6, -16]], claw, 2.4); }
-  }
-  if (L.glow) { mAGlow(c, -4, -6, 36, L.glow, 0.35); }
-  c.restore();
-}
 // layer 'back' is drawn behind the head, 'front' after it (forearms and hands, so the grip on the wall shows)
 function drawLimbs(c, mon, m, half, layer = 'back') {
   const L = monLimbs(mon), t = m.t, sk = L.skin, wall = half - 6;
   c.lineJoin = 'round'; c.lineCap = 'round';
-  if (layer === 'front' && L.kind !== 'arms') return;
+  if (layer === 'front') return;
   if (L.kind === 'arms') {
-    // hand over hand: each hand reaches up the wall fast, grips near the catch line and hauls down slowly
-    const pairs = L.pairs || 1;
-    for (let i = pairs - 1; i >= 0; i--) for (const d of [-1, 1]) {
-      const ph = (t * 0.75 + (d > 0 ? 0 : 0.5) + i * 0.27) % 1, yTop = 66 + i * 80, yBot = 250 + i * 90;
-      const hy = ph < 0.28 ? lerp(yBot, yTop, smooth(0, 1, ph / 0.28)) : lerp(yTop, yBot, (ph - 0.28) / 0.72);
-      const hx = d * (wall - 26), sh = [d * (130 + 20 * i), (L.shY || 330) + 80 * i], el = [d * (wall - 50), Math.max(hy + 40, (sh[1] + hy) / 2 + 40)];
-      if (layer === 'back') { mATaper(c, [sh, [lerp(sh[0], el[0], 0.55), lerp(sh[1], el[1], 0.55) - 14], el], 92 - 14 * i, 70 - 10 * i, limbGrad(c, L, el[1] - 40, sh[1]), { rim: LIMB_RIM, rw: 5, lw: 4.5 }); continue; }
-      mATaper(c, [el, [lerp(el[0], hx, 0.5) + d * 4, lerp(el[1], hy, 0.5)], [hx, hy + 14]], 68 - 10 * i, 50 - 8 * i, limbGrad(c, L, hy, el[1] + 30), { rim: LIMB_RIM, rw: 4, lw: 4 });
-      drawHand(c, L, d, hx, hy, t + i);
-    }
+    // arms are the wall limbs (drawGrabLimb)
   } else if (L.kind === 'tentacles') {
-    for (let i = L.n - 1; i >= 0; i--) for (const d of [-1, 1]) {
+    for (let i = L.n - 1; i >= 1; i--) for (const d of [-1, 1]) {   // (the top one on each side is the wall limb)
       const base = [d * (90 + 24 * i), 360 + 30 * i], tipY = 40 + i * 70 + 26 * Math.sin(t * 1.8 + i * 1.7 + d), tip = [d * (wall - 10), tipY];
       const pts = [];
       for (let k = 0; k <= 9; k++) {
@@ -6517,20 +6643,15 @@ function drawLimbs(c, mon, m, half, layer = 'back') {
     }
   } else if (L.kind === 'legs') {
     // jointed legs stepping up both walls, each foot hooked into the rock
-    for (const d of [-1, 1]) for (let k = L.n - 1; k >= 0; k--) {
+    for (const d of [-1, 1]) for (let k = L.n - 1; k >= 1; k--) {   // (the top one on each side is the wall limb)
       const hip = [d * (70 + 14 * k), 230 + k * (L.short ? 44 : 56)];
       const lift = Math.max(0, Math.sin(t * (L.short ? 9 : 6) + k * 1.9 + (d > 0 ? 0 : 1.3))) * 22;
       const footY = (L.short ? 70 : 30) + k * (L.short ? 52 : 70) - lift, foot = [d * (wall - 4), footY];
-      const knee = [d * (wall - (L.short ? 40 : 70)), Math.max(10, Math.min(hip[1], footY) - (L.short ? 20 : 46))];
+      const knee = [d * (wall - (L.short ? 40 : 70)), Math.max(24, Math.min(hip[1], footY) - (L.short ? 20 : 46))];
       const w0 = L.short ? 30 : 26;
       mATaper(c, [hip, knee], w0, w0 * 0.75, limbGrad(c, L, knee[1], hip[1]), { rim: LIMB_RIM, rw: 3, lw: 3.5 });
       mATaper(c, [knee, foot], w0 * 0.75, 8, limbGrad(c, L, footY, knee[1] + 20), { rim: LIMB_RIM, rw: 3, lw: 3.5 });
       pkPath(c, [[foot[0] - d * 8, foot[1] + 4], [foot[0] + d * 4, foot[1] - 16], [foot[0] + d * 2, foot[1] + 8]], L.claw, 2);
-    }
-    if (L.pincers) for (const d of [-1, 1]) {
-      const ph = (t * 0.6 + (d > 0 ? 0 : 0.5)) % 1, hy = 60 + 120 * Math.abs(Math.sin(ph * Math.PI)), hx = d * (wall - 22), sh = [d * 150, 260];
-      mATaper(c, [sh, [d * (wall - 60), (sh[1] + hy) / 2 + 30], [hx, hy + 20]], 60, 40, limbGrad(c, L, hy, sh[1]), { rim: LIMB_RIM, rw: 4, lw: 4 });
-      drawHand(c, { ...L, hand: 'pincer' }, d, hx, hy, t);
     }
     if (L.drones) for (let k = 0; k < (L.drones > 1 ? L.drones : 4); k++) {
       // drones buzzing up the flanks ahead of the queen (always under the catch line)
@@ -6550,7 +6671,7 @@ function drawCoils(c, mon, m, half = 200) {
   const dark = mon.haze.map(v => v * 0.28 | 0), mid = mon.haze.map(v => v * 0.6 | 0), lit = mon.haze.map(v => Math.min(255, v * 0.9 + 60) | 0);
   for (const d of [-1, 1]) {
     for (let k = 14; k >= 0; k--) {
-      const y = 150 + k * 46, x = d * (half - 18 + Math.sin(k * 0.9 + m.t * 2.2 + d) * 16), r = 44 - k * 0.6;
+      const y = 150 + k * 46, x = d * (half - 48 + Math.sin(k * 0.9 + m.t * 2.2 + d) * 10), r = 44 - k * 0.6;
       mAShape(c, mAEl(x, y, r * 0.86, r), pkRG(c, x - d * 10, y - 8, r, [rgb(lit), rgb(mid), rgb(dark)]), { rim: rgbaA(lit, 0.6), rw: 4, lw: 4 });
       c.strokeStyle = rgbaA(dark, 0.7); c.lineWidth = 3; c.beginPath(); c.ellipse(x, y + 4, r * 0.7, r * 0.5, 0, 0.3, Math.PI - 0.3); c.stroke();
     }
@@ -6583,9 +6704,10 @@ function drawCrest(c, kind, mon) {
 }
 // One monster in its full silhouette, in its own art frame (y = 0 is the kill line). Side heads sit lower
 // and further out, so the main head always owns the kill line.
-function drawMonsterForm(c, mon, m, coilHalf) {
+function drawMonsterForm(c, mon, m, coilHalf, limbs) {
   const f = monForm(mon);
   mon._t = m.t;
+  if (limbs) limbs('back');
   drawLimbs(c, mon, m, coilHalf || 230);
   if (f.coil) drawCoils(c, mon, m, (coilHalf || 230) - 30);
   // side heads ride on long necks rising from behind the main body, out at the shoulders
@@ -6606,6 +6728,201 @@ function drawMonsterForm(c, mon, m, coilHalf) {
     c.restore();
   }
   drawLimbs(c, mon, m, coilHalf || 230, 'front');
+  if (limbs) limbs('front');
+}
+// ---------- wall grab limbs (see GRAB and grabRig) ----------
+// Drawn in rig coordinates (x world, y down from the catch line) in whatever transform the caller set up. The art is
+// built from the rig's own capsules (ink at the capsule's full radius, fill inside it), so the hitbox overlay is exact.
+const GRAB_INK = 2.4;
+// a chain of [x, y, r] points as one tapered limb: ink pass, then fill, then a rim of light on its inner (lit) side
+function grabChain(c, pts, fill, d, rim = LIMB_RIM) {
+  for (const pass of [0, 1]) {
+    c.strokeStyle = pass ? fill : INK;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0, r0] = pts[i - 1], [x1, y1, r1] = pts[i];
+      c.lineWidth = Math.max(0.5, 2 * Math.max(r0, r1) - (pass ? 2 * GRAB_INK : 0));
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    }
+    if (pts.length === 1) { const [x, y, r] = pts[0]; c.fillStyle = pass ? fill : INK; c.beginPath(); c.arc(x, y, r - (pass ? GRAB_INK : 0), 0, TWO_PI); c.fill(); }
+  }
+  if (rim && pts.length > 1) {
+    c.strokeStyle = rim; c.lineWidth = 2;
+    c.beginPath(); pts.forEach(([x, y, r], i) => { const px = x - d * r * 0.45; i ? c.lineTo(px, y) : c.moveTo(px, y); }); c.stroke();
+  }
+}
+// decorations inside a limb's outline, by kind
+function grabDecor(c, kind, pts, L, d, t) {
+  const sk = L.skin;
+  const across = (i, col, w, k = 0.8) => { const [x, y, r] = pts[i]; c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x - r * k, y + (i % 2 ? 1 : -1)); c.lineTo(x + r * k, y); c.stroke(); };
+  if (kind === 'stone') {
+    for (let i = 2; i < pts.length - 1; i += 3) across(i, 'rgba(20,12,10,.75)', 2);
+    if (L.glow) for (let i = 2; i < pts.length - 1; i += 3) { c.save(); c.globalCompositeOperation = 'lighter'; across(i, rgbaA(L.glow, 0.5), 1, 0.5); c.restore(); }
+  } else if (kind === 'leg' || kind === 'shell') {
+    for (let i = 2; i < pts.length - 1; i += 2) across(i, rgbaA([20, 10, 8], 0.6), 1.8);
+  } else if (kind === 'tentacle') {
+    for (let i = 1; i < pts.length; i += 2) { const [x, y, r] = pts[i]; pkE(c, x - d * r * 0.42, y, r * 0.34, r * 0.28, L.sucker, 1.2); }
+  } else if (kind === 'vine') {
+    for (let i = 1; i < pts.length; i += 2) { const [x, y, r] = pts[i]; pkPath(c, [[x - d * r * 0.2, y + 2], [x - d * r * 0.85, y - 2], [x - d * r * 0.2, y - 1]], L.sucker, 1); }
+  } else if (kind === 'goo') {
+    for (let i = 1; i < pts.length; i += 3) { const [x, y, r] = pts[i]; pkE(c, x - d * r * 0.3, y - 1, r * 0.22, r * 0.3, 'rgba(255,255,255,.4)', 0); }
+  } else if (kind === 'flame' || kind === 'smoke') {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const col = kind === 'flame' ? [255, 220, 120] : (L.glow || [190, 90, 255]);
+    for (let i = 1; i < pts.length; i++) { const [x, y, r] = pts[i]; c.fillStyle = rgbaA(col, 0.18 + 0.12 * Math.sin(t * 9 + i)); c.beginPath(); c.arc(x + Math.sin(t * 6 + i) * r * 0.25, y, r * 0.55, 0, TWO_PI); c.fill(); }
+    c.restore();
+  } else if (kind === 'bone' || kind === 'fin') {
+    // a membrane strip with a bone (or spine) along its inner edge
+    c.strokeStyle = L.bone || '#fff'; c.lineWidth = 2.6;
+    c.beginPath(); pts.forEach(([x, y, r], i) => { const px = x - d * r * 0.5; i ? c.lineTo(px, y) : c.moveTo(px, y); }); c.stroke();
+    if (kind === 'fin') for (let i = 1; i < pts.length; i += 2) { const [x, y, r] = pts[i]; c.beginPath(); c.moveTo(x - d * r * 0.5, y); c.lineTo(x + d * r * 0.6, y - r * 0.6); c.stroke(); }
+  } else {   // arm: an elbow crease halfway up the wall
+    if (pts.length > 4) { const [x, y, r] = pts[pts.length >> 1]; c.strokeStyle = rgbaA([20, 10, 8], 0.55); c.lineWidth = 1.6; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.55, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
+  }
+}
+// the hand: skin parts merge under one ink outline, then claws (pointed, inside their capsules), pads, flames, leaves
+function grabHandArt(c, rig, L, mon, t) {
+  const H0 = rig.hand, sk = L.skin, d = rig.d;
+  const soft = H0.filter(p => p[5] !== 'c');
+  const palm = H0[0], g = pkRG(c, palm[0] - d * 3, palm[1] - 4, palm[4] * 2.2, sk);
+  const fillOf = role => role === 'p' ? (L.palm || L.claw || sk[0]) : role === 'l' ? '#6abf3a' : role === 'f' ? 'rgba(255,170,60,1)' : g;
+  for (const pass of [0, 1]) for (const [x0, y0, x1, y1, r, role] of soft) {
+    c.strokeStyle = pass ? fillOf(role) : INK; c.lineWidth = Math.max(0.5, 2 * r - (pass ? 2 * GRAB_INK : 0));
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 + (x1 === x0 && y1 === y0 ? 0.01 : 0), y1); c.stroke();
+  }
+  for (const [x0, y0, x1, y1, r, role] of soft) {
+    if (role === 'f') {   // flame fingers: a white-hot tongue licking up inside each
+      c.save(); c.globalCompositeOperation = 'lighter';
+      const fg = c.createLinearGradient(0, y0, 0, y1 - r); fg.addColorStop(0, 'rgba(255,240,180,.9)'); fg.addColorStop(1, 'rgba(255,250,220,0)');
+      c.strokeStyle = fg; c.lineWidth = r; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.restore();
+    } else if (role === 'p') pkE(c, x0 - d * r * 0.25, y0 - r * 0.25, r * 0.35, r * 0.3, 'rgba(255,255,255,.45)', 0);
+    else if (role === 'l') { c.strokeStyle = '#2e6a14'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+    else if (role === 'g') pkE(c, x0 - d * r * 0.3, y0 - r * 0.3, r * 0.25, r * 0.35, 'rgba(255,255,255,.4)', 0);
+  }
+  c.strokeStyle = LIMB_RIM; c.lineWidth = 2; c.beginPath(); c.arc(palm[0], palm[1], Math.max(1, palm[4] - GRAB_INK - 2), Math.PI * 1.1, Math.PI * 1.6); c.stroke();
+  if (L.glow) mAGlow(c, palm[0], palm[1], palm[4] * 1.6, L.glow, 0.3);
+  // claws: a pointed blade from the capsule's base to its tip, kept inside the capsule (ink included)
+  const clawCol = mon.id === 'flytrap' ? '#ff5a7a' : L.claw;
+  for (const [x0, y0, x1, y1, r, role] of H0) {
+    if (role !== 'c') continue;
+    const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, w = r - 0.8;
+    pkPath(c, [[x0 - uy * w, y0 + ux * w], [x1 + ux * w, y1 + uy * w], [x0 + uy * w, y0 - ux * w]], clawCol, 1.6);
+  }
+}
+// One limb, one layer: 'back' (from behind the head to the wall: drawn before the head) or 'front' (up the wall and the hand)
+function drawGrabLimb(c, mon, rig, layer, t) {
+  const st = GRAB_STYLE[mon.id], L = monLimbs(mon), sk = L.skin;
+  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  const kind = st.limb, rim = kind === 'smoke' ? rgbaA(L.glow || [190, 90, 255], 0.5) : LIMB_RIM;
+  if (layer === 'back') {
+    const y0 = Math.min(...rig.up.map(p => p[1] - p[2])), y1 = Math.max(...rig.up.map(p => p[1] + p[2]));
+    grabChain(c, rig.up, pkLG(c, 0, y0, 0, y1, sk), rig.d, rim);
+    grabDecor(c, kind, rig.up, L, rig.d, t);
+  } else {
+    const f = rig.fore, y0 = Math.min(...f.map(p => p[1])) - 10, y1 = Math.max(...f.map(p => p[1])) + 10;
+    const fill = kind === 'bone' || kind === 'fin' ? pkLG(c, 0, y0, 0, y1, [sk[1], sk[2]]) : pkLG(c, 0, y0, 0, y1, sk);
+    grabChain(c, f, fill, rig.d, rim);
+    grabDecor(c, kind, f, L, rig.d, t);
+    grabHandArt(c, rig, L, mon, t);
+  }
+  c.restore();
+}
+// The wind-up tell, on the wall itself: the rock glows and cracks up the stretch the claw is about to grab (inside the
+// rock, outside the shaft), pulsing faster as the grab comes.
+function drawGrabTell(c, mon, rig, wallX, wind, reach, t) {
+  if (wind <= 0) return;
+  const d = rig.d, pulse = 0.55 + 0.45 * Math.sin(t * (14 + 20 * wind));
+  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  c.globalCompositeOperation = 'lighter';
+  for (const [w, a] of [[16, 0.3], [7, 0.55], [3, 0.9]]) {
+    c.strokeStyle = rgbaA(mon.haze, a * wind * pulse); c.lineWidth = w;
+    c.beginPath(); for (let y = 6; y >= -reach; y -= 6) { const x = wallX(y) + d * 3; y === 6 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
+  }
+  const palm = rig.hand[0];   // and the claw itself flares as it coils
+  const fg = c.createRadialGradient(palm[0], palm[1], 1, palm[0], palm[1], 34); fg.addColorStop(0, rgbaA(mon.haze, 0.6 * wind * pulse)); fg.addColorStop(1, rgbaA(mon.haze, 0));
+  c.fillStyle = fg; c.fillRect(palm[0] - 34, palm[1] - 34, 68, 68);
+  c.restore();
+  // three fresh scratch marks where the claws will land
+  c.strokeStyle = rgbaA([255, 240, 210], 0.7 * wind); c.lineWidth = 1.6;
+  for (let k = 0; k < 3; k++) { const y = -reach + 8 + k * 7, x = wallX(y) + d * 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x + d * 5, y - 5); c.stroke(); }
+}
+// This moment's limb frame: the catch line the limbs hang from, the body's centre line, how much of the head shows
+// below that line on screen, and a cap on how high a claw may reach. In play the limbs hang from the real catch line
+// (or, while the monster is below the screen, from the top of the head peeking over the bottom edge, capped well
+// below the pilot). While the monster swallows the pilot they ride on the lunging head (see drawWorm).
+function grabFrame() {
+  if (!G) return null;
+  const W = G.worm, realY = sy(W.alt);
+  if (!Number.isFinite(realY)) return null;
+  if (G.state === 'dead' && G.bite) return G.biteFrame || null;
+  const prox = clamp(1 - (monsterGap() - 100) / 650, 0, 1), floorPx = sliverFloor(prox);
+  if (realY > H - floorPx) {
+    if (G.state === 'dead' || floorPx < 2) return null;
+    const kill = G.camAlt + floorPx / s, top = pCaps.length ? pilotLow() - 34 / s - kill : GRAB.reach;
+    return { kill, bodyX: WORLD_W / 2, avail: floorPx / s, top: Math.max(0, top), peek: true };
+  }
+  return { kill: W.alt, bodyX: WORLD_W / 2, avail: (H - realY) / s, top: GRAB.reach, peek: false };
+}
+// the limbs for a frame: [left, right], each { rig, pose, alpha }. They fade out (and stop grabbing) when too little of
+// the head shows for their roots to be on screen.
+function grabRigs(fr, mon = monster(), t = G.t) {
+  if (!fr) return [];
+  const alpha = smooth(40, 64, fr.avail), st = GRAB_STYLE[mon.id];
+  if (alpha <= 0 || !st) return [];
+  const wallAt = a => walls(a);
+  return [-1, 1].map(d => {
+    const gb = G.grab && G.grab.side === d && G.state === 'play' ? G.grab.t : null;
+    const pose = grabPose(gb, t, d, fr.top);
+    return { rig: grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail), pose, alpha, kill: fr.kill, top: fr.top };
+  });
+}
+// The limbs' hitboxes in world units (capsules), exactly what is drawn: the game and the overlay both use these.
+function grabShapes(rigs = grabRigs(grabFrame())) {
+  const S = [];
+  for (const { rig, kill } of rigs) for (const [x0, y0, x1, y1, r] of rig.caps) S.push({ k: 's', x0, a0: kill - y0, x1, a1: kill - y1, r });
+  return S;
+}
+// Draw a frame's limbs in screen space (layer 'back' or 'front'; the wind-up tell goes with the front layer).
+function drawGrabWorld(rigs, layer) {
+  if (!rigs.length) return;
+  const mon = monster();
+  for (const { rig, pose, alpha, kill, top } of rigs) {
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(sx(0), sy(kill)); ctx.scale(s, s);
+    if (layer === 'front') drawGrabTell(ctx, mon, rig, y => walls(kill - y)[rig.d < 0 ? 0 : 1], pose.wind, Math.min(GRAB.reach, top), G.t);
+    drawGrabLimb(ctx, mon, rig, layer, G.t);
+    ctx.restore();
+  }
+}
+// One grab at a time, on one wall or the other, every 1.3–2.6 s while the monster is close; a thud when it lands.
+function updateGrab(dt) {
+  if (G.state !== 'play') { G.grab = null; return; }
+  if (G.grab) {
+    const was = G.grab.t;
+    G.grab.t += dt;
+    if (was < GRAB.wind && G.grab.t >= GRAB.wind) {
+      const fr = grabFrame();
+      if (fr && !fr.peek) { G.shake = Math.max(G.shake, 3); vibrate(14); }
+      else G.shake = Math.max(G.shake, 1.5);
+    }
+    if (G.grab.t >= GRAB_TOTAL) G.grab = null;
+    return;
+  }
+  G.grabT = (G.grabT ?? 1.5) - dt;
+  if (G.grabT <= 0 && monsterGap() < GRAB.near) {
+    const fr = grabFrame();
+    if (fr && fr.avail >= 64) G.grab = { t: 0, side: Math.random() < 0.5 ? -1 : 1 };
+    G.grabT = GRAB.every[0] + Math.random() * (GRAB.every[1] - GRAB.every[0]);
+  }
+}
+// The limbs in a portrait (picker cards, key art): drawn in the monster's art frame against walls at ±half (world
+// units), resting with their claws just under the catch line.
+function drawGrabPortrait(c, mon, t, half, layer) {
+  const st = GRAB_STYLE[mon.id]; if (!st) return;
+  c.save(); c.scale(1 / MON_SCALE, 1 / MON_SCALE);
+  for (const d of [-1, 1]) {
+    const rig = grabRig(st, d, () => [-half, half], 0, grabPose(null, t, d), t, 0);
+    drawGrabLimb(c, mon, rig, layer, t);
+  }
+  c.restore();
 }
 // one-line taglines for the picker
 const MONSTER_TAGS = {
@@ -6686,6 +7003,9 @@ function drawWorm() {
     open = b.t < 0.22 ? 1 : b.t < 0.32 ? 1 - smooth(0.22, 0.32, b.t) : 0.06 + 0.1 * Math.max(0, Math.sin((b.t - 0.32) * 9)) * Math.max(0, 1 - (b.t - 0.32) * 0.6);
     G.biteGeo = { mx: tx + mxA * k, my: y + myA * k, rx: mo[2] * k * fx, ry: mo[3] * k * fy, open };
   }
+  // its wall limbs hang from its catch line (riding up on the head as it lunges to swallow)
+  G.biteFrame = b ? { kill: G.camAlt + (H - y) / s, bodyX: (tx - ox) / s, avail: Infinity, top: GRAB.reach, peek: false } : null;
+  const rigs = grabRigs(grabFrame());
   // a zone-contrasting back-light behind it (soft and unclipped: no hard band at the catch line)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const hr = 300 * k, hy = y + 120 * k;
@@ -6693,8 +7013,11 @@ function drawWorm() {
   halo.addColorStop(0, rgbaA(rim, 0)); halo.addColorStop(0.6, rgbaA(rim, 0.22 + 0.15 * crouch + 0.15 * surge)); halo.addColorStop(1, rgbaA(rim, 0));
   ctx.fillStyle = halo; ctx.fillRect(tx - hr, hy - hr, hr * 2, hr * 2);
   ctx.restore();
+  // the arms from behind its head out to the walls (whole, never clipped: always below the catch line)
+  drawGrabWorld(rigs, 'back');
   ctx.save();
-  // clipped exactly at the catch line: nothing of it is ever drawn above where it catches you
+  // its body is clipped exactly at the catch line: nothing of it is ever drawn above where it catches you except its
+  // wall limbs, which climb the wall faces (drawn whole after it)
   if (!b) { ctx.beginPath(); ctx.rect(-40, realY, cssW + 80, H - realY + 80); ctx.clip(); }
   if (!b) {
     // a soft shadow pool below its top edge, starting from nothing (no hard-edged band)
@@ -6708,11 +7031,13 @@ function drawWorm() {
   ctx.scale(k * (1 + 0.04 * surge), k * (1 - 0.08 * crouch + 0.05 * surge + 0.012 * breathe));
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   mFlare = b ? 1 : crouch;
-  const [wl, wr] = walls(W.alt + 100), coilHalf = ((wr - wl) / 2) / (MON_SCALE * (1 + 0.04 * surge));
+  const [wl, wr] = walls(W.alt + 100), coilHalf = ((wr - wl) / 2) / ((k / s) * (1 + 0.04 * surge));   // (its body limbs reach the walls at any size)
   drawMonsterForm(ctx, mon, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) }, coilHalf);
   mFlare = 0;
   ctx.restore();
+  ctx.restore(); ctx.save();          // (end of the clip)
   drawMonsterDepths(mon, y, k, tx);
+  drawGrabWorld(rigs, 'front');
   ctx.globalCompositeOperation = 'lighter';
   if (crouch > 0 || b) {   // eyes flare: a hot flash across its face while it crouches to lunge (and as it bites)
     const f = b ? 1 - smooth(0.2, 0.6, b.t) : crouch;
@@ -6765,9 +7090,9 @@ function drawMonsterDepths(mon, y, k, tx) {
   ctx.restore();
 }
 // While its catch line is below the screen, the top 15-25% of the monster's own art peeks over the bottom edge
-// (its brow, eyes and the top of its jaws, in its real silhouette), growing as it closes in, with its own tell
-// (drawTells) reaching up ahead of it. Purely visual: it only shows while the real catch line is off screen, and
-// sinks away just before the real head rises into view.
+// (its brow, eyes and the top of its jaws, in its real silhouette), growing as it closes in, with its wall limbs
+// whole beside it, gripping and grabbing at the walls (capped well below the pilot). It only shows while the real
+// catch line is off screen, and sinks away just before the real head rises into view.
 // How much of the head always shows at the bottom edge: about 8% of the screen height when far, growing to about
 // 16% as it closes (roughly 60 → 130 px on a phone), but always at least 44 px below the pilot's lowest point, so the
 // head never looks like it has already caught you.
@@ -6781,9 +7106,9 @@ function drawSliver(mon, realY, prox, rim, cx, px) {
   const W = G.worm, f = monForm(mon);
   const k = s * MON_SCALE * lerp(0.86, 1.0, prox) * (1 - (W.crouch > 0 ? 0.04 : 0));   // it swells as it closes in
   G.sliverPx = px;
-  drawTells(mon, prox, px);
   if (px < 2) return;
-  const top = H - px;
+  const top = H - px, rigs = grabRigs(grabFrame());
+  drawGrabWorld(rigs, 'back');
   ctx.save();
   ctx.beginPath(); ctx.rect(-40, top - 1, cssW + 80, px + 60); ctx.clip();
   // rim back-light so its silhouette reads against any cave
@@ -6805,124 +7130,7 @@ function drawSliver(mon, realY, prox, rim, cx, px) {
   fog.addColorStop(0, rgbaA(mon.haze.map(v => v * 0.12 | 0), 0.02)); fog.addColorStop(1, rgbaA(mon.haze.map(v => v * 0.1 | 0), 0.4 - 0.3 * prox));
   ctx.fillStyle = fog; ctx.fillRect(-40, top, cssW + 80, px + 60);
   ctx.restore();
-}
-// Each monster's tell while it is below the screen, rising up ahead of it at the walls as it closes in:
-// arms slam their fists into the walls (a thud and grit), tentacles and vines feel up the rock, wings and fins
-// rake the walls, legs scrabble, the hornet sends drones ahead and the crab snaps its pincers. Purely visual.
-function drawTells(mon, prox, px) {
-  if (prox < 0.08 || G.state !== 'play') return;
-  const L = monLimbs(mon), t = G.t, k = s * MON_SCALE * 0.95, base = H - px;
-  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  // every tell stays at least 34 px below the pilot's lowest point (clipped): purely visual, it never reaches you
-  const capY = pCaps.length ? sy(pilotLow()) + 34 : 0;
-  ctx.beginPath(); ctx.rect(-40, capY, cssW + 80, H + 80 - capY); ctx.clip();
-  drawAttack(mon, L, base, capY);
-  for (const side of [0, 1]) {
-    const d = side ? 1 : -1, wx = sx(walls(G.camAlt + 30)[side]) - d * 14 * s;
-    if (L.kind === 'arms' || L.pincers) {
-      // a fist/claw over the edge: it rises, slams into the wall and slides down
-      const per = 2.2 - 0.9 * prox, ph = pmod(t / per + side * 0.5, 1), up = ph < 0.25 ? smooth(0, 0.25, ph) : 1 - smooth(0.3, 1, ph);
-      const hy = base + 30 * k - up * (60 + 120 * prox) * k;
-      if (ph >= 0.25 && ph < 0.25 + 1 / 60 / per * 1.5 && prox > 0.35) { G.shake = Math.max(G.shake, 2 + 3 * prox); vibrate(10); wallBreak(2, false); }
-      ctx.save(); ctx.translate(wx, hy); ctx.scale(k * 1.15, k * 1.15);
-      ctx.save(); const sk = L.skin; mATaper(ctx, [[-d * 30, 260], [-d * 6, 120], [0, 20]], 70, 50, pkLG(ctx, 0, 0, 0, 260, sk), { rim: LIMB_RIM, rw: 4, lw: 4 }); ctx.restore();
-      drawHand(ctx, L.pincers ? { ...L, hand: 'pincer' } : L, d, 0, 0, t);
-      ctx.restore();
-    } else if (L.kind === 'tentacles') {
-      // tentacle tips feeling up the rock ahead of it
-      for (let i = 0; i < 2; i++) {
-        const reach = (70 + 110 * prox + 30 * Math.sin(t * 1.7 + i * 2 + side)) * (1 - i * 0.35), pts = [];
-        for (let j = 0; j <= 8; j++) { const u = j / 8; pts.push([wx - d * (12 + i * 18) * s + Math.sin(u * 5 + t * 2.4 + i + side) * 10 * s * u, H + 20 - u * (H + 20 - base + reach * s)]); }
-        const tipY = pts[8][1];
-        ctx.save(); ctx.translate(0, 0);
-        mATaper(ctx, pts, (L.vine ? 16 : 26) * s, 5 * s, pkLG(ctx, 0, tipY, 0, H, L.skin), { rim: LIMB_RIM, rw: 3 * s, lw: 3 * s });
-        ctx.restore();
-        if (!L.vine) for (let j = 2; j < 8; j++) pkE(ctx, pts[j][0] - d * 6 * s, pts[j][1], 3 * s, 2.4 * s, L.sucker, 1.2);
-      }
-    } else if (L.kind === 'wings' || L.kind === 'fins') {
-      // a wing tip or fin raking up the wall
-      const beat = 0.5 + 0.5 * Math.sin(t * (L.kind === 'fins' ? 6 : 4.2) + side * 0.6), tipY = base - (30 + 90 * prox) * beat * s;
-      ctx.beginPath(); ctx.moveTo(wx + d * 4 * s, H + 10); ctx.lineTo(wx - d * 6 * s, tipY); ctx.lineTo(wx - d * 40 * s, H + 10); ctx.closePath();
-      ctx.fillStyle = pkLG(ctx, 0, tipY, 0, H, L.skin); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3 * s; ctx.stroke();
-      pkLine(ctx, [[wx - d * 20 * s, H + 10], [wx - d * 6 * s, tipY]], L.bone, 3 * s);
-    } else if (L.kind === 'legs') {
-      // claws scrabbling up the rock
-      for (let i = 0; i < 2; i++) {
-        const lift = Math.max(0, Math.sin(t * 8 + i * 2.2 + side * 1.3)), fy = base - (20 + 50 * prox) * s * (0.6 + 0.4 * lift) - i * 26 * s, fx = wx - d * (4 + i * 8) * s;
-        pkLine(ctx, [[fx - d * 30 * s, H + 10], [fx - d * 26 * s, fy + 30 * s], [fx, fy]], L.skin[1], 7 * s);
-        pkPath(ctx, [[fx - d * 6 * s, fy + 4 * s], [fx + d * 3 * s, fy - 12 * s], [fx + d * 2 * s, fy + 6 * s]], L.claw, 1.6);
-      }
-    }
-  }
-  if (L.drones) for (let i = 0; i < 3; i++) {
-    // hornet drones buzzing up the flanks ahead of the queen
-    const d = i % 2 ? 1 : -1, ph = pmod(t * 0.35 + i * 0.33, 1), y = base - ph * (180 + 200 * prox) * s, x = ox + playW / 2 + d * (playW * 0.32 + Math.sin(t * 5 + i) * 14 * s);
-    ctx.save(); ctx.globalAlpha = Math.min(1, (1 - ph) * 3) * Math.min(1, prox * 3); ctx.translate(x, y); ctx.scale(s * 1.1, s * 1.1); ctx.rotate(Math.sin(t * 9 + i) * 0.3);
-    ctx.save(); ctx.globalAlpha *= 0.6; pkE(ctx, -9, -8, 10, 5, 'rgba(230,245,255,.75)', 1.4, -0.5 + Math.sin(t * 60) * 0.3); pkE(ctx, 9, -8, 10, 5, 'rgba(230,245,255,.75)', 1.4, 0.5 - Math.sin(t * 60) * 0.3); ctx.restore();
-    pkE(ctx, 0, 4, 8, 12, pkLG(ctx, 0, -8, 0, 16, ['#ffe04a', '#2a1a00', '#ffe04a', '#2a1a00']), 2.4);
-    pkE(ctx, 0, -9, 6, 5, '#2a1a00', 2); pkDot(ctx, -2.5, -10, 1.6, '#ff4a3a'); pkDot(ctx, 2.5, -10, 1.6, '#ff4a3a');
-    ctx.restore();
-  }
-  ctx.restore();
-}
-// Attack tells: every few seconds while it is close, the monster lashes out in its own way below you: a claw swipe
-// across the shaft from one side (clawed arms, pincers), a tongue or vine lash flicking up from its mouth (toad,
-// flytrap, blob, worm), a tentacle whip (kraken), a gust off its wings or fins, a snapping jaw lurch, or a burst of
-// drones (hornet). Purely visual and clipped below the pilot (see drawTells), so it never extends the catch line.
-const TELL_KIND = { toad: 'tongue', flytrap: 'tongue', blob: 'tongue', worm: 'tongue', kraken: 'whip', hornet: 'swarm', shark: 'snap', piranha: 'snap', rex: 'snap', spider: 'snap', dragon: 'gust', bat: 'gust' };
-function tellKind(mon) { const L = monLimbs(mon); return TELL_KIND[mon.id] || (L.kind === 'arms' || L.pincers ? 'swipe' : L.kind === 'tentacles' ? 'whip' : L.kind === 'wings' || L.kind === 'fins' ? 'gust' : 'snap'); }
-function updateTell(dt) {
-  if (G.state !== 'play') { G.tell = null; return; }
-  if (G.tell) { G.tell.t += dt; if (G.tell.t > 0.7) G.tell = null; return; }
-  G.tellT = (G.tellT ?? 2) - dt;
-  if (G.tellT <= 0 && monsterGap() < 420) { G.tell = { t: 0, side: Math.random() < 0.5 ? -1 : 1 }; G.tellT = 2.4 + Math.random() * 1.8; if (monsterGap() < 260) { G.shake = Math.max(G.shake, 2); vibrate(8); } }
-}
-function drawAttack(mon, L, base, capY) {
-  const T = G.tell; if (!T) return;
-  const e = T.t / 0.7, kind = tellKind(mon), cx = ox + playW / 2, d = T.side, sk = L.skin || ['#888', '#444', '#111'];
-  const reach = Math.max(capY, base - 120 * s), hit = Math.sin(Math.PI * Math.min(1, e * 1.3));   // out and back
-  if (kind === 'swipe') {
-    // a clawed hand sweeping across the bottom of the shaft from one wall, with motion streaks
-    const x = lerp(ox + (d < 0 ? 0 : playW), ox + (d < 0 ? playW : 0), smooth(0.1, 0.75, e)), y = lerp(base + 20 * s, reach + 30 * s, hit);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 4; i++) { ctx.strokeStyle = `rgba(255,240,220,${0.35 * hit * (1 - i / 4)})`; ctx.lineWidth = (6 - i) * s; ctx.beginPath(); ctx.arc(x - d * 80 * s, y + 120 * s, (130 + i * 14) * s, -Math.PI / 2 - 0.9, -Math.PI / 2 + 0.9); ctx.stroke(); }
-    ctx.restore();
-    ctx.save(); ctx.translate(x, y); ctx.scale(k2(1.25), k2(1.25)); ctx.rotate(-d * 0.5);
-    mATaper(ctx, [[-d * 30, 280], [-d * 10, 130], [0, 20]], 74, 52, pkLG(ctx, 0, 0, 0, 280, sk), { rim: LIMB_RIM, rw: 4, lw: 4 });
-    drawHand(ctx, L.pincers ? { ...L, hand: 'pincer' } : L.hand ? L : { ...L, hand: 'claw', claw: L.claw || '#fff' }, -d, 0, 0, G.t);
-    ctx.restore();
-  } else if (kind === 'tongue') {
-    // a tongue (or vine) flicking up from the middle of its head and snapping back
-    const col = mon.id === 'flytrap' ? '#6abf3a' : mon.id === 'blob' ? '#7aff9a' : '#ff6a8a', y1 = lerp(base + 10 * s, reach, hit), x1 = cx + Math.sin(e * 9) * 18 * s;
-    pkLine(ctx, [[cx, H + 20], [lerp(cx, x1, 0.5) + d * 20 * s, (H + y1) / 2], [x1, y1]], col, 12 * s);
-    pkE(ctx, x1, y1, 13 * s, 10 * s, col, 2.4);
-    if (mon.id === 'flytrap') pkPath(ctx, [[x1 - 12 * s, y1], [x1, y1 - 16 * s], [x1 + 12 * s, y1]], '#ff5a7a', 2);
-  } else if (kind === 'whip') {
-    const pts = [];
-    for (let j = 0; j <= 10; j++) { const u = j / 10; pts.push([lerp(ox + (d < 0 ? 10 : playW - 10), cx + d * 40 * s, u) + Math.sin(u * 6 + e * 12) * 26 * s * u, lerp(H + 20, reach + 10 * s, u * hit)]); }
-    mATaper(ctx, pts, 30 * s, 6 * s, pkLG(ctx, 0, reach, 0, H, sk), { rim: LIMB_RIM, rw: 3 * s, lw: 3 * s });
-    for (let j = 3; j < 10; j += 2) pkE(ctx, pts[j][0], pts[j][1], 3.4 * s, 2.6 * s, L.sucker || '#ffd8c0', 1.2);
-  } else if (kind === 'gust') {
-    // a wing or fin beat: a wall of air rushing up from below (bent streaks), the wing tip raking past
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-    for (let i = 0; i < 9; i++) { const x = ox + playW * (0.1 + 0.1 * i), y = lerp(H + 10, reach, hit) + (i % 3) * 14 * s; ctx.strokeStyle = rgbaA(mon.haze.map(v => Math.min(255, v + 80)), 0.4 * hit); ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.moveTo(x, y + 60 * s); ctx.quadraticCurveTo(x + d * 14 * s, y + 30 * s, x, y); ctx.stroke(); }
-    ctx.restore();
-  } else if (kind === 'swarm') {
-    for (let i = 0; i < 9; i++) {
-      const u = hash2(i, 77), x = cx + (u - 0.5) * playW * 0.8 + Math.sin(G.t * 9 + i) * 10 * s, y = lerp(H + 20, reach + u * 40 * s, hit);
-      ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(Math.sin(G.t * 12 + i) * 0.4);
-      pkE(ctx, -8, -8, 9, 4, 'rgba(230,245,255,.7)', 1.2, -0.5); pkE(ctx, 8, -8, 9, 4, 'rgba(230,245,255,.7)', 1.2, 0.5);
-      pkE(ctx, 0, 3, 7, 11, pkLG(ctx, 0, -8, 0, 14, ['#ffe04a', '#2a1a00', '#ffe04a', '#2a1a00']), 2); pkDot(ctx, -2, -8, 1.5, '#ff4a3a'); pkDot(ctx, 2, -8, 1.5, '#ff4a3a');
-      ctx.restore();
-    }
-  } else {
-    // a jaw snap: white bite streaks closing on the space just above its head
-    const y = lerp(base, reach + 20 * s, hit), w = playW * 0.28 * (1 - 0.6 * smooth(0.4, 0.6, e));
-    ctx.save(); ctx.lineCap = 'round';
-    for (const dd of [-1, 1]) { ctx.strokeStyle = INK; ctx.lineWidth = 9 * s; ctx.beginPath(); ctx.moveTo(cx - w, y + dd * 14 * s); ctx.quadraticCurveTo(cx, y + dd * (4 - 26 * (1 - e)) * s, cx + w, y + dd * 14 * s); ctx.stroke(); ctx.strokeStyle = '#f7ead0'; ctx.lineWidth = 4.5 * s; ctx.stroke(); }
-    ctx.restore();
-  }
-  function k2(m) { return s * MON_SCALE * m; }
+  drawGrabWorld(rigs, 'front');
 }
 // The roar: when it closes in (the gap drops under ~210 after being clear), a shudder, a rumble and rings of
 // its breath bursting from the bottom edge, once per approach.
@@ -7049,6 +7257,10 @@ function drawHitboxes() {
   ctx.lineWidth = 2; ctx.strokeStyle = red; ctx.fillStyle = redFill;
   ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 3;
   for (const h of G.hazards) for (const q of hazardShapes(h)) shape(q);
+  // ice crystals: their pickup circles, in ice blue
+  ctx.save(); ctx.strokeStyle = 'rgba(140,220,255,.95)'; ctx.fillStyle = 'rgba(140,220,255,.15)';
+  for (const f of G.fruit) if (sy(f.alt) > -40 && sy(f.alt) < H + 40) shape({ k: 'c', x: f.x, a: f.alt, r: CRYSTAL_R });
+  ctx.restore();
   // shaft walls: no pilot capsule may cross these lines
   ctx.setLineDash([6, 5]);
   for (const side of [0, 1]) {
@@ -7056,7 +7268,9 @@ function drawHitboxes() {
     for (let a = G.camAlt - 20, i = 0; a < G.camAlt + viewH + 20; a += 12, i++) { const x = sx(walls(a)[side]); i ? ctx.lineTo(x, sy(a)) : ctx.moveTo(x, sy(a)); }
     ctx.stroke();
   }
-  // the monster's catch line: its visible top edge (head and claws never rise above it)
+  // the monster's wall limbs (only ever against the walls, within GRAB.band of them)
+  for (const q of grabShapes()) shape(q);
+  // the monster's catch line: its body's visible top edge (only its wall limbs climb above it, up the walls)
   const bite = sy(G.worm.alt);
   if (bite < H) { ctx.beginPath(); ctx.moveTo(0, bite); ctx.lineTo(cssW, bite); ctx.stroke(); }
   ctx.setLineDash([]);
@@ -7460,9 +7674,11 @@ function drawKeyArt(cv, t) {
   c.save(); c.beginPath(); c.rect(0, top - 2, w, h); c.clip();
   c.translate(w / 2, top); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
   mFlare = 0.5 + 0.5 * Math.max(0, Math.sin(t * 1.7));
-  drawMonsterForm(c, mn, { t, open: 0.85 + 0.15 * Math.sin(t * 3), look: Math.sin(t * 0.7) * 0.6 });
+  const kHalf = (w * 0.4 - 6) / k * MON_SCALE;   // its wall limbs grip the drawn walls
+  drawMonsterForm(c, mn, { t, open: 0.85 + 0.15 * Math.sin(t * 3), look: Math.sin(t * 0.7) * 0.6 }, undefined, layer => { if (layer === 'back') drawGrabPortrait(c, mn, t, kHalf, 'back'); });
   mFlare = 0;
   c.restore();
+  c.save(); c.translate(w / 2, top); c.scale(k, k); drawGrabPortrait(c, mn, t, kHalf, 'front'); c.restore();
   c.save(); c.globalCompositeOperation = 'lighter';
   const lg = c.createLinearGradient(0, h * 0.7, 0, h); lg.addColorStop(0, rgbaA(mn.haze, 0)); lg.addColorStop(1, rgbaA(mn.haze, 0.5));
   c.fillStyle = lg; c.fillRect(0, h * 0.7, w, h * 0.3); c.restore();
@@ -7533,7 +7749,7 @@ function monsterPortrait(c, mn, t, w, h, k, top, open) {
   c.fillStyle = rg; c.fillRect(0, 0, w, h); c.restore();
   c.save(); c.translate(w / 2, top); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
   mFlare = 0.6;
-  drawMonsterForm(c, mn, { t, open, look: Math.sin(t * 0.7) * 0.5 });
+  drawMonsterForm(c, mn, { t, open, look: Math.sin(t * 0.7) * 0.5 }, undefined, layer => { if (layer === 'back') { const hw = Math.min(196, w / 2 / k * MON_SCALE - 10); drawGrabPortrait(c, mn, t, hw, 'back'); drawGrabPortrait(c, mn, t, hw, 'front'); } });   // (its wall limbs behind it, gripping walls as wide as the game's, inside the card)
   mFlare = 0;
   c.restore();
   // lava light welling up from under it
