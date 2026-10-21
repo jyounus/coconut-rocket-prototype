@@ -6550,26 +6550,28 @@ const MONSTERS = [
 // crested; and each climbs in its own way with its limbs (MONSTER_LIMBS).
 const MONSTER_FORMS = {
   // dy/dx shift a whole form (art units) so every bit of its head art, crests and horns included, sits at or below the
-  // catch line (y = 0) and inside the phone screen's sides (|x| under about 300) even with its sway and lean
+  // catch line (y = 0); fit shrinks the head and body of the widest forms so they stay inside the phone screen's sides
+  // (|x| at most 262 art units, leaving room for the 1.144x lunge swell and shake before the 312 edge)
   worm:    { sx: 0.9, sy: 1.05, coil: true },        // a top-down maw, no face
-  bat:     { dy: 5 },
-  gorilla: { dy: 5 },
+  bat:     { dy: 5, fit: 0.91 },
+  gorilla: { dy: 5, fit: 0.87 },
   mole:    { dy: 3 },
-  golem:   { horns: 'crystal', dy: 5 },
+  golem:   { horns: 'crystal', dy: 5, fit: 0.88 },
   kraken:  { sx: 0.82, sy: 1.16, dy: 3 },
-  piranha: { crest: 'fin', tilt: -0.16, dx: -24, dy: 16 },   // side-profile jaws, snapping in from the side
-  dragon:  { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 5 },
+  piranha: { crest: 'fin', tilt: -0.16, dx: -24, dy: 16, fit: 0.86 },   // side-profile jaws, snapping in from the side
+  dragon:  { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 5, fit: 0.89 },
   rex:     { sx: 0.8, sy: 1.2, tilt: 0.3, dy: 12 },   // a long neck, head turned side-on
-  flytrap: { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 3 },
-  blob:    { sx: 1.1, sy: 0.9 },
-  spider:  { dy: 3 },
-  shark:   { sx: 0.72, sy: 1.26, crest: 'fin', tilt: -0.2, dx: -24 },
+  flytrap: { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 3, fit: 0.88 },
+  blob:    { sx: 1.1, sy: 0.9, fit: 0.94 },
+  spider:  { dy: 3, fit: 0.89 },
+  shark:   { sx: 0.72, sy: 1.26, crest: 'fin', tilt: -0.2, dx: -24, fit: 0.9 },
   tiki:    { sx: 0.78, sy: 1.24, horns: 'feather', dy: 42 },   // (lowered so its feather crest tops out at the catch line)
   spirit:  { sx: 0.86, sy: 1.14, crest: 'flame' },
-  toad:    { sx: 1.12, sy: 0.88, dy: 3 },
-  giant:   { horns: 'bone', dy: 6 },
+  toad:    { sx: 1.12, sy: 0.88, dy: 3, fit: 0.89 },
+  giant:   { horns: 'bone', dy: 6, fit: 0.89 },
   hornet:  { sx: 0.8, sy: 1.16, coil: true },
-  shadow:  { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 5 },
+  crab:    { fit: 0.89 },
+  shadow:  { heads: 3, headX: 190, headY: 220, headS: 0.4, dy: 5, fit: 0.92 },
 };
 const monForm = mon => MONSTER_FORMS[mon.id] || {};
 
@@ -6719,6 +6721,9 @@ function drawMonsterForm(c, mon, m, coilHalf, limbs) {
   if (f.coil) drawCoils(c, mon, m, (coilHalf || 230) - 30);
   // side heads ride on long necks rising from behind the main body, out at the shoulders
   const sway = d => Math.sin(m.t * 1.7 + d * 1.3) * 10;
+  // the head and body (not the limbs, which reach the walls) scale by `fit` about the catch line's centre, so the widest
+  // forms stay inside the phone screen's sides even while swelling in a lunge
+  c.save(); c.scale(f.fit || 1, f.fit || 1);
   if (f.heads) for (const d of [-1, 1]) {
     const dark = mon.haze.map(v => v * 0.3 | 0), mid = mon.haze.map(v => v * 0.62 | 0);
     mATaper(c, [[d * 150, 700], [d * (f.headX - 10) + sway(d) * 0.5, 420], [d * f.headX + sway(d), f.headY + 110]], 120, 70, pkLG(c, 0, f.headY, 0, 700, [rgb(mid), rgb(dark)]), { rim: rgbaA(mon.haze.map(v => Math.min(255, v + 60)), 0.55), rw: 5, lw: 4 });
@@ -6734,6 +6739,7 @@ function drawMonsterForm(c, mon, m, coilHalf, limbs) {
     try { mon.draw(c, { t: m.t + d * 0.7, open: clamp(m.open * 0.85 + 0.1 * Math.sin(m.t * 3 + d), 0, 1), look: m.look }); } finally { mNoFill = false; }
     c.restore();
   }
+  c.restore();
   drawLimbs(c, mon, m, coilHalf || 230, 'front');
   if (limbs) limbs('front');
 }
@@ -6976,8 +6982,9 @@ function monsterEyes(mon) {
 // The mouth's centre in the monster's art frame, after its form's tilt and stretch (see drawMonsterForm).
 function mouthArt(mon) {
   const mo = mon.mouth || [0, 150, 100, 50], f = monForm(mon), x = mo[0] * (f.sx || 1), y = mo[1] * (f.sy || 1), a = f.tilt || 0;
-  const ox0 = f.dx || 0, oy0 = f.dy || 0;
-  return a ? [ox0 - a * 90 + x * Math.cos(a) - y * Math.sin(a), oy0 + 40 * Math.abs(a) + x * Math.sin(a) + y * Math.cos(a)] : [ox0 + x, oy0 + y];
+  const ox0 = f.dx || 0, oy0 = f.dy || 0, q = f.fit || 1;
+  const [px, py] = a ? [ox0 - a * 90 + x * Math.cos(a) - y * Math.sin(a), oy0 + 40 * Math.abs(a) + x * Math.sin(a) + y * Math.cos(a)] : [ox0 + x, oy0 + y];
+  return [px * q, py * q];
 }
 function drawWorm() {
   const mon = monster(), W = G.worm, realY = sy(W.alt), cx = ox + playW / 2;
@@ -7003,7 +7010,7 @@ function drawWorm() {
     const e = smooth(0, 0.16, b.t), kb = s * MON_SCALE * lerp(1, 1.18, e), px = sx(b.x), py = sy(b.alt), [mxA, myA] = mouthArt(mon);
     tx = lerp(cx, px - mxA * kb, e); y = lerp(y, py - myA * kb, e); k = kb;
     open = b.t < 0.22 ? 1 : b.t < 0.32 ? 1 - smooth(0.22, 0.32, b.t) : 0.06 + 0.1 * Math.max(0, Math.sin((b.t - 0.32) * 9)) * Math.max(0, 1 - (b.t - 0.32) * 0.6);
-    G.biteGeo = { mx: tx + mxA * k, my: y + myA * k, rx: mo[2] * k * fx, ry: mo[3] * k * fy, open };
+    G.biteGeo = { mx: tx + mxA * k, my: y + myA * k, rx: mo[2] * k * fx * (fm.fit || 1), ry: mo[3] * k * fy * (fm.fit || 1), open };
   }
   // its wall limbs hang from its catch line (riding up on the head as it lunges to swallow)
   G.biteFrame = b ? { kill: G.camAlt + (H - y) / s, bodyX: (tx - ox) / s, avail: Infinity, top: GRAB.reach, peek: false } : null;
