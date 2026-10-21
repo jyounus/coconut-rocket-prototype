@@ -415,7 +415,7 @@ const LANE_SCALE = 1.8;
 const PILOT_HITS = {
   lemur:     [[0, -18, 0, -18, 12.5], [-6.8, -28, 6.8, -28, 3.6], [0, 8, 0, 10, 16.5], [-16, 18, -17, 27, 3.5], [16, 18, 17, 27, 3.5], [0, 25, 0, 27.5, 6.5]],
   ember:     [[-1, -16.5, 1, -16.5, 12.6], [-7, -28, 7, -28, 3.5], [0, 5, 0, 13, 15.5], [0, 24, 0, 26.5, 6], [-11, 22, -14, 26.5, 3], [11, 22, 14, 26.5, 3], [-9, -11, -15, -12.5, 3.3], [9, -11, 15, -12.5, 3.3]],
-  snail:     [[0, 13, 0, 13, 16], [0, -11, 0, -11, 10.5], [-9, -27.5, 9, -27.5, 6.8], [0, 30, 0, 32, 6.5]],
+  snail:     [[-1.5, -15.5, -1.5, -15.5, 9.6], [-10, -30.5, 7, -30.5, 5.4], [2, 5.5, 2, 5.5, 11.6], [-8, -1, -3, -8, 5], [-9.5, 0, -3.5, 2, 5], [2.1, 24, 2.1, 27, 7], [11, 16, 12, 23, 2.6], [-6.8, 16, -7.8, 23, 2.6]],
   puffer:    [[0, -28, 0, -17, 12.5], [0, 4, 0, 4, 15.5], [-17.5, 2, -17.5, 15, 4.3], [17.5, 2, 17.5, 15, 4.3], [0, 20, 0, 25, 6.5]],
   firefly:   [[0, -24.5, 0, -24.5, 11], [0, -2, 0, 15, 14], [0, 25, 0, 27, 6.5], [-14, -18, 14, -18, 4], [-13, 22, 13, 22, 3]],
   octopus:   [[0, -9, 0, -9, 15.5], [-9, 10, 9, 10, 7]],
@@ -5464,97 +5464,189 @@ function embFlame(c, x, y, s, a) {
   c.restore();
 }
 
-// Shellby the snail: a speed-mad garden snail whose shell is a candy-apple hot-rod turbo, with a lightning-bolt
-// decal on its outer whorl, a spinning brass hubcap, a riveted brass cockpit ring round the opening and a
-// heat-blued afterburner bell bolted underneath. Flying goggles sit on the tips of its eyestalks.
+// Shellby the snail: a speed-mad garden snail stretched up out of its shell, its whole slimy body leading the way under
+// its head, the shell a chrome hot-rod turbo seen side-on: a true logarithmic coil with cobalt flames licking back
+// from a flared brass-riveted lip, a yellow pinstripe that ends in a lightning bolt, a spinning brass hubcap on the
+// spire, chrome zoomie pipes and a heat-blued afterburner bell underneath, and big yellow tailfins. Flying goggles
+// sit on the tips of its eyestalks.
 const SNL = {
-  skin: ['#b4fbe8', '#3fd2bc', '#0f7a70'], muzzle: '#e4fff7', spot: 'rgba(10,92,86,.55)',
-  shell: ['#ff8a9c', '#e6203e', '#7e0822'], stripe: '#fff3df',
-  brass: ['#fff4b6', '#f2b532', '#9a5a0a'],
+  skin: ['#fff6df', '#f7c987', '#d48a48', '#8a4a22'], sole: ['#fffbf0', '#fff1d8', '#e8a868'], spot: 'rgba(150,74,28,.5)',
+  chrome: ['#ffffff', '#e4eff9', '#a9bfda', '#6f87ab', '#8a90a8', '#d8c2ae'],
+  flame: ['#dff2ff', '#5aa2ff', '#1f5ae8', '#1238a8'], stripe: ['#fffbc8', '#ffd21a', '#f09a00'],
+  fin: ['#fff7a0', '#ffd21a', '#f0a000', '#b86a00'], cobalt: ['#9cd2ff', '#2f72f0', '#143c9e'],
+  brass: ['#fff4b6', '#f2b532', '#9a5a0a'], blued: ['#2a2c50', '#5a5c98', '#c4a2dc', '#f0b878', '#6a4a56'],
 };
-const SNL_R = 16, SNL_CY = 13, SNL_T = 2.1;
-// a point on the shell's spiral suture (u: 0 at the hub, 1 where it meets the opening at the top)
-function snlP(u) {
-  const th = -Math.PI / 2 - (1 - u) * SNL_T * TWO_PI, r = SNL_R * Math.pow(0.47, (1 - u) * SNL_T);
-  return [2 * (1 - u) + Math.cos(th) * r, SNL_CY + 2.4 * (1 - u) + Math.sin(th) * r * 0.97];
+// the coil: radius SNL_R0 at the aperture, shrinking by SNL_Q every turn round the spire (phi turns back from the
+// aperture, which opens up and to the left where the body comes out); the whorl centres drift toward the spire,
+// so the coil reads as a cone seen from the side
+const SNL_A = [0, 7.5], SNL_R0 = 17, SNL_Q = 0.42, SNL_AP = -2.55, SNL_BX = 2.1;
+const snlR = phi => SNL_R0 * Math.pow(SNL_Q, phi / TWO_PI);
+function snlPt(phi, k = 1) {
+  const r = snlR(phi), sh = 1 - r / SNL_R0, th = SNL_AP + phi;
+  return [SNL_A[0] + 4 * sh + Math.cos(th) * r * k, SNL_A[1] - 1.4 * sh + Math.sin(th) * r * k * 0.95];
 }
-// the middle of the whorl just outside the suture point u (the outermost whorl runs out to the rim)
-function snlMid(u, k = 0.5) {
-  const [x, y] = snlP(u), u2 = u + 1 / SNL_T;
-  let ox, oy;
-  if (u2 <= 1) [ox, oy] = snlP(u2);
-  else { const a = Math.atan2(y - SNL_CY, x), rr = SNL_R - 0.6; ox = Math.cos(a) * rr; oy = SNL_CY + Math.sin(a) * rr; }
-  return [x + (ox - x) * k, y + (oy - y) * k];
-}
+// a point across the whorl outside the suture at phi (k 0: on the suture, 1: on the next whorl out)
+function snlAcross(phi, k) { const [x0, y0] = snlPt(phi + TWO_PI), [x1, y1] = snlPt(phi); return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k]; }
 function snlTrace(c, f, u0, u1, n = 80) { c.beginPath(); for (let i = 0; i <= n; i++) { const [x, y] = f(u0 + (u1 - u0) * i / n); i ? c.lineTo(x, y) : c.moveTo(x, y); } }
-function snlFin(c, d, fl) {
-  const p = [[d * 8, 23.5], [d * (14.5 + fl * 1.6), 27 + fl * 0.5], [d * (14.6 + fl * 2), 34.5 + fl], [d * 10.5, 33], [d * 6, 30]];
-  pkPath(c, p, pkLG(c, d * 6, 24, d * 15, 34, ['#ff7086', '#d8183a', '#760620']), 0);
-  c.save(); c.beginPath(); p.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); c.clip();
-  c.strokeStyle = SNL.stripe; c.lineWidth = 2.3; c.beginPath(); c.moveTo(d * 10, 36.5); c.lineTo(d * (17.5 + fl * 2), 27); c.stroke();
-  c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(d * 8.6, 25); c.lineTo(d * (14 + fl), 27.8); c.stroke();
-  c.restore();
-  pkPath(c, p, null, 2);
+function snlOutline(c) {   // the shell's silhouette: the outer whorl all the way round, closed across the aperture
+  c.beginPath();
+  for (let i = 0; i <= 90; i++) { const [x, y] = snlPt(TWO_PI * i / 90); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+  const [ax, ay] = snlPt(0); c.lineTo(ax, ay); c.closePath();
 }
-function snlBell(c, thr) {
-  // a heat-blued steel bell on a riveted brass mount
-  c.beginPath(); c.moveTo(-5, 29); c.lineTo(5, 29); c.quadraticCurveTo(5.4, 33.4, 7.6, 36); c.lineTo(-7.6, 36); c.quadraticCurveTo(-5.4, 33.4, -5, 29); c.closePath();
-  c.fillStyle = pkLG(c, -8, 0, 8, 0, ['#262a46', '#565c92', '#c4a2dc', '#eab878', '#6a4a56', '#202438']); c.fill();
-  c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+// the aperture: a slot from the lip's outer edge to the columella, where the body comes out
+const snlSlot = () => { const [ax, ay] = snlPt(0), [bx, by] = snlPt(TWO_PI); return { x: (ax + bx) / 2, y: (ay + by) / 2, a: Math.atan2(by - ay, bx - ax), rx: Math.hypot(bx - ax, by - ay) / 2 + 1 }; };
+// a big swept hot-rod tailfin, yellow with a cobalt racing flash and a chrome leading edge
+function snlFin(c, d, fl) {
+  const x0 = SNL_BX + d * 8.4, y0 = 12, p = [[x0, y0], [x0 + d * (5.4 + fl * 0.6), y0 + 7.6], [x0 + d * (5 + fl), 33.6 + fl], [x0 + d * 1, 29.6], [x0 - d * 2.6, 22.6]];
+  const path = () => { c.beginPath(); c.moveTo(...p[0]); c.quadraticCurveTo(p[1][0] - d * 0.6, p[1][1] - 4, p[1][0], p[1][1]); c.quadraticCurveTo(p[2][0] + d * 0.8, 27, p[2][0], p[2][1]); c.quadraticCurveTo(p[3][0] + d * 1.4, 31.6, p[3][0], p[3][1]); c.quadraticCurveTo(p[4][0] + d * 1.2, 26, p[4][0], p[4][1]); c.closePath(); };
+  path(); c.fillStyle = pkLG(c, x0 - d * 2, y0, x0 + d * 6, 34, SNL.fin); c.fill();
+  c.save(); path(); c.clip();
+  c.strokeStyle = SNL.cobalt[1]; c.lineWidth = 2.8; c.beginPath(); c.moveTo(x0 - d * 2, 29); c.lineTo(x0 + d * 8, 21); c.stroke();
+  c.strokeStyle = SNL.cobalt[0]; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x0 - d * 2, 27.8); c.lineTo(x0 + d * 8, 19.8); c.stroke();
+  c.fillStyle = pkLG(c, x0 - d * 3, 0, x0 + d * 3, 0, ['rgba(120,60,0,.45)', 'rgba(120,60,0,0)']); c.fillRect(x0 - 6, y0 - 1, 12, 36 - y0);
+  c.restore();
+  path(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke();
+  // the chrome trim down the leading edge
+  c.beginPath(); c.moveTo(x0 + d * 0.6, y0 + 0.8); c.quadraticCurveTo(p[1][0] - d * 0.4, p[1][1] - 3.6, p[1][0] - d * 0.4, p[1][1]); c.quadraticCurveTo(p[2][0] + d * 0.3, 27, p[2][0] - d * 0.3, p[2][1] - 1);
+  c.strokeStyle = '#f2f8ff'; c.lineWidth = 1.1; c.stroke();
+}
+// the afterburner: a chrome turbo housing under the shell, two zoomie pipes, a brass turbo ring and a heat-blued
+// steel bell (its mouth is the nozzle, at y 32)
+function snlBell(c, thr, t) {
+  const bx = SNL_BX;
+  // the zoomie pipes: fat chrome tubes kicking out of the housing and down, heat-blued at their open tips
+  for (const d of [-1, 1]) {
+    const a = [bx + d * 4.4, 17.4], m = [bx + d * 10.2, 18.4], e = [bx + d * 9.8, 25.4];
+    pkCurve(c, a, m, e, '#cbdcee', 3.4);
+    pkCurve(c, [a[0], a[1] - 0.9], [m[0] - d * 0.4, m[1] - 1], [e[0] - d * 0.9, e[1]], '#ffffff', 0.9, false);
+    pkCurve(c, [a[0], a[1] + 0.9], [m[0] + d * 0.6, m[1] + 0.8], [e[0] + d * 0.9, e[1] - 0.4], 'rgba(60,80,120,.7)', 0.7, false);
+    pkE(c, e[0], e[1] + 0.2, 2.2, 1.2, pkLG(c, e[0] - 2, 0, e[0] + 2, 0, SNL.blued), 1);
+    pkE(c, e[0], e[1] + 0.4, 1.3, 0.6, thr ? '#ffd05a' : '#1e1424', 0);
+    if (thr) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(e[0], e[1] + 1.5, 0.3, e[0], e[1] + 1.5, 3.6); g.addColorStop(0, 'rgba(255,200,90,.9)'); g.addColorStop(1, 'rgba(255,110,30,0)'); c.fillStyle = g; c.fillRect(e[0] - 4, e[1] - 2, 8, 8); c.restore(); }
+  }
+  // the chrome housing joining shell and bell
+  pkRect(c, bx - 4.8, 13.6, 9.6, 8.4, 2.4, pkLG(c, bx - 4.8, 0, bx + 4.8, 0, ['#6f87ab', '#e8f2fb', '#ffffff', '#a9bfda', '#5a6e90']), 1.4);
+  c.beginPath(); c.moveTo(bx - 5.4, 23); c.lineTo(bx + 5.4, 23); c.quadraticCurveTo(bx + 5.8, 28.6, bx + 8.2, 32); c.lineTo(bx - 8.2, 32); c.quadraticCurveTo(bx - 5.8, 28.6, bx - 5.4, 23); c.closePath();
+  c.fillStyle = pkLG(c, bx - 8.2, 0, bx + 8.2, 0, ['#262a46', '#565c92', '#c4a2dc', '#eab878', '#6a4a56', '#202438']); c.fill();
+  c.strokeStyle = INK; c.lineWidth = 1.7; c.stroke();
   c.strokeStyle = 'rgba(20,10,30,.55)'; c.lineWidth = 0.9;
-  for (const y of [31.4, 33.7]) { const w = 5.2 + (y - 29) * 0.33; c.beginPath(); c.moveTo(-w, y); c.quadraticCurveTo(0, y + 1, w, y); c.stroke(); }
-  c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-3.4, 30); c.quadraticCurveTo(-3.6, 33, -5.4, 35.2); c.stroke();
-  pkE(c, 0, 36, 7.6, 2, thr ? pkRG(c, 0, 36.5, 7, ['#fffbe0', '#ffc040', '#ff5a10']) : pkRG(c, 0, 36, 7, ['#5a3a48', '#2a1a26', '#1a1220']), 1.8);
-  pkRect(c, -8.4, 25.8, 16.8, 4.2, 2, pkLG(c, 0, 25.8, 0, 30, SNL.brass), 1.8);
-  for (const x of [-5.4, 5.4]) { pkDot(c, x, 27.9, 0.95, '#7a4608'); pkDot(c, x - 0.3, 27.5, 0.4, '#fff6c8'); }
-  // vent slots that glow when the burner is lit
-  for (const x of [-2.2, 0, 2.2]) pkRect(c, x - 0.6, 26.7, 1.2, 2.5, 0.5, thr ? '#ffcf4a' : '#4a2a10', 0);
-  if (thr) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(0, 28, 0.5, 0, 28, 5); g.addColorStop(0, 'rgba(255,190,80,.7)'); g.addColorStop(1, 'rgba(255,120,30,0)'); c.fillStyle = g; c.fillRect(-5, 23, 10, 10); c.restore(); }
+  for (const y of [25.8, 28.6]) { const w = 5.6 + (y - 23) * 0.36; c.beginPath(); c.moveTo(bx - w, y); c.quadraticCurveTo(bx, y + 1, bx + w, y); c.stroke(); }
+  c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 1; c.beginPath(); c.moveTo(bx - 3.6, 24); c.quadraticCurveTo(bx - 3.8, 28.4, bx - 6, 31); c.stroke();
+  pkE(c, bx, 32, 8.2, 2.1, thr ? pkRG(c, bx, 32.5, 7.4, ['#fffbe0', '#ffc040', '#ff5a10']) : pkRG(c, bx, 32, 7.4, ['#5a3a48', '#2a1a26', '#1a1220']), 1.5);
+  // the brass turbo ring with its rivets and vent slots that glow while the burner is lit
+  pkRect(c, bx - 8.4, 19.6, 16.8, 4.4, 2.1, pkLG(c, 0, 19.6, 0, 24, SNL.brass), 1.5);
+  for (const x of [-5.8, 5.8]) { pkDot(c, bx + x, 21.8, 0.95, '#7a4608'); pkDot(c, bx + x - 0.3, 21.4, 0.4, '#fff6c8'); }
+  for (const x of [-2.6, 0, 2.6]) pkRect(c, bx + x - 0.65, 20.5, 1.3, 2.7, 0.5, thr ? '#ffcf4a' : '#4a2a10', 0);
+  if (thr) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(bx, 22, 0.5, bx, 22, 6); g.addColorStop(0, 'rgba(255,190,80,.75)'); g.addColorStop(1, 'rgba(255,120,30,0)'); c.fillStyle = g; c.fillRect(bx - 6, 16, 12, 12); c.restore(); }
 }
 function snlShell(c, thr, t) {
-  const R = SNL_R, cy = SNL_CY;
-  pkE(c, 0, cy, R, R, pkRG(c, 0, cy, R, SNL.shell), 0);
-  c.save(); c.beginPath(); c.arc(0, cy, R, 0, TWO_PI); c.clip();
-  // rounded whorls: shadow pooled into the suture, a soft sheen along each whorl's crown
-  snlTrace(c, snlP, 0.02, 1); c.strokeStyle = 'rgba(70,0,18,.45)'; c.lineWidth = 4.6; c.stroke();
-  snlTrace(c, u => snlMid(u, 0.4), 0.12, 1); c.strokeStyle = 'rgba(255,170,185,.28)'; c.lineWidth = 2.8; c.stroke();
-  // growth ridges across the whorls
-  c.strokeStyle = 'rgba(110,6,32,.5)'; c.lineWidth = 0.75;
-  for (let u = 0.2; u < 0.99; u += 0.034) { const [x, y] = snlMid(u, 0.12), [x2, y2] = snlMid(u, 0.88); c.beginPath(); c.moveTo(x, y); c.lineTo(x2, y2); c.stroke(); }
-  // the suture groove itself
-  snlTrace(c, snlP, 0.02, 1); c.strokeStyle = INK; c.lineWidth = 1.6; c.stroke();
-  // a lightning-bolt racing decal on the broad outer whorl
-  { c.save(); c.translate(-12, 13.5); c.rotate(0.12); c.scale(1.05, 1.05);
+  snlOutline(c); c.fillStyle = pkLG(c, ...snlPt(0.6), ...snlPt(3.6), SNL.chrome); c.fill();
+  c.save(); snlOutline(c); c.clip();
+  // rounded whorls: a dark groove pooled along each suture, a bright sky sheen along each whorl's crown
+  snlTrace(c, p => snlAcross(p, 0.03), 0, 3 * TWO_PI, 140); c.strokeStyle = 'rgba(28,40,70,.45)'; c.lineWidth = 3.4; c.stroke();
+  snlTrace(c, p => snlAcross(p, 0.45), 0.1, 3 * TWO_PI, 140); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2.4; c.stroke();
+  snlTrace(c, p => snlAcross(p, 0.84), 0.1, 2.6 * TWO_PI, 120); c.strokeStyle = 'rgba(40,56,90,.25)'; c.lineWidth = 1.6; c.stroke();
+  // cobalt flames licking back from the lip along the outer whorl
+  for (const [p0, len, w] of [[0.55, 1.6, 0.95], [0.8, 2.3, 1.15], [1.15, 1.8, 0.9]]) {
+    const pts = [], n = 16;
+    for (let i = 0; i <= n; i++) { const u = i / n, ph = p0 + len * u; pts.push([ph, 0.52 + 0.28 * Math.sin(u * 3.1 + p0 * 4) * (1 - u) * w]); }
+    const up = pts.map(([ph, k], i) => snlAcross(ph, Math.min(0.97, k + 0.4 * w * (1 - i / n)))), dn = pts.map(([ph, k], i) => snlAcross(ph, Math.max(0.07, k - 0.4 * w * (1 - i / n))));
+    c.beginPath(); up.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); [...dn].reverse().forEach(([x, y]) => c.lineTo(x, y)); c.closePath();
+    c.fillStyle = pkLG(c, ...snlAcross(p0, 0.5), ...snlAcross(p0 + len, 0.5), SNL.flame); c.fill();
+    c.strokeStyle = 'rgba(210,240,255,.75)'; c.lineWidth = 0.5; c.stroke();
+  }
+  // the yellow pinstripe round the outer whorl, ending in a lightning bolt
+  snlTrace(c, p => snlAcross(p, 0.84), 2.7, 4.6, 40); c.strokeStyle = '#a85e00'; c.lineWidth = 2.7; c.stroke();
+  snlTrace(c, p => snlAcross(p, 0.84), 2.7, 4.6, 40); c.strokeStyle = pkLG(c, ...snlPt(2.7), ...snlPt(4.6), SNL.stripe); c.lineWidth = 1.8; c.stroke();
+  snlTrace(c, p => snlAcross(p, 0.9), 2.75, 4.55, 40); c.strokeStyle = 'rgba(255,255,230,.8)'; c.lineWidth = 0.45; c.stroke();
+  { const [x, y] = snlAcross(5.0, 0.58), [x2, y2] = snlAcross(5.2, 0.58), a = Math.atan2(y2 - y, x2 - x);
+    c.save(); c.translate(x, y); c.rotate(a - Math.PI / 2);
     const bolt = [[0.6, -5.6], [-2.6, 0.4], [-0.2, 0.4], [-1.4, 5.8], [2.8, -1.2], [0.4, -1.2], [1.8, -5.6]];
-    pkPath(c, bolt, pkLG(c, 0, -5.6, 0, 5.8, ['#fffbe0', '#ffd23a', '#ff9a1a']), 1.3);
-    c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(0.6, -4.8); c.lineTo(-1.6, -0.4); c.stroke();
+    pkPath(c, bolt, pkLG(c, 0, -5.6, 0, 5.8, ['#fffbe0', '#ffd23a', '#ff9a1a']), 1.1);
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(0.6, -4.8); c.lineTo(-1.6, -0.4); c.stroke();
     c.restore(); }
-  // ambient occlusion low on the shell and under the cockpit, then gloss and a hotspot
-  c.fillStyle = pkLG(c, 0, cy + 3, 0, cy + R, ['rgba(60,0,20,0)', 'rgba(60,0,20,.45)']); c.fillRect(-R, cy + 3, 2 * R, R);
-  c.fillStyle = pkLG(c, 0, cy - R, 0, cy - R + 6, ['rgba(40,0,12,.5)', 'rgba(40,0,12,0)']); c.fillRect(-R, cy - R, 2 * R, 6);
-  c.save(); c.translate(-7.5, cy - 6.5); c.rotate(-0.7); c.scale(1, 0.5);
-  const hg = c.createRadialGradient(0, 0, 0.5, 0, 0, 7); hg.addColorStop(0, 'rgba(255,255,255,.45)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
-  c.fillStyle = hg; c.beginPath(); c.arc(0, 0, 7, 0, TWO_PI); c.fill(); c.restore();
-  pkE(c, -9.3, cy - 7.6, 2.3, 1.15, 'rgba(255,255,255,.92)', 0, -0.75);
-  pkDot(c, -12.2, cy - 3.2, 0.7, 'rgba(255,255,255,.8)');
+  // growth ridges across the whorls
+  c.strokeStyle = 'rgba(40,56,90,.2)'; c.lineWidth = 0.5;
+  for (let p = 0.25; p < 2 * TWO_PI; p += 0.3) { const [x, y] = snlAcross(p, 0.12), [x2, y2] = snlAcross(p + 0.08, 0.88); c.beginPath(); c.moveTo(x, y); c.lineTo(x2, y2); c.stroke(); }
+  // the suture groove itself
+  snlTrace(c, p => snlAcross(p, 0), 0, 3 * TWO_PI, 140); c.strokeStyle = INK; c.lineWidth = 1.2; c.stroke();
+  // ambient occlusion low on the shell, then a broad gloss and a hotspot on the lit upper right
+  c.fillStyle = pkLG(c, 0, 10, 0, 20, ['rgba(20,24,50,0)', 'rgba(20,24,50,.35)']); c.fillRect(-14, 10, 32, 10);
+  { const [gx, gy] = snlAcross(1.15, 0.62); c.save(); c.translate(gx, gy); c.rotate(0.5); c.scale(1, 0.42);
+    const hg = c.createRadialGradient(0, 0, 0.5, 0, 0, 7); hg.addColorStop(0, 'rgba(255,255,255,.8)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = hg; c.beginPath(); c.arc(0, 0, 7, 0, TWO_PI); c.fill(); c.restore();
+    pkE(c, gx + 0.6, gy + 0.2, 2.6, 1.05, 'rgba(255,255,255,.95)', 0, 0.5); }
+  { const [x, y] = snlAcross(2.1, 0.7); pkDot(c, x, y, 0.7, 'rgba(255,255,255,.85)'); }
   // scuffs and chips from the cave walls
-  c.strokeStyle = 'rgba(255,215,222,.55)'; c.lineWidth = 0.7;
-  for (const [x, y, a] of [[9.5, 21, 0.5], [12, 17, 0.95], [-12, 19.5, -0.5], [5, 25, 0.2]]) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * 2.4, y + Math.sin(a) * 2.4); c.stroke(); }
+  c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.7;
+  for (const [ph, k, a] of [[2.4, 0.3, 0.6], [3.0, 0.6, 0.95], [5.4, 0.4, -0.4], [4.2, 0.3, 0.2]]) { const [x, y] = snlAcross(ph, k); c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * 2.2, y + Math.sin(a) * 2.2); c.stroke(); }
   c.restore();
-  pkE(c, 0, cy, R, R, null, 2.4);
-  pkRim(c, 0, cy, R - 1.6, R - 1.6, 3.7, 4.4, 0.45);
-  c.strokeStyle = 'rgba(190,235,255,.6)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, cy, R - 1.3, -0.3, 0.8); c.stroke();
-  // the spinning brass hubcap at the spiral's heart
-  const hx = 1.9, hy = SNL_CY + 2.3, spin = thr ? t * 11 : t * 0.7;
+  snlOutline(c); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  // a cool rim of reflected sky down the right
+  c.save(); snlOutline(c); c.clip(); snlTrace(c, p => snlPt(p, 0.93), 1.4, 3.2, 30); c.strokeStyle = 'rgba(190,235,255,.75)'; c.lineWidth = 1.2; c.stroke(); c.restore();
+  // the spinning brass hubcap on the spire
+  const [hx, hy] = snlPt(5 * TWO_PI), spin = thr ? t * 11 : t * 0.7;
   if (thr) {   // turbo whirl: motion arcs spinning round the hub
-    c.save(); c.globalAlpha = 0.6; c.strokeStyle = '#ffd6dc'; c.lineWidth = 0.9;
-    for (let k = 0; k < 3; k++) { const a = -t * 14 + k * TWO_PI / 3; c.beginPath(); c.arc(hx, hy, 5.2, a, a + 1.1); c.stroke(); }
+    c.save(); c.globalAlpha = 0.75; c.strokeStyle = '#ffffff'; c.lineWidth = 0.9;
+    for (let k = 0; k < 3; k++) { const a = -t * 14 + k * TWO_PI / 3; c.beginPath(); c.arc(hx, hy, 4.2, a, a + 1.1); c.stroke(); }
     c.restore();
   }
-  pkE(c, hx, hy, 3.3, 3.3, pkRG(c, hx, hy, 3.3, SNL.brass), 1.6);
+  pkE(c, hx, hy, 2.1, 2.1, pkRG(c, hx, hy, 2.1, SNL.brass), 1);
   c.strokeStyle = '#8a4e08'; c.lineWidth = 1;
-  for (const a of [spin, spin + Math.PI / 2]) { c.beginPath(); c.moveTo(hx + Math.cos(a) * 1.7, hy + Math.sin(a) * 1.7); c.lineTo(hx - Math.cos(a) * 1.7, hy - Math.sin(a) * 1.7); c.stroke(); }
-  pkDot(c, hx - 1.1, hy - 1.2, 0.65, '#fffbe0');
+  for (const a of [spin, spin + Math.PI / 2]) { c.beginPath(); c.moveTo(hx + Math.cos(a) * 1.3, hy + Math.sin(a) * 1.3); c.lineTo(hx - Math.cos(a) * 1.3, hy - Math.sin(a) * 1.3); c.stroke(); }
+  pkDot(c, hx - 0.8, hy - 0.9, 0.5, '#fffbe0');
+}
+// the flared brass lip round the aperture (the old cockpit ring): the far half behind the body, the near half over it
+function snlLip(c, front) {
+  const L = snlSlot();
+  c.save(); c.translate(L.x, L.y); c.rotate(L.a);
+  if (!front) pkE(c, 0, 0.2, L.rx - 1, 1.8, pkLG(c, 0, -2, 0, 2, ['#24121c', '#5a2c3c']), 0);   // the dark inside of the shell
+  c.beginPath(); c.ellipse(0, 0, L.rx, 2.3, 0, front ? -0.1 : Math.PI - 0.1, front ? Math.PI + 0.1 : TWO_PI + 0.1); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
+  c.strokeStyle = pkLG(c, -L.rx, 0, L.rx, 0, [SNL.brass[2], SNL.brass[0], SNL.brass[1], SNL.brass[2]]); c.lineWidth = 2.5; c.stroke();
+  if (front) for (const k of [0.22, 0.4, 0.6, 0.78]) { const u = Math.PI * k; pkDot(c, Math.cos(u) * L.rx, Math.sin(u) * 2.3, 0.55, '#7a4608'); pkDot(c, Math.cos(u) * L.rx - 0.22, Math.sin(u) * 2.3 - 0.22, 0.22, '#fff6c8'); }
+  else { c.strokeStyle = 'rgba(255,250,210,.8)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(0, 0, L.rx, 2.3, 0, Math.PI + 0.5, TWO_PI - 0.5); c.stroke(); }
+  c.restore();
+}
+// the body: the slimy foot stretching up out of the shell under the head, its pale frilly sole down the leading
+// (left) edge, a frilled skirt spilling over the lip and slime running down the shell; reach 0..1 stretches it taller
+function snlBody(c, hx, hy, t, thr, bite) {
+  const L = snlSlot(), ca = Math.cos(L.a), sa = Math.sin(L.a);
+  const end = k => [L.x + ca * L.rx * k, L.y + sa * L.rx * k];
+  const [x0, y0] = end(-0.86), [x1, y1] = end(0.6), wob = bite ? Math.sin(t * 19) * 2.4 : Math.sin(t * 3) * 0.5;
+  const path = () => {
+    c.beginPath(); c.moveTo(x0, y0);
+    c.bezierCurveTo(x0 - 2.4, y0 - 4, hx - 7.4 + wob, hy + 9, hx - 6, hy + 2);
+    c.lineTo(hx + 6, hy + 2);
+    c.bezierCurveTo(hx + 6.6, hy + 8, x1 + 1, y1 - 5, x1, y1); c.closePath();
+  };
+  path(); c.fillStyle = pkLG(c, x0 - 3, 0, x1 + 1, 0, [SNL.skin[2], SNL.skin[1], SNL.skin[0], SNL.skin[1]]); c.fill();
+  c.save(); path(); c.clip();
+  // the pale frilly sole along the leading edge, with its ripple of muscle waves
+  c.beginPath(); c.moveTo(x0 - 0.4, y0 + 0.4); c.bezierCurveTo(x0 - 3, y0 - 4, hx - 8.2 + wob, hy + 9, hx - 6.6, hy + 2.6);
+  c.strokeStyle = SNL.sole[1]; c.lineWidth = 3.6; c.stroke();
+  c.beginPath(); c.moveTo(x0 + 1.4, y0 - 0.6); c.bezierCurveTo(x0 - 0.8, y0 - 4.4, hx - 5.6 + wob, hy + 9, hx - 4.6, hy + 3.4); c.strokeStyle = 'rgba(200,120,56,.7)'; c.lineWidth = 0.7; c.stroke();
+  c.strokeStyle = 'rgba(214,138,72,.8)'; c.lineWidth = 0.6;
+  for (let i = 0; i < 5; i++) { const u = (i + 0.5) / 5, y = y0 + (hy + 4 - y0) * u, x = x0 - 2.2 + (hx - 6.4 - x0) * u * u - Math.sin(u * 3) * 0.8; const ph = Math.sin(t * (thr ? 14 : 5) - i * 1.4) * 0.4; c.beginPath(); c.moveTo(x - 1.2, y + ph); c.lineTo(x + 1.4, y + 0.8 + ph); c.stroke(); }
+  // skin creases, spots and a wet sheen
+  c.strokeStyle = 'rgba(190,110,50,.6)'; c.lineWidth = 0.7;
+  for (const k of [0.3, 0.55]) { const y = y0 + (hy + 2 - y0) * k; c.beginPath(); c.moveTo(hx - 4.6, y); c.quadraticCurveTo(hx, y + 1.3, hx + 4.8, y - 0.6); c.stroke(); }
+  for (const [u, v, r] of [[0.25, 0.6, 0.9], [0.5, 0.3, 0.8], [0.7, 0.7, 0.7]]) pkDot(c, hx - 5 + v * 10, y0 + (hy + 2 - y0) * u, r, SNL.spot);
+  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(hx - 2.6, hy + 7); c.quadraticCurveTo(hx - 4.4, (y0 + hy) / 2 + 3, x0 + 2.6, y0 - 2.4); c.stroke();
+  c.fillStyle = pkLG(c, 0, hy + 1.8, 0, hy + 5.6, ['rgba(140,60,20,.35)', 'rgba(140,60,20,0)']); c.fillRect(hx - 9, hy + 1.8, 18, 4);
+  c.restore();
+  path(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke();
+  // the frilled skirt of the foot spilling out over the lip, slime glistening, and a drip running down the shell
+  { const sk = () => { c.beginPath(); c.moveTo(x0 - 1.4, y0 - 0.6); for (let i = 0; i < 3; i++) { const xa = x0 - 1.4 + i * 1.7; c.quadraticCurveTo(xa + 0.85, y0 + 2.4 + (i === 1 ? 0.5 : 0), xa + 1.7, y0 - 0.2); } c.lineTo(x0 + 3.6, y0 - 1.4); c.closePath(); };
+    sk(); c.fillStyle = pkLG(c, 0, y0 - 1, 0, y0 + 2.4, [SNL.sole[0], SNL.sole[1], SNL.skin[1]]); c.fill(); c.strokeStyle = INK; c.lineWidth = 0.9; c.stroke(); }
+  if (!bite) {
+    const dr = (t * (thr ? 0.9 : 0.35)) % 1, dx = x0 - 0.4, dy = y0 + 2.6 + dr * 4.5;
+    c.save(); c.globalAlpha = 0.85 * (1 - dr * 0.6);
+    c.beginPath(); c.moveTo(dx - 0.5, y0 + 2.4); c.quadraticCurveTo(dx - 0.6, dy - 1, dx - 0.9, dy); c.lineTo(dx + 0.5, dy); c.quadraticCurveTo(dx + 0.3, dy - 1, dx + 0.6, y0 + 2.4); c.closePath();
+    c.fillStyle = 'rgba(220,255,240,.75)'; c.fill();
+    pkE(c, dx - 0.2, dy + 0.6, 1, 1.2, 'rgba(225,255,245,.85)', 0.5);
+    c.restore();
+  }
+  pkDot(c, x0 + 0.6, y0 - 3.4, 0.7, 'rgba(255,255,255,.9)');
 }
 // a soft tapered eyestalk along a quadratic curve, with a wet sheen down one side
 function snlStalk(c, b, m, e, w0, w1) {
@@ -5565,103 +5657,120 @@ function snlStalk(c, b, m, e, w0, w1) {
     const w = (w0 + (w1 - w0) * u) / 2, nx = -(y2 - y1) / l * w, ny = (x2 - x1) / l * w;
     L.push([x + nx, y + ny]); Rr.push([x - nx, y - ny]);
   }
-  pkPath(c, [...L, ...Rr.reverse()], pkLG(c, b[0] - w0, 0, b[0] + w0, 0, [SNL.skin[0], SNL.skin[1], SNL.skin[2]]), 1.6);
-  c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 0.8; c.beginPath();
+  pkPath(c, [...L, ...Rr.reverse()], pkLG(c, b[0] - w0, 0, b[0] + w0, 0, [SNL.skin[0], SNL.skin[1], SNL.skin[2]]), 1.4);
+  c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.8; c.beginPath();
   for (let i = 1; i <= 8; i++) { const u = i / 10, [x, y] = P(u), w = (w0 + (w1 - w0) * u) * 0.22; i > 1 ? c.lineTo(x - w, y) : c.moveTo(x - w, y); } c.stroke();
 }
-function snlEye(c, x, y, r, st, mood, d) {
-  // flying goggles: a brass rim round each eye, then the eye, its lid, and a glint across the glass
-  c.beginPath(); c.arc(x, y, r + 1.3, 0, TWO_PI); c.strokeStyle = INK; c.lineWidth = 3.5; c.stroke();
-  c.strokeStyle = pkLG(c, x - r, y - r, x + r, y + r, SNL.brass); c.lineWidth = 1.8; c.stroke();
+// a big round eye in brass flying goggles; mood: calm | drive | grin | alarm | panic | scream
+function snlEye(c, x, y, r, st, mood) {
+  const b = st.blink;
+  c.beginPath(); c.arc(x, y, r + 1.3, 0, TWO_PI); c.strokeStyle = INK; c.lineWidth = 3.4; c.stroke();
+  c.strokeStyle = pkLG(c, x - r, y - r, x + r, y + r, SNL.brass); c.lineWidth = 1.9; c.stroke();
   c.strokeStyle = 'rgba(255,255,230,.9)'; c.lineWidth = 0.7; c.beginPath(); c.arc(x, y, r + 1.6, 3.4, 4.6); c.stroke();
   for (let k = 0; k < 6; k++) { const a = k / 6 * TWO_PI + 0.3; pkDot(c, x + Math.cos(a) * (r + 1.3), y + Math.sin(a) * (r + 1.3), 0.36, '#8a5008'); }
-  const keep = pkMood;
-  if (mood === 'alarm') pkMood = 'panic';
-  pkEye(c, x, y, r, st, { iris: '#6a3818' });
-  pkMood = keep;
-  if (st.blink > 0.35 && (mood === 'drive' || mood === 'grin')) {
-    // determined: a heavy lid slanting down toward the middle
-    c.save(); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.clip();
-    const lo = mood === 'drive' ? -0.05 : -0.42, inner = mood === 'drive' ? 0.48 : 0.12;
-    const yl = y + r * (d < 0 ? lo : lo + inner), yr = y + r * (d < 0 ? lo + inner : lo);
-    c.beginPath(); c.moveTo(x - r - 1, y - r - 1); c.lineTo(x + r + 1, y - r - 1); c.lineTo(x + r + 1, yr); c.lineTo(x - r - 1, yl); c.closePath();
-    c.fillStyle = pkLG(c, 0, y - r, 0, y + r * 0.4, [SNL.skin[0], SNL.skin[1]]); c.fill();
-    c.strokeStyle = INK; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + r + 1, yr); c.lineTo(x - r - 1, yl); c.stroke();
+  pkE(c, x, y, r, r * b, '#ffffff', 1.2);
+  if (b > 0.35) {
+    const scared = mood === 'alarm' || mood === 'panic' || mood === 'scream';
+    const lk = st.look * r * 0.24, ly = pkLookDown * r * 0.3 + (mood === 'drive' ? -r * 0.12 : 0);
+    const ir = scared ? r * 0.42 : mood === 'drive' ? r * 0.55 : r * 0.66, pr = scared ? r * 0.2 : mood === 'drive' ? r * 0.26 : r * 0.36;
+    c.save(); c.beginPath(); c.ellipse(x, y, r, r * b, 0, 0, TWO_PI); c.clip();
+    pkE(c, x + lk, y + ly + r * 0.06, ir, ir * b, pkRG(c, x + lk, y + ly, ir, ['#b0f0ff', '#2a9ae0', '#0e4a8a']), 0);
+    pkE(c, x + lk, y + ly + r * 0.08, pr, pr * b, '#0e1a30', 0);
+    pkE(c, x + lk - ir * 0.36, y + ly - ir * 0.36, ir * 0.3, ir * 0.3 * b, '#ffffff', 0);
+    pkDot(c, x + lk + ir * 0.4, y + ly + ir * 0.34, ir * 0.13, 'rgba(255,255,255,.85)');
     c.restore();
   }
+  // a glint across the goggle glass
   c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, r - 0.7, 3.5, 4.3); c.stroke();
-  pkE(c, x, y, r, r, null, 1.4);
 }
-function snlMouth(c, mood, y) {
+// eager brows on the head (arched when happy, slammed into a V when racing, flung up in alarm)
+function snlBrows(c, mood, hy) {
+  const sh = { calm: [0.4, -0.6], drive: [-1.4, 1.4], grin: [0.8, -0.9], alarm: [1.6, -1.6], panic: [2, -2], scream: [2.2, -2.2] }[mood];
+  for (const d of [-1, 1]) {
+    c.beginPath(); c.moveTo(d * 1.6, hy - 5.2 - sh[0] * 0.3 + sh[1] * 0.2); c.quadraticCurveTo(d * 4, hy - 6.6 - sh[0], d * 6.4, hy - 5.6 - sh[0] * 0.6 - sh[1] * 0.8);
+    c.strokeStyle = pkSoft || INK; c.lineWidth = 1.5; c.stroke();
+  }
+}
+function snlMouth(c, mood, y, t) {
+  const teeth = (path, w, ty, th) => { c.save(); path(); c.clip(); c.fillStyle = '#ffffff'; c.fillRect(-w, ty, 2 * w, th); c.restore(); };
+  if (mood === 'calm' || mood === 'grin') {
+    // a huge D-shaped grin, corners curled up, one bright row of teeth under the top lip
+    const w = mood === 'grin' ? 6.6 : 5.8, dp = mood === 'grin' ? 5.6 : 4.4;
+    const path = () => { c.beginPath(); c.moveTo(-w, y - 1.4); c.quadraticCurveTo(0, y - 0.2, w, y - 1.4); c.quadraticCurveTo(w * 0.7, y + dp, 0, y + dp); c.quadraticCurveTo(-w * 0.7, y + dp, -w, y - 1.4); c.closePath(); };
+    path(); c.fillStyle = '#7a1e22'; c.fill();
+    c.save(); path(); c.clip(); pkE(c, 0, y + dp + 0.4, w * 0.5, 2.2, '#ff7a86', 0); c.restore();
+    teeth(path, w, y - 2, 2.6);
+    path(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
+    for (const d of [-1, 1]) { c.beginPath(); c.moveTo(d * (w - 0.3), y - 1.6); c.quadraticCurveTo(d * (w + 1.2), y - 2, d * (w + 1.3), y - 3.2); c.strokeStyle = pkSoft || INK; c.lineWidth = 1.1; c.stroke(); }
+    return;
+  }
   if (mood === 'drive') {
-    // a gritted, lopsided racer's grin
-    c.beginPath(); c.moveTo(-5, y - 1.2); c.quadraticCurveTo(-0.5, y + 5, 5.4, y - 2.2); c.quadraticCurveTo(0.2, y - 0.2, -5, y - 1.2); c.closePath();
-    c.fillStyle = '#ffffff'; c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke();
-    c.strokeStyle = 'rgba(28,15,11,.6)'; c.lineWidth = 0.7;
-    c.beginPath(); c.moveTo(-4.4, y + 0.3); c.quadraticCurveTo(0, y + 1.6, 4.8, y - 0.8); c.stroke();
-    for (const tx of [-2.3, 0.3, 2.9]) { c.beginPath(); c.moveTo(tx, y - 1); c.lineTo(tx + 0.1, y + 2.6); c.stroke(); }
-    c.strokeStyle = INK; c.lineWidth = 1.3; c.beginPath(); c.moveTo(4.8, y - 2.9); c.quadraticCurveTo(6, y - 2.2, 6, y - 0.9); c.stroke();
+    // a wide-open racing whoop: one bright top tooth row, the tongue flapping in the wind
+    const w = 6, dp = 6.2 + Math.sin(t * 9) * 0.4;
+    const path = () => { c.beginPath(); c.moveTo(-w, y - 1.8); c.quadraticCurveTo(0, y - 0.6, w, y - 1.8); c.quadraticCurveTo(w * 0.8, y + dp, 0, y + dp); c.quadraticCurveTo(-w * 0.8, y + dp, -w, y - 1.8); c.closePath(); };
+    path(); c.fillStyle = '#6a1418'; c.fill();
+    c.save(); path(); c.clip(); c.beginPath(); c.ellipse(1 + Math.sin(t * 13) * 0.6, y + dp - 0.6, 3.4, 2.6, 0.2, 0, TWO_PI); c.fillStyle = '#ff6a7a'; c.fill(); c.restore();
+    teeth(path, w, y - 2.4, 2.8);
+    path(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
     return;
   }
-  if (mood === 'alarm') { pkE(c, 0, y + 0.6, 2, 2.6, '#6a1a14', 1.4); return; }
-  if (mood === 'calm') {
-    c.beginPath(); c.moveTo(-4.2, y - 0.8); c.quadraticCurveTo(0, y + 4.2, 4.2, y - 0.8); c.quadraticCurveTo(0, y + 1.2, -4.2, y - 0.8); c.closePath();
-    c.fillStyle = '#7a1e1a'; c.fill(); c.strokeStyle = INK; c.lineWidth = 1.5; c.stroke();
-    pkE(c, 0.5, y + 1.7, 1.5, 0.8, '#ff7a86', 0);
-    return;
-  }
-  pkSmile(c, 0, y, 3.4, 1.5);
+  if (mood === 'alarm') { pkE(c, 0, y + 1.8, 2.4, 3, '#6a1a14', 1.2); pkE(c, 0, y + 3, 1.4, 1, '#ff7a86', 0); return; }
+  // panic / scream: a big wobbling yell
+  const w = mood === 'scream' ? 4.4 : 3.6, h = mood === 'scream' ? 5.4 : 4.2, wob = Math.sin(t * 40) * 0.3;
+  pkE(c, 0, y + 2.6, w + wob, h - wob, '#6a1418', 1.3);
+  c.save(); c.beginPath(); c.ellipse(0, y + 2.6, w + wob, h - wob, 0, 0, TWO_PI); c.clip();
+  c.fillStyle = '#ffffff'; c.fillRect(-w, y + 2.6 - h, 2 * w, 1.6);
+  pkE(c, 0, y + 2.6 + h - 1, w * 0.6, 1.8, '#ff6a7a', 0); c.restore();
 }
 function snlDraw(c, st) {
-  const t = st.t, thr = !!st.thrust, panic = pkMood === 'panic', grin = pkMood === 'grin';
-  const alarm = !thr && !panic && pkLookDown > 0;
-  const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'drive' : alarm ? 'alarm' : 'calm';
+  const t = st.t, thr = !!st.thrust, bite = st.bite >= 0, panic = pkMood === 'panic' && !bite, grin = pkMood === 'grin';
+  const alarm = !thr && !panic && !bite && pkLookDown > 0;
+  const mood = bite ? 'scream' : panic ? 'panic' : grin ? 'grin' : thr ? 'drive' : alarm ? 'alarm' : 'calm';
   const bob = Math.sin(t * 2.6) * (thr ? 0.35 : 0.85), fl = thr ? 1 + Math.sin(t * 30) * 0.15 : 0;
-  // the vehicle: fins, afterburner bell, shell
+  const shake = panic || bite ? Math.sin(t * 47) * 0.45 : 0;
+  // the vehicle tips back in the bite, the snail flung up out of it
+  const ta = 0.3 + Math.sin(t * 9) * 0.06, tip = () => { if (bite) { c.translate(2, 12); c.rotate(ta); c.translate(-2, -12); } };
+  // (a point in the tipped vehicle's frame, so the body reaches the head while the shell tips back)
+  const local = (x, y) => bite ? [2 + (x - 2) * Math.cos(ta) + (y - 12) * Math.sin(ta), 12 - (x - 2) * Math.sin(ta) + (y - 12) * Math.cos(ta)] : [x, y];
+  const hx = (bite ? -2 : thr ? -1 : -1.6) + shake, hy = -15.6 + bob * 0.5 + (thr ? 0.6 : 0) + (bite ? -2.4 : 0);
+  c.save(); tip();
   for (const d of [-1, 1]) snlFin(c, d, fl);
-  snlBell(c, thr);
+  snlBell(c, thr, t);
   snlShell(c, thr, t);
-  // the cockpit: dark inside, a riveted brass ring round its lip
-  pkE(c, 0, -2.5, 10.2, 3.5, pkLG(c, 0, -6, 0, 1, SNL.brass), 1.8);
-  pkE(c, 0, -2.9, 8, 2.2, '#4a0f22', 0);
-  // the snail sits in its cockpit, head bobbing
-  c.save(); c.translate(0, bob * 0.5);
-  const hy = -10.6 + bob * 0.4, lean = thr ? -0.5 : 0;
+  snlLip(c, false);
+  snlBody(c, ...local(hx, hy), t, thr, bite);
+  snlLip(c, true);
+  c.restore();
   // eyestalks
-  const sway = Math.sin(t * 2.2) * 0.1, Ls = panic ? 14.2 : alarm ? 13.8 : thr ? 12.6 : 13.5, eyes = [];
+  const sway = Math.sin(t * 2.2) * 0.1, Ls = bite ? 12.6 : panic ? 12 : alarm ? 11.8 : thr ? 10.8 : 11.2, eyes = [];
   for (const d of [-1, 1]) {
-    let a = d * (panic ? 0.5 : alarm ? 0.34 : thr ? 0.56 : 0.46) + sway * (d < 0 ? 1 : 0.8);
-    if (panic) a += Math.sin(t * 31 + d) * 0.09;
+    let a = d * (bite ? 0.7 : panic ? 0.5 : alarm ? 0.34 : thr ? 0.3 : 0.42) + sway * (d < 0 ? 1 : 0.8);
+    if (panic || bite) a += Math.sin(t * 31 + d) * 0.1;
     if (alarm) a += Math.sin(t * 12 + d * 2) * 0.06;
-    const bx = d * 3.4 + lean, by = hy - 4.2, tx = bx + Math.sin(a) * Ls, ty = by - Math.cos(a) * Ls;
-    const bend = thr ? d * 1.5 : Math.sin(t * 2.2 + d) * 0.8;
-    snlStalk(c, [bx, by + 4], [(bx + tx) / 2 + bend, (by + ty) / 2], [tx, ty], 5, 2.6);
-    eyes.push([tx, ty, d]);
+    const bx = hx + d * 3.6, by = hy - 5, tx = bx + Math.sin(a) * Ls, ty = by - Math.cos(a) * Ls;
+    // on the climb the stalks stream back in the wind, bowed by the speed
+    const bend = thr ? -d * 2.4 : Math.sin(t * 2.2 + d) * 0.8;
+    snlStalk(c, [bx, by + 4], [(bx + tx) / 2 + bend, (by + ty) / 2 + (thr ? 1.4 : 0)], [tx, ty], 4.6, 2.4);
+    eyes.push([tx, ty]);
   }
-  // head
-  c.save(); c.translate(lean, 0);
-  pkE(c, 0, hy, 10.6, 7.7, pkRG(c, 0, hy, 10.6, SNL.skin), 2.2);
-  c.save(); c.beginPath(); c.ellipse(0, hy, 10.6, 7.7, 0, 0, TWO_PI); c.clip();
-  // soft skin wrinkles over the brow, between the stalks
-  c.strokeStyle = 'rgba(10,92,86,.45)'; c.lineWidth = 0.8;
-  for (const k of [0, 1]) { c.beginPath(); c.moveTo(-2.6 + k * 0.4, hy - 5.6 + k * 1.5); c.quadraticCurveTo(0, hy - 6.6 + k * 1.5, 2.6 - k * 0.4, hy - 5.6 + k * 1.5); c.stroke(); }
-  for (const [x, y, r] of [[-7, hy - 3.2, 1.1], [-4.6, hy - 6, 0.8], [6.4, hy - 4.4, 1.2], [8.2, hy - 0.8, 0.8], [3.6, hy - 6.6, 0.7], [-8.6, hy + 0.6, 0.8]]) pkDot(c, x, y, r, SNL.spot);
-  c.fillStyle = pkLG(c, 0, hy + 3, 0, hy + 8.7, ['rgba(10,60,60,0)', 'rgba(10,60,60,.28)']); c.fillRect(-11, hy + 3, 22, 6);
+  // head: a round, soft face turned to us
+  c.save(); c.translate(hx, 0);
+  pkE(c, 0, hy, 9.8, 7.6, pkRG(c, 0, hy, 9.8, SNL.skin.slice(0, 3)), 1.8);
+  c.save(); c.beginPath(); c.ellipse(0, hy, 9.8, 7.6, 0, 0, TWO_PI); c.clip();
+  // a pale muzzle, soft skin wrinkles over the brow, spots, and shade under the chin
+  pkE(c, 0, hy + 2.6, 7.4, 4.6, 'rgba(255,250,236,.85)', 0);
+  c.strokeStyle = 'rgba(170,96,40,.45)'; c.lineWidth = 0.7;
+  for (const k of [0, 1]) { c.beginPath(); c.moveTo(-2.4 + k * 0.4, hy - 6 + k * 1.3); c.quadraticCurveTo(0, hy - 6.9 + k * 1.3, 2.4 - k * 0.4, hy - 6 + k * 1.3); c.stroke(); }
+  for (const [x, y, r] of [[-7, hy - 2.6, 1], [-5, hy - 5.4, 0.7], [6.6, hy - 3.6, 1.1], [8, hy + 0.2, 0.7], [4, hy - 6, 0.6]]) pkDot(c, x, y, r, SNL.spot);
+  c.fillStyle = pkLG(c, 0, hy + 3.6, 0, hy + 7.6, ['rgba(140,60,20,0)', 'rgba(140,60,20,.3)']); c.fillRect(-10, hy + 3.6, 20, 4.2);
   c.restore();
-  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.3; c.beginPath(); c.ellipse(0, hy, 8.4, 6.2, 0, 3.75, 4.3); c.stroke();
-  pkDot(c, -6, hy - 5.1, 0.8, '#ffffff');
-  c.strokeStyle = 'rgba(200,245,255,.6)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, hy, 9.4, 7.5, 0, -0.5, 0.7); c.stroke();
-    // the cockpit ring's front lip, over the snail's chin
+  c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, hy, 7.8, 6, 0, 3.75, 4.3); c.stroke();
+  pkDot(c, -5.6, hy - 5, 0.75, '#ffffff');
+  for (const d of [-1, 1]) pkE(c, d * 6.6, hy + 2, 2, 1.2, 'rgba(255,96,110,.55)', 0);
+  snlBrows(c, mood, hy);
+  snlMouth(c, mood, hy + 1.6, t);
   c.restore();
-  c.beginPath(); c.ellipse(0, -2.5, 10.2, 3.5, 0, 0.12, Math.PI - 0.12); c.strokeStyle = INK; c.lineWidth = 4; c.stroke();
-  c.beginPath(); c.ellipse(0, -2.5, 10.2, 3.5, 0, 0.12, Math.PI - 0.12); c.strokeStyle = pkLG(c, -10, 0, 10, 0, [SNL.brass[2], SNL.brass[0], SNL.brass[1], SNL.brass[2]]); c.lineWidth = 2.2; c.stroke();
-  for (const a of [0.5, 1.05, 1.57, 2.1, 2.65]) { pkDot(c, Math.cos(a) * 10.2, -2.5 + Math.sin(a) * 3.5, 0.65, '#7a4608'); pkDot(c, Math.cos(a) * 10.2 - 0.25, -2.75 + Math.sin(a) * 3.5, 0.25, '#fff6c8'); }
-  c.save(); c.translate(lean, 0);
-  for (const d of [-1, 1]) pkE(c, d * 7, hy + 2.4, 2.2, 1.3, 'rgba(255,92,130,.6)', 0);
-  snlMouth(c, mood, hy + 3.2);
-  c.restore();
-  for (const [x, y, d] of eyes) snlEye(c, x, y, 4.2, st, mood, d);
-  c.restore();
+  for (const [x, y] of eyes) snlEye(c, x, y, 4.3, st, mood);
 }
 
 // Captain Puff: a pufferfish in a captain's cap, riding a riveted fishbowl water-jet. Bowl centre (0, 4) r 15.5,
@@ -6259,7 +6368,7 @@ const PILOTS = [
     c.restore();
   } },
 
-  { id: 'snail', name: 'Shellby the snail', ride: 'Turbo shell', noInk: '#0a5650', exhaust: 'fire', nozzles: [[0, 36]], draw(c, st) { snlDraw(c, st); } },
+  { id: 'snail', name: 'Shellby the snail', ride: 'Turbo shell', noInk: '#26406e', exhaust: 'fire', bitePose: true, nozzles: [[2.1, 32]], draw(c, st) { snlDraw(c, st); } },
 
   { id: 'puffer', name: 'Captain Puff', ride: 'Fishbowl water-jet', noInk: '#6a3412', exhaust: 'water', nozzles: [[0, 29]], draw(c, st) { pfDraw(c, st); } },
 
