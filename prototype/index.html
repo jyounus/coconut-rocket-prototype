@@ -1454,7 +1454,7 @@ const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
 // Radii: rr at the root, rm mid-way out, r0 at the bend, r1 at the wrist. rx: the root's offset from the body's centre
 // line; ry: how far below the bend it sits; rest: where the tip idles (always under the catch line); wig: a wave.
 const GRAB_STYLE = {
-  worm:    { type: 'parapod',  hand: 'chaetae',   rr: 24, rm: 19, r0: 15, r1: 12, rx: 64, ry: 76, rest: -46, wig: 3 },   // Scissorjaw: a parapod growing out of its first body ring, a big glass-bristle fan for a hand
+  worm:    { type: 'parapod',  hand: 'parahook',  rr: 24, rm: 19, r0: 15, r1: 12, rx: 64, ry: 76, rest: -46, wig: 3 },   // Scissorjaw: a ringed parapod growing out of its first body ring, ending in a gold hooked claw
   bat:     { type: 'wing',     hand: 'vclaw',     rr: 18, rm: 12, r0: 11, r1: 7,  rx: 104, ry: 70, rest: -14, bendY: 46 },
   gorilla: { type: 'arm',      hand: 'apegrip',   rr: 36, rm: 28, r0: 21, r1: 16, rx: 116, ry: 64, rest: -18, lean: 10 },   // Cinderback: huge shaggy arms climbing the walls, hands braced high up the rock (one higher than the other: lean), elbows out
   mole:    { type: 'paw',      hand: 'spade',     rr: 36, rm: 28, r0: 17, r1: 14, rx: 128, ry: 92, rest: -36 },   // the Auger mole: huge shovel forearms from low on its flanks
@@ -1572,12 +1572,12 @@ function grabHand(kind, grip, t, wind = 0) {
       for (let k = 0; k < 4; k++) { const u = 2 + k * 6.3, fl = 2.6 * Math.sin(t * 14 + k * 2); s(u + 1, 8, u - 1, 18 + fl * 0.5, 3.4, 'f'); s(u - 1, 18 + fl * 0.5, u - 4 + fl * 0.4, 30 + fl - Math.abs(k - 1.5) * 1.5, 2, 'f'); }
       break;
     }
-    case 'chaetae':   // the Scissorjaw's parapod tip: a big fleshy lobe, a black hooked spine and a wide fan of long glass
-      // bristles stabbed into the rock (about twice the old size, still inside the wall band)
-      s(13, 0, 13, 11, 13);
-      s(21, 9, 15 - g * 3, 30, 4.8, 'c');
-      for (let k = 0; k < 5; k++) { const ub = 4 + k * 4.3, ut = -1 + k * 6.2 + Math.sin(t * 30 + k) * wind * 1.4, vt = 44 - Math.abs(k - 2) * 4.5; s(ub, 12, ut - g * 1.8, vt, 3.2, 'x'); }
-      s(5, 6, -1 - g, 20, 2.6, 'x');
+    case 'parahook':  // the Scissorjaw's parapod tip: two more ring segments, then a big gold hooked claw (its mandibles'
+      // gold) curling over the wall's edge into the rock (deeper as it grips), a smaller hook behind it, two glass bristles
+      s(12, 0, 12, 7, 12.5); s(12, 7, 11.5, 14, 10.5);
+      s(11.5, 15, 8 - g, 27, 6.4, 'c'); s(8 - g, 27, 1 - 2 * g, 33, 4.6, 'c'); s(1 - 2 * g, 33, -3 - 2.5 * g, 29, 2.8, 'c');
+      s(19, 9, 23, 19, 3.6, 'c');
+      s(5, 4, -1, 10, 2.2, 'x'); s(19, 2, 25, 6, 2.2, 'x');
       break;
     case 'smokeclaw': {   // three long bright claws on a hand of smoke
       s(10, 0, 11, 8, 10, 'k');
@@ -7130,20 +7130,20 @@ function gkArm(c, rig, P, layer, t) {
   }
 }
 const MONSTERS = [
-  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, mouth: [0, 210, 100, 88], halfW: 262,
+  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], halfW: 262,
     // its ringed body: armoured segments shrinking away down the shaft in a slow S, a glass bristle tuft on each side
     // of each ring and molten light in the gaps; on the swallow a glowing lump slides down it ring by ring
     body(c, m) {
       const t = m.t, bt = m.bite, N = 13, segs = [];
       if (bt >= 0) c.scale(1 - 0.12 * smooth(0, 0.12, bt), 1);   // (it draws itself in tight as it lunges, so all of it stays on screen in the bite's zoom)
-      const lump = bt > 0.42 ? smooth(0.42, 1.5, bt) * (N + 1) - 0.5 : -9;
+      const lump = bt >= 0.45 ? (bt <= 1.2 ? lerp(-0.6, N - 0.5, 0.25 * ((bt - 0.45) / 0.75) + 0.75 * smooth(0.45, 1.2, bt)) : N - 0.5 + (bt - 1.2) * 8) : -9;   // (the swallowed lump rides from the neck at +0.45 s to the tail at +1.2 s)
       SJ.last = { segs, pin: bt >= 0 ? 1 - 0.12 * smooth(0, 0.12, bt) : 1 };   // (the parapods redraw the rings they grow out of over their roots)
       for (let k = 0; k < N; k++) {
         const u = k / (N - 1);
         const y = 172 + k * 46 - k * k * 0.5, x = Math.sin(k * 0.55 - t * 1.7) * 70 * Math.pow(u, 1.2);
         const sw = Math.exp(-((k - lump) ** 2) / 0.7);
-        const w = 202 * (1 - 0.78 * Math.pow(u, 0.75)) * (1 + 0.025 * Math.sin(t * 2.4 - k * 0.8)) * (1 + 0.24 * sw);
-        segs.push({ x, y, w, h: 68 * (1 - 0.45 * u) * (1 + 0.2 * sw), u, sw });
+        const w = 202 * (1 - 0.78 * Math.pow(u, 0.75)) * (1 + 0.025 * Math.sin(t * 2.4 - k * 0.8)) * (1 + 0.36 * sw);
+        segs.push({ x, y, w, h: 68 * (1 - 0.45 * u) * (1 + 0.3 * sw), u, sw });
       }
       // the tail's tip below the last ring: a solid chitin spike in a ring of glass bristles
       { const S = segs[N - 1], tx = S.x + Math.sin(t * 1.3) * 6, ty = S.y + S.h * 0.6;
@@ -7163,30 +7163,40 @@ const MONSTERS = [
       const t = m.t, bt = m.bite, op = clamp(m.open, 0, 1), gp = m.gape || 0, rage = mRage, wide = bt >= 0 ? (m.wide || 0) : 0;
       if (bt >= 0) c.scale(1 - 0.12 * smooth(0, 0.12, bt), 1);   // (it draws itself in tight as it lunges, so all of it stays on screen in the bite's zoom)
       const shut = Math.max(sjBlink(t) * (bt >= 0 ? 0 : 1), bt > 0.5 ? 0.4 * smooth(0.5, 0.7, bt) : 0);
-      // ---- the mouth: a fleshy lip ring round a hot gullet ----
-      const top = 108 - 8 * gp, h = 24 + 50 * op + 30 * gp, w = 74 + 18 * op + 28 * gp, cy = top + h;
-      mShade(c, 0, cy + h * 0.5, w + 60, h * 0.7 + 30, 0.4);
-      pkE(c, 0, cy, w + 18, h + 15, pkRG(c, 0, cy - h * 0.3, w + 18, [SJ.flesh[1], SJ.flesh[2], SJ.flesh[3]]), 4.5);
-      const cav = c2 => { c2.beginPath(); c2.ellipse(0, cy, w, h, 0, 0, TWO_PI); };
-      cav(c); { const g = c.createRadialGradient(0, cy + h * 0.25, 2, 0, cy + h * 0.1, Math.max(w, h)); g.addColorStop(0, '#fff2a8'); g.addColorStop(0.25, '#ff9a2a'); g.addColorStop(0.6, '#c0203e'); g.addColorStop(1, '#3a0418'); c.fillStyle = g; c.fill(); }
-      c.save(); cav(c); c.clip();
-      // the gullet's fleshy rings receding into the heat, little hooked teeth on the nearest one
-      for (const [f, a] of [[0.82, 0.55], [0.6, 0.45], [0.4, 0.35]]) { c.strokeStyle = `rgba(90,0,30,${a})`; c.lineWidth = 7 * f; c.beginPath(); c.ellipse(0, cy + h * (1 - f) * 0.35, w * f, h * f, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = `rgba(255,170,150,${a * 0.6})`; c.lineWidth = 2; c.beginPath(); c.ellipse(0, cy + h * (1 - f) * 0.35 - 2, w * f, h * f, 0, 3.5, 5.9); c.stroke(); }
-      if (h > 30) for (let i = 0; i < 9; i++) { const a = Math.PI * (0.12 + 0.76 * i / 8), ex = Math.cos(a) * w * 0.8, ey = cy + h * 0.06 + Math.sin(a) * h * 0.8; pkPath(c, [[ex - 5, ey], [ex * 0.88, ey - 12 * Math.min(1, h / 60)], [ex + 5, ey]], '#ffe6c8', 1.6); }
-      mAGlow(c, 0, cy + h * 0.3, w * 0.8, SJ.seam, 0.3 + 0.3 * op);
-      c.restore();
-      mInMouth(c, cav);
-      // the lower teeth rising from the lip
-      mATeeth(c, 0, cy, w, h, false, 8, 14 + 16 * op, '#fff4dc', [1, 6], 2);
-      cav(c); c.strokeStyle = sjInk; c.lineWidth = 4; c.stroke();
-      c.strokeStyle = 'rgba(255,190,200,.5)'; c.lineWidth = 3; c.beginPath(); c.ellipse(0, cy, w + 9, h + 7, 0, 0.3, Math.PI - 0.3); c.stroke();
-      // ---- the scissor mandibles ----
+      // ---- the mandibles' swing (0 = shut, tips crossed) ----
       let aL = Math.min(0.1 + 0.72 * op + 0.36 * gp + 0.08 * rage, bt >= 0 ? 0.98 : 1.1), aR = aL;   // (the tips never swing off the screen's sides)
       if (bt >= 0.3) { const sn = smooth(0.3, 0.37, bt), ov = -0.18 * Math.sin(clamp((bt - 0.35) / 0.16, 0, 1) * Math.PI); aL = aR = lerp(aL, 0, sn) + ov; }
       if (bt > 0.5) { const amp = 0.1 * (1 - smooth(0.9, 1.8, bt)), s2 = Math.sin((bt - 0.5) * 17); aR += amp * s2; aL -= amp * s2; }
       if (bt < 0) { const tw = 0.03 * Math.sin(t * 9) * (0.4 + rage); aL += tw; aR -= tw; }   // twitching, never quite still
       const heat = 0.3 + 0.7 * op;
+      // ---- one mouth: the gullet fills the whole V between the helmet's toothed lip and the two mandibles' cutting
+      // edges, so the blades are its jaws (no second lip or chin plate) ----
+      const h = 24 + 50 * op + 30 * gp, w = 74 + 18 * op + 28 * gp;
+      const M = sjMandPts(), edge = (d, ang) => { const ca = Math.cos(ang), sa = Math.sin(ang); return M.base.map(([x, y]) => [d * (x * ca + y * sa) + d * 126, -x * sa + y * ca + 114]); };
+      const mHalf = (d, ang) => { const E = edge(d, ang), out = []; for (let i = 0; i < E.length; i++) { const q = E[i]; if (d * q[0] < 0) { const p0 = E[i - 1], u = p0[0] / (p0[0] - q[0]); out.push([0, lerp(p0[1], q[1], u)]); return { pts: out, met: true }; } out.push(q); } return { pts: out, met: false }; };
+      const HR = mHalf(1, aR), HL = mHalf(-1, aL);
+      let mBot = 0; for (const q of [...HR.pts, ...HL.pts]) mBot = Math.max(mBot, q[1]);
+      const cav = c2 => {
+        c2.beginPath(); c2.moveTo(HL.pts[0][0], HL.pts[0][1]);
+        c2.bezierCurveTo(-60, 112, 60, 112, HR.pts[0][0], HR.pts[0][1]);
+        HR.pts.forEach(q => c2.lineTo(q[0], q[1]));
+        const tr = HR.pts[HR.pts.length - 1], tl = HL.pts[HL.pts.length - 1];
+        if (!(HR.met && HL.met)) { const yb = Math.max(tr[1], tl[1]); c2.bezierCurveTo(tr[0] * 0.7, yb + 22, tl[0] * 0.7, yb + 22, tl[0], tl[1]); }
+        for (let i = HL.pts.length - 1; i >= 0; i--) c2.lineTo(HL.pts[i][0], HL.pts[i][1]);
+        c2.closePath();
+      };
+      const gy = lerp(150, mBot, 0.45);
       mShade(c, 0, 262, 170, 70, 0.6);   // the chin sinks into shadow between the blades
+      cav(c); { const g = c.createRadialGradient(0, gy + 10, 2, 0, gy, Math.max(80, mBot - 100)); g.addColorStop(0, op > 0.2 ? '#fff2a8' : '#ffb04a'); g.addColorStop(0.22, '#ff8a22'); g.addColorStop(0.55, '#b81a3c'); g.addColorStop(0.85, '#4a0620'); g.addColorStop(1, '#22020e'); c.fillStyle = g; c.fill(); }
+      c.save(); cav(c); c.clip();
+      // the gullet's fleshy rings receding into the heat (round the throat's centre), little hooked teeth on the nearest
+      for (const [f, a] of [[1.0, 0.6], [0.74, 0.5], [0.5, 0.4], [0.3, 0.3]]) { const rx = (w + 40) * f, ry = (mBot - 118) * 0.55 * f; c.strokeStyle = `rgba(90,0,30,${a})`; c.lineWidth = 8 * f + 2; c.beginPath(); c.ellipse(0, gy + 6 * (1 - f), rx, ry, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = `rgba(255,170,150,${a * 0.6})`; c.lineWidth = 2; c.beginPath(); c.ellipse(0, gy + 6 * (1 - f) - 3, rx, ry, 0, 3.5, 5.9); c.stroke(); }
+      for (let i = 0; i < 7; i++) { const a = Math.PI * (0.15 + 0.7 * i / 6), rx = (w + 40) * 0.74, ry = (mBot - 118) * 0.55 * 0.74, ex = Math.cos(a) * rx, ey = gy + 2 + Math.sin(a) * ry; pkPath(c, [[ex - 5, ey], [ex * 0.9, ey - 10], [ex + 5, ey]], '#ffe6c8', 1.4); }
+      mAGlow(c, 0, gy + 6, w, SJ.seam, 0.25 + 0.35 * op);
+      c.restore();
+      mInMouth(c, cav);
+      cav(c); c.strokeStyle = sjInk; c.lineWidth = 4; c.stroke();
+      // ---- the scissor mandibles: the mouth's jaws ----
       sjMandible(c, 1, aR, heat);
       sjMandible(c, -1, aL, heat);
       if (bt > 0.36) mCrumbs(c, 0, 232, bt - 0.36);
@@ -7252,7 +7262,7 @@ const MONSTERS = [
       mPuffs(c, 176, 80, t * 0.8 + 0.5, 0.6, [240, 220, 255], 3);
     },
   },
-  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, mouth: [0, 232, 86, 58], halfW: 236,
+  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, hazeK: 0.45, mouth: [0, 232, 86, 58], halfW: 236,
     limbArt: gvWing,
     // the body under the head (seen as it swallows): wrapped in its folded wings like a cloak (finger bones running down
     // the magenta membrane to a scalloped hem that ends it cleanly, a thumb claw hooked over each shoulder), the lilac
@@ -7467,7 +7477,7 @@ const MONSTERS = [
       for (let k = 0; k < 6; k++) { const u = (t * (0.3 + 0.1 * gvH(k, 8)) + gvH(k, 9)) % 1, x = (gvH(k, 10) - 0.5) * 100 + Math.sin(t * 2 + k) * 6, y = 110 - u * 50 + 10; if (y < 8) continue; c.fillStyle = rgbaA(GV.glow, 0.7 * (1 - u)); c.beginPath(); c.arc(x, y, 2.2 * (1 - u) + 0.6, 0, TWO_PI); c.fill(); }
       c.restore();
     } },
-  { id: 'gorilla', name: 'Cinderback', label: 'cinderback', haze: [255, 130, 50], v3: true, mouth: [0, 278, 100, 70], fit: 0.9, halfW: 290,
+  { id: 'gorilla', name: 'Cinderback', label: 'cinderback', haze: [255, 130, 50], v3: true, hazeK: 0.45, mouth: [0, 278, 100, 70], fit: 0.9, halfW: 290,
     limbArt: cbLimb, ownHands: true, shoulderArt: true,
     body(c, m) {
       // a hunched silverback seen from the front as it climbs: a great barrel chest under one cracked slab of obsidian
@@ -7685,7 +7695,7 @@ const MONSTERS = [
       c.restore();
     } },
 
-  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, mouth: [0, 128, 78, 92], halfW: 252, fit: 0.9,
+  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, hazeK: 0.45, mouth: [0, 128, 78, 92], halfW: 252, fit: 0.9,
     // A burrowing tyrant with a cream armoured mantle and a golden drill for a snout. The drill turns as it hunts, its
     // seam parts to show a glowing grinder maw, and on the bite it cracks down the middle and the halves swing back like
     // doors (two golden horns framing the maw); then it slams shut and grinds, sparks spraying from the seam.
@@ -7693,7 +7703,7 @@ const MONSTERS = [
     body(c, m) { moleBody(c, m); },
     head(c, m) { moleHead(c, m); },
   },
-  { id: 'golem', name: 'Geode King', label: 'geode king', haze: [255, 84, 210], v3: true, mouth: [0, 238, 96, 50], fit: 0.9, halfW: 280, shoulderArt: true,
+  { id: 'golem', name: 'Geode King', label: 'geode king', haze: [255, 84, 210], v3: true, hazeK: 0.45, mouth: [0, 238, 96, 50], fit: 0.9, halfW: 280, shoulderArt: true,
     body(c, m) {
       // a body built of great boulders stacked like a cairn: the chest boulder split open by the geode, a belly boulder
       // under it, a broad pelvis stone and two thigh boulders sinking into the dark, pink crystal light glowing in the
@@ -9313,6 +9323,57 @@ function limbFur(c, ch, d, col, len = 5, every = 1) {
   for (let i = 1; i < ch.length; i += every) { const [x, y, r] = ch[i]; for (const k of [-0.5, 0.2, 0.7]) { const px = x + n[i][0] * r * k, py = y + n[i][1] * r * k; c.moveTo(px, py); c.lineTo(px + n[i][0] * len * 0.5 - (ch[i][0] - ch[i - 1][0]) * 0.25, py + len * 0.6); } }
   c.stroke();
 }
+// The Scissorjaw's parapod drawn as a stack of armour rings in its body's own two violets (exactly inside the
+// capsules' ink outline): each ring lit on the side toward the light, a dark gap and a molten seam between rings.
+function sjPod(c, ch, d, t, wind, fromRoot) {
+  capStroke(c, ch, INK, r => 2 * r);
+  capStroke(c, ch, '#1e0640', r => 2 * r - 2 * GRAB_INK);
+  const R = chainEvery(ch, 14), n = litSide(ch, d);
+  c.save(); cbCapPath(c, [ch], [], GRAB_INK); c.clip();
+  const order = R.map((_, i) => i); if (fromRoot) order.reverse();   // (the ring nearer the body overlaps the next one out)
+  for (const i of order) {
+    const [x, y, r, a] = R[i], A = i % 2 ? ['#f2deff', '#b47cf2', '#7a3cc8', '#3a1268'] : ['#e4c8ff', '#9658e0', '#5e26a6', '#2a0a52'];
+    let bj = 0, bd = 1e9; ch.forEach((p, j) => { const dd = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (dd < bd) { bd = dd; bj = j; } });
+    const nx = -Math.sin(a), ny = Math.cos(a), lit = n[bj][0] * nx + n[bj][1] * ny > 0 ? 1 : -1, fw = fromRoot ? 1 : -1;
+    c.save(); c.translate(x, y); c.rotate(a);
+    // a fat barrel of armour: lit toward the light, a deep core shadow on the far side
+    const g = c.createLinearGradient(0, -lit * r, 0, lit * r); g.addColorStop(0, A[3]); g.addColorStop(0.35, A[2]); g.addColorStop(0.7, A[1]); g.addColorStop(0.92, A[0]); g.addColorStop(1, A[1]);
+    c.fillStyle = g; c.beginPath(); c.ellipse(0, 0, 8.6, r + 2, 0, 0, TWO_PI); c.fill();
+    // the gap to the next ring out: an ink crease with molten light leaking from it
+    c.strokeStyle = 'rgba(10,2,24,.9)'; c.lineWidth = 3; c.beginPath(); c.ellipse(0, 0, 8.6, r + 2, 0, fw > 0 ? -Math.PI / 2 : Math.PI / 2, fw > 0 ? Math.PI / 2 : Math.PI * 1.5); c.stroke();
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = rgbaA(SJ.seam, clamp(0.45 + 0.3 * Math.sin(t * 3 + i) + 0.4 * wind, 0, 1)); c.lineWidth = 2;
+    c.beginPath(); c.ellipse(fw * 1.5, 0, 8.6, r * 0.9, 0, fw > 0 ? -Math.PI * 0.35 : Math.PI * 0.65, fw > 0 ? Math.PI * 0.35 : Math.PI * 1.35); c.stroke();
+    c.restore();
+    pkE(c, -fw * 1.5, lit * r * 0.55, 3.2, r * 0.22, 'rgba(255,255,255,.55)', 0);   // a gloss spot on the lit side
+    c.restore();
+  }
+  c.restore();
+  c.strokeStyle = 'rgba(150,255,236,.6)'; c.lineWidth = 2;   // a cyan rim down its lit side (as on the body rings)
+  c.beginPath(); ch.forEach(([x, y, r], i) => { const px = x + n[i][0] * (r - GRAB_INK - 1.5), py = y + n[i][1] * (r - GRAB_INK - 1.5); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
+}
+// its parapod's tip: two last ring segments and a gold hooked claw (tapering inside its capsules) over the wall's edge
+function sjPodHand(c, rig, t) {
+  const H0 = rig.hand, d = rig.d, segs = H0.filter(p => p[5] === 's'), hook = H0.filter(p => p[5] === 'c'), glass = H0.filter(p => p[5] === 'x');
+  for (const [x0, y0, x1, y1, r] of glass) { const pts = [[x0 - 1.4, y0], [x1, y1], [x0 + 1.4, y0]]; mAGlow(c, x1, y1, 8, [150, 240, 255], 0.5); pkPath(c, pts, '#c8f6ff', 1.2); }
+  const chain = segs.map(([x0, y0, x1, y1, r]) => [[x0, y0, r], [x1, y1, r]]).flat();
+  sjPod(c, chain, d, t, rig.wind, false);
+  // the hooks: the main one is a chain of claw capsules (each starting where the last ended), the spur is the last
+  const runs = []; for (const p of hook) { const last = runs[runs.length - 1]; if (last && Math.hypot(last[last.length - 1][2] - p[0], last[last.length - 1][3] - p[1]) < 0.5) last.push(p); else runs.push([p]); }
+  for (const run of runs) {
+    const pts = [[run[0][0], run[0][1], run[0][4]], ...run.map(p => [p[2], p[3], p[4]])], L = [], Rr = [];
+    const n = pts.length - 1;
+    for (let i = 0; i <= n; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1, nx = -ty / l, ny = tx / l;
+      const w = i === n ? 0 : (Math.min(pts[i][2], pts[Math.max(0, i - 1)][2]) - 0.9) * (i === 0 ? 1 : 0.92);
+      L.push([pts[i][0] + nx * w, pts[i][1] + ny * w]); Rr.push([pts[i][0] - nx * w, pts[i][1] - ny * w]);
+    }
+    const poly = [...L, ...Rr.slice(0, -1).reverse()];
+    const [bx, by] = pts[0], [ex, ey] = pts[n];
+    pkPath(c, poly, pkLG(c, bx, by, ex, ey, [SJ.jaw[2], SJ.jaw[1], SJ.jaw[0], SJ.tip[0], SJ.tip[1]]), 2.4);
+    c.strokeStyle = 'rgba(255,252,220,.75)'; c.lineWidth = 1.6; c.beginPath(); L.slice(0, -1).forEach(([x, y], i) => { const q = pts[i]; const px = lerp(x, q[0], 0.45), py = lerp(y, q[1], 0.45); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
+  }
+}
 const LIMB_ART = {
   parapod(c, rig, P, layer, t, mon) {   // the Scissorjaw's parapod: a ringed violet arm, molten seams glowing between its armour rings, glass bristles along it
     const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d;
@@ -9336,7 +9397,7 @@ const LIMB_ART = {
       const [rx0, ry0, rr0] = rig.up[0];
       mShade(c, rx0, ry0, rr0 * 1.8, rr0 * 1.3, 0.55);
     }
-    grabBody(c, [ch], P.skin, d, { rim: 'rgba(150,255,236,.65)' });
+    sjPod(c, ch, d, t, rig.wind, layer === 'mid');
     if (layer === 'mid') limbRootShade(c, rig.up, 0.2);
     if (redraw) {
       // the body rings over the arm's root, clipped round it (back to front, exactly as the body draws them)
@@ -9353,25 +9414,7 @@ const LIMB_ART = {
       band(12, INK, 3.4); band(14, 'rgba(255,214,226,.6)', 1.6, r - GRAB_INK - 2);   // a second, thinner fold
       c.restore();
     }
-    chainEvery(ch, 12).forEach(([x, y, r, a], i) => {
-      if (i === 0) return;
-      if (joint > 0 && Math.hypot(x - rig.up[0][0], y - rig.up[0][1]) < Math.hypot(rig.up[joint][0] - rig.up[0][0], rig.up[joint][1] - rig.up[0][1]) + 14) return;   // (no armour rings under the ring's edge or on the joint)
-      const nx = -Math.sin(a), ny = Math.cos(a), w = r - GRAB_INK - 0.6, bx = x + Math.cos(a) * r * 0.4, by = y + Math.sin(a) * r * 0.4;
-      c.strokeStyle = 'rgba(16,4,36,.75)'; c.lineWidth = 3;
-      c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.quadraticCurveTo(bx, by, x - nx * w, y - ny * w); c.stroke();
-      c.save(); c.globalCompositeOperation = 'lighter';
-      c.strokeStyle = `rgba(255,168,50,${(0.55 + 0.3 * Math.sin(t * 3 + i) + 0.4 * rig.wind).toFixed(3)})`; c.lineWidth = 1.5;
-      c.beginPath(); c.moveTo(x + nx * w * 0.8 - Math.cos(a) * 2, y + ny * w * 0.8 - Math.sin(a) * 2); c.quadraticCurveTo(bx - Math.cos(a) * 2, by - Math.sin(a) * 2, x - nx * w * 0.8 - Math.cos(a) * 2, y - ny * w * 0.8 - Math.sin(a) * 2); c.stroke();
-      c.restore();
-      // a little tuft of glass bristles on the shaded side of every other ring (inside the outline)
-      if (i % 2 === 0 && r > 8) {
-        const n = litSide([[x - Math.cos(a), y - Math.sin(a)], [x, y], [x + Math.cos(a), y + Math.sin(a)]], d)[1], sx0 = x - n[0] * r * 0.25, sy0 = y - n[1] * r * 0.25;
-        for (const k of [-0.5, 0, 0.5]) {
-          const ex = x - n[0] * (r - GRAB_INK - 1.5) - Math.cos(a) * (6 + k * 4), ey = y - n[1] * (r - GRAB_INK - 1.5) - Math.sin(a) * (6 + k * 4);
-          c.strokeStyle = 'rgba(200,250,255,.8)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(sx0 + k * 3 * nx, sy0 + k * 3 * ny); c.lineTo(ex, ey); c.stroke();
-        }
-      }
-    });
+    if (layer === 'front') sjPodHand(c, rig, t);
   },
   arm(c, rig, P, layer, t, mon) {
     const id = mon.id, d = rig.d;
@@ -9668,7 +9711,7 @@ function drawGrabPortrait(c, mon, t, half, layer) {
 }
 // one-line taglines for the picker
 const MONSTER_TAGS = {
-  worm: 'Glass bristles on the walls, golden scissor jaws for you', bat: 'Crystal-crowned, wrapped in its wings, and starving', gorilla: 'A volcanic silverback that climbs knuckles-first',
+  worm: 'Hooked claws on the walls, golden scissor jaws for you', bat: 'Crystal-crowned, wrapped in its wings, and starving', gorilla: 'A volcanic silverback that climbs knuckles-first',
   mole: 'A star-nosed mole whose golden drill splits into jaws', golem: "Half its face split open like a geode, and hungry", kraken: 'Tentacles slap the walls; the beak waits',
   piranha: 'An underbite full of razor teeth', dragon: 'Wing claws on the walls, fire in its throat', rex: 'Bone talons and a skull full of teeth',
   flytrap: 'Vines climb ahead; the lobes snap shut', blob: 'Goo up the walls, and you can see inside', spider: 'Eight eyes, eight legs, two big fangs',
@@ -9760,7 +9803,7 @@ function drawWorm() {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const hr = 300 * k, hy = y + 120 * k;
   const halo = ctx.createRadialGradient(tx, hy, hr * 0.25, tx, hy, hr);
-  halo.addColorStop(0, rgbaA(rim, 0)); halo.addColorStop(0.6, rgbaA(rim, 0.22 + 0.15 * crouch + 0.15 * surge)); halo.addColorStop(1, rgbaA(rim, 0));
+  halo.addColorStop(0, rgbaA(rim, 0)); halo.addColorStop(0.6, rgbaA(rim, (0.22 + 0.15 * crouch + 0.15 * surge) * (b ? 1 : mon.hazeK ?? 1))); halo.addColorStop(1, rgbaA(rim, 0));
   ctx.fillStyle = halo; ctx.fillRect(tx - hr, hy - hr, hr * 2, hr * 2);
   ctx.restore();
   // the arms from behind its head out to the walls (whole, never clipped: always below the catch line)
@@ -9841,7 +9884,7 @@ function drawMonsterDepths(mon, y, k, tx) {
   }
   ctx.globalCompositeOperation = 'lighter';
   // lava light welling up under its body: an oval glow centred under it, not a band across the screen
-  ellGlow(tx, Math.max(y + 560 * k, H + 20), 300 * k, 220 * k, [[0, rgbaA(mon.haze, 0.3 + 0.06 * Math.sin(G.t * 2))], [1, rgbaA(mon.haze, 0)]]);
+  ellGlow(tx, Math.max(y + 560 * k, H + 20), 300 * k, 220 * k, [[0, rgbaA(mon.haze, (0.3 + 0.06 * Math.sin(G.t * 2)) * (G.state === 'dead' ? 1 : mon.hazeK ?? 1))], [1, rgbaA(mon.haze, 0)]]);
   for (let i = 0; i < 12; i++) {
     const ph = (G.t * 0.35 + hash2(i, 51)) % 1, ex = ox + playW * hash2(i, 52) + Math.sin(G.t * 2 + i) * 8, ey = H + 10 - ph * (H - Math.max(gy0, H * 0.45));
     ctx.fillStyle = rgbaA(mon.haze.map(v => Math.min(255, v + 70) | 0), 0.8 * (1 - ph)); ctx.beginPath(); ctx.arc(ex, ey, 1.6 + hash2(i, 53) * 1.6, 0, 6.283); ctx.fill();
@@ -9873,7 +9916,7 @@ function drawSliver(mon, realY, prox, rim, cx, px) {
   // rim back-light so its silhouette reads against any cave
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const hg = ctx.createRadialGradient(cx, top + 60 * k, 10, cx, top + 60 * k, 260 * k);
-  hg.addColorStop(0, rgbaA(rim, 0)); hg.addColorStop(0.6, rgbaA(rim, 0.25 + 0.2 * prox)); hg.addColorStop(1, rgbaA(rim, 0));
+  hg.addColorStop(0, rgbaA(rim, 0)); hg.addColorStop(0.6, rgbaA(rim, (0.25 + 0.2 * prox) * (mon.hazeK ?? 1))); hg.addColorStop(1, rgbaA(rim, 0));
   ctx.fillStyle = hg; ctx.fillRect(cx - 260 * k, top - 200 * k, 520 * k, 520 * k);
   ctx.restore();
   const T0 = ctx.getTransform();
@@ -10045,15 +10088,15 @@ function drawHitboxes() {
 // at close range. Soft ovals welling up from the bottom edge, pulsing faster as it closes; no straight edges.
 function drawDangerUnder() {
   if (G.state !== 'play') return;
-  const d = clamp(1 - (monsterGap() - 60) / 260, 0, 1), haze = monster().haze;
+  const d = clamp(1 - (monsterGap() - 60) / 260, 0, 1), haze = monster().haze, hk = monster().hazeK ?? 1;   // (hazeK: a monster may dim its chase haze so its head keeps its contrast)
   if (d <= 0) return;
   const beat = 0.7 + 0.3 * Math.max(0, Math.sin(G.t * (6 + 8 * d)));
   const cx = ox + playW / 2;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  ellGlow(cx, H + 10, cssW * 0.8, H * 0.38, [[0, rgbaA(haze, 0.2 * d * beat)], [1, rgbaA(haze, 0)]]);
+  ellGlow(cx, H + 10, cssW * 0.8, H * 0.38, [[0, rgbaA(haze, 0.2 * d * beat * hk)], [1, rgbaA(haze, 0)]]);
   ctx.restore();
   const r = clamp(1 - (monsterGap() - 40) / 210, 0, 1);
-  if (r > 0) ellGlow(cx, H + 10, cssW * 0.75, H * (0.24 + 0.2 * r), [[0, `rgba(255,30,40,${(0.22 + 0.26 * r) * beat})`], [1, 'rgba(255,30,40,0)']]);
+  if (r > 0) ellGlow(cx, H + 10, cssW * 0.75, H * (0.24 + 0.2 * r), [[0, `rgba(255,30,40,${(0.22 + 0.26 * r) * beat * (0.4 + 0.6 * hk)})`], [1, 'rgba(255,30,40,0)']]);
 }
 // Over the screen only a soft vignette darkening the top and the corners (capped, centred low, so the monster at the
 // bottom keeps its own colours).

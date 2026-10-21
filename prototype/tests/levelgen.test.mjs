@@ -607,9 +607,11 @@ function limbCheck(id, st, rig, wallAt, kill) {
     if (L < 28) fail('the wing thumb claw is big (28+ long)', `${id}: ${L.toFixed(0)}`);
   }
   if (st.hand === 'geode' && roles.filter(r => r === 'o').length < 6) fail('the stone hand is an open palm (palm, four fingers, thumb)', id);
-  if (st.hand === 'chaetae') {   // the Scissorjaw's hand: a big fan of glass bristles that reads at phone size
-    const hh = Math.max(...hand.map(p => Math.max(p[1], p[3]) + p[4])) - Math.min(...hand.map(p => Math.min(p[1], p[3]) - p[4]));
-    if (roles.filter(r => r === 'x').length < 5 || hh < 55) fail('the bristle-fan hand is big (5+ bristles, 55+ tall)', `${id}: ${hh.toFixed(0)}`);
+  if (st.hand === 'parahook') {   // the Scissorjaw's parapod ends in ring segments and a big hooked claw that reads at phone size
+    const hk = hand.filter(p => p[5] === 'c'), L = hk.reduce((m, p) => m + Math.hypot(p[2] - p[0], p[3] - p[1]), 0);
+    if (hand.filter(p => p[5] === 's').length < 2 || hk.length < 3 || L < 30) fail('the parapod tip is ringed and ends in a big hook (30+ long)', `${id}: ${L.toFixed(0)}`);
+    const tip = hk[hk.length - 2];   // the main hook's last joint curls over toward the rock
+    if (!((tip[2] - tip[0]) * d > 0)) fail('the parapod hook curls over into the rock', id);
   }
 }
 const GRAB_JOINTED_T = new Set(['arm', 'paw', 'pad', 'wing', 'pincer', 'fin', 'talon']);
