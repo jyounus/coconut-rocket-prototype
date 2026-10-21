@@ -7074,6 +7074,7 @@ const MONSTERS = [
     // of each ring and molten light in the gaps; on the swallow a glowing lump slides down it ring by ring
     body(c, m) {
       const t = m.t, bt = m.bite, N = 13, segs = [];
+      if (bt >= 0) c.scale(1 - 0.12 * smooth(0, 0.12, bt), 1);   // (it draws itself in tight as it lunges, so all of it stays on screen in the bite's zoom)
       const lump = bt > 0.42 ? smooth(0.42, 1.5, bt) * (N + 1) - 0.5 : -9;
       for (let k = 0; k < N; k++) {
         const u = k / (N - 1);
@@ -7082,9 +7083,13 @@ const MONSTERS = [
         const w = 202 * (1 - 0.78 * Math.pow(u, 0.75)) * (1 + 0.025 * Math.sin(t * 2.4 - k * 0.8)) * (1 + 0.24 * sw);
         segs.push({ x, y, w, h: 68 * (1 - 0.45 * u) * (1 + 0.2 * sw), u, sw });
       }
+      // the tail's tip below the last ring: a solid chitin spike in a ring of glass bristles
+      { const S = segs[N - 1], tx = S.x + Math.sin(t * 1.3) * 6, ty = S.y + S.h * 0.6;
+        for (let i = 0; i < 9; i++) { const a = Math.PI * (0.08 + 0.84 * i / 8), L = 40 + 8 * Math.sin(i * 1.7); const ex = tx + Math.cos(a) * L * 1.15, ey = ty + Math.sin(a) * L * 0.8 + 10;
+          c.lineCap = 'round'; c.strokeStyle = sjInk; c.lineWidth = 5; c.beginPath(); c.moveTo(tx, ty); c.lineTo(ex, ey); c.stroke(); c.strokeStyle = pkLG(c, tx, ty, ex, ey, ['#6a8aa8', '#a8dcf0']); c.lineWidth = 2.6; c.stroke(); }
+        mAShape(c, mASm([[tx - 30, ty - 10], [tx, ty - 18], [tx + 30, ty - 10], [tx + 14, ty + 40], [tx + 2, ty + 96], [tx - 12, ty + 40]]), pkLG(c, tx - 30, ty, tx + 30, ty + 60, [SJ.plate[3], SJ.plate[4], '#08020e']), { lw: 4, rim: 'rgba(170,255,240,.3)', rw: 3 }); }
       for (let k = N - 1; k >= 0; k--) {
-        const S = segs[k], dk = 0.75 * S.u;   // farther rings sink into the dark
-        c.globalAlpha = 1 - 0.8 * smooth(0.45, 1, S.u);
+        const S = segs[k], dk = 0.75 * S.u;   // farther rings sink into the dark (opaque all the way to the tail's tip)
         // tufts behind the ring's flanks
         for (const d of [-1, 1]) sjTuft(c, S.x + d * S.w * 0.9, S.y + S.h * 0.15, d, 1.1 - 0.55 * S.u, t, k + d);
         // molten light welling up from the gap above this ring
@@ -7103,10 +7108,10 @@ const MONSTERS = [
         if (S.sw > 0.05) mAGlow(c, S.x, S.y, S.w * 0.8, [255, 170, 80], 0.55 * S.sw);
         c.restore();
       }
-      c.globalAlpha = 1;
     },
     head(c, m) {
       const t = m.t, bt = m.bite, op = clamp(m.open, 0, 1), gp = m.gape || 0, rage = mRage, wide = bt >= 0 ? (m.wide || 0) : 0;
+      if (bt >= 0) c.scale(1 - 0.12 * smooth(0, 0.12, bt), 1);   // (it draws itself in tight as it lunges, so all of it stays on screen in the bite's zoom)
       const shut = Math.max(sjBlink(t) * (bt >= 0 ? 0 : 1), bt > 0.5 ? 0.4 * smooth(0.5, 0.7, bt) : 0);
       // ---- the mouth: a fleshy lip ring round a hot gullet ----
       const top = 108 - 8 * gp, h = 24 + 50 * op + 30 * gp, w = 74 + 18 * op + 28 * gp, cy = top + h;
@@ -7126,7 +7131,7 @@ const MONSTERS = [
       cav(c); c.strokeStyle = sjInk; c.lineWidth = 4; c.stroke();
       c.strokeStyle = 'rgba(255,190,200,.5)'; c.lineWidth = 3; c.beginPath(); c.ellipse(0, cy, w + 9, h + 7, 0, 0.3, Math.PI - 0.3); c.stroke();
       // ---- the scissor mandibles ----
-      let aL = 0.1 + 0.72 * op + 0.36 * gp + 0.08 * rage, aR = aL;
+      let aL = Math.min(0.1 + 0.72 * op + 0.36 * gp + 0.08 * rage, bt >= 0 ? 0.98 : 1.1), aR = aL;   // (the tips never swing off the screen's sides)
       if (bt >= 0.3) { const sn = smooth(0.3, 0.37, bt), ov = -0.18 * Math.sin(clamp((bt - 0.35) / 0.16, 0, 1) * Math.PI); aL = aR = lerp(aL, 0, sn) + ov; }
       if (bt > 0.5) { const amp = 0.1 * (1 - smooth(0.9, 1.8, bt)), s2 = Math.sin((bt - 0.5) * 17); aR += amp * s2; aL -= amp * s2; }
       if (bt < 0) { const tw = 0.03 * Math.sin(t * 9) * (0.4 + rage); aL += tw; aR -= tw; }   // twitching, never quite still
@@ -7142,25 +7147,34 @@ const MONSTERS = [
         mShade(c, cx, cy2 + 30, 60, 22, 0.4);
         mAShape(c, gp2, pkRG(c, cx - d * 10, cy2 - 16, 60, [SJ.plate[1], SJ.plate[2], SJ.plate[3], SJ.plate[4]]), { rim: 'rgba(170,255,240,.6)', rw: 5, under: 'rgba(255,150,70,.45)', uw: 7, lw: 4.5 });
         sjSeam(c, [[cx - d * 34, cy2 - 4], [cx, cy2 + 10], [cx + d * 36, cy2 + 4]], 0.5 + 0.3 * Math.sin(t * 2.4) + 0.4 * rage, 0.8);
+        // the shoulder socket on the guard's upper outer rim, where the parapod's ball joint sits: a dark cup with a
+        // thick lit lip and molten light in its gap
+        { const sx = cx + d * 34, sy = cy2 - 26, rot = -d * 0.55;
+          pkE(c, sx, sy, 30, 17, pkRG(c, sx, sy + 4, 30, ['#2a0a3a', '#12041e', '#08020e']), 4, rot);
+          sjSeam(c, [[sx - d * 22, sy + 4], [sx, sy + 10], [sx + d * 22, sy - 2]], 0.6 + 0.3 * Math.sin(t * 3 + d), 0.7);
+          c.strokeStyle = SJ.plate[1]; c.lineWidth = 4; c.beginPath(); c.ellipse(sx, sy, 27, 14, rot, Math.PI * 0.05, Math.PI * 0.95); c.stroke();
+          c.strokeStyle = 'rgba(200,170,255,.6)'; c.lineWidth = 1.8; c.beginPath(); c.ellipse(sx, sy, 27, 14, rot, Math.PI * 0.25, Math.PI * 0.75); c.stroke(); }
         pkE(c, cx - d * 14, cy2 - 20, 14, 7, 'rgba(255,255,255,.28)', 0, d * 0.35);
       }
       // ---- the horns and the helmet ----
-      for (const d of [-1, 1]) sjHorn(c, d, t, rage);
+      { const pinB = bt >= 0 ? smooth(0, 0.12, bt) : 0; c.save(); c.scale(1 - 0.14 * pinB, 1); for (const d of [-1, 1]) sjHorn(c, d, t, rage); c.restore(); }
       const half = [[0, 4], [66, 5], [124, 12], [166, 32], [190, 62], [186, 90], [164, 112], [128, 122], [96, 120], [66, 116], [38, 122], [16, 134], [0, 142]];
       const shell = mBlob(half, true);
       mShade(c, 0, 170, 190, 30, 0.45);
-      mAShape(c, shell, pkRG(c, 0, 26, 205, [SJ.plate[0], SJ.plate[1], SJ.plate[2], SJ.plate[3], SJ.plate[4]]), { rim: 'rgba(170,255,240,.75)', rw: 7, under: 'rgba(255,150,70,.55)', uw: 10, lw: 5 });
+      mAShape(c, shell, pkLG(c, 0, 4, 0, 142, [SJ.plate[1], SJ.plate[2], SJ.plate[3], SJ.plate[4]]), { rim: 'rgba(190,160,240,.3)', rw: 4, under: 'rgba(255,150,70,.55)', uw: 10, lw: 5 });
       c.save(); shell(c); c.clip();
-      // the oil-slick sheen sweeping across the crown
-      const sh = Math.sin(t * 0.8) * 20;
       c.lineCap = 'round';
-      c.strokeStyle = rgbaA(SJ.sheen, 0.16); c.lineWidth = 14; c.beginPath(); c.ellipse(sh, 60, 150, 44, 0, 3.5, 5.95); c.stroke();
-      c.strokeStyle = rgbaA(SJ.pink, 0.13); c.lineWidth = 9; c.beginPath(); c.ellipse(sh, 74, 150, 44, 0, 3.6, 5.85); c.stroke();
-      // the face plates (darker, recessed) round the eyes, the crown plate above them
-      for (const d of [-1, 1]) pkE(c, d * 92, 90, 84, 40, mixHex(SJ.plate[3], SJ.plate[4], 0.2, 0.55), 0, -d * 0.18);
+      // matte chitin: the carapace is built of overlapping plates, the grooves between them dark with a lit lip below
+      for (const d of [-1, 1]) for (const [x0, y0, x1, y1, x2, y2] of [[30, 6, 70, 40, 92, 96], [96, 14, 136, 50, 158, 98]]) {
+        c.strokeStyle = 'rgba(14,4,30,.6)'; c.lineWidth = 4; c.beginPath(); c.moveTo(d * x0, y0); c.quadraticCurveTo(d * x1, y1, d * x2, y2); c.stroke();
+        c.strokeStyle = 'rgba(190,150,250,.35)'; c.lineWidth = 2; c.beginPath(); c.moveTo(d * (x0 + 4), y0 + 3); c.quadraticCurveTo(d * (x1 + 4), y1 + 3, d * (x2 + 4), y2); c.stroke();
+      }
+      // the brow plate: a thick opaque ridge of chitin over the eyes (its edge casts a shadow on the face)
+      c.fillStyle = 'rgba(14,4,30,.35)'; c.beginPath(); c.ellipse(0, 112, 176, 26, 0, 0, TWO_PI); c.fill();
+      pkE(c, -64, 28, 11, 4, 'rgba(255,255,255,.8)', 0, -0.15);   // its one specular highlight
       // the keel: a raised ridge down the middle to a beak over the mouth
       mAShape(c, mASm([[0, -2], [30, 6], [24, 32], [0, 54], [-24, 32], [-30, 6]]), pkLG(c, -26, 0, 26, 0, [SJ.plate[1], SJ.plate[0], SJ.plate[2]]), { lw: 3.5 });
-      c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-12, 8); c.quadraticCurveTo(-10, 24, -2, 34); c.stroke();
+      c.strokeStyle = 'rgba(220,200,255,.35)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-12, 8); c.quadraticCurveTo(-10, 24, -2, 34); c.stroke();
       // scars and scuffs on the armour
       c.strokeStyle = 'rgba(20,4,36,.6)'; c.lineWidth = 2.6;
       for (const [x0, y0, x1, y1] of [[-150, 58, -122, 44], [-144, 66, -112, 56], [118, 30, 146, 50], [60, 18, 84, 26]]) { c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
@@ -7170,7 +7184,7 @@ const MONSTERS = [
       // molten seams between the plates (brighter in a rage, pulsing with its breath)
       const sa = 0.55 + 0.25 * Math.sin(t * 2.4) + 0.4 * rage;
       for (const d of [-1, 1]) {
-        sjSeam(c, [[d * 24, 26], [d * 64, 34], [d * 112, 32], [d * 156, 42], [d * 180, 62]], sa);
+        sjSeam(c, [[d * 150, 64], [d * 172, 74], [d * 184, 90]], sa * 0.8, 0.8);
         sjSeam(c, [[d * 168, 102], [d * 140, 112], [d * 112, 114]], sa * 0.8, 0.8);
       }
       // the upper teeth hanging from the helmet's lip, in front of the gullet
@@ -7231,12 +7245,12 @@ const MONSTERS = [
       if (fed > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = fed * (1 - smooth(1.3, 1.8, bt)) * 0.9; c.strokeStyle = rgbaA(GV.glow, 0.8); c.lineWidth = 5; c.beginPath(); c.arc(gx, gy, 48 + 40 * smooth(1.15, 1.6, bt), 0, TWO_PI); c.stroke(); c.restore(); }
       // the wings wrapped round it like a cloak: the right one first, the left one overlapping it in front
       for (const d of [1, -1]) {
-        const hug = 1 + 0.02 * br, wx = d * 206, wy = 214;
-        const tips = [[d * 204 * hug, 520], [d * 120, 556], [d * 38, 548], [-d * 18, 516]];
+        const hug = 1 + 0.02 * br, wx = d * 192, wy = 214;
+        const tips = [[d * 192 * hug, 520], [d * 116, 556], [d * 38, 548], [-d * 18, 516]];
         const inner = [[-d * 18, 516], [d * 14, 430], [d * 44, 330], [d * 70, 270], [d * 120, 236]];
         const wing = c2 => {
           c2.beginPath(); c2.moveTo(wx, wy);
-          c2.quadraticCurveTo(d * 232 * hug, 360, tips[0][0], tips[0][1]);
+          c2.quadraticCurveTo(d * 214 * hug, 360, tips[0][0], tips[0][1]);
           for (let k = 1; k < tips.length; k++) { const p = tips[k - 1], q = tips[k]; c2.quadraticCurveTo((p[0] + q[0]) / 2, Math.min(p[1], q[1]) - 34, q[0], q[1]); }
           c2.bezierCurveTo(inner[1][0], inner[1][1], inner[2][0], inner[2][1], inner[3][0], inner[3][1]);
           c2.quadraticCurveTo(inner[4][0], inner[4][1], wx, wy); c2.closePath();
@@ -9238,6 +9252,20 @@ const LIMB_ART = {
     const ch = layer === 'mid' ? rig.up : armChain(rig), d = rig.d;
     grabBody(c, [ch], P.skin, d, { rim: 'rgba(150,255,236,.65)' });
     if (layer === 'mid') limbRootShade(c, rig.up, 0.2);
+    if (layer === 'mid') {
+      // the shoulder joint: where the arm comes out from under the cheek guard it sits in a socket, a ball of chitin
+      // in a dark cup with a thick collar ring and molten light in the gap (inside the arm's own outline)
+      const st = GRAB_STYLE.worm, sc = rig.sc || 1, bx = rig.root[0] + d * (rig.squeeze || 0) - d * st.rx * sc, k = MON_SCALE * sc;
+      const gx = bx + d * 184 * k, gy = 150 * k, R = 50 * k;
+      let j = rig.up.findIndex(([x, y]) => Math.hypot(x - gx, (y - gy) * 1.25) > R);
+      if (j < 1) j = 1;
+      const [x, y, r] = rig.up[j], q = rig.up[Math.min(rig.up.length - 1, j + 1)], a = Math.atan2(q[1] - y, q[0] - x), nx = -Math.sin(a), ny = Math.cos(a), w = r - GRAB_INK - 0.5, ux = Math.cos(a), uy = Math.sin(a);
+      const band = (o, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(x + ux * o + nx * w, y + uy * o + ny * w); c.quadraticCurveTo(x + ux * (o + r * 0.35), y + uy * (o + r * 0.35), x + ux * o - nx * w, y + uy * o - ny * w); c.stroke(); };
+      band(-2, 'rgba(10,2,24,.85)', 9);                                    // the cup's dark rim
+      c.save(); c.globalCompositeOperation = 'lighter'; band(3, rgbaA(SJ.seam, 0.6 + 0.3 * Math.sin(t * 3 + d)), 3); c.restore();
+      band(9, SJ.plate[2], 7); band(9, 'rgba(10,2,24,.6)', 1.6); band(6, 'rgba(200,170,255,.55)', 1.6);   // the collar ring, lit along its edge
+      pkE(c, x + ux * 20 + nx * w * 0.35 * -d, y + uy * 20 + ny * w * 0.35 * -d, w * 0.32, w * 0.2, 'rgba(230,210,255,.45)', 0, a);   // the ball's sheen
+    }
     chainEvery(ch, 12).forEach(([x, y, r, a], i) => {
       if (i === 0) return;
       const nx = -Math.sin(a), ny = Math.cos(a), w = r - GRAB_INK - 0.6, bx = x + Math.cos(a) * r * 0.4, by = y + Math.sin(a) * r * 0.4;
