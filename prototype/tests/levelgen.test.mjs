@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf };')();
+const { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf, batPos, BAT_PAT } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf, batPos, BAT_PAT };')();
 
 const HITBOX = 26;
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
@@ -49,7 +49,9 @@ for (const cfg of CONFIGS) {
       const again = [], againFruit = []; createLevel(seed, cfg).fill(HEIGHT, again, againFruit);
       if (JSON.stringify(again) !== JSON.stringify(hz) || JSON.stringify(againFruit) !== JSON.stringify(fruit)) fail('same seed gives the same layout', tag);
     }
-    if (hz.length < HEIGHT / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
+    // calm chambers are empty on purpose, so they don't count toward the height that needs obstacles
+    const calmH = level.chambers.reduce((n, c) => n + Math.max(0, Math.min(c.a1, HEIGHT) - c.a0), 0);
+    if (hz.length < (HEIGHT - calmH) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
     if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
 
@@ -79,7 +81,8 @@ for (const cfg of CONFIGS) {
       if (zs + 3000 > HEIGHT) return;
       const mk = level.marks.find(m => m.zone === z);
       if (!mk) fail('every zone has its set piece', `${tag}: zone ${z + 1}`);
-      else if (mk.alt < zs + RULES.setPieceAt - 600 || mk.alt > zs + RULES.setPieceAt + 1500) fail('set pieces start about 150 m into their zone', `${tag}: zone ${z + 1} at ${((mk.alt - zs) / 10).toFixed(0)} m in`);
+      // (a calm chamber that lands on the set piece's spot pushes it up by at most one chamber plus one gap)
+      else if (mk.alt < zs + RULES.setPieceAt - 600 || mk.alt > zs + RULES.setPieceAt + 1500 + RULES.chamber.len[1] + RULES.spacing[0] / cfg.density) fail('set pieces start about 150 m into their zone', `${tag}: zone ${z + 1} at ${((mk.alt - zs) / 10).toFixed(0)} m in`);
     });
 
     // hazards wear their zone's skin: no jungle pods in the magma core
@@ -110,6 +113,47 @@ for (const cfg of CONFIGS) {
       }
     }
 
+    // authored stretches: pinches go right down to the minimum width, chambers open wide, and a calm
+    // chamber (no hazards at all, not even a falling rock) comes at least every few stretches
+    const segs = [];
+    for (let a = 0; a < HEIGHT;) { const sg = level.segAt(a); segs.push(sg); a = sg.a1 + 1; }
+    const kinds = new Set(segs.map(sg => sg.kind));
+    if (!kinds.has('chamber')) fail('shafts have calm chambers', tag);
+    if (intro < HEIGHT / 2 && !kinds.has('pinch')) fail('shafts have pinches', tag);
+    let lastCalm = 0;
+    segs.forEach((sg, i) => {
+      if (sg.kind === 'pinch' && segs[i + 1] && segs[i + 1].kind === 'pinch') fail('a pinch always opens up again', `${tag} at ${(sg.a0 / 10).toFixed(0)} m`);
+      if (sg.kind !== 'chamber') return;
+      if (sg.a0 - lastCalm > (RULES.chamber.every[1] + 1) * RULES.stretch[1] + RULES.chamber.len[1]) fail('a calm chamber comes every few stretches', `${tag} at ${(sg.a0 / 10).toFixed(0)} m`);
+      lastCalm = sg.a1;
+      const mid = (sg.a0 + sg.a1) / 2, [L, R] = level.walls(mid);
+      if (R - L < 320) fail('chambers open wide', `${tag} at ${(mid / 10).toFixed(0)} m: ${(R - L).toFixed(0)}`);
+      for (const h of hz) {
+        const top = h.type === 'pend' ? h.aAlt : h.hi, lo = h.type === 'boulder' ? h.alt - RULES.boulderZone[0] : h.lo;
+        if (lo < sg.a1 && top > sg.a0) fail('calm chambers have no hazards', `${tag}: ${h.type} at ${(h.lo / 10).toFixed(0)} m`);
+      }
+    });
+    for (const sg of segs) if (sg.kind === 'pinch') {
+      const [L, R] = level.walls((sg.a0 + sg.a1) / 2);
+      if (R - L > RULES.pinchWidth[1] + RULES.wallShape * 2 + 14) fail('pinches squeeze the shaft', `${tag} at ${(sg.a0 / 10).toFixed(0)} m: ${(R - L).toFixed(0)}`);
+    }
+    // each zone's first chamber hosts its spectacle
+    const specs = level.chambers.filter(c => c.spectacle).map(c => c.zone);
+    if (new Set(specs).size !== specs.length) fail('one spectacle per zone', tag);
+    for (const c of level.chambers) if (c.a1 < HEIGHT - 2000 && !specs.includes(c.zone)) fail('every zone with a chamber has a spectacle', `${tag}: zone ${c.zone + 1}`);
+    // calm chambers carry a fruit weave
+    for (const c of level.chambers) if (!fruit.some(f => f.alt > c.a0 && f.alt < c.a1)) fail('calm chambers have fruit', tag);
+
+    // zone wall silhouettes (root bulges, column tiers, crags) never jut out like a hidden ledge
+    for (const side of [0, 1]) {
+      let prev = level.walls(0)[side];
+      for (let a = 1; a <= HEIGHT; a += 1) {
+        const x = level.walls(a)[side];
+        if (Math.abs(x - prev) > RULES.maxWallSlope) { fail('walls never step in sharply', `${tag} at ${(a / 10).toFixed(0)} m: ${Math.abs(x - prev).toFixed(2)} per unit`); break; }
+        prev = x;
+      }
+    }
+
     // shaft shape: never under 60% of the screen, and every narrow stretch opens up again
     let narrowSince = null;
     for (let a = 0; a <= HEIGHT; a += 5) {
@@ -125,9 +169,11 @@ for (const cfg of CONFIGS) {
       const h = hz[i];
       const where = `${tag} at ${(h.lo / 10).toFixed(0)} m`;
 
-      // easy start: only bats and pods, nothing below the planks
+      // easy start: thorns only at first, then pods and spiders; no bats until it is over
       if (h.lo < 400) fail('nothing spawns on the start planks', where);
       if (h.lo < intro && !RULES.intro.types.includes(h.type)) fail('easy start uses only the gentle obstacles', `${where}: ${h.type}`);
+      if (h.lo < intro * RULES.intro.staticOnly && !RULES.intro.first.includes(h.type)) fail('easy start opens with one static hazard type', `${where}: ${h.type}`);
+      if (h.type === 'bat' && h.lo < intro) fail('no bats during the easy start', where);
 
       // every static hazard leaves a lane at least RULES.minLane wide (3.5 hitboxes)
       if (h.type === 'geyser') {
@@ -147,7 +193,21 @@ for (const cfg of CONFIGS) {
         const clear = Math.min(h.cx - h.len - L, R - (h.cx + h.len));
         if (clear < HITBOX + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
       }
-      if (h.type === 'bat' && h.amp * h.speed > RULES.batMaxSpeed + 1e-6) fail('bats stay under the speed cap', where);
+      if (h.type === 'bat') {
+        // sample the real flight path: sideways speed under the cap, and the bat inside its band
+        const T = 6.283 / h.speed, dt = T / 400;
+        let [px] = batPos(h, 0), vmax = 0;
+        for (let t = dt; t <= T; t += dt) {
+          const [x, y] = batPos(h, t);
+          vmax = Math.max(vmax, Math.abs(x - px) / dt); px = x;
+          if (y - h.r < h.lo - 0.5 || y + h.r > h.hi + 0.5) { fail('bats stay inside their band', where); break; }
+        }
+        if (vmax > RULES.batMaxSpeed + 1) fail('bats stay under the speed cap', `${where}: ${vmax.toFixed(0)}`);
+        if (h.amp * h.speed * BAT_PAT[h.pat].vx > RULES.batMaxSpeed + 1e-6) fail('bats stay under the speed cap', where);
+        // neighbouring bats never share a flight pattern, so three identical bats never appear together
+        const nb = hz.slice(i + 1).find(q => q.type === 'bat');
+        if (nb && nb.lo - h.hi < RULES.batLookGap - 400 && nb.pat === h.pat) fail('neighbouring bats fly differently', where);
+      }
       if (h.type === 'spike') {
         const [L, R] = tightest(level, h.lo, h.hi);
         const tip = h.base + h.side * h.len;
