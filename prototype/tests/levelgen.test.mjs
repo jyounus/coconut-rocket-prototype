@@ -607,7 +607,11 @@ function limbCheck(id, st, rig, wallAt, kill) {
     if (L < 28) fail('the wing thumb claw is big (28+ long)', `${id}: ${L.toFixed(0)}`);
     if (roles.filter(r => r === 'b').length < 3 || roles.filter(r => r === 'm').length < 2) fail('the wing-wrist folds three finger bones and a membrane down the wall', id);
   }
-  if (st.hand === 'geode' && roles.filter(r => r === 'o').length < 6) fail('the stone hand is an open palm (palm, four fingers, thumb)', id);
+  if (st.hand === 'geode') {   // the Geode King's stone hand grips: a palm, four fingers curled over the wall's edge into the rock, a thumb
+    if (roles.filter(r => r === 'o').length < 10) fail('the stone hand has a palm, four two-part fingers and a thumb', id);
+    const tips = hand.filter((p, i) => i >= 2 && i <= 8 && i % 2 === 0);
+    if (tips.some(p => !((p[2] - p[0]) * d > 0))) fail('the stone fingers curl over into the rock', id);
+  }
   if (st.hand === 'parahook') {   // the Scissorjaw's parapod ends in ring segments and a big hooked claw that reads at phone size
     const hk = hand.filter(p => p[5] === 'c'), L = hk.reduce((m, p) => m + Math.hypot(p[2] - p[0], p[3] - p[1]), 0);
     if (hand.filter(p => p[5] === 's').length < 2 || hk.length < 3 || L < 30) fail('the parapod tip is ringed and ends in a big hook (30+ long)', `${id}: ${L.toFixed(0)}`);
