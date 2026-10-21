@@ -45,8 +45,10 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   pointer-events: none;
 }
-.hud .height { display: flex; flex-direction: column; gap: 2px; transition: opacity .18s; }
-.hud .height.faded, .hud .iconbtn.faded { opacity: .28; }
+.hud .height { display: flex; flex-direction: column; gap: 2px; transition: opacity .18s, background .18s; padding: 6px 12px 8px 10px; margin: -4px 0 0 -6px; border-radius: 16px 18px 18px 12px; background: linear-gradient(170deg, rgba(40,24,22,.78), rgba(18,10,10,.7)); border: 2px solid rgba(0,0,0,.55); box-shadow: 0 3px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,220,180,.12); }
+/* a hazard passing behind the HUD: the plate thins out a little so it never hides a threat, but the number stays readable */
+.hud .height.faded { opacity: .7; background: linear-gradient(170deg, rgba(40,24,22,.45), rgba(18,10,10,.35)); }
+.hud .iconbtn.faded { opacity: .5; }
 .hud .meters {
   font-family: var(--font-display); font-size: 44px; line-height: 1;
   color: var(--cream); font-variant-numeric: tabular-nums;
@@ -182,6 +184,14 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .bignum { font-family: var(--font-display); font-size: 60px; line-height: .9; color: var(--cream); -webkit-text-stroke: 2px var(--ink); text-shadow: 0 5px 0 var(--ink); font-variant-numeric: tabular-nums; }
 .bignum small { font-size: 34px; }
 .cause { margin: 0; font-size: 17px; font-weight: 800; color: var(--ember); }
+@keyframes sting { 0% { transform: scale(.2) rotate(-12deg); opacity: 0; } 55% { transform: scale(1.35) rotate(4deg); opacity: 1; } 75% { transform: scale(.92) rotate(-2deg); } 100% { transform: scale(1) rotate(-3deg); } }
+@keyframes shine { 0% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
+.newbest.sting { animation: sting .7s cubic-bezier(.2, 1.3, .4, 1) both; background: linear-gradient(100deg, var(--leaf) 30%, #eaffc0 45%, var(--leaf) 60%) 0 0 / 200% 100%; }
+.newbest.sting::after { content: ''; }
+.newbest.sting.shine { animation: sting .7s cubic-bezier(.2, 1.3, .4, 1) both, shine 1.2s .7s ease-in-out 2; }
+.total b.bump { display: inline-block; animation: bump .35s ease-out; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .newbest { display: inline-block; align-self: flex-start; padding: 4px 10px; border-radius: 999px; background: var(--leaf); color: var(--ink); font-weight: 900; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; border: 2px solid var(--ink); }
 
 .adbox { aspect-ratio: 16 / 10; max-width: 100%; border-radius: 16px; border: 3px dashed rgba(255,241,214,.35); display: grid; place-items: center; text-align: center; background: repeating-linear-gradient(45deg, rgba(0,0,0,.25) 0 12px, rgba(0,0,0,.1) 12px 24px); }
@@ -211,8 +221,9 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pickbtn span { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; }
 .pickbtn small { font: 900 10px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .pickbtn b { font-weight: 400; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.keyart { display: block; width: calc(100% + 40px); height: 168px; margin: -22px -20px -4px; border-radius: 23px 23px 0 0; border-bottom: 3px solid var(--ink); }
-@media (max-height: 640px) { .keyart { height: 120px; } }
+.keyart { display: block; width: calc(100% + 40px); height: 230px; margin: -22px -20px -4px; border-radius: 23px 23px 0 0; border-bottom: 3px solid var(--ink); }
+@media (max-height: 700px) { .keyart { height: 180px; } }
+@media (max-height: 600px) { .keyart { height: 140px; } }
 .note { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.45; }
 
 .toast {
@@ -222,7 +233,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   background: var(--cream); color: var(--ink); font-weight: 900; font-size: 14px; text-align: center;
   box-shadow: 0 4px 0 var(--ink);
 }
-@media (prefers-reduced-motion: reduce) { .hint, #over:not([hidden]) .panel { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hint, #over:not([hidden]) .panel, .newbest.sting, .total b.bump { animation: none; } }
 </style>
 
 <canvas id="game" aria-label="Coconut Rocket game"></canvas>
@@ -246,7 +257,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   <div class="panel">
     <canvas class="keyart" id="keyArt" aria-hidden="true"></canvas>
     <div class="eyebrow" id="menuDate">Daily shaft</div>
-    <h1 class="title">Coconut <em>Rocket</em></h1>
+    <h1 class="title sr-only">Coconut Rocket</h1>
     <p class="lede">Hold to fly. Steer through. Don't get eaten.</p>
     <button class="btn go big" id="playDaily">Play</button>
     <div class="seg" role="group" aria-label="Controls">
@@ -338,7 +349,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="eyebrow">Rewarded video</div>
     <div class="adbox"><div><b id="adCount">3</b><span class="note">A rewarded video ad plays here in the real game.</span></div></div>
     <div class="bar"><i id="adBar"></i></div>
-    <p class="note">You get one extra life per run. The worm gets pushed back and the obstacles around you are cleared.</p>
+    <p class="note" id="adNote">You get one extra life per run. The monster gets pushed back and the obstacles around you are cleared.</p>
   </div>
 </div>
 
@@ -465,7 +476,7 @@ resize();
 let G = null;
 /* LEVELGEN:BEGIN */
 // Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m and the
-// pilot's hitbox is 30 across. Every hazard must pass these before it is placed, so a
+// pilot's hitbox is 32 across. Every hazard must pass these before it is placed, so a
 // layout can be hard but never impossible. Everything is measured in height, never time,
 // so every player gets the same daily shaft.
 const RULES = {
@@ -480,12 +491,15 @@ const RULES = {
   wallBlend: 220,              // height over which one stretch's width eases into the next
   maxWallSlope: 1.6,           // a wall never juts inward faster than this per unit of height: no hidden ledges
   wallShape: 10,               // depth of the zone wall silhouettes: jungle root bulges, basalt column tiers, magma crags
-  minLane: 96,                 // narrowest open lane any hazard may leave (over 3 hitboxes across)
+  minLane: 96,                 // narrowest open lane any hazard may leave (3 hitboxes across)
   spacing: [220, 130],         // clear height between neighbouring hazards, easy → hard
   heavyExtra: 60,              // extra clearance after a geyser, fire wheel or spiky pod
   zigzagExtra: 150,            // extra when consecutive wall hazards sit on opposite walls
   minSpacing: 110,             // floor for spacing, even at high obstacle density
-  sameTypeGap: { geyser: 520, firebar: 520, boulder: 480, pend: 240, bat: 0, spike: 200, spider: 150, crusher: 220, gate: 700 },
+  sameTypeGap: { geyser: 520, firebar: 520, boulder: 480, pend: 240, bat: 0, spike: 200, spider: 150, crusher: 220, gate: 700, lavafall: 260 },
+  // Zone signatures: lavafalls (a constant stream of lava pouring from a wall spout, lighting the walls)
+  // only in the magma core; in the basalt caves the falling rocks are broken basalt column segments.
+  lavafall: { fall: [150, 210], out: [26, 46], hw: 12, hit: 9 },
   maxRun: 2,                   // never more than this many hazards of one type in a row (after the first 75 m)
   narrowGap: 270,              // openings narrower than this count as a narrow passage
   narrowGeyserGap: 820,        // a geyser in a narrow passage keeps this far from any other geyser
@@ -505,10 +519,14 @@ const RULES = {
   // Easy start: the first quarter uses only thorns (one static hazard type); then pods and spiders join,
   // so the jungle never runs on thorns alone. Bats (fast movers) only appear once the easy start is over.
   intro: { spacing: 380, breather: 520, staticOnly: 0.25, first: ['spike'], types: ['pend', 'spike', 'spider'] },
+  // The launch: the first 100 m are hazard-free, and the first two thorns are short and hug their wall,
+  // well away from the centre launch line, so simply holding thrust never dies straight away.
+  clearStart: 1000,
+  firstThorns: { n: 2, maxShare: 0.33, centreClear: 44 },
   batLookGap: 900,             // bats this close together never share a flight pattern
   centreFrom: 1500,            // from 150 m on, chunks that cover the centre line join the mix
   centreBoost: 1.6,            // and chunks that cover the centre line are this much more likely
-  firebarClear: 40,            // room between a fire wheel's reach and the wall
+  firebarClear: 54,            // room between a fire wheel's bar tip and the wall (its flame, then over a hitbox plus a margin)
   batMaxSpeed: 250,            // fastest a bat may cross the shaft
   zones: [6800, 15000],        // zone changes (jungle → basalt → magma); each one gets a landmark
   landmarkClear: 220,          // no hazard this close below a zone change, so the landmark has the stage
@@ -519,9 +537,15 @@ const RULES = {
   fruitChance: 0.6,            // share of hazards that get a fruit trail through their safe lane
   fruitHug: 26,                // fruit racing lines thread this close to a hazard's reach (centre to its edge)
   // Release beats: after a chunk's tension steps, a fruit arc sweeps across an empty stretch of shaft.
-  arc: { gap: 90, n: 7 },
+  arc: { gap: 90, n: 7, every: 2 },   // only every 2nd release beat carries an arc: fruit is a racing line, not filler
+  chamberFruitStep: 76,        // calm chambers' fruit weave is sparse too
+  // Corridors: interlocking stretches where two or three hazard types combine at close spacing. They grow
+  // more likely deeper into each zone (corridorRamp, by share of the zone climbed) and are always followed
+  // by a long breather (corridorBreather × the normal one).
+  corridorRamp: [0.45, 2.6],
+  corridorBreather: 1.9,
 };
-const WALL_HAZARDS = new Set(['geyser', 'pend', 'spike']);
+const WALL_HAZARDS = new Set(['geyser', 'pend', 'spike', 'lavafall']);
 const HEAVY = new Set(['geyser', 'firebar', 'pend', 'crusher', 'gate']);
 
 // Chunks: small hand-made patterns of several hazards, chosen and stitched by the seed.
@@ -549,8 +573,8 @@ const CHUNKS = [
   { name: 'bat and pod',      w: [2.6, 1, .8], from: 0,    steps: [['pend', 'A'], ['bat'], ['arc'], ['spike', 'B'], ['bat', 'combo']] },
   { name: 'jungle mix',       w: [2, 1, .7],   from: 1500, steps: [['pend', 'A'], ['spider', 'C'], ['spike', 'B'], ['arc'], ['bat'], ['spike', 'A', 'combo']] },
   { name: 'bat gauntlet',     w: [1.4, 1.2, 1], from: 1500, steps: [['bat'], ['spike', 'A'], ['bat', 'tight'], ['arc'], ['spider', 'C'], ['bat', 'tight']] },
-  { name: 'rockfall',         w: [2.4, 2.4, 1.8], from: 0,   steps: [['boulder', 'C'], ['spike', 'A'], ['arc'], ['bat'], ['spike', 'B', 'combo']] },
-  { name: 'thorn and spider', w: [1.4, 1, .9], from: 1500, steps: [['spike', 'A'], ['spider', 'B', 'combo']] },
+  { name: 'rockfall',         w: [2.8, 3, 2.4],   from: 0,   steps: [['boulder', 'C'], ['spike', 'A'], ['arc'], ['bat'], ['spike', 'B', 'combo']] },
+  { name: 'thorn and spider', w: [1.4, 1, .9], from: 1500, steps: [['spike', 'A'], ['spider', 'B', 'combo'], ['boulder', 'A']] },
   { name: 'pod over thorn',   w: [1.4, .8, .7], from: 1500, steps: [['spike', 'A'], ['pend', 'A', 'combo']] },
   // basalt cave hazards: crushers, gates and geysers, mixed with the jungle ones
   { name: 'piston and pod',   w: [.4, 1.8, 1.3], from: 1500, steps: [['crusher'], ['pend', 'A'], ['arc'], ['crusher', 'B'], ['spike', 'A', 'combo']] },
@@ -564,10 +588,15 @@ const CHUNKS = [
   { name: 'wait for it',      w: [.6, 1.6, 1.2], from: 1500, steps: [['spike', 'A'], ['gate'], ['arc'], ['pend', 'B'], ['spider', 'C', 'tight']] },
   { name: 'gate and bats',    w: [.4, 1.3, 1.2], from: 2500, steps: [['bat'], ['gate'], ['bat', 'tight'], ['arc'], ['spike', 'A'], ['spider', 'B', 'combo']] },
   // magma core hazards: fire wheels, mixed with everything that came before
+  { name: 'lavafalls',        w: [0, 0, 4],    from: 2500, steps: [['lavafall', 'A'], ['bat'], ['arc'], ['boulder', 'B'], ['lavafall', 'B'], ['spider', 'C', 'tight']] },
   { name: 'wheel and bats',   w: [0, .7, 2.2], from: 1500, steps: [['firebar', 'C'], ['bat'], ['arc'], ['spike', 'A'], ['pend', 'B', 'tight']] },
   { name: 'wheel and pistons', w: [0, .6, 2.2], from: 1500, steps: [['firebar', 'C'], ['crusher', 'B'], ['arc'], ['geyser', 'A'], ['spider', 'C', 'tight']] },
-  { name: 'wheel and web',    w: [0, .6, 1.8], from: 2500, steps: [['firebar', 'C'], ['spider', 'A', 'combo'], ['arc'], ['spike', 'B'], ['bat']] },
+  { name: 'wheel and web',    w: [0, .6, 1.8], from: 2500, steps: [['firebar', 'C'], ['spider', 'A', 'combo'], ['arc'], ['lavafall', 'B'], ['bat']] },
   { name: 'fire gauntlet',    w: [0, .4, 1.8], from: 2500, steps: [['geyser', 'A'], ['pend', 'B'], ['arc'], ['firebar', 'C'], ['spike', 'A', 'tight'], ['gate']] },
+  // corridors: no release beat inside, hazards interlock and tighten, then a real breather after
+  { name: 'bramble corridor', corridor: true, w: [1.3, .5, .4], from: 2500, steps: [['spike', 'A'], ['spider', 'C', 'tight'], ['spike', 'B', 'tight'], ['pend', 'A', 'combo'], ['spider', 'C', 'tight'], ['spike', 'B', 'combo']] },
+  { name: 'piston corridor',  corridor: true, w: [0, 1.4, .8], from: 2500, steps: [['crusher'], ['bat', 'tight'], ['crusher', 'A', 'tight'], ['spike', 'B', 'combo'], ['crusher', 'B', 'tight'], ['bat', 'combo']] },
+  { name: 'cinder corridor',  corridor: true, w: [0, .4, 1.4], from: 2500, steps: [['lavafall', 'A'], ['bat', 'tight'], ['firebar', 'C', 'tight'], ['lavafall', 'B', 'combo'], ['spike', 'A', 'tight'], ['pend', 'B', 'combo']] },
 ];
 
 // One scripted set piece per zone, about RULES.setPieceAt into it, each mixing hazard types. A step
@@ -583,6 +612,8 @@ const coversCentre = c => c.steps.some(([t, v]) => t === 'bat' || t === 'gate' |
 
 function zoneT(a) { const [z1, z2] = RULES.zones; return [smooth(z1 - 600, z1 + 600, a), smooth(z2 - 700, z2 + 700, a)]; }
 function zoneOf(a) { return a < RULES.zones[0] ? 0 : a < RULES.zones[1] ? 1 : 2; }
+// how far through its zone a height is, 0..1 (the magma core counts as 8000 deep)
+function zoneProgress(a) { const z = zoneOf(a), a0 = z ? RULES.zones[z - 1] : 0, a1 = z < 2 ? RULES.zones[z] : RULES.zones[1] + 8000; return clamp((a - a0) / (a1 - a0), 0, 1); }
 
 // How far a gate's slabs are closed (0 open, 1 shut) at time t. Shared by play and the test.
 function gateK(h, t) {
@@ -700,12 +731,12 @@ function createLevel(seed, opts) {
     },
     pend(A, diff, u) {
       // A is the anchor on the wall; the pod swings below it, reaching 0.97 × len into the shaft.
-      const side = u[0] < 0.5 ? 1 : -1, r = 20;
+      const side = u[0] < 0.5 ? 1 : -1, r = 27;
       const ax = walls(A)[side > 0 ? 0 : 1];
-      const [L, R] = opening(A - 160, A);
+      const [L, R] = opening(A - 180, A);
       const room = side > 0 ? R - ax : ax - L;
-      const len = Math.min(80 + u[1] * 55, (room - r - RULES.minLane) / 0.971);
-      if (len < 55) return null;
+      const len = Math.min(84 + u[1] * 55, (room - r - RULES.minLane) / 0.971);
+      if (len < 58) return null;
       return { type: 'pend', skin: zoneOf(A), side, th: side * 0.78, len, aAlt: A, ax, w: 1.3 + u[2] * 0.9 + diff * 0.7, ph: u[3] * 6.283, x: ax, alt: A - len, r, lo: A - len - r, hi: A - 0.24 * len + r };
     },
     geyser(A, diff, u) {
@@ -718,16 +749,20 @@ function createLevel(seed, opts) {
       return { type: 'geyser', side, alt: A, base: walls(A)[side > 0 ? 0 : 1], len, hh: 20, narrow, ph: u[3] * 6.283, lo, hi };
     },
     firebar(A, diff, u) {
-      const [L, R] = opening(A - 104, A + 104), gap = R - L, off = (u[0] - 0.5) * 24;
-      const len = Math.min(88, gap / 2 - Math.abs(off) - RULES.firebarClear);
-      if (len < 48) return null;
-      return { type: 'firebar', alt: A, cx: (L + R) / 2 + off, len, br: 10, w: (u[1] < 0.5 ? -1 : 1) * (1.2 + u[2] * 0.8), ph: u[3] * 6.283, lo: A - len - 16, hi: A + len + 16 };
+      const [L, R] = opening(A - 132, A + 132), gap = R - L, off = (u[0] - 0.5) * 24;
+      const len = Math.min(112, gap / 2 - Math.abs(off) - RULES.firebarClear);
+      if (len < 56) return null;
+      return { type: 'firebar', alt: A, cx: (L + R) / 2 + off, len, br: 13, w: (u[1] < 0.5 ? -1 : 1) * (1.1 + u[2] * 0.7), ph: u[3] * 6.283, lo: A - len - 19, hi: A + len + 19 };
     },
     spike(A, diff, u) {
       // A rock spike jutting from one wall. Its look follows the zone: thorn branch, crystal, obsidian.
       const side = u[0] < 0.5 ? 1 : -1, half = 20;
       const [L, R] = opening(A - half - 4, A + half + 4), gap = R - L;
-      const len = Math.min(gap * (0.34 + u[1] * 0.24), gap - RULES.minLane);
+      let len = Math.min(gap * (0.34 + u[1] * 0.24), gap - RULES.minLane);
+      if (spikesPlaced < RULES.firstThorns.n) {
+        const base = walls(A)[side > 0 ? 0 : 1];
+        len = Math.min(len, gap * RULES.firstThorns.maxShare, Math.abs(base - WORLD_W / 2) - RULES.firstThorns.centreClear);
+      }
       if (len < 50) return null;
       const [t1, t2] = zoneT(A);
       const skin = t2 > 0.5 ? 'obsidian' : t1 > 0.5 ? 'crystal' : 'thorn';
@@ -769,9 +804,19 @@ function createLevel(seed, opts) {
         period: RULES.gate.period,
         shut: lerp(RULES.gate.shut[0], RULES.gate.shut[1], diff), ph: u[1], lo: A - hb - 4, hi: A + hb + 4 };
     },
+    lavafall(A, diff, u) {
+      // A is the spout on the wall; the stream pours straight down for `fall` and burns out. Constant.
+      const side = u[0] < 0.5 ? 1 : -1, LF = RULES.lavafall, fall = lerp(LF.fall[0], LF.fall[1], u[1]);
+      const lo = A - fall, hi = A + 16, [L, R] = opening(lo, hi);
+      let x = walls(A)[side > 0 ? 0 : 1] + side * lerp(LF.out[0], LF.out[1], u[2]);
+      x = side > 0 ? Math.max(x, L + LF.hw + 6) : Math.min(x, R - LF.hw - 6);   // the stream never falls into a wall
+      const lane = side > 0 ? R - (x + LF.hw) : (x - LF.hw) - L;
+      if (lane < RULES.minLane) return null;
+      return { type: 'lavafall', skin: zoneOf(A), side, alt: A, base: walls(A)[side > 0 ? 0 : 1], x, fall, hw: LF.hw, ph: u[3] * 6.283, lo, hi };
+    },
     boulder(A, diff, u) {
       const [L, R] = opening(A - RULES.boulderFall, A + 100);   // never drops through a wall
-      return { type: 'boulder', alt: A, x: L + 34 + u[0] * (R - L - 68), r: 20 + u[1] * 9, state: 'idle', spd: u[2] * 140 + diff * 120, rot: 0, spin: (u[3] - 0.5) * 6, cur: A, lo: A - 30, hi: A + 30 };
+      return { type: 'boulder', col: zoneOf(A) === 1, alt: A, x: L + 34 + u[0] * (R - L - 68), r: 20 + u[1] * 9, state: 'idle', spd: u[2] * 140 + diff * 120, rot: 0, spin: (u[3] - 0.5) * 6, cur: A, lo: A - 30, hi: A + 30 };
     },
   };
 
@@ -786,6 +831,7 @@ function createLevel(seed, opts) {
       return h.side > 0 ? [reach, R] : [L, reach];
     }
     if (h.type === 'crusher') { const [L, R] = opening(h.lo, h.hi); return [Math.max(L, h.lb + h.maxL), Math.min(R, h.rb - h.maxR)]; }
+    if (h.type === 'lavafall') { const [L, R] = opening(h.lo, h.hi); return h.side > 0 ? [h.x + h.hw, R] : [L, h.x - h.hw]; }
     if (h.type === 'spider') { const [L, R] = opening(h.lo, h.hi); return h.x - h.r - L > R - h.x - h.r ? [L, h.x - h.r] : [h.x + h.r, R]; }
     return null;
   }
@@ -821,7 +867,7 @@ function createLevel(seed, opts) {
     // the edge of the lane that touches the hazard: wall hazards and pods reach in from one side,
     // a spider's column is on the lane's near side, a crusher's longer piston sets its tight side
     let line;
-    if (h.type === 'geyser' || h.type === 'spike' || h.type === 'pend') line = h.side > 0 ? lane[0] + hug : lane[1] - hug;
+    if (h.type === 'geyser' || h.type === 'spike' || h.type === 'pend' || h.type === 'lavafall') line = h.side > 0 ? lane[0] + hug : lane[1] - hug;
     else if (h.type === 'spider') line = lane[0] >= h.x ? lane[0] + hug : lane[1] - hug;
     else if (h.type === 'crusher') line = h.maxL >= h.maxR ? lane[0] + hug : lane[1] - hug;
     else line = (lane[0] + lane[1]) / 2;
@@ -834,7 +880,7 @@ function createLevel(seed, opts) {
 
   // Which hazard types the easy start allows at height a (null: everything).
   function allowed(a) {
-    if (a < intro * RULES.intro.staticOnly) return RULES.intro.first;   // (thorns only)
+    if (intro > 0 && a < RULES.clearStart + intro * RULES.intro.staticOnly) return RULES.intro.first;   // (thorns only, after the clear launch)
     if (a < intro) return RULES.intro.types;
     return null;
   }
@@ -844,6 +890,7 @@ function createLevel(seed, opts) {
       if (c.from > a || (c.to != null && a > c.to) || (ok && !c.steps.every(([t]) => t === 'arc' || ok.includes(t)))) return 0;
       let w = lerp(lerp(c.w[0], c.w[1], t1), c.w[2], t2);
       if (a >= RULES.centreFrom && coversCentre(c)) w *= RULES.centreBoost;
+      if (c.corridor) w *= lerp(RULES.corridorRamp[0], RULES.corridorRamp[1], zoneProgress(a));
       return c === last ? w * 0.3 : w;   // keep it varied
     });
   }
@@ -879,9 +926,11 @@ function createLevel(seed, opts) {
 
   const rng = mulberry32((seed ^ 0x1E7E1A7) >>> 0);
   const recent = [];                 // last placed hazards, newest last
-  let floor = 450, pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
+  let spikesPlaced = 0, arcsSeen = 0;
+  let floor = RULES.clearStart, pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
   const marks = [], setDone = [false, false, false];   // set pieces placed, as { alt, name, zone }
   const chambers = [], specDone = [false, false, false];
+  const chunkMarks = [];             // where each chunk starts (after its breather): the chase surges here
   let markNext = null;
 
   // A calm chamber: no hazards, just a fruit weave from wall to wall that rewards steering. The
@@ -892,9 +941,9 @@ function createLevel(seed, opts) {
     if (!specDone[ch.zone]) { specDone[ch.zone] = true; ch.spectacle = true; }
     chambers.push(ch);
     if (!fruitOut) return;
-    for (let a = ch.a0 + 120, k = 0; a < ch.a1 - 80; a += RULES.fruitStep, k++) {
+    for (let a = ch.a0 + 120, k = 0; a < ch.a1 - 80; a += RULES.chamberFruitStep, k++) {
       const [l, r] = walls(a), M = RULES.fruitMargin + 10;
-      fruitOut.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.42) * ((r - l) / 2 - M), l + M, r - M), alt: a });
+      fruitOut.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.84) * ((r - l) / 2 - M), l + M, r - M), alt: a });
     }
   }
 
@@ -922,8 +971,9 @@ function createLevel(seed, opts) {
     const inIntro = floor < intro, diff = difficulty(floor);
     if (queue.length && !markNext && setPieceDue() >= 0) queue = [];
     if (!queue.length) {
-      if (recent.length) pending += inIntro ? RULES.intro.breather : lerp(RULES.breather[0], RULES.breather[1], diff);
+      if (recent.length) pending += (inIntro ? RULES.intro.breather : lerp(RULES.breather[0], RULES.breather[1], diff)) * (chunk && chunk.corridor ? RULES.corridorBreather : 1);
       nextChunk();
+      if (recent.length) chunkMarks.push({ alt: floor + pending, corridor: !!chunk.corridor, set: !!markNext });
       retries = 0;
     }
     let [type, ...vars] = queue[0];
@@ -931,7 +981,7 @@ function createLevel(seed, opts) {
     if (type === 'arc') {               // a release beat: an empty stretch with a fruit arc across it
       queue.shift(); retries = 0;
       const a0 = floor + pending + RULES.arc.gap, a1 = a0 + RULES.fruitStep * (RULES.arc.n - 1);
-      if (fruitOut && !chamberNear(a0 - 10, a1 + 10)) {
+      if (fruitOut && arcsSeen++ % RULES.arc.every === 0 && !chamberNear(a0 - 10, a1 + 10)) {
         const dir = rng() < 0.5 ? 1 : -1;
         for (let k = 0; k < RULES.arc.n; k++) {
           const a = a0 + k * RULES.fruitStep, [l, r] = walls(a), M = RULES.fruitMargin + 8;
@@ -941,6 +991,8 @@ function createLevel(seed, opts) {
       floor = a1; pending = 0;
       return;
     }
+    // lavafalls belong to the magma core: anywhere else the step becomes a geyser (or a thorn)
+    if (type === 'lavafall' && zoneOf(floor + pending + 200) !== 2) type = zoneOf(floor + pending + 200) === 1 ? 'geyser' : 'spike';
     // a step the easy start doesn't allow yet at this height (in a set piece) becomes a thorn
     const ok = allowed(floor + pending);
     if (ok && !ok.includes(type)) type = ok.includes('spike') ? 'spike' : ok[0];
@@ -988,6 +1040,7 @@ function createLevel(seed, opts) {
     for (let ch; (ch = chamberNear(floor, h.lo)) && !ch.done;) calm(ch, fruitOut);   // chambers the spacing skipped over
     out.push(h); recent.push(h); if (recent.length > 24) recent.shift();
     if (h.type === 'bat') lastBat = h;
+    if (h.type === 'spike') spikesPlaced++;
     if (markNext) { marks.push({ alt: h.lo, ...markNext }); markNext = null; }
     if (fruitOut && hash2(placed, seed + 41) < RULES.fruitChance) trail(h, fruitOut);
     placed++;
@@ -995,7 +1048,7 @@ function createLevel(seed, opts) {
   }
 
   return {
-    seed, intro, walls, difficulty, safeLane, marks, chambers, segAt, allowed,
+    seed, intro, walls, difficulty, safeLane, marks, chambers, segAt, allowed, chunkMarks,
     fill(upTo, out, fruitOut) { while (floor + pending < upTo) step(out, fruitOut); },
   };
 }
@@ -1044,6 +1097,7 @@ function newRun(isDaily) {
     particles: [], pops: [], streaks: [],
     fruitCount: 0, closeCount: 0, lastHundred: 0, zone: 0,
     hitStop: 0, flash: 0, flashCol: [255, 255, 255], burst: null, slow: 0, knock: null, bite: null, punch: 0, deathAlt: 58, deathX: 200,
+    calm: 0, markIdx: 0, surgeWarn: 0, grinT: 0, rubbleT: 0,
     reviveUsed: false, counted: false, shake: 0, cause: '', deadTimer: 0, ringTimer: 0,
     planks: null, lastPopT: -9, readyFlash: 0, camFloat: 0, spec: {},
   };
@@ -1137,6 +1191,8 @@ const CAUSES = {
   crusher: 'Squashed by a basalt crusher',
   gate: 'Shut in by a gate',
   firebar: 'Singed by a fire wheel',
+  lavafall: 'Scorched by a lavafall',
+  column: 'Crushed by a falling basalt column',
   wall: 'Crashed into the shaft wall',
 };
 function die(cause) {
@@ -1159,10 +1215,11 @@ function die(cause) {
   input.pointers.clear(); input.pressed = false; recomputeThrust();
   vibrate(80);
 }
-function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
+function vibrate(ms) { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch {} }
 function causeColour(cause) {
   if (cause === 'worm') return monster().haze;
-  if (cause === 'geyser' || cause === 'firebar' || cause === 'boulder') return [255, 120, 30];
+  if (cause === 'geyser' || cause === 'firebar' || cause === 'boulder' || cause === 'lavafall') return [255, 120, 30];
+  if (cause === 'column') return [150, 200, 255];
   if (cause === 'spike-crystal') return [120, 230, 255];
   if (cause === 'crusher' || cause === 'gate') return [255, 200, 70];
   if (cause === 'wall') return pal('rim', G.p.alt);
@@ -1199,10 +1256,11 @@ function finishRun() {
     `<li><span>Height ${m} m × ${PTS_PER_M}</span><b>${(m * PTS_PER_M).toLocaleString('en-GB')}</b></li>` +
     `<li><span>Fruit ${G.fruitCount} × ${FRUIT_BONUS}</span><b>+${(G.fruitCount * FRUIT_BONUS).toLocaleString('en-GB')}</b></li>` +
     `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>`;
-  $('overPoints').textContent = fmtPts(score);
+  $('overPoints').textContent = fmtPts(0);
   $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   $('overNew').textContent = G.isDaily ? 'New best today' : 'New practice best';
-  $('overNew').hidden = !(isNew && score > 0);
+  $('overNew').hidden = true; $('overNew').classList.remove('sting', 'shine');
+  countUp(score, isNew && score > 0);
   $('overTuned').hidden = !G.isDaily || counts;
   if (G.isDaily) {
     $('overBestLabel').textContent = 'Best today'; $('overBest').textContent = fmtPts(daily.bestPts);
@@ -1217,6 +1275,22 @@ function finishRun() {
   for (const el of document.querySelectorAll('#over .stat b, #over .total b, #over .bonus li span')) fitText(el, 11);
 }
 
+// Game over: the final score counts up once the panel has slid in, then a new best lands with a stinger.
+let countRaf = 0;
+function countUp(score, isNew) {
+  cancelAnimationFrame(countRaf);
+  const el = $('overPoints'), t0 = performance.now() + 380, dur = Math.min(1400, 500 + score / 12);
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tick = now => {
+    const e = reduce ? 1 : clamp((now - t0) / dur, 0, 1), v = Math.round(score * (1 - (1 - e) ** 3));
+    el.textContent = fmtPts(v);
+    if (e < 1) { countRaf = requestAnimationFrame(tick); return; }
+    el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+    if (isNew) { const nb = $('overNew'); nb.hidden = false; nb.classList.add('sting', 'shine'); vibrate([20, 40, 30]); }
+    fitText(el, 11);
+  };
+  countRaf = requestAnimationFrame(tick);
+}
 function revive() {
   const p = G.p;
   G.reviveUsed = true;
@@ -1242,7 +1316,14 @@ function revive() {
 // or dropping lets it close in. Surge beats pull the target in to `surgeTo` for `beatLen` seconds.
 // While a gate is just above you it eases off (you may have to wait), and during a zone reveal it
 // holds back.
-const CHASE = { k: 1.35, cap: 140, floor: 0.42, surgeTo: 150, beatLen: 1.6, every: [8, 12], gateEase: 0.45 };
+// The gap breathes: clean play (no overheat, no scrape with the monster) builds `calm` over calmTime
+// seconds, which lets the leash open out to `open` units, so the head drops off the screen and only its
+// sliver shows. Then, at the next chunk boundary, it surges: a 0.9 s warning you can't miss (it crouches,
+// the bottom edge flashes, chevrons pulse), a lunge that pulls the gap in to surgeTo, and calm resets.
+// While the engine is cut out by an overheat it slows right down (overheatCap × its base), so an overheat
+// near it is a scare, not a death, as long as the gap was at its normal leash.
+const CHASE = { k: 1.35, cap: 140, floor: 0.42, surgeTo: 150, beatLen: 1.6, every: [8, 12], gateEase: 0.45,
+  open: 330, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, overheatCap: 0.3 };
 function gateAhead() {
   const a = G.p.alt;
   return G.hazards.some(h => h.type === 'gate' && h.lo < a + 420 && h.hi > a - 80);
@@ -1251,9 +1332,11 @@ function chaseSpeed(gap, dt) {
   const base = cfg.wormBase + Math.min(60, G.maxAlt * cfg.wormRamp);
   // a longer leash while the easy start plays out (room to survive an overheat while you learn)
   let target = lerp(Math.max(cfg.chase, 330), cfg.chase, smooth(cfg.intro * 10, cfg.intro * 18, G.p.alt));
+  target = lerp(target, Math.max(target, CHASE.open), smooth(0, 1, G.calm || 0));     // the gap opens after clean play
   if (G.worm.beat > 0) target = Math.min(target, CHASE.surgeTo);
   let v = base + clamp((gap - target) * CHASE.k, -base, CHASE.cap);
   let floor = base * CHASE.floor;
+  if (G.heat.over > 0) { v = Math.min(v, base * CHASE.overheatCap); floor = Math.min(floor, base * CHASE.overheatCap); }
   // a gate just above: it only creeps up on you while you wait it out (no faster than you climb)
   if (gateAhead()) { floor *= CHASE.gateEase; v = Math.min(v, floor + Math.max(0, G.p.vy)); }
   if (G.reveal > 0) v = Math.min(v, floor);
@@ -1273,8 +1356,17 @@ function update(rawDt) {
   if (G.state === 'dead' && currentScreen !== null) { updateCamera(rawDt); return; }   // frozen behind the game-over panel
   if (G.burst) { G.burst.t += rawDt; if (G.burst.t > 0.6) G.burst = null; }
   if (G.hitStop > 0) { G.hitStop -= rawDt; return; }           // a beat of stillness when you get hit
+  if (G.resumeT > 0) {               // frozen during the resume countdown
+    G.resumeT = Math.max(0, G.resumeT - rawDt); input.pressed = false;
+    // not holding when it ends: hover in place (like after a revive) until you press, so a resume never
+    // drops you into the jaws
+    if (G.resumeT <= 0 && !input.thrust && G.state === 'play') { G.state = 'ready'; G.reviving = true; G.p.vy = 0; showHint(); }
+    return;
+  }
   let dt = rawDt;
   if (G.slow > 0) { G.slow -= rawDt; dt *= 0.35; }             // close-call slow-mo
+  else if (G.revealSlow > 0) { G.revealSlow -= rawDt; dt *= 0.4; }   // a beat of slow-mo as a new zone opens up
+  if (G.sweep) G.sweep.t += rawDt;
   G.flash = Math.max(0, G.flash - rawDt * 2.6);
   if (G.zoneCard) G.zoneCard.t += rawDt;
   if (G.reveal > 0) { G.reveal = Math.max(0, G.reveal - rawDt); G.shake = Math.max(G.shake, 2.5 * Math.sin(Math.PI * G.reveal / REVEAL)); }
@@ -1354,10 +1446,14 @@ function update(rawDt) {
     p.stretch = lerp(p.stretch, G.thrust && p.vy > cfg.maxUp * 0.75 ? 1 : 0, Math.min(1, dt * 10));
     p.squash = Math.max(0, p.squash - dt * 3.5);
     p.nearT = Math.max(0, p.nearT - dt);
+    p.grinT = Math.max(0, (p.grinT || 0) - dt);
     // a subtle zoom pulse while flying flat out, plus a kick on every boost
     G.zoomKick = Math.max(0, (G.zoomKick || 0) - dt * 2.5);
     const revealK = G.reveal > 0 ? Math.sin(Math.PI * (1 - G.reveal / REVEAL)) : 0;
-    const zoomTo = (1 + 0.045 * (G.thrust ? smooth(0.7, 1, p.vy / cfg.maxUp) : 0) + 0.08 * G.zoomKick) * (1 - 0.14 * revealK);
+    // zoom follows climb speed: the camera eases back a touch as you approach top speed (more shaft in
+    // view, a sense of rush) and leans in when you drop; boosts kick it; the zone reveal pulls well back
+    const vk = clamp(p.vy / cfg.maxUp, -1, 1.25);
+    const zoomTo = (1 - 0.06 * smooth(0.45, 1.15, vk) + 0.035 * smooth(-0.2, -0.9, vk) + 0.07 * G.zoomKick) * (1 - 0.16 * revealK) * (1 - 0.1 * (G.pullBack || 0));
     G.zoom = lerp(G.zoom, zoomTo, Math.min(1, dt * 6));
 
     // exhaust, from every nozzle of the current pilot, in that pilot's exhaust look
@@ -1367,9 +1463,10 @@ function update(rawDt) {
     for (const [lx, ly, exName = pl.exhaust] of pl.nozzles) {
       const ex = EXHAUST[exName], nx = p.x + (lx * cs - ly * sn) * PILOT_SCALE, na = p.alt - (lx * sn + ly * cs) * PILOT_SCALE;
       if (G.thrust) {
+        // the main flame is the drawn fire cone (drawThrustFlame); particles carry each pilot's own flavour
         for (let i = 0; i < count; i++) {
-          puff(nx + (Math.random() - .5) * 6, na, (Math.random() - .5) * 60, -220 - Math.random() * 160 + p.vy * 0.3,
-            ex.add ? 0.28 + Math.random() * 0.14 : 0.5 + Math.random() * 0.3, ex.add ? 6 + Math.random() * 4 : 5 + Math.random() * 4, ex.add ? 'flame' : 'puff', exName);
+          if (ex.add) puff(nx + (Math.random() - .5) * 6, na - 18, (Math.random() - .5) * 50, -200 - Math.random() * 140 + p.vy * 0.3, 0.22 + Math.random() * 0.12, 5 + Math.random() * 3, 'flame', exName);
+          else if (Math.random() < 0.6) puff(nx + (Math.random() - .5) * 8, na - 34, (Math.random() - .5) * 60, -160 - Math.random() * 120 + p.vy * 0.3, 0.5 + Math.random() * 0.3, 4 + Math.random() * 3, 'puff', exName);
         }
         if (ringNow && ex.rings) puff(nx, na - 6, p.vx * 0.2, -120 + p.vy * 0.2, 0.7, 7, 'ring');
         if (ex.coins && Math.random() < 0.2) puff(nx, na, (Math.random() - .5) * 140, -40 - Math.random() * 80, 1.2, 5, 'coin');
@@ -1382,12 +1479,16 @@ function update(rawDt) {
     // a number pop every 100 m, and a title card at every zone change
     const hundred = Math.floor(G.maxAlt / 1000);
     if (hundred > G.lastHundred) { G.lastHundred = hundred; addPop(`${hundred * 100} m`, 0, 0, { big: true, life: 0.85 }); vibrate(15); }
+    // the crusher hall (basalt set piece): the camera pulls back so the whole gauntlet is in view
+    const hall = G.level.marks.find(mk => mk.zone === 1);
+    G.pullBack = lerp(G.pullBack || 0, hall && p.alt > hall.alt - 420 && p.alt < hall.alt + 1500 ? 1 : 0, Math.min(1, dt * 2));
     // announce each set piece at the side as it comes into view
     for (const mk of G.level.marks) if (!mk.shown && p.alt > mk.alt - viewH * 0.55) { mk.shown = true; addPop(mk.name, 0, 0, { big: true, life: 1.4 }); }
     const z = zoneIndex(p.alt);
     if (z > G.zone) {
       G.zone = z; G.flash = Math.max(G.flash, 0.7); G.flashCol = [[255, 236, 150], [140, 210, 255], [255, 140, 50]][z];
       G.zoneCard = { i: z, t: 0 }; G.reveal = REVEAL; G.shake = Math.max(G.shake, 7); vibrate(40);
+      G.revealSlow = 0.45; G.sweep = { t: 0, z };
       for (let i = 0; i < 40; i++) { const a = Math.random() * 6.283, v = 80 + Math.random() * 260; puff(p.x, p.alt + 40, Math.cos(a) * v, Math.sin(a) * v, 0.8 + Math.random() * 0.6, 2 + Math.random() * 1.5, 'spark'); }
     }
 
@@ -1405,6 +1506,9 @@ function update(rawDt) {
       const [wl, wr] = walls(G.camAlt + 10), from = Math.max(G.camAlt - 10, G.worm.alt);
       puff(lerp(wl, wr, Math.random()), from, (Math.random() - .5) * 40, 160 + Math.random() * 220 + 200 * prox, 0.9 + Math.random() * 0.6, 1.2 + Math.random() * 1.6, Math.random() < 0.6 ? 'ember' : 'debris', haze);
     }
+    // it tears chunks out of the walls as it climbs: more and bigger the closer it is
+    G.rubbleT -= dt;
+    if (G.rubbleT <= 0) { G.rubbleT = lerp(1.1, 0.16, prox) * (0.6 + 0.8 * Math.random()); if (gap < 900) wallBreak(prox > 0.6 ? 2 : 1, prox > 0.7); }
     if (p.alt - p.r * 0.4 < G.worm.alt) { p.invuln = 0; die('worm'); }
 
     // walls
@@ -1453,17 +1557,30 @@ function update(rawDt) {
   // the shaft that pulls its chase gap in to about CHASE.surgeTo for a moment before it releases.
   // Never while a gate is just above you, during a zone reveal, or right after a revive.
   const W = G.worm;
-  if (W.crouch > 0) { W.crouch -= dt; if (W.crouch <= 0) { W.crouch = 0; W.surge = 1; W.beat = CHASE.beatLen; G.shake = Math.max(G.shake, 9); vibrate(25); } }
+  if (W.crouch > 0) { W.crouch -= dt; if (W.crouch <= 0) { W.crouch = 0; W.surge = 1; W.beat = CHASE.beatLen; G.calm = 0; G.shake = Math.max(G.shake, 9); vibrate(25); wallBreak(10, true); } }
   W.surge = Math.max(0, W.surge - dt * 2.4);
   W.beat = Math.max(0, (W.beat || 0) - dt);
   W.snap = Math.max(0, W.snap - dt * 3);
   W.nextLunge -= dt;
-  if (W.nextLunge <= 0 && G.state === 'play') {
-    W.nextLunge = CHASE.every[0] + Math.random() * (CHASE.every[1] - CHASE.every[0]);
-    // (and never on top of a near-overheated engine)
-    if (G.p.alt - W.alt < 420 && !gateAhead() && !(G.reveal > 0) && G.p.invuln <= 0 && G.p.alt > 1500 && G.heat.v < 0.6 && G.heat.over <= 0) W.crouch = 0.55;
-    else W.nextLunge = 2;
+  if (G.state === 'play') {
+    // calm builds while you fly clean and drains when it gets close or you overheat
+    const gapNow = G.p.alt - W.alt;
+    if (G.heat.over > 0 || gapNow < 140) G.calm = Math.max(0, (G.calm || 0) - dt * 0.6);
+    else if (W.beat <= 0 && W.crouch <= 0) G.calm = Math.min(1, (G.calm || 0) + dt / CHASE.calmTime);
+    // never on top of a hot engine, a gate, a zone reveal, a revive or the resume countdown
+    const fair = !gateAhead() && !(G.reveal > 0) && G.p.invuln <= 0 && G.p.alt > 1500 && G.heat.v < 0.6 && G.heat.over <= 0;
+    const marks = G.level.chunkMarks;
+    while (G.markIdx < marks.length && marks[G.markIdx].alt < G.p.alt) {
+      const mk = marks[G.markIdx++];
+      if (W.crouch <= 0 && W.beat <= 0 && fair && G.calm >= CHASE.minCalm && gapNow < 560) { W.crouch = CHASE.warn; W.nextLunge = CHASE.fallback; G.surgeWarn = 1; }
+    }
+    // a fallback surge if it has been quiet for a long time
+    if (W.nextLunge <= 0) {
+      if (W.crouch <= 0 && fair && gapNow < 460) { W.crouch = CHASE.warn; G.surgeWarn = 1; W.nextLunge = CHASE.fallback; }
+      else W.nextLunge = 2;
+    }
   }
+  G.surgeWarn = Math.max(0, (G.surgeWarn || 0) - dt / (CHASE.warn + 0.3));
   if (G.state === 'play' && G.p.alt - G.worm.alt < 200 && G.worm.snap <= 0 && Math.random() < dt * 0.8) G.worm.snap = 1;
   // jaws: a slow chew, wide open during a lunge, shutting hard on a snap
   const chew = 0.5 + 0.5 * Math.sin(G.t * 3.2);
@@ -1504,7 +1621,12 @@ function updateCamera(dt) {
   const prev = G.camAlt;
   G.camAlt += (target - G.camAlt) * Math.min(1, dt * follow);
   const dy = (G.camAlt - prev) * s;
-  for (const m of motes) { m.y += dy * m.depth + m.drift * dt; if (m.y > H + 10) m.y -= H + 20; if (m.y < -10) m.y += H + 20; }
+  const mA = G.camAlt + viewH / 2;
+  for (const m of motes) {
+    const d = MOTE_DRIFT[moteKind(m, mA)];
+    m.y += dy * m.depth + lerp(d[0], d[1], m.ph / 6.28) * dt;
+    if (m.y > H + 10) { m.y -= H + 20; m.x = Math.random(); } if (m.y < -10) { m.y += H + 20; m.x = Math.random(); }
+  }
 }
 
 // The starting planks snap into pieces that tumble away once you have launched.
@@ -1529,11 +1651,15 @@ function boulderActive() {
   return G.hazards.some(h => h.type === 'boulder' && (h.state === 'warn' || (h.state === 'fall' && h.cur > G.p.alt - 40)));
 }
 
-// The player's hitbox radius: about 60% of the drawn body (the coconut is r≈19 in art units, drawn
-// at PILOT_SCALE 1.3, so about 25 world units). `hitPad` grows it for the close-call test only.
-const PLAYER_HIT = 15, NEAR_PAD = 13;
-let hitPad = 0;
-const playerR = () => PLAYER_HIT + hitPad;
+// The player's hitbox radius: about 55% of the drawn body (the coconut is r≈19 in art units, drawn
+// at PILOT_SCALE 1.5, so about 28 world units). For the close-call test every collision shape is
+// grown to NEAR_K × (its radius + the player's) + NEAR_ADD, so threading a fruit racing line past a
+// hazard's reach counts as a close call.
+const PLAYER_HIT = 16, NEAR_K = 1.5, NEAR_ADD = 6;
+let nearMode = false;
+const playerR = () => PLAYER_HIT;
+// true when a point at distance d from a shape of radius r touches the player (or comes close, in nearMode)
+const within = (d, r) => d < (nearMode ? (r + PLAYER_HIT) * NEAR_K + NEAR_ADD : r + PLAYER_HIT);
 
 // Flame shape shared by drawing and collision: thin at the vent, fullest near 60%, tapering
 // to a point, and curling slightly upward as hot gas rises.
@@ -1546,8 +1672,7 @@ function geyserHits(h) {
   for (let k = -2; k <= 2; k++) {
     const x = p.x + k * 5, t = (x - h.base) * h.side / h.len;
     if (t < 0 || t > GEYSER_HIT.length) continue;
-    const d = Math.hypot(x - p.x, p.alt - (h.alt + geyserRise(t))) - geyserHalf(h, t) * GEYSER_HIT.thickness;
-    if (d < playerR()) return true;
+    if (within(Math.hypot(x - p.x, p.alt - (h.alt + geyserRise(t))), geyserHalf(h, t) * GEYSER_HIT.thickness)) return true;
   }
   return false;
 }
@@ -1565,8 +1690,8 @@ function spikeHits(h) {
 function crusherK(h, t) {
   const P = 6.283 / h.w, s0 = (((t / P + h.ph / 6.283) % 1) + 1) % 1 * P;
   const open = P * 0.42, wind = 0.3, slam = 0.14, hold = P * 0.16;
-  if (s0 < open) return [0, 0, clamp((s0 - open + 0.3) / 0.6, 0, 1)];
-  if (s0 < open + wind) return [0, (s0 - open) / wind, 0.5 + 0.5 * (s0 - open) / wind];
+  if (s0 < open) return [0, 0, clamp((s0 - open + 0.3) / 0.6, 0, 1), s0 > open - 0.5 ? 1 : 0];
+  if (s0 < open + wind) return [0, (s0 - open) / wind, 0.5 + 0.5 * (s0 - open) / wind, 1];
   if (s0 < open + wind + slam) { const x = (s0 - open - wind) / slam; return [x * x, 0]; }
   if (s0 < open + wind + slam + hold) return [1, 0];
   return [1 - smooth(open + wind + slam + hold, P, s0), 0];
@@ -1577,21 +1702,29 @@ function crusherHits(h) {
   const p = G.p;
   for (const [x0, x1] of crusherRects(h)) {
     const cx = clamp(p.x, x0, x1), ca = clamp(p.alt, h.alt - h.hb + 2, h.alt + h.hb - 2);
-    if ((p.x - cx) ** 2 + (p.alt - ca) ** 2 < playerR() ** 2) return true;
+    if (within(Math.hypot(p.x - cx, p.alt - ca), 0)) return true;
   }
   return false;
 }
 
+// A basalt column segment falls upright: its hitbox is two circles stacked inside the drawn hex prism.
+function columnCircles(h) { return [[h.x, h.cur - h.r * 0.55, h.r * 0.8], [h.x, h.cur + h.r * 0.55, h.r * 0.8]]; }
+// A lavafall: the spout ledge out of the wall, and the stream, which burns out a little above where the art fades.
+function lavaRects(h) {
+  const LF = RULES.lavafall, wx = h.base - h.side * 10, sx0 = h.x + h.side * (h.hw - 3);
+  return [[Math.min(wx, sx0), Math.max(wx, sx0), h.alt - 4, h.alt + 10], [h.x - LF.hit, h.x + LF.hit, h.alt - h.fall + 28, h.alt]];
+}
 function hit(x, a, r) {
-  const p = G.p, dx = p.x - x, da = p.alt - a, rr = r + playerR();
-  return dx * dx + da * da < rr * rr;
+  const p = G.p;
+  return within(Math.hypot(p.x - x, p.alt - a), r);
 }
 
 // Collision for one hazard against the player's (possibly padded) hitbox.
 function hazardHits(h) {
   switch (h.type) {
     case 'bat': case 'pend': case 'spider': return hit(h.x, h.alt, h.r);
-    case 'boulder': return h.state === 'fall' && hit(h.x, h.cur, h.r * 0.9);
+    case 'boulder': return h.state === 'fall' && (h.col ? columnCircles(h).some(([x, a, r]) => hit(x, a, r)) : hit(h.x, h.cur, h.r * 0.9));
+    case 'lavafall': return lavaRects(h).some(([x0, x1, a0, a1]) => within(Math.hypot(G.p.x - clamp(G.p.x, x0, x1), G.p.alt - clamp(G.p.alt, a0, a1)), 0));
     case 'geyser': return geyserHits(h);
     case 'spike': return spikeHits(h);
     case 'crusher': case 'gate': return crusherHits(h);
@@ -1604,13 +1737,13 @@ function hazardHits(h) {
   }
   return false;
 }
-const causeOf = h => h.type === 'spike' ? 'spike-' + h.skin : h.type;
+const causeOf = h => h.type === 'spike' ? 'spike-' + h.skin : h.type === 'boulder' && h.col ? 'column' : h.type;
 
-// A close call: you were within NEAR_PAD of a hazard's hitbox and got away clean.
+// A close call: you came within the grown near shape of a hazard (see NEAR_K) and got away clean.
 // Pops sit to the side away from the pilot, inside the shaft.
 function sideX(x, d) { const [L, R] = walls(G.p.alt), right = x < (L + R) / 2; return clamp(x + (right ? d : -d), L + 40, R - 40); }
 function closeCall(h) {
-  G.closeCount++; G.slow = 0.2; G.closeFlash = 1; G.p.nearT = 0.5;
+  G.closeCount++; G.slow = 0.2; G.closeFlash = 1; G.p.nearT = 0.5; G.p.grinT = 1.5;
   // every close call scores, but the "Close!" pop shows at most once every 1.5 s
   if (G.t - G.lastPopT > 1.5) { G.lastPopT = G.t; addPop('Close!', sideX(G.p.x, 95), G.p.alt + 12, { col: '#ffe14a', sub: `+${CLOSE_BONUS} pts` }); }
   puff(G.p.x, G.p.alt, 0, 0, 0.45, 22, 'whoosh');
@@ -1634,6 +1767,8 @@ function updateHazards(dt) {
       if (h.state === 'idle' && G.p.alt > h.alt - RULES.boulderTrigger && !boulderActive()) { h.state = 'warn'; h.timer = 0.9; }
       else if (h.state === 'warn') {
         h.timer -= dt;
+        // grit and pebbles trickle down the warned column before it falls
+        if (Math.random() < dt * 22) puff(h.x + (Math.random() - 0.5) * h.r * 1.6, camTop + 4, (Math.random() - 0.5) * 20, -160 - Math.random() * 120, 0.9, 1.6 + Math.random() * 2, 'debris');
         if (h.timer <= 0) { h.state = 'fall'; h.cur = camTop + h.r + 4; h.vy = -(240 + h.spd); }   // enters straight down the warned column
       } else if (h.state === 'fall') {
         h.vy -= 320 * dt; h.cur += h.vy * dt; h.rot += h.spin * dt;
@@ -1651,9 +1786,10 @@ function updateHazards(dt) {
     } else if (h.type === 'spider') {
       h.alt = h.aAlt - (h.mid + h.amp * Math.sin(t * h.w + h.ph));
     } else if (h.type === 'crusher') {
-      const [k, wind, tele] = crusherK(h, t);
+      const [k, wind, tele, pre] = crusherK(h, t);
       h.wind = wind; h.tele = tele;
-      if (wind > 0 && Math.random() < dt * 30) slabDust(h, [h.lb + h.extL, h.rb - h.extR]);   // grit shaken loose before the slam
+      // grit starts trickling off the pistons half a second before they move, then pours in the wind-up
+      if (pre && Math.random() < dt * (wind > 0 ? 34 : 16)) slabDust(h, [h.lb + h.extL, h.rb - h.extR]);
       h.extL = h.minExt + (h.maxL - h.minExt) * k;
       h.extR = h.minExt + (h.maxR - h.minExt) * k;
       h.k = k;
@@ -1668,11 +1804,16 @@ function updateHazards(dt) {
       if (k >= 1 && was < 1) { slamDust(h, [h.mid, h.mid]); if (Math.abs(h.alt - G.p.alt) < viewH * 0.7) G.shake = Math.max(G.shake, 4); }
     } else if (h.type === 'firebar') {
       h.ang = t * h.w + h.ph;
+    } else if (h.type === 'lavafall') {
+      if (h.alt > G.camAlt - 260 && h.lo < camTop + 40) {
+        if (Math.random() < dt * 18) puff(h.x + (Math.random() - 0.5) * 16, h.lo + 20 + Math.random() * 20, (Math.random() - 0.5) * 80, -20 - Math.random() * 40, 0.6, 1.4 + Math.random(), 'ember', [255, 150, 50]);
+        if (Math.random() < dt * 6) puff(h.x + (Math.random() - 0.5) * 20, h.lo + 26, (Math.random() - 0.5) * 20, -30, 1.1, 6 + Math.random() * 4, 'smoke');
+      }
     }
     if (G.state === 'play') {
       if (hazardHits(h)) die(causeOf(h));
       else if (G.p.invuln <= 0) {
-        hitPad = NEAR_PAD; const near = hazardHits(h); hitPad = 0;
+        nearMode = true; const near = hazardHits(h); nearMode = false;
         if (near) h.near = true;
         else if (h.near) { h.near = false; if (!h.closeDone) { h.closeDone = true; closeCall(h); } }
       }
@@ -1689,6 +1830,10 @@ function slabDust(h, xs) {
 }
 function slamDust(h, xs) {
   if (h.alt < G.camAlt - 60 || h.alt > G.camAlt + viewH + 60) return;
+  // chunks of rock knocked off the faces on impact, and a little thump if it is near you
+  const wc = pal('wall', h.alt), lit = pal('rim', h.alt);
+  for (const x of xs) for (let i = 0; i < 3; i++) puff(x, h.alt + (Math.random() - 0.5) * h.hb, (Math.random() - 0.5) * 240, 60 + Math.random() * 160, 0.9, 2.5 + Math.random() * 3, 'rock', { c: wc, l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 14 });
+  if (Math.abs(h.alt - G.p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 2.5);
   for (const x of xs) for (let i = 0; i < 7; i++) {
     const up = Math.random() < 0.5 ? 1 : -1;
     puff(x, h.alt + (Math.random() - 0.5) * h.hb * 1.6, (Math.random() - 0.5) * 70, up * (30 + Math.random() * 70), 0.6 + Math.random() * 0.4, 4 + Math.random() * 4, 'smoke');
@@ -1711,14 +1856,22 @@ function updateParticles(dt) {
     q.life -= dt;
     if (q.life <= 0) { ps.splice(i, 1); continue; }
     q.x += q.vx * dt; q.alt += q.vy * dt;
-    if (q.kind === 'debris' || q.kind === 'coin') q.vy -= 700 * dt;
+    if (q.kind === 'debris' || q.kind === 'coin' || q.kind === 'rock') { q.vy -= 700 * dt; if (q.kind === 'rock') q.ex.rot += q.ex.spin * dt; }
     else if (q.kind === 'spark') { q.vx *= 1 - dt * 1.6; q.vy += 120 * dt; }
     else { q.vx *= 1 - dt * 2; q.vy *= 1 - dt * 1.5; }
   }
 }
 
 // ---------- ambient motes (screen space) ----------
-const motes = Array.from({ length: 34 }, () => ({ x: Math.random(), y: Math.random() * 800, depth: 0.3 + Math.random() * 0.6, drift: -8 - Math.random() * 18, sz: 1 + Math.random() * 2.2, ph: Math.random() * 6.28 }));
+// Each mote has a random `r`: in the jungle they are floating spores; in the basalt caves half are water
+// drips falling from the roof and half drifting dust; in the magma core half are embers rising on the heat
+// and half are ash flakes sinking and swaying. (No rain-like streaks outside the jungle.)
+const motes = Array.from({ length: 40 }, () => ({ x: Math.random(), y: Math.random() * 800, depth: 0.3 + Math.random() * 0.6, r: Math.random(), sz: 1 + Math.random() * 2.2, ph: Math.random() * 6.28 }));
+function moteKind(m, a) {
+  const [t1, t2] = zoneT(a), z = t2 > 0.5 ? 2 : t1 > 0.5 ? 1 : 0;
+  return z === 0 ? 'spore' : z === 1 ? (m.r < 0.45 ? 'drip' : 'dust') : (m.r < 0.55 ? 'ember' : 'ash');
+}
+const MOTE_DRIFT = { spore: [-8, -26], drip: [190, 320], dust: [-4, 10], ember: [-40, -95], ash: [14, 34] };
 
 // ---------- drawing ----------
 const sx = x => ox + x * s;
@@ -1736,15 +1889,21 @@ function draw() {
   if (zoom < 1) { ctx.fillStyle = rgb(pal('bgBot', G.camAlt)); ctx.fillRect(0, 0, cssW, H); }
   if (zoom !== 1) { ctx.translate(zx, zy); ctx.scale(zoom, zoom); ctx.translate(-zx, -zy); }
   // shake: impacts, a faint rumble from ~700 units that grows hard under ~250, and the lunges
-  const sh = G.shake + monsterRumble() * 4.5 + G.worm.surge * 4 + (G.worm.crouch > 0 ? 1.5 : 0);
+  // plus a heavy thud in time with its climb that grows with proximity
+  const prox = G.state === 'play' ? clamp(1 - (monsterGap() - 100) / 650, 0, 1) : 0;
+  const thud = prox * 3 * Math.pow(Math.max(0, Math.sin(G.t * (4 + 5 * prox))), 6);
+  const sh = G.shake + monsterRumble() * 4.5 + thud + G.worm.surge * 4 + (G.worm.crouch > 0 ? 2.5 : 0);
   if (sh > 0) ctx.translate((Math.random() - .5) * sh, (Math.random() - .5) * sh);
   drawBackground();
   drawMidground();
   drawSpectacle();
-  // the whole backdrop sits a quarter darker than before, so the gameplay layer pops
-  ctx.fillStyle = 'rgba(6,3,8,.26)'; ctx.fillRect(-40, -40, cssW + 80, H + 80);
+  // the whole backdrop sits well under the gameplay layer in value (at least ~30% darker), so it pops
+  ctx.fillStyle = 'rgba(6,3,8,.34)'; ctx.fillRect(-40 - drawPad * s, -40 - drawPad * s, cssW + 80 + 2 * drawPad * s, H + 80 + 2 * drawPad * s);
   drawLandmarks();
   drawWalls();
+  drawZoneSweep();
+  drawZoneMoments();
+  drawThrustLight();
   drawShimmer();
   drawPlanks();
   drawBestLine();
@@ -1765,8 +1924,10 @@ function draw() {
   drawPops();
   drawDanger();
   drawChaseMarker();
+  drawSurgeWarn();
   drawFlash();
   if (G.state !== 'dead' && steerMode() === 'two') drawTwoThumbUI();
+  drawResume();
 }
 
 function drawBackground() {
@@ -1775,46 +1936,192 @@ function drawBackground() {
   g.addColorStop(0, rgb(pal('bgTop', midA + viewH / 2)));
   g.addColorStop(1, rgb(pal('bgBot', midA - viewH / 2)));
   ctx.fillStyle = g; ctx.fillRect(-20 - P, -20 - P, cssW + 40 + 2 * P, H + 40 + 2 * P);
-
-  // parallax cave layers with depth falloff: the farthest is hazy and close to the sky colour,
-  // each nearer layer is darker and moves faster, so the lane in front reads as deep
+  const [t1, t2] = zoneT(midA), wJ = 1 - t1, wB = t1 * (1 - t2), wM = t2;
   const sky = pal('bgTop', midA).map((v, i) => (v + pal('bgBot', midA)[i]) / 2), deep = pal('wallIn', midA);
-  // two back layers: far silhouettes (spires and hanging roots) at 0.2, mid rock at 0.5; the near
-  // layer (vines and stalactites at 1.3) is drawn in front of the play area by drawForeground
-  for (const [f, depth, seedOff, base, spire] of [[0.2, 0.3, 19, 150, 90], [0.5, 0.64, 31, 96, 30]]) {
-    ctx.fillStyle = rgb(sky.map((v, i) => lerp(v, deep[i], depth)));
+  const tone = k => sky.map((v, i) => lerp(v, deep[i], k));
+  const top = -20 - P, bot = H + 20 + P, X0 = -20 - P, X1 = cssW + 20 + P;
+
+  // ---- far layer (0.2): zone silhouettes across the whole back wall, hazy and close to the sky colour
+  const fA = G.camAlt * 0.2, farC = tone(0.45), farHi = sky.map(v => v * 1.2 + 10);
+  const yOf = (pa, f) => H - (pa - G.camAlt * f) * s;              // screen y of a parallax-space height
+  if (wJ > 0.02) {
+    ctx.save(); ctx.globalAlpha = wJ;
+    // giant trunks rising out of sight, with limbs and hanging canopy curtains
+    for (let k = 0; k < 4; k++) {
+      const cx = ox + playW * (0.08 + 0.29 * k + 0.08 * (hash2(k, G.seed + 3) - 0.5)), w = (22 + 22 * hash2(k, G.seed + 4)) * s;
+      ctx.fillStyle = rgb(farC);
+      ctx.beginPath();
+      for (let y = top; y <= bot; y += 24) ctx.lineTo(cx - w / 2 + 12 * s * (vnoise((fA + (H - y) / s) / 260, k + 40) - 0.5), y);
+      for (let y = bot; y >= top; y -= 24) ctx.lineTo(cx + w / 2 + 12 * s * (vnoise((fA + (H - y) / s) / 260, k + 40) - 0.5), y);
+      ctx.fill();
+      ctx.fillStyle = rgb(farHi, 0.5); ctx.fillRect(cx - w / 2 + 2 * s, top, 3 * s, bot - top);
+      const slot = 210, i0 = Math.floor((fA - 200) / slot), i1 = Math.ceil((fA + viewH + 200) / slot);
+      for (let i = i0; i <= i1; i++) {
+        const hsh = hash2(i * 7 + k, G.seed + 5); if (hsh < 0.4) continue;
+        const y = yOf(i * slot, 0.2), d = hsh < 0.7 ? -1 : 1, L = (40 + 50 * hsh) * s;
+        ctx.strokeStyle = rgb(farC); ctx.lineWidth = 7 * s; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx, y); ctx.quadraticCurveTo(cx + d * L * 0.6, y - 10 * s, cx + d * L, y - 24 * s); ctx.stroke();
+        ctx.fillStyle = rgb(farC);
+        for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.ellipse(cx + d * (L * 0.5 + j * 9 * s), y - 18 * s + j * 4 * s, 16 * s, 9 * s, 0, 0, 6.283); ctx.fill(); }
+      }
+    }
+    ctx.restore();
+  }
+  if (wB > 0.02) {
+    ctx.save(); ctx.globalAlpha = wB;
+    // ranks of basalt organ pipes: tiers of hexagonal columns at stepped heights, each with a lit cap
+    const slot = 300, cw = 30 * s, i0 = Math.floor((fA - 320) / slot), i1 = Math.ceil((fA + viewH + 320) / slot);
+    for (let i = i0; i <= i1; i++) {
+      const yb = yOf(i * slot, 0.2);
+      for (let x = ox - cw, j = 0; x < ox + playW + cw; x += cw, j++) {
+        const hgt = (90 + 170 * hash2(j * 13 + i, G.seed + 8)) * s, y0 = yb - hgt;
+        ctx.fillStyle = rgb(farC.map(v => v * (0.85 + 0.25 * hash2(j, i))));
+        ctx.fillRect(x + 1, y0, cw - 2, yb - y0 + slot * s * 0.2);
+        ctx.fillStyle = rgb(farHi, 0.55); ctx.fillRect(x + 1, y0, cw - 2, 3 * s);
+        ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(x + cw * 0.62, y0 + 3 * s, cw * 0.36, yb - y0);
+      }
+    }
+    ctx.restore();
+  }
+  if (wM > 0.02) {
+    ctx.save(); ctx.globalAlpha = wM;
+    // jagged obsidian spires with molten rivers winding down between them
+    const slot = 230, i0 = Math.floor((fA - 300) / slot), i1 = Math.ceil((fA + viewH + 300) / slot);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let r = 0; r < 2; r++) {
+      const rx = ox + playW * (0.3 + 0.4 * r);
+      ctx.strokeStyle = `rgba(255,${90 + 30 * r},20,${0.16 + 0.05 * Math.sin(G.t * 1.5 + r)})`; ctx.lineWidth = (6 + 3 * r) * s; ctx.beginPath();
+      for (let y = top; y <= bot; y += 20) ctx.lineTo(rx + 40 * s * (vnoise((fA + (H - y) / s) / 180, r + 70) - 0.5), y);
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (let i = i0; i <= i1; i++) for (let k = 0; k < 3; k++) {
+      const hsh = hash2(i * 3 + k, G.seed + 9), cx = ox + playW * (0.1 + 0.4 * k + 0.2 * (hsh - 0.5)), yb = yOf(i * slot, 0.2) + 40 * s, hgt = (120 + 160 * hsh) * s, w = (30 + 30 * hsh) * s;
+      ctx.fillStyle = rgb(farC);
+      ctx.beginPath(); ctx.moveTo(cx - w, yb); ctx.lineTo(cx - w * 0.3, yb - hgt * 0.55); ctx.lineTo(cx - w * 0.1, yb - hgt); ctx.lineTo(cx + w * 0.25, yb - hgt * 0.6); ctx.lineTo(cx + w, yb); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,110,40,.22)'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.moveTo(cx - w * 0.3, yb - hgt * 0.55); ctx.lineTo(cx - w * 0.1, yb - hgt); ctx.lineTo(cx + w * 0.25, yb - hgt * 0.6); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // far cliffs framing both sides (0.2), then the mid rock (0.5): each nearer layer darker
+  for (const [f, depth, seedOff, base, spire] of [[0.2, 0.36, 19, 150, 90], [0.5, 0.66, 31, 96, 30]]) {
+    ctx.fillStyle = rgb(tone(depth));
     for (const side of [0, 1]) {
       ctx.beginPath();
-      const edge = side ? cssW + 20 + P : -20 - P;
-      ctx.moveTo(edge, H + 20 + P);
-      for (let y = H + 20 + P; y >= -20 - P; y -= 18) {
+      const edge = side ? X1 : X0;
+      ctx.moveTo(edge, bot);
+      for (let y = bot; y >= top; y -= 18) {
         const wa = G.camAlt * f + (H - y) / s;
         const w = (base + 70 * vnoise(wa / 260, G.seed + seedOff + side) + 30 * vnoise(wa / 70, G.seed + seedOff + 9 + side) + spire * Math.max(0, vnoise(wa / 40, G.seed + seedOff + 5 + side) - 0.55) * 2.2) * s;
         ctx.lineTo(side ? ox + playW - w + playW * 0.05 : ox + w - playW * 0.05, y);
       }
-      ctx.lineTo(edge, -20 - P); ctx.closePath(); ctx.fill();
+      ctx.lineTo(edge, top); ctx.closePath(); ctx.fill();
     }
+    if (f === 0.5) drawFormations(tone(0.6));
   }
+  drawGodRays(wJ, wB, wM);
 
   // magma core key light: lava light welling up from below, behind the walls and everything you dodge
-  const [t1, t2] = zoneT(midA);
   if (t2 > 0.01) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const up = ctx.createLinearGradient(0, H, 0, H * 0.2);
-    up.addColorStop(0, `rgba(255,90,20,${(0.4 + 0.07 * Math.sin(G.t * 2.2)) * t2})`); up.addColorStop(1, 'rgba(255,60,10,0)');
+    up.addColorStop(0, `rgba(255,90,20,${(0.34 + 0.07 * Math.sin(G.t * 2.2)) * t2})`); up.addColorStop(1, 'rgba(255,60,10,0)');
     ctx.fillStyle = up; ctx.fillRect(0, H * 0.2, cssW, H * 0.8);
     ctx.restore();
   }
-  // floating spores / crystal dust / embers
+  drawMotes();
+}
+
+// Mid-layer rock formations (0.5 parallax, behind the walls): mossy outcrops trailing roots in the
+// jungle, broken basalt column stacks in the caves, obsidian crags with glowing seams in the core.
+// Low contrast and never outlined, so they read as scenery.
+function drawFormations(col) {
+  const f = 0.5, slot = 340, baseA = G.camAlt * f, i0 = Math.floor((baseA - 300) / slot), i1 = Math.ceil((baseA + viewH + 300) / slot);
+  const midA = G.camAlt + viewH / 2, [t1, t2] = zoneT(midA), z = t2 > 0.5 ? 2 : t1 > 0.5 ? 1 : 0, hi = col.map(v => v * 1.35 + 8);
+  for (let i = i0; i <= i1; i++) {
+    const hsh = hash2(i, G.seed + 81); if (hsh < 0.3) continue;
+    const side = hash2(i, G.seed + 82) < 0.5 ? 0 : 1, d = side ? -1 : 1, y = H - (i * slot - baseA) * s;
+    const x = side ? ox + playW * (0.92 - 0.1 * hsh) : ox + playW * (0.08 + 0.1 * hsh);
+    ctx.save(); ctx.translate(x, y); ctx.scale(s * d, s);
+    ctx.fillStyle = rgb(col);
+    if (z === 0) {
+      ctx.beginPath(); ctx.moveTo(-60, 40); ctx.quadraticCurveTo(-40, -50, 30, -40); ctx.quadraticCurveTo(90, -20, 80, 30); ctx.quadraticCurveTo(20, 60, -60, 40); ctx.fill();
+      ctx.fillStyle = rgb(hi.map((v, k) => k === 1 ? v * 1.1 : v * 0.9), 0.6); ctx.beginPath(); ctx.moveTo(-50, -10); ctx.quadraticCurveTo(-20, -48, 30, -40); ctx.quadraticCurveTo(70, -30, 76, -6); ctx.quadraticCurveTo(20, -26, -50, -10); ctx.fill();
+      ctx.strokeStyle = rgb(col); ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (let k = 0; k < 4; k++) { const rx = -30 + k * 26, L = 60 + 60 * hash2(i * 5 + k, 3), sw = Math.sin(G.t * 0.7 + k + i) * 4; ctx.beginPath(); ctx.moveTo(rx, 40); ctx.quadraticCurveTo(rx + sw, 40 + L / 2, rx + sw * 1.5, 40 + L); ctx.stroke(); }
+    } else if (z === 1) {
+      for (let k = 0; k < 3; k++) {
+        const bx = -30 + k * 28, h0 = 60 + 70 * hash2(i * 3 + k, 5), tilt = (k - 1) * 0.08;
+        ctx.save(); ctx.translate(bx, 50); ctx.rotate(tilt);
+        ctx.fillStyle = rgb(col.map(v => v * (0.9 + 0.12 * k))); ctx.fillRect(-13, -h0, 26, h0 + 40);
+        ctx.fillStyle = rgb(hi, 0.6); ctx.beginPath(); ctx.moveTo(-13, -h0); ctx.lineTo(-6, -h0 - 6); ctx.lineTo(6, -h0 - 6); ctx.lineTo(13, -h0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      ctx.beginPath(); ctx.moveTo(-70, 50); ctx.lineTo(-40, -30); ctx.lineTo(-10, -10); ctx.lineTo(20, -70); ctx.lineTo(50, -20); ctx.lineTo(80, 50); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,120,40,${0.3 + 0.12 * Math.sin(G.t * 2 + i)})`; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(-40, -30); ctx.lineTo(-10, -10); ctx.lineTo(20, -70); ctx.lineTo(50, -20); ctx.moveTo(-10, -10); ctx.lineTo(0, 30); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+}
+
+// God rays behind the playfield: slanting sun shafts in the jungle, cold shafts falling from cracks in
+// the basalt roof, and heat columns wavering up from the lava in the core. Dust drifts through them.
+function drawGodRays(wJ, wB, wM) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const shaft = (x0, w0, x1, w1, y0, y1, col, a) => {
+    const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, rgbaA(col, a)); g.addColorStop(1, rgbaA(col, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + w0, y0); ctx.lineTo(x1 + w1, y1); ctx.lineTo(x1, y1); ctx.closePath(); ctx.fill();
+  };
+  if (wJ > 0.02) for (let k = 0; k < 4; k++) {
+    const x = ox + playW * (0.02 + 0.27 * k) + Math.sin(G.t * 0.2 + k * 2) * 12, w = playW * (0.05 + 0.03 * (k % 2));
+    shaft(x, w, x + playW * 0.3, w * 2.6, -10, H * 0.95, [255, 226, 150], (0.075 + 0.025 * Math.sin(G.t * 0.6 + k)) * wJ);
+  }
+  if (wB > 0.02) for (let k = 0; k < 3; k++) {
+    const x = ox + playW * (0.18 + 0.3 * k + 0.06 * Math.sin(k * 3.1)), w = playW * (0.035 + 0.02 * (k % 2));
+    shaft(x, w, x - w * 0.4, w * 2.2, -10, H * 0.8, [150, 200, 255], (0.08 + 0.025 * Math.sin(G.t * 0.8 + k * 2)) * wB);
+  }
+  if (wM > 0.02) for (let k = 0; k < 3; k++) {
+    const x = ox + playW * (0.12 + 0.32 * k) + Math.sin(G.t * 0.9 + k) * 10 * s, w = playW * 0.12;
+    shaft(x, w, x + Math.sin(G.t * 0.7 + k * 2) * 20 * s, w * 0.4, H + 10, H * 0.1, [255, 110, 30], (0.1 + 0.03 * Math.sin(G.t * 1.7 + k)) * wM);
+  }
+  ctx.restore();
+}
+
+// Ambient particles in screen space, in the zone's own kind (see moteKind).
+function drawMotes() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const midA = G.camAlt + viewH / 2;
   const streak = G.state === 'play' ? clamp(Math.abs(G.p.vy) - 200, 0, 400) * 0.06 * s : 0;
   for (const m of motes) {
-    const tw = 0.5 + 0.5 * Math.sin(G.t * 2 + m.ph);
-    const col = t2 > 0.5 ? [255, 140, 50] : t1 > 0.5 ? [150, 230, 255] : [210, 240, 140];
-    // at speed the motes stretch into streaks, the nearer ones longer: parallax you can feel
-    const mx = ox + m.x * playW + Math.sin(G.t + m.ph) * 6, len = streak * m.depth;
-    if (len > 2) { ctx.strokeStyle = rgb(col, (0.1 + 0.2 * tw) * m.depth); ctx.lineWidth = m.sz; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(mx, m.y); ctx.lineTo(mx, m.y - len); ctx.stroke(); }
-    else { ctx.fillStyle = rgb(col, 0.25 + 0.45 * tw); ctx.beginPath(); ctx.arc(mx, m.y, m.sz, 0, 6.283); ctx.fill(); }
+    const tw = 0.5 + 0.5 * Math.sin(G.t * 2 + m.ph), kind = moteKind(m, midA);
+    const mx = ox + m.x * playW + (kind === 'drip' ? 0 : Math.sin(G.t * (kind === 'ash' ? 1.3 : 1) + m.ph) * (kind === 'ash' ? 14 : 6)), y = m.y;
+    if (kind === 'spore') {
+      const len = streak * m.depth, col = [210, 240, 140];
+      if (len > 2) { ctx.strokeStyle = rgb(col, (0.1 + 0.2 * tw) * m.depth); ctx.lineWidth = m.sz; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(mx, y); ctx.lineTo(mx, y - len); ctx.stroke(); }
+      else { ctx.fillStyle = rgb(col, 0.25 + 0.45 * tw); ctx.beginPath(); ctx.arc(mx, y, m.sz, 0, 6.283); ctx.fill(); }
+    } else if (kind === 'drip') {
+      // a falling water drop: a bright bead with a short tail above it
+      const r = (1 + m.sz * 0.6) * m.depth + 0.6;
+      ctx.fillStyle = `rgba(170,220,255,${0.45 * m.depth + 0.15})`;
+      ctx.beginPath(); ctx.moveTo(mx, y - r * 4); ctx.quadraticCurveTo(mx + r, y - r, mx, y + r); ctx.quadraticCurveTo(mx - r, y - r, mx, y - r * 4); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(mx - r * 0.3, y - r * 0.2, r * 0.35, 0, 6.283); ctx.fill();
+    } else if (kind === 'dust') {
+      ctx.fillStyle = `rgba(190,200,240,${(0.12 + 0.2 * tw) * m.depth})`; ctx.beginPath(); ctx.arc(mx, y, m.sz * 0.8, 0, 6.283); ctx.fill();
+    } else if (kind === 'ember') {
+      const fl = 0.55 + 0.45 * Math.sin(G.t * 9 + m.ph * 3);
+      ctx.fillStyle = `rgba(255,${120 + 80 * fl | 0},40,${(0.4 + 0.5 * fl) * m.depth + 0.1})`; ctx.beginPath(); ctx.arc(mx, y, m.sz * 0.9, 0, 6.283); ctx.fill();
+      ctx.fillStyle = `rgba(255,140,40,${0.12 * fl})`; ctx.beginPath(); ctx.arc(mx, y, m.sz * 3, 0, 6.283); ctx.fill();
+    } else {
+      // ash: a pale grey flake tumbling down (drawn normally, not glowing)
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.save(); ctx.translate(mx, y); ctx.rotate(G.t * 1.5 + m.ph); ctx.fillStyle = `rgba(150,140,140,${0.35 + 0.3 * m.depth})`;
+      ctx.fillRect(-m.sz * 1.3, -m.sz * 0.5, m.sz * 2.6, m.sz); ctx.restore();
+      ctx.globalCompositeOperation = 'lighter';
+    }
   }
   ctx.restore();
 }
@@ -2042,6 +2349,24 @@ function drawWalls() {
     const edge = side ? cssW + 30 + drawPad * s : -30 - drawPad * s, dir = side ? 1 : -1;   // dir points into the rock
     const wx = a => side ? rightWall(a) : leftWall(a);
     const trace = (off = 0) => pts.forEach(([x, y], i) => { const xx = x + dir * off * s; i ? ctx.lineTo(xx, y) : ctx.moveTo(xx, y); });
+    // the wall's receding side plane: from the lit ink edge back toward the far wall, inside the shaft
+    // but behind everything you dodge (no outline, fading into the backdrop), so the rock reads as a
+    // thick mass with depth while the ink edge stays the exact collision line. Drawn as bands that
+    // follow the wall's own shape, lit near the edge (light from the playfield) and darkening back.
+    {
+      const face = wallC.map((v, i) => lerp(v * 0.95, rimC[i] * 0.5, 0.3)), D = 30;
+      ctx.lineJoin = 'round';
+      for (let b = 4; b >= 0; b--) {
+        const u = b / 4;
+        ctx.strokeStyle = rgb(face.map((v, i) => lerp(v, inC[i], u * 0.8)), 0.9 - 0.75 * u);
+        ctx.lineWidth = (D / 4 + 1) * s; ctx.beginPath(); trace(-(3 + u * (D - 3))); ctx.stroke();
+      }
+      // strata lines running back along the plane
+      ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2.2 * s;
+      for (let a = Math.floor(bot / 64) * 64; a < top + 64; a += 64) {
+        const x = sx(wx(a)), y = sy(a); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - dir * D * s, y + (H * 0.42 - y) * 0.07); ctx.stroke();
+      }
+    }
     // body
     ctx.beginPath(); ctx.moveTo(edge, sy(bot));
     for (const [x, y] of pts) ctx.lineTo(x, y);
@@ -2189,6 +2514,86 @@ function drawWalls() {
   }
 }
 
+// Zone reveal: the new zone's rim light sweeps up both walls from the bottom of the screen.
+function drawZoneSweep() {
+  const sw = G.sweep;
+  if (!sw || sw.t > 1.3) return;
+  const e = sw.t / 1.1, y = H * (1.1 - 1.3 * e), col = [[200, 240, 120], [150, 210, 255], [255, 140, 50]][sw.z], band = 140;
+  ctx.save();
+  ctx.beginPath();
+  for (const side of [0, 1]) {
+    const edge = side ? cssW + 40 : -40, a0 = G.camAlt - 40, a1 = G.camAlt + viewH + 40;
+    ctx.moveTo(edge, sy(a0));
+    for (let a = a0; a <= a1; a += 16) ctx.lineTo(sx(walls(a)[side]) + (side ? -40 : 40) * s, sy(a));
+    ctx.lineTo(edge, sy(a1)); ctx.closePath();
+  }
+  ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(0, y - band, 0, y + band * 2);
+  g.addColorStop(0, rgbaA(col, 0)); g.addColorStop(0.3, rgbaA(col, 0.75 * (1 - smooth(0.9, 1.3, sw.t)))); g.addColorStop(1, rgbaA(col, 0.12));
+  ctx.fillStyle = g; ctx.fillRect(0, y - band, cssW, H - y + band + 40);
+  ctx.restore();
+}
+
+// Full-width zone-change moments (pure show, no collision, the shaft above a zone change is kept clear):
+// leaving the jungle, a rope bridge spanning the shaft snaps and tumbles away as you near it; entering
+// the magma core, a lava flood surges up from below behind you, lighting the shaft, then drains.
+function drawZoneMoments() {
+  const p = G.p, z0 = RULES.zones[0], z1 = RULES.zones[1];
+  // the bridge, slung across at z0 + 120
+  const ba = z0 + 120, by = sy(ba);
+  if (by > -120 && by < H + 200) {
+    if (G.bridgeT == null && p.alt > ba - 430 && p.alt < ba + 300 && G.state === 'play') { G.bridgeT = G.t; G.shake = Math.max(G.shake, 6); vibrate(30); }
+    const e = G.bridgeT == null ? 0 : G.t - G.bridgeT, [L, R] = walls(ba), n = 11, pw = (R - L) / n;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n, sag = Math.sin(u * Math.PI) * 26, side = u < 0.5 ? -1 : 1;
+      let x = L + pw * (i + 0.5), a = ba - sag, rot = 0;
+      if (e > 0) {
+        const te = Math.max(0, e - Math.abs(u - 0.5) * 0.25);    // it snaps in the middle first
+        x += side * 30 * te + (hash2(i, 3) - 0.5) * 60 * te; a += 150 * te - 520 * te * te; rot = (hash2(i, 4) - 0.5) * 9 * te;
+      }
+      const yy = sy(a); if (yy > H + 60) continue;
+      ctx.save(); ctx.translate(sx(x), yy); ctx.rotate(rot); ctx.scale(s, s); ctx.globalAlpha = 1 - smooth(1.1, 1.8, e);
+      pkRect(ctx, -pw * 0.45, -5, pw * 0.9, 10, 2.5, i % 2 ? '#8a5a32' : '#a06a3a', 2.2);
+      ctx.restore();
+    }
+    // ropes: whole and sagging, or snapped and dangling from each wall
+    for (const k of [0, 1]) {
+      ctx.strokeStyle = INK; ctx.lineWidth = 4 * s; const off = k ? 14 : -2;
+      const rope = () => {
+        ctx.beginPath();
+        if (e <= 0) { for (let i = 0; i <= 16; i++) { const u = i / 16; ctx.lineTo(sx(lerp(L, R, u)), sy(ba - Math.sin(u * Math.PI) * 26 + off)); } }
+        else for (const side of [0, 1]) {
+          const wx = side ? R : L, d = side ? -1 : 1, sw = Math.sin(G.t * 3 + side) * 10 * Math.max(0, 1 - e * 0.4);
+          ctx.moveTo(sx(wx), sy(ba + off)); ctx.quadraticCurveTo(sx(wx + d * 30 + sw), sy(ba + off - 50), sx(wx + d * 14 + sw * 1.4), sy(ba + off - 110));
+        }
+      };
+      rope(); ctx.stroke(); ctx.strokeStyle = '#c8a46a'; ctx.lineWidth = 2 * s; rope(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // the lava flood
+  if (G.floodT == null && p.alt > z1 - 200 && p.alt < z1 + 400 && G.state === 'play') { G.floodT = G.t; G.shake = Math.max(G.shake, 8); vibrate(40); }
+  if (G.floodT != null) {
+    const e = G.t - G.floodT;
+    if (e < 3) {
+      const rise = Math.sin(Math.PI * clamp(e / 3, 0, 1)) ** 0.7, y = H - H * 0.17 * rise + 6;
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(-40, H + 40);
+      for (let x = -40; x <= cssW + 40; x += 10) ctx.lineTo(x, y + Math.sin(x * 0.04 + G.t * 4) * 5 + Math.sin(x * 0.11 - G.t * 6) * 3);
+      ctx.lineTo(cssW + 40, H + 40); ctx.closePath();
+      const lg = ctx.createLinearGradient(0, y, 0, H);
+      lg.addColorStop(0, '#fff0a0'); lg.addColorStop(0.08, '#ffb238'); lg.addColorStop(0.4, '#ff5a1a'); lg.addColorStop(1, '#7a1404');
+      ctx.fillStyle = lg; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+      const gg = ctx.createLinearGradient(0, y - 220, 0, y); gg.addColorStop(0, 'rgba(255,120,30,0)'); gg.addColorStop(1, `rgba(255,140,40,${0.45 * rise})`);
+      ctx.fillStyle = gg; ctx.fillRect(0, y - 220, cssW, 220);
+      for (let k = 0; k < 9; k++) { const bx = (hash2(k, 11) * cssW + G.t * 20) % cssW, ph = (G.t * 1.3 + hash2(k, 12)) % 1; ctx.fillStyle = `rgba(255,230,140,${0.8 * (1 - ph)})`; ctx.beginPath(); ctx.arc(bx, y - ph * 30, 3 + 4 * (1 - ph), 0, 6.283); ctx.fill(); }
+      ctx.restore();
+    }
+  }
+}
+
 // Magma heat shimmer: the lower part of the frame (background and walls, before anything you dodge is
 // drawn) is redrawn in thin strips nudged sideways by a slow wave, so the air over the lava wobbles.
 function drawShimmer() {
@@ -2318,29 +2723,48 @@ function drawForeground() {
   }
 }
 
-// Speed streaks: long bright ones streaming down both walls that stretch with your climb speed,
-// a few in the open shaft, and short ones running the other way when you fall.
+// Speed: in the jungle long pale streaks stream down both walls; in the basalt caves water trickles
+// down the wall faces instead, and in the magma core sparks race up off the rock (no rain-like
+// streaks there). In the open shaft short streaks appear from about 55% of top climb speed and get
+// much denser near it; falling flips them the other way.
 function drawSpeedLines() {
   if (G.state !== 'play') return;
-  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 120) / (cfg.maxUp * 1.15 - 120), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
-  if (k <= 0) return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.5 * cfg.maxUp) / (cfg.maxUp * 0.62), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  const midA = G.camAlt + viewH / 2, [t1, t2] = zoneT(midA), wJ = 1 - t1, wB = t1 * (1 - t2), wM = t2;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-  // along the walls
-  for (const side of [0, 1]) for (let i = 0; i < 9; i++) {
-    const j = hash2(i + side * 31, 21), len = (30 + 150 * k) * (0.6 + 0.6 * j) * s;
+  const kw = up ? clamp((v - 120) / (cfg.maxUp * 1.15 - 120), 0, 1) : 0;
+  for (const side of [0, 1]) for (let i = 0; i < 9 + Math.round(8 * kw); i++) {
+    const j = hash2(i + side * 31, 21);
     const y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 22) * H * 3) % (H + 300)) - 150;
     const a = G.camAlt + (H - y) / s, wx = walls(a)[side], x = sx(wx) + (side ? -1 : 1) * (5 + 14 * j) * s;
-    ctx.strokeStyle = `rgba(255,255,255,${(0.12 + 0.42 * k) * (0.6 + 0.4 * j)})`; ctx.lineWidth = (1.4 + 2.2 * k * j) * s;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+    if (wJ > 0.02 && kw > 0) {
+      const len = (30 + 150 * kw) * (0.6 + 0.6 * j) * s;
+      ctx.strokeStyle = `rgba(200,240,160,${(0.06 + 0.26 * kw * kw) * (0.6 + 0.4 * j) * wJ})`; ctx.lineWidth = (1.4 + 2.2 * kw * j) * s;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
+    }
+    if (wB > 0.02) {
+      // a trickle of water sliding down the wall face (it moves down the screen on its own)
+      const ty = (y + G.t * 60 * (0.6 + j)) % (H + 300) - 150, tl = (10 + 16 * j) * s;
+      ctx.strokeStyle = `rgba(150,210,255,${0.28 * wB * (0.5 + 0.5 * j)})`; ctx.lineWidth = 1.6 * s;
+      ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x, ty + tl); ctx.stroke();
+      ctx.fillStyle = `rgba(210,240,255,${0.5 * wB})`; ctx.beginPath(); ctx.arc(x, ty + tl, 1.6 * s, 0, 6.283); ctx.fill();
+    }
+    if (wM > 0.02) {
+      // sparks racing up off the rock, faster as you climb faster
+      const sy0 = (y - G.t * (120 + 260 * kw) * (0.6 + j)) % (H + 300), yy = (sy0 < 0 ? sy0 + H + 300 : sy0) - 150;
+      ctx.fillStyle = `rgba(255,${150 + 80 * j | 0},60,${(0.45 + 0.4 * kw) * wM})`; ctx.beginPath(); ctx.arc(x + Math.sin(G.t * 6 + i) * 3 * s, yy, (1 + kw) * s, 0, 6.283); ctx.fill();
+    }
   }
-  // in the open shaft
-  for (let i = 0; i < 12; i++) {
-    const near = hash2(i, 13) < 0.3;                         // a few streaks hug the rocket
-    const x = near ? sx(G.p.x) + (hash2(i, 7) - 0.5) * 110 * s : ox + playW * (0.1 + 0.8 * hash2(i, 7));
-    const len = (16 + 60 * hash2(i, 8)) * (0.4 + 1.6 * k) * s;
-    const y = ((G.camAlt * s * (1.2 + hash2(i, 9)) + hash2(i, 10) * H * 2) % (H + 200)) - 100;
-    ctx.strokeStyle = `rgba(255,255,255,${(0.08 + 0.2 * k * hash2(i, 11)) * (near ? 1.3 : 1)})`; ctx.lineWidth = 1.2 + 1.6 * hash2(i, 12) * k;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  if (k > 0) {
+    const n = 8 + Math.round(26 * k * k), col = wM > 0.5 ? [255, 210, 160] : wB > 0.5 ? [200, 225, 255] : [240, 255, 220];
+    for (let i = 0; i < n; i++) {
+      const near = hash2(i, 13) < 0.3;                         // a few streaks hug the rocket
+      const x = near ? sx(G.p.x) + (hash2(i, 7) - 0.5) * 120 * s : ox + playW * (0.08 + 0.84 * hash2(i, 7));
+      const len = (16 + 60 * hash2(i, 8)) * (0.5 + 1.6 * k) * s;
+      const y = ((G.camAlt * s * (1.2 + hash2(i, 9)) + hash2(i, 10) * H * 2) % (H + 200)) - 100;
+      ctx.strokeStyle = rgbaA(col, (0.04 + 0.17 * k * hash2(i, 11)) * (near ? 1.4 : 1)); ctx.lineWidth = 1 + 1.2 * hash2(i, 12) * k;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -2356,13 +2780,6 @@ function drawLight() {
     const top = ctx.createLinearGradient(0, 0, 0, H * 0.5);
     top.addColorStop(0, `rgba(255,236,170,${0.08 * jungle})`); top.addColorStop(1, 'rgba(255,236,170,0)');
     ctx.fillStyle = top; ctx.fillRect(0, 0, cssW, H * 0.5);
-    // thin, faint sun shafts: atmosphere, not a flat band of light competing with play
-    for (let k = 0; k < 3; k++) {
-      const x = ox + playW * (0.08 + 0.34 * k) + Math.sin(G.t * 0.25 + k * 2) * 14, w = playW * (0.03 + 0.02 * (k % 2));
-      const a = (0.035 + 0.015 * Math.sin(G.t * 0.7 + k)) * jungle;
-      const rg = ctx.createLinearGradient(0, 0, 0, H * 0.85); rg.addColorStop(0, `rgba(255,228,150,${a})`); rg.addColorStop(1, 'rgba(255,228,150,0)');
-      ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(x, -10); ctx.lineTo(x + w, -10); ctx.lineTo(x + w + playW * 0.32, H * 0.85); ctx.lineTo(x + playW * 0.26, H * 0.85); ctx.closePath(); ctx.fill();
-    }
   }
   if (caves > 0.01) {
     for (const side of [0, 1]) {
@@ -2445,9 +2862,14 @@ function drawZoneCard() {
   const zc = G.zoneCard;
   if (!zc || zc.t > CARD_LIFE) return;
   const i = zc.i, tin = smooth(0, 0.3, zc.t), tout = smooth(CARD_LIFE - 0.35, CARD_LIFE, zc.t);
-  const w = Math.min(playW - 32, 280), hh = 58, y = hudBottom() + 22 + hh / 2;
-  const x = ox + playW / 2 + (1 - tin) * (i % 2 ? 1 : -1) * playW * 0.8 + tout * (i % 2 ? -1 : 1) * playW * 0.8;
-  ctx.save(); ctx.globalAlpha = Math.min(tin, 1 - tout); ctx.translate(x, y); ctx.rotate(-0.025);
+  // it never leaves the safe area: a short slide (a quarter of its own width) and a scale pop, with the
+  // centre clamped so the whole banner (rotated, with its drop shadow) stays inside the screen gutters
+  const left = Math.max(16, ox) , right = Math.min(cssW - 16, ox + playW);
+  const w = Math.min((right - left - 12) / 1.12, 280), hh = 58, y = hudBottom() + 22 + hh / 2;
+  const slide = ((1 - tin) * (i % 2 ? 1 : -1) + tout * (i % 2 ? -1 : 1)) * w * 0.25;
+  const x = clamp(ox + playW / 2 + slide, left + w * 0.55 + 4, right - w * 0.55 - 6);   // (0.55: room for the 1.08 pop)
+  const pop = 0.7 + 0.3 * tin + 0.08 * Math.sin(Math.PI * smooth(0, 0.45, zc.t)) - 0.15 * tout;
+  ctx.save(); ctx.globalAlpha = Math.min(tin, 1 - tout); ctx.translate(x, y); ctx.rotate(-0.025); ctx.scale(pop, pop);
   ctx.fillStyle = INK; ctx.beginPath(); ctx.roundRect(-w / 2 + 3, -hh / 2 + 5, w, hh, 14); ctx.fill();
   const g = ctx.createLinearGradient(0, -hh / 2, 0, hh / 2), cols = [['#4aa860', '#1e5a2a'], ['#5a6ad8', '#2a2a7a'], ['#e8501a', '#5a1006']][i];
   g.addColorStop(0, cols[0]); g.addColorStop(1, cols[1]);
@@ -2638,6 +3060,7 @@ const BAT_LOOKS = [
 ];
 function drawBat(h) {
   const L = BAT_LOOKS[h.look || 0], x = sx(h.x), y = sy(h.alt), flap = Math.sin(G.t * L.flap + h.ph), K = BAT_SKINS[h.skin || 0];
+  const rimLit = pal('rim', h.alt).map(v => Math.min(255, v + 70));
   hazardShadow(x, y, 36, 9);
   backlight(x, y, 58, h.skin || 0);
   dangerGlow(x, y, 46);
@@ -2658,6 +3081,8 @@ function drawBat(h) {
     if (h.look === 2) { wg.addColorStop(0, K.wing[1]); wg.addColorStop(1, K.wing[0]); }
     else { wg.addColorStop(0, K.wing[0]); wg.addColorStop(0.6, K.wing[1]); wg.addColorStop(1, h.look === 1 ? K.ear : K.wing[2]); }
     ctx.fillStyle = wg; ctx.strokeStyle = INK; ctx.lineWidth = 2.6 / L.wing; ctx.fill(); ctx.stroke();
+    // zone rim light on the wing's upper edge, so a dark bat reads on dark rock
+    ctx.save(); ctx.clip(); ctx.translate(0, 2.2); ctx.strokeStyle = rgb(rimLit, 0.85); ctx.lineWidth = 3 / L.wing; ctx.stroke(); ctx.restore();
     ctx.strokeStyle = 'rgba(20,4,16,.8)'; ctx.lineWidth = 1.3 / L.wing;
     ctx.beginPath();
     ctx.moveTo(8, -3); ctx.lineTo(37, -8 - lift);
@@ -2678,6 +3103,7 @@ function drawBat(h) {
   }
   if (L.tuft) for (let k = -1; k <= 1; k++) pkPath(ctx, [[k * 3 - 2.5, -12], [k * 4.5, -21 - (k ? 0 : 3)], [k * 3 + 2.5, -12]], K.ear, 1.8);
   ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(0, 0, 12 * L.body, 13.5 * (L.body > 1 ? 1.08 : 1), 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.clip(); ctx.translate(0, 2.4); ctx.strokeStyle = rgb(rimLit, 0.8); ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
   if (L.belly) { ctx.fillStyle = 'rgba(255,240,220,.4)'; ctx.beginPath(); ctx.ellipse(0, 4, 5.5, 8, 0, 0, 6.283); ctx.fill(); }
   else { ctx.fillStyle = 'rgba(255,225,255,.18)'; ctx.beginPath(); ctx.ellipse(0, 5, 7, 6, 0, 0, 6.283); ctx.fill(); }
   const er = h.look === 2 ? 4.4 : 3.6;
@@ -2729,6 +3155,13 @@ function drawPend(h) {
       ctx.restore();
     }
   }
+  // the shadowed alcove in the wall it swings out of
+  ctx.save(); ctx.translate(ax, ay); ctx.scale(s * h.side, s);
+  const ag = ctx.createRadialGradient(-6, 6, 2, -6, 6, 40);
+  ag.addColorStop(0, 'rgba(0,0,0,.85)'); ag.addColorStop(0.7, 'rgba(0,0,0,.55)'); ag.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = ag; ctx.beginPath(); ctx.ellipse(-6, 8, 30, 40, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = rgb(pal('rim', h.aAlt), 0.6); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(-6, 8, 26, 36, 0, -1.3, 1.2); ctx.stroke();
+  ctx.restore();
   // anchor on the wall
   ctx.save(); ctx.translate(ax, ay); ctx.scale(s, s);
   if (zi === 0) {
@@ -2741,10 +3174,11 @@ function drawPend(h) {
   }
   ctx.restore();
   // the weight
-  hazardShadow(px, py, 24, 9);
-  backlight(px, py, 56, zi, 0.26);
-  dangerGlow(px, py, 44);
-  ctx.save(); ctx.translate(px, py); ctx.rotate(h.th * 1.5); ctx.scale(s * 1.32, s * 1.32);
+  const pk = 1.32 * h.r / 20;     // drawn so its spike tips sit just outside the (round) hitbox
+  hazardShadow(px, py, 24 * pk, 9 * pk);
+  backlight(px, py, 56 * pk, zi, 0.3);
+  dangerGlow(px, py, 44 * pk);
+  ctx.save(); ctx.translate(px, py); ctx.rotate(h.th * 1.5); ctx.scale(s * pk, s * pk);
   ctx.lineJoin = 'round';
   const SPK = [['#f3e2a8', '#e8c773'], ['#e9fbff', '#7fe8ff'], ['#4a3a3a', '#2a1a1a']][zi];
   for (let k = 0; k < 12; k++) {
@@ -2803,6 +3237,7 @@ function drawBoulder(h) {
   }
   const x = sx(h.x), y = sy(h.cur);
   if (y < -120 || y > H + 60) return;
+  if (h.col) { drawColumnSeg(h, x, y); return; }
   // fire trail streaming up behind the falling rock
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const tl = (70 + h.r * 1.6) * s, wob = Math.sin(G.t * 30 + h.alt) * 3 * s;
@@ -2846,11 +3281,34 @@ function drawBoulder(h) {
   ctx.restore();
 }
 
+// A broken basalt column segment falling upright (basalt caves only): a hexagonal prism with a lit
+// top face, cold crystal glints and a dust trail. Its two-circle hitbox sits inside the prism.
+function drawColumnSeg(h, x, y) {
+  const r = h.r, w = r * 0.86, hh = r * 1.35;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const tg = ctx.createLinearGradient(x, y, x, y - (90 + r * 2) * s);
+  tg.addColorStop(0, 'rgba(160,190,255,.35)'); tg.addColorStop(1, 'rgba(160,190,255,0)');
+  ctx.fillStyle = tg; ctx.fillRect(x - w * s, y - (90 + r * 2) * s, w * 2 * s, (90 + r * 2) * s);
+  ctx.restore();
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round';
+  const body = [[-w, -hh + 6], [-w * 0.5, -hh], [w * 0.5, -hh], [w, -hh + 6], [w, hh - 4], [w * 0.5, hh], [-w * 0.5, hh], [-w, hh - 4]];
+  pkPath(ctx, body, pkLG(ctx, -w, 0, w, 0, ['#2a2d4a', '#5a6090', '#3a3e62', '#1a1c30']), 3.4);
+  pkPath(ctx, [[-w, -hh + 6], [-w * 0.5, -hh], [w * 0.5, -hh], [w, -hh + 6], [w * 0.5, -hh + 12], [-w * 0.5, -hh + 12]], '#8a94c8', 2.4);
+  ctx.strokeStyle = 'rgba(10,10,24,.6)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-w * 0.5, -hh + 12); ctx.lineTo(-w * 0.5, hh); ctx.moveTo(w * 0.5, -hh + 12); ctx.lineTo(w * 0.5, hh); ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,220,255,.5)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-w * 0.15, -hh + 16); ctx.lineTo(-w * 0.15, hh - 6); ctx.stroke();
+  // jagged broken ends
+  pkPath(ctx, [[-w, hh - 4], [-w * 0.5, hh + 6], [-w * 0.1, hh - 2], [w * 0.3, hh + 7], [w, hh - 4], [w * 0.5, hh], [-w * 0.5, hh]], '#24263e', 2.4);
+  ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(-w * 0.5, hh + 6); ctx.lineTo(-w * 0.3, hh + 1); ctx.lineTo(-w * 0.7, hh + 1); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  dangerGlow(x, y + hh * 0.8 * s, r * 1.6, 0.25);
+}
+
 // Fire wheel: a big riveted iron hub with a molten heart, and a bar of solid flame sweeping round
 // it: an ink-edged flame body (the size of its hitbox, a little bigger), a white-hot 14-unit core, an
 // additive outer glow, and a trailing arc of embers along the sweep it just made. The hub is lethal too.
-const FIRE_HUB = 26, FIRE_HIT = 0.85;              // drawn hub radius; bar hitbox = br × FIRE_HIT
-const FIRE_HUB_HIT = 19;                           // hub hitbox radius (inside the drawn hub)
+const FIRE_HUB = 34, FIRE_HIT = 0.85;              // drawn hub radius; bar hitbox = br × FIRE_HIT
+const FIRE_HUB_HIT = 25;                           // hub hitbox radius (inside the drawn hub)
 function drawFirebar(h) {
   const cx = sx(h.cx), cy = sy(h.alt), ang = h.ang ?? h.ph, dir = Math.sign(h.w), br = h.br, T = G.t;
   const sa = -ang, L = h.len;                         // the bar's angle on screen (y points down)
@@ -2887,9 +3345,9 @@ function drawFirebar(h) {
   ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
   // the white-hot core, 14 units thick
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,230,140,.95)'; ctx.lineWidth = 14;
+  ctx.strokeStyle = 'rgba(255,230,140,.95)'; ctx.lineWidth = br * 1.4;
   ctx.beginPath(); ctx.moveTo(FIRE_HUB * 0.6, 0); ctx.lineTo(L - 2, 0); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,240,1)'; ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(255,255,240,1)'; ctx.lineWidth = br * 0.6;
   ctx.beginPath(); ctx.moveTo(FIRE_HUB * 0.7, 0); ctx.lineTo(L - 4, 0); ctx.stroke();
   // flame head at the tip
   const fl = 1 + 0.1 * Math.sin(T * 25), hg = ctx.createRadialGradient(L, 0, 1, L, 0, br * 2.2 * fl);
@@ -2901,12 +3359,12 @@ function drawFirebar(h) {
   ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
   pkE(ctx, 0, 0, FIRE_HUB, FIRE_HUB, pkRG(ctx, 0, 0, FIRE_HUB, ['#a8a4b0', '#4a4652', '#16141a']), 3.5);
   ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, FIRE_HUB - 4, 3.6, 5.2); ctx.stroke();
-  for (let k = 0; k < 8; k++) { const a = sa + k / 8 * 6.283; pkE(ctx, Math.cos(a) * (FIRE_HUB - 7), Math.sin(a) * (FIRE_HUB - 7), 2.8, 2.8, '#d8d0c8', 1.2); }
-  pkE(ctx, 0, 0, 15, 15, '#2a0a04', 2.4);
+  for (let k = 0; k < 10; k++) { const a = sa + k / 10 * 6.283; pkE(ctx, Math.cos(a) * (FIRE_HUB - 8), Math.sin(a) * (FIRE_HUB - 8), 3.4, 3.4, '#d8d0c8', 1.4); }
+  pkE(ctx, 0, 0, 20, 20, '#2a0a04', 2.6);
   ctx.globalCompositeOperation = 'lighter';
-  const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, 15);
+  const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, 20);
   cg.addColorStop(0, '#fffbe0'); cg.addColorStop(0.5, `rgba(255,${150 + 60 * Math.sin(T * 6) | 0},40,1)`); cg.addColorStop(1, 'rgba(255,60,20,.25)');
-  ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.283); ctx.fill();
+  ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, 17, 0, 6.283); ctx.fill();
   ctx.restore();
 }
 
@@ -3173,7 +3631,57 @@ function drawGate(h) {
   }
 }
 
-const DRAW = { bat: drawBat, pend: drawPend, geyser: drawGeyser, firebar: drawFirebar, spike: drawSpike, spider: drawSpider, crusher: drawCrusher, gate: drawGate };
+// Lavafall (magma core only): a constant stream of lava pouring from an obsidian spout on the wall. It
+// lights the wall rock around it, steams where it burns out, and its hitbox stops short of the fade.
+function drawLavafall(h) {
+  const x = sx(h.x), top = sy(h.alt), bot = sy(h.lo), T = G.t, hw = h.hw, bx = sx(h.base), d = h.side;
+  // the light it throws on the walls and the shaft around it
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const cy = (top + bot) / 2, R = (h.fall * 0.9 + 60) * s;
+  const lg = ctx.createRadialGradient((x + bx) / 2, cy, 4, (x + bx) / 2, cy, R);
+  lg.addColorStop(0, `rgba(255,120,30,${0.42 + 0.06 * Math.sin(T * 5 + h.ph)})`); lg.addColorStop(0.5, 'rgba(255,80,20,.14)'); lg.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = lg; ctx.fillRect((x + bx) / 2 - R, cy - R, R * 2, R * 2);
+  // glowing streak where the light hits the wall face
+  const wg = ctx.createLinearGradient(0, top - 40 * s, 0, bot + 30 * s);
+  wg.addColorStop(0, 'rgba(255,160,60,0)'); wg.addColorStop(0.3, 'rgba(255,150,50,.55)'); wg.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.strokeStyle = wg; ctx.lineWidth = 7 * s; ctx.beginPath();
+  for (let a = h.alt + 40, i = 0; a >= h.lo - 30; a -= 10, i++) { const wx = sx(walls(a)[d > 0 ? 0 : 1]); i ? ctx.lineTo(wx, sy(a)) : ctx.moveTo(wx, sy(a)); }
+  ctx.stroke();
+  ctx.restore();
+  // the stream: an ink-edged ribbon that wobbles, bright core and a current running down it
+  const wob = k => Math.sin(k * 0.09 + T * 7 + h.ph) * 1.6 * s;
+  const fade = smooth(0, 0.22, 1);
+  ctx.save();
+  const sg = ctx.createLinearGradient(0, top, 0, bot);
+  sg.addColorStop(0, '#fff2b0'); sg.addColorStop(0.25, '#ffb238'); sg.addColorStop(0.75, '#ff5a1a'); sg.addColorStop(1, 'rgba(200,40,10,0)');
+  ctx.beginPath();
+  for (let y = top; y <= bot; y += 6) ctx.lineTo(x - hw * s * (1 - 0.35 * smooth(0.75, 1, (y - top) / (bot - top))) + wob(y), y);
+  for (let y = bot; y >= top; y -= 6) ctx.lineTo(x + hw * s * (1 - 0.35 * smooth(0.75, 1, (y - top) / (bot - top))) + wob(y + 30), y);
+  ctx.closePath(); ctx.fillStyle = sg; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,255,220,.85)'; ctx.lineWidth = 3 * s; ctx.setLineDash([12 * s, 18 * s]); ctx.lineDashOffset = -T * 160 * s;
+  for (const k of [-0.4, 0.3]) { ctx.beginPath(); ctx.moveTo(x + k * hw * s, top); ctx.lineTo(x + k * hw * s, bot); ctx.stroke(); }
+  ctx.setLineDash([]); ctx.restore();
+  const ig = ctx.createLinearGradient(0, top, 0, bot); ig.addColorStop(0, 'rgba(70,10,4,.95)'); ig.addColorStop(0.8, 'rgba(70,10,4,.6)'); ig.addColorStop(1, 'rgba(70,10,4,0)');
+  ctx.strokeStyle = ig; ctx.lineWidth = 2.6 * s * fade; ctx.stroke();
+  ctx.restore();
+  // steam and spatter where it burns out
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const pg = ctx.createRadialGradient(x, bot - 10 * s, 2, x, bot - 10 * s, 34 * s); pg.addColorStop(0, 'rgba(255,200,90,.6)'); pg.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.fillStyle = pg; ctx.fillRect(x - 34 * s, bot - 44 * s, 68 * s, 68 * s);
+  ctx.restore();
+  // the obsidian spout jutting from the wall, lava welling over its lip
+  ctx.save(); ctx.translate(bx, top); ctx.scale(s * d, s);
+  const out = Math.abs(h.x - h.base) + hw - 2;
+  pkPath(ctx, [[-10, -14], [out * 0.6, -16], [out + 4, -8], [out + 2, 4], [out * 0.5, 10], [-10, 12]], pkLG(ctx, 0, -16, 0, 12, ['#5a4448', '#241618', '#0e0606']), 3.2);
+  ctx.strokeStyle = 'rgba(255,170,80,.75)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(out * 0.6, -14.5); ctx.lineTo(out + 2, -7); ctx.stroke();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  pkE(ctx, out - hw + 2, 2, hw, 5, '#ffcf6a', 0);
+  ctx.restore();
+  ctx.restore();
+}
+const DRAW = { bat: drawBat, pend: drawPend, geyser: drawGeyser, firebar: drawFirebar, spike: drawSpike, spider: drawSpider, crusher: drawCrusher, gate: drawGate, lavafall: drawLavafall };
 
 function drawParticles(additive) {
   ctx.save();
@@ -3184,7 +3692,7 @@ function drawParticles(additive) {
     const t = q.life / q.max, x = sx(q.x), y = sy(q.alt);
     if (q.kind === 'flame') {
       const r = q.size * s * (0.5 + t), ex = EXHAUST[q.ex || 'fire'];
-      ctx.fillStyle = rgbaA(t > 0.6 ? ex.core : t > 0.3 ? ex.mid : ex.edge, t);
+      ctx.fillStyle = rgbaA(t > 0.55 ? ex.mid : ex.edge, t * 0.5);
       ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
     } else if (q.kind === 'puff') {
       const ex = EXHAUST[q.ex];
@@ -3232,11 +3740,18 @@ function drawParticles(additive) {
       ctx.beginPath(); ctx.arc(x, y, q.size * s, 0, 6.283); ctx.fill();
     } else if (q.kind === 'ring') {
       const r = (q.size + (1 - t) * 16) * s;
-      ctx.strokeStyle = `rgba(230,210,200,${t * 0.55})`; ctx.lineWidth = 3 * s * t + 1;
+      ctx.strokeStyle = `rgba(255,${170 + 60 * t | 0},110,${t * 0.45})`; ctx.lineWidth = 3 * s * t + 1;
       ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.45, 0, 0, 6.283); ctx.stroke();
     } else if (q.kind === 'smoke') {
       ctx.fillStyle = `rgba(150,130,125,${t * 0.35})`;
       ctx.beginPath(); ctx.arc(x, y, q.size * s * (1.6 - t), 0, 6.283); ctx.fill();
+    } else if (q.kind === 'rock') {
+      const r = q.size * s, e = q.ex;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(e.rot); ctx.globalAlpha = Math.min(1, t * 3);
+      ctx.beginPath(); ctx.moveTo(-r, -r * 0.4); ctx.lineTo(-r * 0.2, -r); ctx.lineTo(r, -r * 0.5); ctx.lineTo(r * 0.7, r * 0.7); ctx.lineTo(-r * 0.6, r * 0.8); ctx.closePath();
+      ctx.fillStyle = rgb(e.c); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, 1.6 * s); ctx.stroke();
+      ctx.strokeStyle = rgb(e.l, 0.7); ctx.lineWidth = Math.max(1, 1.2 * s); ctx.beginPath(); ctx.moveTo(-r * 0.8, -r * 0.45); ctx.lineTo(-r * 0.2, -r * 0.9); ctx.lineTo(r * 0.8, -r * 0.45); ctx.stroke();
+      ctx.restore();
     } else if (q.kind === 'debris') {
       ctx.fillStyle = `rgba(110,70,40,${t})`;
       ctx.fillRect(x - q.size * s / 2, y - q.size * s / 2, q.size * s, q.size * s);
@@ -3317,7 +3832,7 @@ function pkTube(c, y, k = 1) {
 
 // Exhaust looks. Additive ones glow; the rest are soft puffs.
 const EXHAUST = {
-  fire:    { add: true,  core: [255, 255, 220], mid: [255, 170, 50],  edge: [255, 60, 10], rings: true },
+  fire:    { add: true,  core: [255, 236, 150], mid: [255, 150, 40],  edge: [230, 50, 10], rings: true },
   glow:    { add: true,  core: [245, 255, 220], mid: [190, 255, 90],  edge: [80, 220, 60] },
   mustard: { add: true,  core: [255, 255, 210], mid: [255, 210, 30],  edge: [230, 150, 0] },
   coin:    { add: true,  core: [255, 255, 230], mid: [255, 210, 70],  edge: [255, 150, 0], coins: true },
@@ -3759,9 +4274,9 @@ function pilotState(t, vx, thrust) {
 function drawNozzleGlow(c, pl) {
   for (const [x, y, exName = pl.exhaust] of pl.nozzles) {
     const ex = EXHAUST[exName], fl = (12 + Math.random() * 7) * (pl.nozzles.length > 1 ? 0.7 : 1);
-    c.save(); c.globalCompositeOperation = ex.add ? 'lighter' : 'source-over';
+    c.save(); c.globalCompositeOperation = 'lighter';
     const g = c.createRadialGradient(x, y + 2, 1, x, y + 6, fl);
-    g.addColorStop(0, rgbaA(ex.core, 1)); g.addColorStop(0.4, rgbaA(ex.mid, 0.9)); g.addColorStop(1, rgbaA(ex.edge, 0));
+    g.addColorStop(0, 'rgba(255,240,170,1)'); g.addColorStop(0.4, ex.add ? rgbaA(ex.mid, 0.9) : 'rgba(255,150,40,.85)'); g.addColorStop(1, ex.add ? rgbaA(ex.edge, 0) : 'rgba(230,60,10,0)');
     c.fillStyle = g; c.beginPath(); c.ellipse(x, y + fl * 0.5, 7 * (pl.nozzles.length > 1 ? 0.75 : 1), fl, 0, 0, TWO_PI); c.fill();
     c.restore();
   }
@@ -3773,10 +4288,10 @@ function drawPilot(c, pl, st) {
   c.restore();
 }
 
-// The pilot is drawn 1.3x; the hitbox (PLAYER_HIT) is about 60% of the drawn body, which the
+// The pilot is drawn 1.5x; the hitbox (PLAYER_HIT 16) is about 55% of the drawn body, which the
 // hitbox overlay shows. It gets a dark outer stroke and a zone-tinted rim halo from a small offscreen
 // silhouette, so pale pilots (the polar bear, the goat) never wash out against bright caves.
-const PILOT_SCALE = 1.3;
+const PILOT_SCALE = 1.5;
 function drawSweat(c) {
   for (const [x, y, ph] of [[15, -26, 0], [-17, -20, 0.5]]) {
     const k = (G.t * 2.4 + ph) % 1;
@@ -3819,7 +4334,9 @@ function drawPlayer() {
   const p = G.p;
   if (p.invuln > 0 && Math.sin(G.t * 30) > 0) return;
   const gap = p.alt - G.worm.alt, playing = G.state === 'play';
-  const panic = playing && (p.vy < -320 || gap < 250 || G.sputter);
+  // faces: scared when the monster is within ~120 units (or you're plunging or the engine is cut out), a
+  // big grin for a moment after a close call, calm otherwise
+  const panic = playing && (p.vy < -320 || gap < 120 || G.sputter);
   const falling = playing && !panic && p.vy < -140;
   const st = p.stretch || 0, sq = p.squash || 0, nm = p.nearT > 0 ? Math.sin((1 - p.nearT / 0.5) * Math.PI) : 0;
   // poses: launch squash, stretched when rising flat out, squat and wobbling when falling,
@@ -3830,8 +4347,10 @@ function drawPlayer() {
   if (panic) rot += Math.sin(G.t * 34) * 0.06;
   if (nm) rot += nm * 0.25 * Math.sign(p.vx || 1);
   const pl = pilot(), stt = pilotState(G.t, p.vx, G.thrust);
+  drawThrustFlame(pl, rot, kx, ky);
+  drawPilotBacklight(p);
   drawPilotOutlined(sx(p.x), sy(p.alt), rot, kx, ky, c => {
-    pkMood = panic ? 'panic' : nm > 0 || G.thrust ? 'grin' : ''; pkLookDown = gap < 430 || falling ? 1 : 0;
+    pkMood = panic ? 'panic' : nm > 0 || p.grinT > 0 ? 'grin' : ''; pkLookDown = gap < 300 || falling ? 1 : 0;
     c.save(); pl.draw(c, stt); c.restore();
     pkMood = ''; pkLookDown = 0;
     if (panic) drawSweat(c);
@@ -3841,6 +4360,58 @@ function drawPlayer() {
   ctx.restore();
   drawBoostReady();
   drawHeatGauge();
+}
+// The thrust flame: an additive, flickering cone of fire from every nozzle (orange edge, yellow body,
+// pale core), longer at speed and during a boost, sputtering short when the engine is hot.
+function drawThrustFlame(pl, rot, kx, ky) {
+  const p = G.p, ht = G.heat;
+  if (!G.thrust && !(G.sputter && Math.random() < 0.3)) return;
+  const k = clamp(p.vy / cfg.maxUp, 0, 1.2), boost = ht.boostT / 0.45, hot = smooth(0.6, 1, ht.v);
+  ctx.save(); ctx.translate(sx(p.x), sy(p.alt)); ctx.rotate(rot); ctx.scale(s * PILOT_SCALE * kx, s * PILOT_SCALE * ky);
+  ctx.globalCompositeOperation = 'lighter';
+  const n = pl.nozzles.length, wk = n > 1 ? 0.7 : 1;
+  for (const [x, y] of pl.nozzles) {
+    const fl = 0.85 + 0.15 * Math.sin(G.t * 47 + x) + 0.1 * (Math.random() - 0.5);
+    const L = (28 + 18 * k + 20 * boost) * fl * (1 - 0.35 * hot) * wk, W = (8 + 2 * boost) * wk;
+    for (const [lk, wk2, c0, c1] of [[1, 1, [255, 60, 10], 0.75], [0.75, 0.62, [255, 130, 20], 0.55], [0.42, 0.32, [255, 215, 110], 0.6]]) {
+      const g = ctx.createLinearGradient(0, y, 0, y + L * lk);
+      g.addColorStop(0, rgbaA(c0, c1)); g.addColorStop(0.6, rgbaA(c0, c1 * 0.6)); g.addColorStop(1, rgbaA(c0, 0));
+      ctx.fillStyle = g; ctx.beginPath();
+      const w = W * wk2, sw = Math.sin(G.t * 31 + x) * 1.5;
+      ctx.moveTo(x - w, y); ctx.quadraticCurveTo(x - w * 1.1, y + L * lk * 0.45, x + sw, y + L * lk);
+      ctx.quadraticCurveTo(x + w * 1.1, y + L * lk * 0.45, x + w, y); ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+// Firelight: the flame lights the nearby wall rock (clipped to the walls, so it reads as light on stone).
+function drawThrustLight() {
+  if (G.state !== 'play' || !G.thrust) return;
+  const p = G.p, x = sx(p.x), y = sy(p.alt - 22), R = (150 + 40 * (G.heat.boostT / 0.45)) * s;
+  ctx.save();
+  ctx.beginPath();
+  for (const side of [0, 1]) {
+    const edge = side ? cssW + 40 : -40;
+    ctx.moveTo(edge, sy(p.alt - 200));
+    for (let a = p.alt - 200; a <= p.alt + 200; a += 12) ctx.lineTo(sx(walls(a)[side]) + (side ? -6 : 6) * s, sy(a));
+    ctx.lineTo(edge, sy(p.alt + 200)); ctx.closePath();
+  }
+  ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 4, x, y, R), f = 0.85 + 0.15 * Math.sin(G.t * 37);
+  g.addColorStop(0, `rgba(255,170,70,${0.55 * f})`); g.addColorStop(0.5, `rgba(255,110,30,${0.22 * f})`); g.addColorStop(1, 'rgba(255,80,20,0)');
+  ctx.fillStyle = g; ctx.fillRect(x - R, y - R, R * 2, R * 2);
+  ctx.restore();
+}
+// A soft light behind the pilot in a cool, contrasting tone, so it never sinks into a dark or same-hued
+// backdrop (the grey lemur over magma rock).
+function drawPilotBacklight(p) {
+  const x = sx(p.x), y = sy(p.alt + 4), R = 46 * s, [, t2] = zoneT(p.alt);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const col = t2 > 0.5 ? [255, 230, 190] : [230, 245, 255];
+  const g = ctx.createRadialGradient(x, y, 4, x, y, R); g.addColorStop(0, rgbaA(col, 0.2 + 0.1 * t2)); g.addColorStop(1, rgbaA(col, 0));
+  ctx.fillStyle = g; ctx.fillRect(x - R, y - R, R * 2, R * 2);
+  ctx.restore();
 }
 // The boost is readable at a glance: a big star flash at the nozzle the moment it becomes available,
 // then a steady pilot light there for as long as it stays ready.
@@ -3961,7 +4532,8 @@ function drawKnock() {
 // Every monster is seen from above as it surges up the shaft toward you: predators lunge jaws-first,
 // the rest look up at you in three-quarter view. Nothing reaches up with hands, so the top edge is
 // always the head itself. x = 0 is the shaft's centre; the shaft is 400 wide; the body fills below.
-function mFill(c, y0, col) { c.fillStyle = col; c.fillRect(-320, y0, 640, 4000); }
+let mNoFill = false;          // side heads skip the flat fill under the body
+function mFill(c, y0, col) { if (mNoFill) return; c.fillStyle = col; c.fillRect(-320, y0, 640, 4000); }
 function mFang(c, x, y, w, len, col = '#f7ead0', lw = 1.8) { pkPath(c, [[x - w / 2, y], [x, y + len], [x + w / 2, y]], col, lw); }
 // a row of teeth hanging from (down) or rising from (up) an elliptical arc
 function mArcTeeth(c, cx, cy, rx, ry, a0, a1, n, len, inward = true, col = '#f7ead0') {
@@ -4911,6 +5483,88 @@ const MONSTERS = [
     mAMaw(c, 0, 200, 118, 62, m, { n: 13, nLow: 11, L: 24, fangs: [1, 11], throat: ['#ffd0ff', '#d83ac8', '#3a0a4a', '#120420'], glow: [255, 120, 240], teeth: '#f4eaff', tongue: '#ff6ad8', gum: '#160830', droolCol: 'rgba(230,180,255,.7)', lipLight: 'rgba(240,160,255,.6)' });
   } },
 ];
+// Silhouettes: every monster keeps its own head, but the roster reads as different shapes: tall and
+// narrow (sx < 1, sy > 1), squat and wide, coiled bodies hugging both walls, three-headed, horned and
+// crested. Still no hands, arms or reaching limbs: extra heads, coils, horns and crests only.
+const MONSTER_FORMS = {
+  worm:    { sx: 0.84, sy: 1.12, coil: true },
+  golem:   { horns: 'crystal' },
+  kraken:  { sx: 0.82, sy: 1.16 },
+  piranha: { crest: 'fin' },
+  dragon:  { heads: 3, headX: 262, headY: 150 },
+  rex:     { sx: 0.8, sy: 1.2, crest: 'spines' },
+  flytrap: { heads: 3, headX: 262, headY: 170 },
+  blob:    { sx: 1.1, sy: 0.9 },
+  shark:   { sx: 0.72, sy: 1.26, crest: 'fin' },
+  tiki:    { sx: 0.78, sy: 1.24, horns: 'feather' },
+  spirit:  { sx: 0.86, sy: 1.14, crest: 'flame' },
+  toad:    { sx: 1.12, sy: 0.88 },
+  giant:   { horns: 'bone' },
+  hornet:  { sx: 0.8, sy: 1.16, coil: true },
+  shadow:  { heads: 3, headX: 262, headY: 160 },
+};
+const monForm = mon => MONSTER_FORMS[mon.id] || {};
+// Coils: thick body loops climbing the shaft along both walls behind the head (seen from above, sliding
+// up the rock), in the monster's own colours. art units: x = 0 is the shaft centre, y down from the kill line.
+function drawCoils(c, mon, m, half = 200) {
+  const dark = mon.haze.map(v => v * 0.28 | 0), mid = mon.haze.map(v => v * 0.6 | 0), lit = mon.haze.map(v => Math.min(255, v * 0.9 + 60) | 0);
+  for (const d of [-1, 1]) {
+    for (let k = 14; k >= 0; k--) {
+      const y = 150 + k * 46, x = d * (half - 18 + Math.sin(k * 0.9 + m.t * 2.2 + d) * 16), r = 44 - k * 0.6;
+      mAShape(c, mAEl(x, y, r * 0.86, r), pkRG(c, x - d * 10, y - 8, r, [rgb(lit), rgb(mid), rgb(dark)]), { rim: rgbaA(lit, 0.6), rw: 4, lw: 4 });
+      c.strokeStyle = rgbaA(dark, 0.7); c.lineWidth = 3; c.beginPath(); c.ellipse(x, y + 4, r * 0.7, r * 0.5, 0, 0.3, Math.PI - 0.3); c.stroke();
+    }
+  }
+}
+function drawHorns(c, kind, mon) {
+  const col = kind === 'crystal' ? ['#e8fdff', '#6ad8f0', '#2a7aa0'] : kind === 'feather' ? ['#fff0a0', '#ff8a2a', '#a8261a'] : ['#fffaf0', '#e0c898', '#8a6a40'];
+  for (const d of [-1, 1]) {
+    if (kind === 'feather') {
+      for (let k = 0; k < 4; k++) { c.save(); c.translate(d * (60 + k * 30), 24 + k * 8); c.rotate(d * (0.9 + k * 0.22)); mAShape(c, mASm([[0, 0], [-14, -40], [0, -96], [14, -40]]), pkLG(c, 0, -96, 0, 0, col), { rim: 'rgba(255,255,230,.6)', rw: 3, lw: 3.5 }); c.restore(); }
+    } else {
+      // swept out to the sides and curling back down: never above the kill line, never reaching up
+      mAShape(c, mASm([[d * 96, 64], [d * 150, 22], [d * 236, 14], [d * 290, 60], [d * 292, 120], [d * 262, 84], [d * 214, 52], [d * 150, 78]]), pkLG(c, d * 96, 14, d * 290, 120, col), { rim: 'rgba(255,255,240,.7)', rw: 4, lw: 4 });
+      if (kind === 'crystal') mAGlow(c, d * 250, 50, 60, [120, 230, 255], 0.35);
+    }
+  }
+}
+function drawCrest(c, kind, mon) {
+  const T = 0;
+  if (kind === 'flame') {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (let k = -3; k <= 3; k++) { const x = k * 34, h = 70 - Math.abs(k) * 12; const g = c.createLinearGradient(0, 40 + h, 0, 6); g.addColorStop(0, 'rgba(255,120,30,.0)'); g.addColorStop(1, 'rgba(255,230,140,.75)'); c.fillStyle = g; c.beginPath(); c.moveTo(x - 18, 70); c.quadraticCurveTo(x - 6, 30, x + Math.sin(k * 2 + (mon._t || 0) * 6) * 6, 6); c.quadraticCurveTo(x + 6, 30, x + 18, 70); c.closePath(); c.fill(); }
+    c.restore(); return;
+  }
+  const n = kind === 'fin' ? 1 : 5;
+  for (let k = 0; k < n; k++) {
+    const y = kind === 'fin' ? 8 : 10 + k * 26, w = kind === 'fin' ? 26 : 16 - k * 1.5, L = kind === 'fin' ? 130 : 46 - k * 4;
+    mAShape(c, mAPoly([[-w, y + L * 0.9], [0, y], [w, y + L * 0.9], [0, y + L * 0.7]]), pkLG(c, 0, y, 0, y + L, kind === 'fin' ? ['#ffd0a0', rgb(mon.haze), rgb(mon.haze.map(v => v * 0.4))] : ['#fffaf0', '#d8c8a0']), { rim: 'rgba(255,255,240,.6)', rw: 3, lw: 3.5 });
+  }
+}
+// One monster in its full silhouette, in its own art frame (y = 0 is the kill line). Side heads sit lower
+// and further out, so the main head always owns the kill line.
+function drawMonsterForm(c, mon, m, coilHalf) {
+  const f = monForm(mon);
+  mon._t = m.t;
+  if (f.coil) drawCoils(c, mon, m, coilHalf || 200);
+  // side heads ride on long necks rising from behind the main body, out at the shoulders
+  const sway = d => Math.sin(m.t * 1.7 + d * 1.3) * 10;
+  if (f.heads) for (const d of [-1, 1]) {
+    const dark = mon.haze.map(v => v * 0.3 | 0), mid = mon.haze.map(v => v * 0.62 | 0);
+    mATaper(c, [[d * 150, 700], [d * (f.headX - 10) + sway(d) * 0.5, 420], [d * f.headX + sway(d), f.headY + 110]], 120, 70, pkLG(c, 0, f.headY, 0, 700, [rgb(mid), rgb(dark)]), { rim: rgbaA(mon.haze.map(v => Math.min(255, v + 60)), 0.55), rw: 5, lw: 4 });
+  }
+  c.save(); c.scale(f.sx || 1, f.sy || 1);
+  mon.draw(c, m);
+  if (f.horns) drawHorns(c, f.horns, mon);
+  if (f.crest) drawCrest(c, f.crest, mon);
+  c.restore();
+  if (f.heads) for (const d of [-1, 1]) {
+    c.save(); c.translate(d * f.headX + sway(d), f.headY); c.rotate(d * 0.2); c.scale(0.5, 0.5);
+    mNoFill = true;
+    try { mon.draw(c, { t: m.t + d * 0.7, open: clamp(m.open * 0.85 + 0.1 * Math.sin(m.t * 3 + d), 0, 1), look: m.look }); } finally { mNoFill = false; }
+    c.restore();
+  }
+}
 let monsterIndex = Math.max(0, MONSTERS.findIndex(mn => mn.id === settings.monster));
 const monster = () => MONSTERS[monsterIndex];
 
@@ -4958,17 +5612,17 @@ function drawWorm() {
   const b = G.state === 'dead' ? G.bite : null;
   G.biteGeo = null;
   if (realY > H + 2 && !b) { drawSliver(mon, realY, prox, rim, cx); return; }
-  const crouch = W.crouch > 0 ? smooth(0, 0.15, 0.55 - W.crouch) : 0, surge = W.surge, breathe = Math.sin(G.t * 2.4);
+  const crouch = W.crouch > 0 ? smooth(0, 0.25, CHASE.warn - W.crouch) : 0, surge = W.surge, breathe = Math.sin(G.t * 2.4);
   let y = realY + (crouch * 34 + 3 * (1 + breathe) * (1 - crouch)) * s, tx = cx;
   let k = s * MON_SCALE * (1 + 0.1 * surge - 0.04 * crouch + 0.012 * breathe), open = W.open;
-  const mo = mon.mouth || [0, 150, 100, 50];
+  const mo = mon.mouth || [0, 150, 100, 50], fm = monForm(mon), fx = fm.sx || 1, fy = fm.sy || 1;
   if (b) {
     // the swallow: the whole head lunges and swells so its own mouth closes on the pilot; the jaws
     // stay wide for a beat, snap shut, then chew
     const e = smooth(0, 0.16, b.t), kb = s * MON_SCALE * lerp(1, 1.18, e), px = sx(b.x), py = sy(b.alt);
-    tx = lerp(cx, px - mo[0] * kb, e); y = lerp(y, py - mo[1] * kb, e); k = kb;
+    tx = lerp(cx, px - mo[0] * kb * fx, e); y = lerp(y, py - mo[1] * kb * fy, e); k = kb;
     open = b.t < 0.22 ? 1 : b.t < 0.32 ? 1 - smooth(0.22, 0.32, b.t) : 0.06 + 0.1 * Math.max(0, Math.sin((b.t - 0.32) * 9)) * Math.max(0, 1 - (b.t - 0.32) * 0.6);
-    G.biteGeo = { mx: tx + mo[0] * k, my: y + mo[1] * k, rx: mo[2] * k, ry: mo[3] * k, open };
+    G.biteGeo = { mx: tx + mo[0] * k * fx, my: y + mo[1] * k * fy, rx: mo[2] * k * fx, ry: mo[3] * k * fy, open };
   }
   ctx.save();
   if (!b) { ctx.beginPath(); ctx.rect(-40, realY - 1.5 * s, cssW + 80, H - realY + 80); ctx.clip(); }
@@ -4990,16 +5644,12 @@ function drawWorm() {
   ctx.scale(k * (1 + 0.04 * surge), k * (1 - 0.08 * crouch + 0.05 * surge));
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   mFlare = b ? 1 : crouch;
-  mon.draw(ctx, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) });
+  const [wl, wr] = walls(W.alt + 100), coilHalf = ((wr - wl) / 2) / (MON_SCALE * (1 + 0.04 * surge));
+  drawMonsterForm(ctx, mon, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1) }, coilHalf);
   mFlare = 0;
   ctx.restore();
+  drawMonsterDepths(mon, y, k, tx);
   ctx.globalCompositeOperation = 'lighter';
-  // its body sinks into a lava glow in its own haze colour instead of a black void, and the lava
-  // lights its lower planes from below
-  const gy0 = y + 250 * k, gy1 = y + 560 * k;
-  const lg = ctx.createLinearGradient(0, gy0, 0, gy1);
-  lg.addColorStop(0, rgbaA(mon.haze, 0)); lg.addColorStop(0.6, rgbaA(mon.haze, 0.28 + 0.1 * Math.sin(G.t * 2))); lg.addColorStop(1, rgbaA(mon.haze.map(v => Math.min(255, v + 60)), 0.55));
-  ctx.fillStyle = lg; ctx.fillRect(-40, gy0, cssW + 80, Math.max(H, gy1) - gy0 + 80);
   if (crouch > 0 || b) {   // eyes flare: a hot flash across its face while it crouches to lunge (and as it bites)
     const f = b ? 1 - smooth(0.2, 0.6, b.t) : crouch;
     const fg = ctx.createRadialGradient(tx, y + 110 * k, 4, tx, y + 110 * k, 230 * k);
@@ -5022,10 +5672,38 @@ function drawWorm() {
   }
   ctx.restore();
 }
+// Below the head the body never ends in a hard edge or a flat fill: it sinks into rolling dark smoke
+// (soft drifting puffs break the line), and a low lava glow wells up from under it with embers rising.
+function drawMonsterDepths(mon, y, k, tx) {
+  const gy0 = y + 290 * k, gy1 = y + 470 * k, dark = mon.haze.map(v => v * 0.07 | 0);
+  if (gy0 > H + 40) return;
+  ctx.save();
+  const sg = ctx.createLinearGradient(0, gy0, 0, gy1);
+  sg.addColorStop(0, rgbaA(dark, 0)); sg.addColorStop(0.55, rgbaA(dark, 0.7)); sg.addColorStop(1, rgbaA(dark, 0.96));
+  ctx.fillStyle = sg; ctx.fillRect(-40, gy0, cssW + 80, Math.max(H + 80, gy1) - gy0 + 80);
+  ctx.fillStyle = rgbaA(dark, 0.96); if (gy1 < H + 80) ctx.fillRect(-40, gy1, cssW + 80, H + 80 - gy1 + 40);
+  // smoke puffs rolling along the fade line
+  for (let i = 0; i < 14; i++) {
+    const u = hash2(i, 41), ph = (G.t * (0.12 + 0.1 * hash2(i, 42)) + u) % 1;
+    const px = -40 + (cssW + 80) * ((u + G.t * 0.02 * (i % 2 ? 1 : -1)) % 1 + 1) % 1, py = lerp(gy0 + 30 * k, gy1, hash2(i, 43)) - ph * 60 * k, r = (60 + 50 * hash2(i, 44)) * k;
+    const pg = ctx.createRadialGradient(px, py, 1, px, py, r);
+    pg.addColorStop(0, rgbaA(dark.map(v => v + 14), 0.75 * Math.sin(Math.PI * ph))); pg.addColorStop(1, rgbaA(dark, 0));
+    ctx.fillStyle = pg; ctx.fillRect(px - r, py - r, r * 2, r * 2);
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  const lg = ctx.createLinearGradient(0, Math.max(gy0, H * 0.55), 0, H + 10);
+  lg.addColorStop(0, rgbaA(mon.haze, 0)); lg.addColorStop(1, rgbaA(mon.haze, 0.22 + 0.06 * Math.sin(G.t * 2)));
+  ctx.fillStyle = lg; ctx.fillRect(-40, Math.max(gy0, H * 0.55), cssW + 80, H);
+  for (let i = 0; i < 12; i++) {
+    const ph = (G.t * 0.35 + hash2(i, 51)) % 1, ex = ox + playW * hash2(i, 52) + Math.sin(G.t * 2 + i) * 8, ey = H + 10 - ph * (H - Math.max(gy0, H * 0.45));
+    ctx.fillStyle = rgbaA(mon.haze.map(v => Math.min(255, v + 70) | 0), 0.8 * (1 - ph)); ctx.beginPath(); ctx.arc(ex, ey, 1.6 + hash2(i, 53) * 1.6, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+}
 function drawSliver(mon, realY, prox, rim, cx) {
   if (G.state === 'dead') return;
   const W = G.worm, fade = smooth(0, 60 * s, realY - H);
-  const px = (18 + 58 * prox + 14 * W.surge - (W.crouch > 0 ? 8 : 0)) * s * fade;
+  const px = (28 + 70 * prox + 16 * W.surge - (W.crouch > 0 ? 8 : 0)) * s * fade;
   G.sliverPx = px;
   if (px < 2) return;
   const top = H - px, k = s * MON_SCALE * (0.9 + 0.15 * prox), eyes = monsterEyes(mon);
@@ -5039,6 +5717,16 @@ function drawSliver(mon, realY, prox, rim, cx) {
   ctx.beginPath(); ctx.ellipse(cx, top + hh, hw, hh, 0, Math.PI * 1.05, Math.PI * 1.95);
   ctx.strokeStyle = rgbaA(rim, 0.25 + 0.2 * prox); ctx.lineWidth = 9 * s; ctx.stroke();
   ctx.strokeStyle = rgbaA(rim, 0.9); ctx.lineWidth = 2.6 * s; ctx.stroke();
+  // the jaw edge: a row of teeth along its upper lip, so you always see what is coming
+  ctx.globalCompositeOperation = 'source-over';
+  const chew = 0.5 + 0.5 * Math.sin(G.t * 3.2), jy = top + Math.max(px * 0.8, Math.min(px * 0.62, hh * 0.9) + 14 * s), jw = hw * 0.62;
+  ctx.fillStyle = rgbaA(mon.haze.map(v => v * 0.5 | 0), 0.9); ctx.beginPath(); ctx.ellipse(cx, jy + 6 * s, jw, (8 + 10 * chew) * s, 0, 0, 6.283); ctx.fill();
+  for (let i = 0; i < 9; i++) {
+    const u = (i + 0.5) / 9, x = cx - jw + 2 * jw * u, arc = Math.sqrt(Math.max(0, 1 - (2 * u - 1) ** 2)), yy = jy - arc * 4 * s, L = (10 + 6 * arc + (i % 4 === 1 ? 6 : 0)) * s;
+    ctx.beginPath(); ctx.moveTo(x - 6 * s, yy); ctx.lineTo(x, yy + L); ctx.lineTo(x + 6 * s, yy); ctx.closePath();
+    ctx.fillStyle = '#f7ead0'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6 * s; ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
   // eyes glowing through the haze, brighter as it nears and flaring during a crouch
   const flare = W.crouch > 0 ? 1 : 0, ey = top + Math.min(px * 0.62, hh * 0.9);
   for (const [ex0, , er] of eyes) {
@@ -5070,6 +5758,48 @@ function drawChaseMarker() {
   ctx.restore();
 }
 
+// Surge warning (screen space): while it crouches to lunge, the bottom edge flashes in its colour and a
+// stack of big chevrons climbs from the bottom, so a surge never comes out of nowhere.
+function drawSurgeWarn() {
+  const W = G.worm;
+  if (G.state !== 'play' || !(W.crouch > 0)) return;
+  const e = 1 - W.crouch / CHASE.warn, haze = monster().haze, beat = 0.5 + 0.5 * Math.sin(G.t * 22);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  g.addColorStop(0, rgbaA(haze, 0)); g.addColorStop(1, rgbaA(haze, (0.25 + 0.35 * beat) * (0.5 + 0.5 * e)));
+  ctx.fillStyle = g; ctx.fillRect(0, H * 0.7, cssW, H * 0.3);
+  for (const side of [0, 1]) {
+    const sg = ctx.createLinearGradient(side ? cssW : 0, 0, side ? cssW - 40 : 40, 0);
+    sg.addColorStop(0, rgbaA([255, 60, 60], 0.35 * beat)); sg.addColorStop(1, 'rgba(255,60,60,0)');
+    ctx.fillStyle = sg; ctx.fillRect(side ? cssW - 40 : 0, H * 0.45, 40, H * 0.55);
+  }
+  ctx.restore();
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const x = ox + playW / 2, base = H - safeBot - 30 - (G.sliverPx || 0) * 0.6;
+  for (let i = 0; i < 3; i++) {
+    const on = e * 3 > i, y = base - i * 22 - beat * 4, w = 22 + 4 * i;
+    ctx.globalAlpha = on ? 1 : 0.25;
+    ctx.beginPath(); ctx.moveTo(x - w, y + w * 0.4); ctx.lineTo(x, y - w * 0.25); ctx.lineTo(x + w, y + w * 0.4);
+    ctx.strokeStyle = INK; ctx.lineWidth = 11; ctx.stroke();
+    ctx.strokeStyle = on ? '#ff4a4a' : rgb(haze); ctx.lineWidth = 6; ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.font = '400 20px "Lilita One", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; const ty = base - 84 - beat * 4;
+  ctx.strokeText('It surges!', x, ty); ctx.fillStyle = '#ffe14a'; ctx.fillText('It surges!', x, ty);
+  ctx.restore();
+}
+
+// Rubble: wall chunks the monster tears loose as it climbs, kicked up the shaft from just above its
+// head (or from the bottom edge while it is below the screen). Purely visual, no collision.
+function wallBreak(n, big) {
+  const a0 = Math.max(G.worm.alt + 20, G.camAlt - 10), [L, R] = walls(a0 + 10), wc = pal('wall', a0), lit = pal('rim', a0);
+  for (let i = 0; i < n; i++) {
+    const side = Math.random() < 0.5 ? 0 : 1, x = side ? R - 4 : L + 4, dir = side ? -1 : 1;
+    puff(x, a0 + Math.random() * 30, dir * (30 + Math.random() * (big ? 160 : 90)), 220 + Math.random() * (big ? 420 : 260), 1.2 + Math.random() * 0.6, (big ? 5 : 3.5) + Math.random() * (big ? 8 : 5), 'rock', { c: wc, l: lit, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 12 });
+    if (Math.random() < 0.6) puff(x + dir * 8, a0 + 10, dir * 30, 80 + Math.random() * 60, 0.9, 8 + Math.random() * 8, 'smoke');
+  }
+}
+
 // Debug overlay: every shape here is the real collision shape. The coconut dies when its
 // cyan circle overlaps anything red.
 function drawHitboxes() {
@@ -5081,7 +5811,8 @@ function drawHitboxes() {
   ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 3;
   for (const h of G.hazards) {
     if (h.type === 'bat' || h.type === 'pend') circle(h.x, h.alt, h.r);
-    else if (h.type === 'boulder' && h.state === 'fall') circle(h.x, h.cur, h.r * 0.9);
+    else if (h.type === 'boulder' && h.state === 'fall') { if (h.col) for (const [x, a, r] of columnCircles(h)) circle(x, a, r); else circle(h.x, h.cur, h.r * 0.9); }
+    else if (h.type === 'lavafall') for (const [x0, x1, a0, a1] of lavaRects(h)) { ctx.beginPath(); ctx.rect(sx(x0), sy(a1), (x1 - x0) * s, (a1 - a0) * s); ctx.fill(); ctx.stroke(); }
     else if (h.type === 'firebar') {
       const c = Math.cos(h.ang || 0), sn = Math.sin(h.ang || 0);
       circle(h.cx, h.alt, FIRE_HUB_HIT);
@@ -5140,6 +5871,23 @@ function drawDanger() {
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = b; ctx.fillRect(0, H * 0.62, cssW, H * 0.38); ctx.restore();
 }
 
+// The resume countdown: a big 3-2-1 in the middle of the lane with a shrinking ring.
+function drawResume() {
+  if (!(G.resumeT > 0)) return;
+  const n = Math.ceil(G.resumeT / RESUME_STEP), f = (G.resumeT % RESUME_STEP) / RESUME_STEP || 1, pop = 1 + 0.35 * smooth(0.75, 1, f);
+  const x = ox + playW / 2, y = H * 0.42;
+  ctx.save(); ctx.fillStyle = 'rgba(8,4,6,.35)'; ctx.fillRect(0, 0, cssW, H);
+  ctx.translate(x, y);
+  ctx.strokeStyle = 'rgba(255,178,56,.9)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(0, 0, 58, -Math.PI / 2, -Math.PI / 2 + f * 6.283); ctx.stroke();
+  ctx.scale(pop, pop); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = '400 72px "Lilita One", sans-serif'; ctx.strokeStyle = INK; ctx.lineWidth = 9;
+  ctx.strokeText(String(n), 0, 4); ctx.fillStyle = '#fff1d6'; ctx.fillText(String(n), 0, 4);
+  ctx.restore();
+  ctx.save(); ctx.font = '800 15px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.strokeText('Hold to keep flying', x, y + 92); ctx.fillStyle = '#ffb238'; ctx.fillText('Hold to keep flying', x, y + 92);
+  ctx.restore();
+}
 function drawTwoThumbUI() {
   const pressed = [...input.pointers.values()].some(p => p.role === 'thrust');
   const pb = safeBot;
@@ -5205,7 +5953,8 @@ function hazardRects(fn) {
     else if (h.type === 'crusher' || h.type === 'gate') { x0 = h.lb; x1 = h.rb; }
     else if (h.type === 'firebar') { x0 = h.cx - h.len - 16; x1 = h.cx + h.len + 16; }
     else if (h.type === 'bat') { x0 = h.cx - h.amp - 40; x1 = h.cx + h.amp + 40; }
-    else if (h.type === 'pend') { x0 = Math.min(h.ax, h.x) - 30; x1 = Math.max(h.ax, h.x) + 30; }
+    else if (h.type === 'pend') { x0 = Math.min(h.ax, h.x) - 36; x1 = Math.max(h.ax, h.x) + 36; }
+    else if (h.type === 'lavafall') { x0 = Math.min(h.base, h.x) - 16; x1 = Math.max(h.base, h.x) + 16; }
     else { x0 = h.x - 30; x1 = h.x + 30; }
     if (fn(sx(x0), sy(a1), sx(x1), sy(a0))) return true;
   }
@@ -5266,11 +6015,22 @@ function start(isDaily) {
 }
 function togglePause() {
   if (!G || G.state === 'dead') return;
-  if (currentScreen === 'pause') { paused = false; show(null); return; }
+  if (currentScreen === 'pause') { paused = false; show(null); beginResume(); return; }
   if (currentScreen !== null) return;
   paused = true; input.pointers.clear(); recomputeThrust();
   $('pauseMeters').innerHTML = `${Math.floor(G.maxAlt / UNITS_PER_M)}<small>m</small>`;
   show('pause');
+}
+// Resume: a short 3-2-1 with the game frozen, so you can put your thumb back down, and the monster is
+// pushed back to a safe leash below you (no surge pending), so letting go for a moment never kills you.
+const RESUME_STEP = 0.55, RESUME_LEASH = 380;
+function beginResume() {
+  if (!G || G.state !== 'play') return;
+  G.resumeT = RESUME_STEP * 3;
+  const W = G.worm;
+  W.alt = Math.min(W.alt, G.p.alt - RESUME_LEASH); W.crouch = 0; W.surge = 0; W.beat = 0; W.nextLunge = Math.max(W.nextLunge, 6);
+  G.p.vy = Math.max(0, G.p.vy);
+  Object.assign(G.heat, { over: 0, v: Math.min(G.heat.v, 0.5) });
 }
 function fitMenu() { fitText($('pilotName'), 11); fitText($('monsterName'), 11); }
 function refreshMenu() {
@@ -5294,6 +6054,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 
 $('adBtn').addEventListener('click', () => {
   if (!G || G.reviveUsed) return;
+  const nm = monster().label;
+  $('adNote').textContent = `You get one extra life per run. The ${nm} gets pushed back and the obstacles around you are cleared.`;
   show('ad');
   const t0 = performance.now(), dur = 3000;
   const tick = () => {
@@ -5363,7 +6125,7 @@ function selectPilot(i) {
   $('pilotInfo').textContent = `${pilot().name} · ${pilot().ride}`;
   $('pilotName').textContent = pilot().name;
 }
-// Each pilot's drawn bounding box in art units, measured once from an offscreen render.
+// Each pilot's drawn bounding box in art units (solid body only, not glows), measured once offscreen.
 const boundsCache = {};
 function pilotBounds(pl) {
   if (boundsCache[pl.id]) return boundsCache[pl.id];
@@ -5374,7 +6136,7 @@ function pilotBounds(pl) {
   let x0 = N, y0 = N, x1 = 0, y1 = 0;
   try {
     const d = c.getImageData(0, 0, N, N).data;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (d[(y * N + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (d[(y * N + x) * 4 + 3] > 150) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   } catch {}
   const b = x1 > x0 ? [(x0 - N / 2) / K - 2, (y0 - N / 2) / K - 2, (x1 - N / 2) / K + 2, (y1 - N / 2) / K + 2] : [-28, -40, 28, 40];
   return (boundsCache[pl.id] = b);
@@ -5391,8 +6153,10 @@ function drawPilotThumb(cv, pl, t, big) {
   }
   // fitted to the pilot's own bounding box, so tall ears and hats are never cropped; the exhaust
   // trail runs off the bottom edge
-  const [bx0, by0, bx1, by1] = pilotBounds(pl), pad = big ? 0.86 : 0.8;
-  const k = Math.min(w * pad / (bx1 - bx0), h * pad / (by1 - by0));
+  // normalised so every pilot fills its card about the same: scaled by the size of its own bounding box
+  // (the geometric mean of width and height), then capped so nothing is cropped
+  const [bx0, by0, bx1, by1] = pilotBounds(pl), bw = bx1 - bx0, bh = by1 - by0, pad = big ? 0.9 : 0.86;
+  const k = Math.min(w * 0.7 / Math.sqrt(bw * bh), w * pad / bw, h * pad / bh);
   c.save(); c.translate(w / 2 - (bx0 + bx1) / 2 * k, h * 0.48 - (by0 + by1) / 2 * k + Math.sin(t * 2) * 1.5); c.scale(k, k);
   // exhaust trail
   for (const [x, y, exName = pl.exhaust] of pl.nozzles) {
@@ -5404,38 +6168,76 @@ function drawPilotThumb(cv, pl, t, big) {
   drawPilot(c, pl, pilotState(t, 0, true));
   c.restore();
 }
-// Menu key art: your monster alone, rearing up the shaft with its jaws wide open, lit from below.
+// Menu key art: the chosen pilot fleeing up the shaft on its rocket, the chosen monster surging up
+// below with its jaws wide, and the logo. All drawn live, in the game's own style.
 function drawKeyArt(cv, t) {
   const r = cv.getBoundingClientRect();
   if (r.width < 2) return;
   const d = Math.min(2, window.devicePixelRatio || 1), W = Math.round(r.width * d), Hh = Math.round(r.height * d);
   if (cv.width !== W || cv.height !== Hh) { cv.width = W; cv.height = Hh; }
-  const c = cv.getContext('2d'), w = r.width, h = r.height, mn = monster();
+  const c = cv.getContext('2d'), w = r.width, h = r.height, mn = monster(), pl = pilot();
   c.setTransform(d, 0, 0, d, 0, 0);
-  const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0c0709'); g.addColorStop(1, rgb(mn.haze.map(v => v * 0.22)));
+  const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#16201c'); g.addColorStop(0.55, '#0e0a0c'); g.addColorStop(1, rgb(mn.haze.map(v => v * 0.25)));
   c.fillStyle = g; c.fillRect(0, 0, w, h);
-  // shaft walls with a lit edge
-  for (const side of [0, 1]) {
-    c.beginPath(); const edge = side ? w : 0; c.moveTo(edge, 0);
-    for (let y = 0; y <= h; y += 8) c.lineTo(side ? w * (0.9 + Math.sin(y * 0.05 + t * 0.6 + side) * 0.02) : w * (0.1 + Math.sin(y * 0.045 + t * 0.6) * 0.02), y);
-    c.lineTo(edge, h); c.closePath(); c.fillStyle = '#1a1214'; c.fill(); c.strokeStyle = rgbaA(mn.haze, 0.7); c.lineWidth = 2.5; c.stroke();
-  }
-  // its glow, then the monster rearing up with its jaws wide open, lit from below
-  const k = Math.min(w * 0.82 / 440, h / 300), top = h * 0.08 + Math.sin(t * 2.4) * 3;
+  // god rays from the top
   c.save(); c.globalCompositeOperation = 'lighter';
-  const rg = c.createRadialGradient(w / 2, top + 140 * k, 4, w / 2, top + 140 * k, 260 * k);
-  rg.addColorStop(0, rgbaA(mn.haze, 0.35)); rg.addColorStop(1, rgbaA(mn.haze, 0));
+  for (let k = 0; k < 3; k++) { const x = w * (0.15 + 0.3 * k), rg = c.createLinearGradient(0, 0, 0, h * 0.8); rg.addColorStop(0, 'rgba(255,226,150,.1)'); rg.addColorStop(1, 'rgba(255,226,150,0)'); c.fillStyle = rg; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + w * 0.06, 0); c.lineTo(x + w * 0.2, h * 0.8); c.lineTo(x + w * 0.1, h * 0.8); c.closePath(); c.fill(); }
+  c.restore();
+  // shaft walls with a lit edge and a receding inner face
+  for (const side of [0, 1]) {
+    const edge = side ? w : 0, xAt = y => side ? w * (0.9 + Math.sin(y * 0.05 + t * 1.2 + side) * 0.02) : w * (0.1 + Math.sin(y * 0.045 + t * 1.2) * 0.02);
+    c.beginPath(); c.moveTo(edge, 0); for (let y = 0; y <= h; y += 8) c.lineTo(xAt(y), y); c.lineTo(edge, h); c.closePath();
+    c.fillStyle = '#2a1e1a'; c.fill();
+    c.beginPath(); for (let y = 0; y <= h; y += 8) c.lineTo(xAt(y) + (side ? -8 : 8), y); c.strokeStyle = 'rgba(120,90,60,.5)'; c.lineWidth = 10; c.stroke();
+    c.beginPath(); for (let y = 0; y <= h; y += 8) c.lineTo(xAt(y), y); c.strokeStyle = INK; c.lineWidth = 4; c.stroke(); c.strokeStyle = rgbaA(mn.haze, 0.8); c.lineWidth = 2; c.stroke();
+  }
+  // the monster below, jaws wide, lit from beneath
+  const k = Math.min(w * 0.9 / 460, h / 260), top = h * 0.5 + Math.sin(t * 2.4) * 3;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const rg = c.createRadialGradient(w / 2, top + 120 * k, 4, w / 2, top + 120 * k, 260 * k);
+  rg.addColorStop(0, rgbaA(mn.haze, 0.4)); rg.addColorStop(1, rgbaA(mn.haze, 0));
   c.fillStyle = rg; c.fillRect(0, 0, w, h); c.restore();
-  c.save(); c.translate(w / 2, top); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
+  c.save(); c.beginPath(); c.rect(0, top - 2, w, h); c.clip();
+  c.translate(w / 2, top); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
   mFlare = 0.5 + 0.5 * Math.max(0, Math.sin(t * 1.7));
-  mn.draw(c, { t, open: 0.85 + 0.15 * Math.sin(t * 3), look: Math.sin(t * 0.7) * 0.6 });
+  drawMonsterForm(c, mn, { t, open: 0.85 + 0.15 * Math.sin(t * 3), look: Math.sin(t * 0.7) * 0.6 });
   mFlare = 0;
   c.restore();
   c.save(); c.globalCompositeOperation = 'lighter';
-  const lg = c.createLinearGradient(0, h * 0.4, 0, h); lg.addColorStop(0, rgbaA(mn.haze, 0)); lg.addColorStop(1, rgbaA(mn.haze, 0.65));
-  c.fillStyle = lg; c.fillRect(0, h * 0.4, w, h * 0.6); c.restore();
-  // embers rising past it
-  for (let i = 0; i < 14; i++) { const p = (t * 0.25 + hash2(i, 5)) % 1; c.fillStyle = rgbaA(mn.haze.map(v => Math.min(255, v + 60) | 0), 0.8 * (1 - p)); c.beginPath(); c.arc(w * hash2(i, 6), h * (1 - p), 1.5 + hash2(i, 7) * 1.5, 0, TWO_PI); c.fill(); }
+  const lg = c.createLinearGradient(0, h * 0.7, 0, h); lg.addColorStop(0, rgbaA(mn.haze, 0)); lg.addColorStop(1, rgbaA(mn.haze, 0.5));
+  c.fillStyle = lg; c.fillRect(0, h * 0.7, w, h * 0.3); c.restore();
+  // embers and grit kicked up the shaft
+  for (let i = 0; i < 16; i++) { const p = (t * 0.3 + hash2(i, 5)) % 1; c.fillStyle = rgbaA(mn.haze.map(v => Math.min(255, v + 60) | 0), 0.8 * (1 - p)); c.beginPath(); c.arc(w * (0.12 + 0.76 * hash2(i, 6)), h * (1 - p), 1.4 + hash2(i, 7) * 1.6, 0, TWO_PI); c.fill(); }
+  // the pilot fleeing upward on its rocket, a fire cone and speed streaks behind it
+  const [bx0, by0, bx1, by1] = pilotBounds(pl), pk = Math.min(h * 0.36 / (by1 - by0), w * 0.24 / (bx1 - bx0));
+  const px = w * 0.68 + Math.sin(t * 1.6) * 6, py = h * 0.3 + Math.sin(t * 2.3) * 4, rot = 0.12 + Math.sin(t * 1.6) * 0.06;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+  for (let i = 0; i < 7; i++) { const yy = ((t * 260 + i * 41) % (h * 0.8)), xx = px + (hash2(i, 9) - 0.5) * 60; c.strokeStyle = `rgba(255,240,210,${0.25 * (1 - yy / (h * 0.8))})`; c.lineWidth = 1.5; c.beginPath(); c.moveTo(xx, py + 20 + yy); c.lineTo(xx, py + 44 + yy); c.stroke(); }
+  c.restore();
+  c.save(); c.translate(px, py); c.rotate(rot); c.scale(pk, pk);
+  c.globalCompositeOperation = 'lighter';
+  for (const [nx, ny] of pl.nozzles) for (const [lk, wk, col, a] of [[1, 1, [255, 60, 10], 0.75], [0.75, 0.62, [255, 130, 20], 0.55], [0.42, 0.32, [255, 215, 110], 0.6]]) {
+    const L = (40 + 6 * Math.sin(t * 40 + nx)) * lk * (pl.nozzles.length > 1 ? 0.7 : 1), W2 = 8 * wk;
+    const fg = c.createLinearGradient(0, ny, 0, ny + L); fg.addColorStop(0, rgbaA(col, a)); fg.addColorStop(1, rgbaA(col, 0));
+    c.fillStyle = fg; c.beginPath(); c.moveTo(nx - W2, ny); c.quadraticCurveTo(nx - W2 * 1.1, ny + L * 0.45, nx, ny + L); c.quadraticCurveTo(nx + W2 * 1.1, ny + L * 0.45, nx + W2, ny); c.closePath(); c.fill();
+  }
+  c.globalCompositeOperation = 'source-over';
+  pkMood = Math.sin(t * 0.9) > 0.3 ? 'panic' : ''; pkLookDown = 1;
+  drawPilot(c, pl, pilotState(t, 0, true));
+  pkMood = ''; pkLookDown = 0;
+  c.restore();
+  // the logo, top left
+  c.save(); c.translate(16, 14); c.rotate(-0.04); c.lineJoin = 'round';
+  const fs = Math.min(46, w * 0.13);
+  c.font = `400 ${fs * 0.62}px "Lilita One", sans-serif`; c.textBaseline = 'top';
+  c.strokeStyle = INK; c.lineWidth = 6; c.strokeText('Coconut', 2, 0); c.fillStyle = '#fff1d6'; c.fillText('Coconut', 2, 0);
+  c.font = `400 ${fs}px "Lilita One", sans-serif`;
+  const y2 = fs * 0.58;
+  c.fillStyle = '#7a2a10'; c.fillText('Rocket', 3, y2 + 5);
+  c.strokeStyle = INK; c.lineWidth = 8; c.strokeText('Rocket', 0, y2);
+  const tg = c.createLinearGradient(0, y2, 0, y2 + fs); tg.addColorStop(0, '#ffe08a'); tg.addColorStop(0.55, '#ffb238'); tg.addColorStop(1, '#f07a1a');
+  c.fillStyle = tg; c.fillText('Rocket', 0, y2);
+  c.restore();
 }
 $('openPilots').addEventListener('click', () => { buildPilots(); show('pilotScreen'); $('pilot-' + pilot().id).scrollIntoView({ block: 'center' }); });
 
@@ -5469,7 +6271,7 @@ function monsterPortrait(c, mn, t, w, h, k, top, open) {
   c.fillStyle = rg; c.fillRect(0, 0, w, h); c.restore();
   c.save(); c.translate(w / 2, top); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
   mFlare = 0.6;
-  mn.draw(c, { t, open, look: Math.sin(t * 0.7) * 0.5 });
+  drawMonsterForm(c, mn, { t, open, look: Math.sin(t * 0.7) * 0.5 });
   mFlare = 0;
   c.restore();
   // lava light welling up from under it
@@ -5481,7 +6283,8 @@ function monsterPortrait(c, mn, t, w, h, k, top, open) {
 function drawMonsterThumb(cv, mn, t, mini) {
   const c = cv.getContext('2d'), w = cv.width, h = cv.height;
   c.setTransform(1, 0, 0, 1, 0, 0);
-  monsterPortrait(c, mn, t, w, h, w / (mini ? 330 : 420), h * 0.1, 0.75 + 0.25 * Math.sin(t * 2.6));
+  const f = monForm(mn), wide = f.heads ? 1.5 : f.coil ? 1.25 : 1;   // pull back for the wider silhouettes
+  monsterPortrait(c, mn, t, w, h, w / ((mini ? 330 : 420) * wide), h * (f.heads ? 0.2 : 0.1), 0.75 + 0.25 * Math.sin(t * 2.6));
 }
 $('openMonsters').addEventListener('click', () => { buildMonsters(); show('monsterScreen'); $('monster-' + monster().id).scrollIntoView({ block: 'center' }); });
 $('monsterDone').addEventListener('click', () => { refreshMenu(); show('menu'); });

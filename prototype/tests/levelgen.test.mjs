@@ -10,7 +10,7 @@ const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELG
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
 const { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES };')();
 
-const HITBOX = 30;                          // the pilot's hitbox diameter (PLAYER_HIT 15 in index.html)
+const HITBOX = 32;                          // the pilot's hitbox diameter (PLAYER_HIT 16 in index.html)
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -59,19 +59,51 @@ for (const cfg of CONFIGS) {
     const tag = `seed ${seed} density ${cfg.density} intro ${cfg.intro}`;
     const intro = cfg.intro * 10;
 
+    // the launch: the first 100 m are hazard-free, and the first two thorns are short (at most ~35% of the
+    // shaft) and hug their wall, leaving the centre launch line clear, so just holding thrust survives
+    if (hz.length && hz[0].lo < 1000) fail('the first 100 m are hazard-free', `${tag}: ${hz[0].type} at ${(hz[0].lo / 10).toFixed(0)} m`);
+    for (const h of hz.filter(q => q.type === 'spike').slice(0, 2)) {
+      const [L, R] = level.walls(h.alt), tip = h.base + h.side * h.len;
+      if (h.len > 0.35 * (R - L)) fail('the first two thorns are short', `${tag} at ${(h.alt / 10).toFixed(0)} m: ${(100 * h.len / (R - L)).toFixed(0)}%`);
+      if (Math.abs(tip - WORLD_W / 2) < HITBOX / 2 + 20) fail('the first two thorns leave the launch line clear', `${tag} at ${(h.alt / 10).toFixed(0)} m`);
+    }
+
+    // zone signatures: lavafalls only in the magma core, basalt column segments only in the caves
+    for (const h of hz) {
+      if (h.type === 'lavafall' && zoneOf(h.alt) !== 2) fail('lavafalls only pour in the magma core', `${tag} at ${(h.alt / 10).toFixed(0)} m`);
+      if (h.type === 'boulder' && h.col !== (zoneOf(h.alt) === 1)) fail('basalt column segments only fall in the caves', `${tag} at ${(h.alt / 10).toFixed(0)} m`);
+    }
+    if (hz.some(h => h.type === 'lavafall')) seen.set('lavafall*', (seen.get('lavafall*') || 0) + 1);
+    // chase surges fire at chunk boundaries: those sit in clear shaft, never inside a hazard's band
+    const cm = level.chunkMarks.filter(m => m.alt < HEIGHT);
+    let hasCorridor = false;
+    for (let i = 1; i < cm.length; i++) if (cm[i].alt <= cm[i - 1].alt) fail('chunk boundaries climb', tag);
+    for (const m of cm) for (const h of hz) { const top = h.type === 'pend' ? h.aAlt : h.hi; if (m.alt > h.lo && m.alt < top) { fail('chunk boundaries sit in clear shaft', `${tag} at ${(m.alt / 10).toFixed(0)} m`); break; } }
+    // corridors (interlocking hazards) are followed by a real breather
+    for (let i = 0; i + 1 < cm.length; i++) {
+      if (!cm[i].corridor) continue;
+      hasCorridor = true;
+      const before = hz.filter(h => h.lo < cm[i + 1].alt && h.lo >= cm[i].alt);
+      if (!before.length) continue;
+      const top = Math.max(...before.map(h => h.hi));
+      if (cm[i + 1].alt - top < RULES.breather[1] * RULES.corridorBreather - 1) fail('corridors are followed by a long breather', `${tag} at ${(top / 10).toFixed(0)} m: ${(cm[i + 1].alt - top).toFixed(0)}`);
+    }
+
+    if (hasCorridor) zoneMix.corridors = (zoneMix.corridors || 0) + 1;
+
     // determinism: the same seed always gives the same shaft
     if (k < 20) {
       const again = [], againFruit = []; createLevel(seed, cfg).fill(HEIGHT, again, againFruit);
       if (JSON.stringify(again) !== JSON.stringify(hz) || JSON.stringify(againFruit) !== JSON.stringify(fruit)) fail('same seed gives the same layout', tag);
     }
-    // calm chambers are empty on purpose, so they don't count toward the height that needs obstacles
+    // calm chambers (and the clear launch) are empty on purpose, so they don't count toward the height that needs obstacles
     const calmH = level.chambers.reduce((n, c) => n + Math.max(0, Math.min(c.a1, HEIGHT) - c.a0), 0);
-    if (hz.length < (HEIGHT - calmH) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
+    if (hz.length < (HEIGHT - calmH - RULES.clearStart) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
     if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
 
     // no monotonous runs: after the thorns-only opening, never more than RULES.maxRun of a type in a row
-    const openEnd = intro * RULES.intro.staticOnly;
+    const openEnd = intro > 0 ? RULES.clearStart + intro * RULES.intro.staticOnly : 0;
     for (let i = RULES.maxRun; i < hz.length; i++) {
       if (hz[i - RULES.maxRun].lo < openEnd + 400) continue;   // (the swap is decided a step before placement)
       if (hz.slice(i - RULES.maxRun, i + 1).every(q => q.type === hz[i].type)) fail('no long runs of one hazard type', `${tag} at ${(hz[i].lo / 10).toFixed(0)} m: ${hz[i].type}`);
@@ -90,7 +122,7 @@ for (const cfg of CONFIGS) {
 
     // release beats: fruit arcs sweep across empty stretches, never through a hazard's band
     const arcs = fruit.filter(f => f.arc);
-    if (arcs.length < 14) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
+    if (arcs.length < RULES.arc.n) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
     for (const f of arcs) for (const h of hz) {
       const top = h.type === 'pend' ? h.aAlt : h.hi, lo = h.type === 'boulder' ? h.alt - 40 : h.lo;
       if (f.alt > lo - 10 && f.alt < top + 10) { fail('fruit arcs stay clear of hazards', `${tag} at ${(f.alt / 10).toFixed(0)} m: ${h.type}`); break; }
@@ -158,6 +190,8 @@ for (const cfg of CONFIGS) {
           if (Math.hypot(f.x - h.cx, f.alt - h.alt) < h.len + h.br + PAD) fail('fruit never sits in a fire wheel', fw);
         } else if (h.type === 'spider') {
           if (Math.abs(f.x - h.x) < h.r + PAD) fail('fruit never sits in a spider column', fw);
+        } else if (h.type === 'lavafall') {
+          if (Math.abs(f.x - h.x) < h.hw + PAD) fail('fruit never sits in a lavafall', fw);
         }
       }
     }
@@ -239,7 +273,7 @@ for (const cfg of CONFIGS) {
       }
       if (h.type === 'firebar') {
         const [L, R] = tightest(level, h.lo, h.hi);
-        const clear = Math.min(h.cx - h.len - L, R - (h.cx + h.len));
+        const clear = Math.min(h.cx - h.len - L, R - (h.cx + h.len)) - h.br * 0.85;   // from the flame's edge
         if (clear < HITBOX + 8) fail('fire wheel leaves room at the walls', `${where}: ${clear.toFixed(0)} units`);
       }
       if (h.type === 'bat') {
@@ -300,6 +334,12 @@ for (const cfg of CONFIGS) {
         }
         if (Math.abs(warnT / 2 - RULES.gate.warn) > 0.02) fail('gate countdown lasts RULES.gate.warn', `${where}: ${(warnT / 2).toFixed(2)} s`);
       }
+      if (h.type === 'lavafall') {
+        const [L, R] = tightest(level, h.lo, h.hi);
+        const lane = h.side > 0 ? R - (h.x + h.hw) : (h.x - h.hw) - L;
+        if (lane < RULES.minLane - 0.5) fail('lavafall leaves an open lane', `${where}: ${lane.toFixed(0)} units`);
+        if (h.x - h.hw < L || h.x + h.hw > R) fail('lavafalls never pour into a wall', where);
+      }
       if (h.type === 'boulder') {
         const [L, R] = tightest(level, h.alt - RULES.boulderFall, h.alt + 100);
         if (h.x - h.r < L || h.x + h.r > R) fail('boulders never fall through a wall', where);
@@ -332,6 +372,9 @@ if (zoneMix.varied < zoneMix.variedOf * 0.9) fail('every zone mixes several haza
 for (const t of ['bat', 'pend', 'spike', 'spider', 'geyser', 'crusher', 'boulder', 'firebar', 'gate']) {
   if ((seen.get(t) || 0) < checked * 0.6) fail('every hazard type shows up in most shafts', `${t} in ${seen.get(t) || 0} of ${checked}`);
 }
+
+if ((seen.get('lavafall*') || 0) < checked * 0.55) fail('lavafalls show up in most shafts', `${seen.get('lavafall*') || 0} of ${checked}`);
+if ((zoneMix.corridors || 0) < checked * 0.55) fail('corridor stretches show up in most shafts', `${zoneMix.corridors || 0} of ${checked}`);
 
 if (failures.size) {
   console.log(`FAILED: ${failures.size} rule(s) broken across ${checked} shafts`);
