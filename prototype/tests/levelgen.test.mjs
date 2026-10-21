@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf, batPos, BAT_PAT } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, zoneOf, batPos, BAT_PAT };')();
+const { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, gateK, gateExt, gateWarn, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES };')();
 
-const HITBOX = 26;
+const HITBOX = 30;                          // the pilot's hitbox diameter (PLAYER_HIT 15 in index.html)
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -22,6 +22,7 @@ const CONFIGS = [
 
 const failures = new Map();
 let checked = 0;
+const zoneMix = { carried: 0, carriedOf: 0, varied: 0, variedOf: 0 };
 const seen = new Map();                     // how many shafts each hazard type shows up in
 function fail(rule, detail) {
   if (!failures.has(rule)) failures.set(rule, { count: 0, example: detail });
@@ -33,6 +34,20 @@ function tightest(level, lo, hi) {
   for (let a = lo; a <= hi; a += 2) { const [l, r] = level.walls(a); L = Math.max(L, l); R = Math.min(R, r); }
   return [L, R];
 }
+
+// static checks on the authored data
+// lanes stay clearly wider than the (bigger) hitbox
+if (RULES.minLane < 3 * HITBOX) fail('open lanes are at least three hitboxes wide', `${RULES.minLane} vs hitbox ${HITBOX}`);
+// pacing: every chunk mixes hazard types (only the thorns-only openers are exempt), and most follow
+// the tension / release (fruit arc) / spike rhythm
+for (const c of CHUNKS) {
+  const types = new Set(c.steps.map(([t]) => t).filter(t => t !== 'arc'));
+  if (types.size < 2 && !(c.to != null && c.to <= 2500)) fail('every chunk mixes hazard types', c.name);
+}
+if (CHUNKS.filter(c => c.steps.some(([t]) => t === 'arc')).length < CHUNKS.length * 0.6) fail('most chunks have a fruit-arc release beat', '');
+for (const sp of SET_PIECES) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('set pieces mix hazard types', sp.name);
+// the zone reveal (1.5 s, default top climb speed 440 plus a 0.45 s boost at +22%) never reaches a hazard
+if (RULES.landmarkAfter < 1.5 * 440 + 0.45 * 0.22 * 440) fail('the zone reveal plays out over empty shaft', `${RULES.landmarkAfter}`);
 
 for (const cfg of CONFIGS) {
   for (let k = 0; k < SEEDS; k++) {
@@ -54,6 +69,40 @@ for (const cfg of CONFIGS) {
     if (hz.length < (HEIGHT - calmH) / 1000) fail('shaft has a reasonable number of obstacles', `${tag}: only ${hz.length}`);
     if (fruit.length < HEIGHT / 500) fail('shaft has fruit trails to collect', `${tag}: only ${fruit.length}`);
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
+
+    // no monotonous runs: after the thorns-only opening, never more than RULES.maxRun of a type in a row
+    const openEnd = intro * RULES.intro.staticOnly;
+    for (let i = RULES.maxRun; i < hz.length; i++) {
+      if (hz[i - RULES.maxRun].lo < openEnd + 400) continue;   // (the swap is decided a step before placement)
+      if (hz.slice(i - RULES.maxRun, i + 1).every(q => q.type === hz[i].type)) fail('no long runs of one hazard type', `${tag} at ${(hz[i].lo / 10).toFixed(0)} m: ${hz[i].type}`);
+    }
+    // earlier zones' hazards carry on into later zones, and every zone mixes several hazard types
+    const JUNGLE = ['spike', 'pend', 'spider', 'bat'], CAVES = ['crusher', 'gate', 'geyser'];
+    const inZone = (a, b) => new Set(hz.filter(h => h.lo >= a && h.hi <= b).map(h => h.type));
+    const caves = inZone(RULES.zones[0] + 1000, RULES.zones[1]), core = inZone(RULES.zones[1] + 1000, HEIGHT);
+    zoneMix.carriedOf += 2;
+    if (JUNGLE.some(t => caves.has(t))) zoneMix.carried++;
+    if (JUNGLE.some(t => core.has(t)) && CAVES.some(t => core.has(t))) zoneMix.carried++;
+    // (the jungle's stretch after the easy start is short, so three types there; four in the caves and the core)
+    const jungleFrom = Math.max(intro, 1500), sets = [[caves, 4], [core, 4]];
+    if (RULES.zones[0] - jungleFrom >= 3000) sets.push([inZone(jungleFrom, RULES.zones[0]), 3]);
+    for (const [set, n] of sets) { zoneMix.variedOf++; if (set.size >= n) zoneMix.varied++; }
+
+    // release beats: fruit arcs sweep across empty stretches, never through a hazard's band
+    const arcs = fruit.filter(f => f.arc);
+    if (arcs.length < 14) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
+    for (const f of arcs) for (const h of hz) {
+      const top = h.type === 'pend' ? h.aAlt : h.hi, lo = h.type === 'boulder' ? h.alt - 40 : h.lo;
+      if (f.alt > lo - 10 && f.alt < top + 10) { fail('fruit arcs stay clear of hazards', `${tag} at ${(f.alt / 10).toFixed(0)} m: ${h.type}`); break; }
+    }
+    // racing lines: fruit beside a wall hazard threads close to its reach (RULES.fruitHug), not the lane's middle
+    let near = 0, beside = 0;
+    for (const f of fruit) for (const h of hz) {
+      if ((h.type !== 'spike' && h.type !== 'geyser') || f.alt < h.lo || f.alt > h.hi) continue;
+      beside++;
+      if (Math.abs(f.x - (h.base + h.side * (h.len + RULES.fruitHug))) < 8) near++;
+    }
+    if (beside > 10 && near / beside < 0.7) fail('fruit racing lines hug the hazards', `${tag}: ${near} of ${beside}`);
 
     // from 150 m on, holding the centre line without steering must stop working: a fair share of
     // hazards (centred spiders and fire wheels, offset crushers, bats sweeping the middle) cover it
@@ -240,6 +289,16 @@ for (const cfg of CONFIGS) {
         if (Math.min(R, h.rb - eR + 2) - Math.max(L, h.lb + eL - 2) < RULES.minLane * 1.5) fail('open gates leave a wide lane', where);
         const below = hz[i - 1];
         if (below && h.lo - below.hi < RULES.gate.room - 0.5) fail('gates leave room to wait below', `${where}: ${(h.lo - below.hi).toFixed(0)} units`);
+        // a fixed, readable rhythm, and a countdown that starts RULES.gate.warn before the slabs move
+        if (h.period !== RULES.gate.period) fail('every gate runs on the same fixed period', `${where}: ${h.period}`);
+        let warnT = 0, prevK = gateK(h, -step);
+        for (let t = 0; t < h.period * 2; t += step) {
+          const k = gateK(h, t), w = gateWarn(h, t);
+          if ((k > prevK + 1e-9 || k >= 1) && w < 1) { fail('a gate never closes without its countdown', where); break; }
+          if (w > 0 && w < 1) warnT += step;
+          prevK = k;
+        }
+        if (Math.abs(warnT / 2 - RULES.gate.warn) > 0.02) fail('gate countdown lasts RULES.gate.warn', `${where}: ${(warnT / 2).toFixed(2)} s`);
       }
       if (h.type === 'boulder') {
         const [L, R] = tightest(level, h.alt - RULES.boulderFall, h.alt + 100);
@@ -268,6 +327,8 @@ for (const cfg of CONFIGS) {
   }
 }
 
+if (zoneMix.carried < zoneMix.carriedOf * 0.9) fail('earlier zone hazards carry on into later zones', `${zoneMix.carried} of ${zoneMix.carriedOf}`);
+if (zoneMix.varied < zoneMix.variedOf * 0.9) fail('every zone mixes several hazard types', `${zoneMix.varied} of ${zoneMix.variedOf}`);
 for (const t of ['bat', 'pend', 'spike', 'spider', 'geyser', 'crusher', 'boulder', 'firebar', 'gate']) {
   if ((seen.get(t) || 0) < checked * 0.6) fail('every hazard type shows up in most shafts', `${t} in ${seen.get(t) || 0} of ${checked}`);
 }
