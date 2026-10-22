@@ -1474,7 +1474,7 @@ const GRAB_STYLE = {
   giant:   { type: 'arm',      hand: 'grbfist',   rr: 34, rm: 28, r0: 21, r1: 15.5, rx: 116, ry: 70, rest: -84, lean: 12 },   // Grumbelly: huge periwinkle ogre arms, a biceps and an elbow at the wall, an iron cuff on the forearm, a meaty hand hooked over the rock's edge
   hornet:  { type: 'leg',      hand: 'hqtarsus',  rr: 11, rm: 8.5, r0: 8, r1: 6.5, rx: 98,  ry: 86, rest: -14, bendY: 24 },   // Queen Buzzsaw: a hornet leg, russet femur to a sharp knee at the wall, a gold bristled shin up the rock, a five-bead foot
   crab:    { type: 'pincer',   hand: 'kcclaw',    rr: 30, rm: 23, r0: 17, r1: 12.5, rx: 118, ry: 66, rest: -30, bendY: 40 },   // Crackatoa: a huge spiny shell arm to a coral carpus at the wall, a crusher claw that gapes on the wind-up and snaps shut on the rock
-  shadow:  { type: 'smoke',    hand: 'smokeclaw', rr: 26, rm: 17, r0: 13, r1: 8,  rx: 104, ry: 76, rest: -26, wig: 4 },
+  shadow:  { type: 'smoke',    hand: 'duskclaw',  rr: 28, rm: 19, r0: 14, r1: 9,  rx: 108, ry: 74, rest: -30, lean: 12, wig: 7, puff: 0.2 },   // Duskmaw: billowing smoke arms out of its mane, a puffy hand with long glowing moonstone claws
 };
 // jointed limbs bend at the bend (an elbow or a knee); soft ones sweep through it in one curve
 const GRAB_JOINTED = new Set(['arm', 'paw', 'pad', 'leg', 'talon', 'wing', 'pincer', 'fin']);
@@ -1612,9 +1612,15 @@ function grabHand(kind, grip, t, wind = 0) {
       s(19, 9, 23, 19, 3.6, 'c');
       s(5, 4, -1, 10, 2.2, 'x'); s(19, 2, 25, 6, 2.2, 'x');
       break;
-    case 'smokeclaw': {   // three long bright claws on a hand of smoke
-      s(10, 0, 11, 8, 10, 'k');
-      for (let k = 0; k < 3; k++) { const u = 3 + k * 8; s(u + 1, 9, u, 19, 3.6, 'k'); s(u, 19, u - 5 - g * 2, 31, 2.4, 'c'); }
+    case 'duskclaw': {   // Duskmaw's hand of smoke: a puffy palm, three smoky fingers and long glowing moonstone claws hooked
+      // over the wall's edge into the rock (deeper as it grips); winding up, the fingers fan wide and the claws flex
+      const sp = wind;
+      s(11, 0, 11, 8, 10.5, 'k');
+      for (let k = 0; k < 3; k++) {
+        const u = 3.5 + k * 7.6 + (k - 1) * 2 * sp, kv = 15.5 - Math.abs(k - 1) * 1.2, ku = u + (k - 1) * 1.5 * sp, cu = ku - 2.5 - 1.5 * g + 2 * sp, tv = 30 - Math.abs(k - 1) * 2.5;
+        s(u + 1, 8, ku, kv, 4.8, 'k'); s(ku, kv, cu, kv + 8.5, 3.4, 'c'); s(cu, kv + 8.5, cu - 3.5 - 2.5 * g + 2.5 * sp, tv, 2.3, 'c');
+      }
+      s(19.5, 2, 23, 10, 3.8, 'k'); s(23, 10, 21.5 + sp, 17, 2.6, 'c');
       break;
     }
     case 'hook':      // a spider's foot: a hairy tarsus ending in a hooked claw stabbed into the rock, a spur behind it
@@ -1761,6 +1767,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
     else if (ty === 'leg') w = 7 * smooth(0.25, 0.55, u) * (1 - smooth(0.55, 0.95, u)) * climb;                   // the shin's joint kinks out
     else if (ty === 'fin') r = lerp(st.r0, st.r1, Math.pow(u, 0.8));                                                // the fin blade tapers to its tip
     else if (jointed) w = 5 * Math.sin(Math.PI * u) * climb;                                                      // a forearm bulges a little
+    if (st.puff) r *= 1 + st.puff * Math.sin(y * 0.16 + t * 3.2 + d * 1.3) * smooth(0, 0.15, u) * (1 - smooth(0.75, 1, u));   // (opt-in: smoke billowing up it toward the hand)
     const rc = Math.max(r, prevR); prevR = r;   // (its capsule's radius)
     // (measured from the wall's most receded point over the capsule's height, so its whole outline stays in the band)
     let wr = wx(y); for (let yy = y - rc - 6; yy <= y + rc + 6; yy += 3) { const v = wx(yy); wr = side ? Math.max(wr, v) : Math.min(wr, v); }
@@ -1817,6 +1824,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
     else if (ty === 'goo') r = lerp(st.rr, st.r0, Math.pow(u, 0.8)) * (1 + 0.12 * Math.sin(i * 1.7 + t * 2));
     else if (jointed) r = u < 0.7 ? lerp(st.rr, st.rm, smooth(0, 0.7, u)) : lerp(st.rm, st.r0, smooth(0.7, 1, u));
     else r = lerp(st.rr, st.r0, Math.pow(u, 0.8));
+    if (st.puff) r *= 1 + st.puff * Math.sin(u * 9 - t * 3.2 + d * 1.3) * smooth(0, 0.25, u) * (1 - smooth(0.8, 1, u));   // (opt-in: smoke billowing out along it)
     const x = a * rootX + m1 * P1[0] + m2 * P2[0] + z * b[0];
     up.push([i === N ? x : clamp(x, scr[0] + r + 0.5, scr[1] - r - 0.5), a * rootY + m1 * P1[1] + m2 * P2[1] + z * b[1], r]);   // (never off the screen's sides)
   }
@@ -20960,6 +20968,329 @@ function gkGlintKC(c, x, y, r, a) {
   c.beginPath(); c.moveTo(x - r, y); c.quadraticCurveTo(x, y, x, y - r * 0.3); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r * 0.3); c.quadraticCurveTo(x, y, x - r, y); c.fill();
   c.restore();
 }
+// ---------- Duskmaw ('shadow'): a living night sky ----------
+// A big smoke cat made of night. Billowing indigo smoke puffs, each rim-lit by a drifting aurora (mint, sky, violet,
+// pink), gold lantern eyes with cat slits, a crescent moon glowing on its brow, smoke ears that curl at the tips,
+// glowing aurora whiskers, and a crescent-moon grin that opens on a glowing sunset throat. Inside its body is a
+// starry night with a constellation; it swallows the pilot whole and keeps it there as a brand-new star.
+// Borderless: every form is built from shading. Where an edge is needed it is a deeper indigo, never black or ink.
+// Art units: x = 0 is the shaft's centre, y = 0 the catch line (nothing is ever drawn above it), y down.
+const DSK = {
+  smoke: ['#a6bcff', '#6884e6', '#3a4fb4', '#232f78', '#151b50', '#0b0e30'],   // lit puff → deep core (index = tone)
+  aur: [[128, 255, 214], [104, 206, 255], [186, 146, 255], [255, 132, 210]],    // the aurora rim: mint, sky, violet, pink
+  eye: ['#fffef4', '#fff2a2', '#ffc844', '#ff8e22', '#c8520e'],                 // lantern eyes: white-hot core → amber rim
+  pupil: '#1c0c3e',
+  muzzle: ['#c8d2ff', '#93a4f2', '#6274d2', '#40509e'],                         // the moonlit muzzle round the mouth
+  throat: ['#ffe8a6', '#ff9c5c', '#ef3e72', '#7c1454', '#2c0836'],              // the sunset glowing in its throat
+  tongue: ['#ffc6de', '#ff709e', '#c42262'],
+  tooth: ['#ffffff', '#f1f0ff', '#c4c0f6', '#8f8ad8'],                          // moonstone teeth and claws
+  moon: ['#fffde8', '#ffe894', '#f0b040'],
+  star: [255, 250, 228], glow: [255, 208, 112], warm: [255, 120, 150],
+};
+const dskH = (i, s) => hash2(i * 7 + 3, s + 400);   // (deterministic per-detail randomness)
+// The aurora colour at u (cyclic over mint → sky → violet → pink), as [r, g, b]
+function dskAurRGB(u) {
+  const A = DSK.aur, v = pmod(u, 1) * 4, i = Math.floor(v), f = v - i, a = A[i % 4], b = A[(i + 1) % 4];
+  return [a[0] + (b[0] - a[0]) * f | 0, a[1] + (b[1] - a[1]) * f | 0, a[2] + (b[2] - a[2]) * f | 0];
+}
+// The aurora at a point: its hue drifts across the creature from side to side and slowly over time
+const dskAurAt = (x, y, t, a = 1) => rgbaA(dskAurRGB(0.5 + x / 520 - y / 1400 + 0.06 * Math.sin(t * 0.5)), a);
+// One ball of smoke: lit from above, rolling into a deep indigo core, the aurora catching its top edge and a warm
+// bounce from below. tone 0 is the brightest set. o: { rim (alpha), warm (alpha), t }
+function dskPuff(c, x, y, r, tone = 1, o = {}) {
+  if (r < 1) return;
+  const S = DSK.smoke, k = clamp(tone | 0, 0, 2);
+  // (most of the ball sits in its mid tone; only a soft lit cap up top and a deeper roll underneath)
+  const g = c.createRadialGradient(x - r * 0.22, y - r * 0.5, r * 0.04, x, y - r * 0.05, r * 1.08);
+  g.addColorStop(0, S[k]); g.addColorStop(0.34, S[k + 1]); g.addColorStop(0.7, S[k + 2]); g.addColorStop(1, S[k + 3]);
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  const rim = o.rim ?? 0.6, warm = o.warm ?? 0.2;
+  if (rim > 0 || warm > 0) {
+    c.save(); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.clip();
+    if (rim > 0) { c.strokeStyle = dskAurAt(x, y, o.t || 0, rim); c.lineWidth = r * 0.13; c.beginPath(); c.arc(x, y + r * 0.1, r, Math.PI * (1.08 + (o.rs || 0)), Math.PI * (1.92 + (o.rs || 0))); c.stroke(); }
+    if (warm > 0) { c.strokeStyle = rgbaA(DSK.warm, warm); c.lineWidth = r * 0.14; c.beginPath(); c.arc(x, y - r * 0.1, r, Math.PI * 0.2, Math.PI * 0.8); c.stroke(); }
+    c.restore();
+  }
+}
+// Stroke the parts of an arc (a0..a1, sampled n times) where ok(angle) holds, each unbroken run as one stroke whose
+// ends taper off (so a run never ends in a hard stub)
+function dskArcRuns(c, x, y, r, a0, a1, n, ok) {
+  const st = (a1 - a0) / n; let run = null;
+  const flush = () => { if (!run) return; const [b0, b1] = run; run = null; if (b1 - b0 < st * 1.5) return; c.beginPath(); c.arc(x, y, r, b0 + st * 0.2, b1 - st * 0.2); c.stroke(); };
+  c.lineCap = 'round';
+  for (let i = 0; i < n; i++) { const s0 = a0 + i * st, s1 = s0 + st; if (ok(s0 + st / 2)) { if (run) run[1] = s1; else run = [s0, s1]; } else flush(); }
+  flush();
+}
+// A billowing mass of smoke: puffs [x, y, r] fused into one body (a single fill), its lobes suggested inside by soft
+// lighter caps and faint creases where one puff rolls over the next, the aurora catching only the silhouette's top
+// edges and a warm bounce only along its underside. o: { tone (0..2), cx, cy, R (the fill's light centre and reach),
+// rim, warm, crease, t }
+function dskBillow(c, puffs, tone = 1, o = {}) {
+  const S = DSK.smoke, k = clamp(tone | 0, 0, 2), t = o.t || 0;
+  const path = c2 => { c2.beginPath(); for (const [x, y, r] of puffs) { c2.moveTo(x + r, y); c2.arc(x, y, r, 0, TWO_PI); } };
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y, r] of puffs) { x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r); y0 = Math.min(y0, y - r); y1 = Math.max(y1, y + r); }
+  const cx = o.cx ?? (x0 + x1) / 2, cy = o.cy ?? y0, R = o.R ?? Math.max(x1 - x0, y1 - y0) * 0.75;
+  path(c); c.fillStyle = pkRG(c, cx, cy, R, [S[k], S[k + 1], S[k + 2], S[k + 3]]); c.fill();
+  const inside = (px, py, j, m = 0.5) => puffs.some(([x, y, r], i) => i !== j && (px - x) ** 2 + (py - y) ** 2 < (r - m) ** 2);
+  c.save(); path(c); c.clip();
+  // soft lighter caps on each lobe, and a faint crease along the part of its edge that lies over another puff
+  const order = puffs.map((p, i) => i).sort((a, b) => puffs[b][1] - puffs[a][1]);
+  for (const j of order) {
+    const [x, y, r] = puffs[j];
+    const g = c.createRadialGradient(x - r * 0.18, y - r * 0.42, 0, x - r * 0.1, y - r * 0.3, r * 0.85);
+    g.addColorStop(0, rgbaA(hexRGB(S[k]), 0.42)); g.addColorStop(1, rgbaA(hexRGB(S[k]), 0));
+    c.fillStyle = g; c.beginPath(); c.arc(x - r * 0.1, y - r * 0.3, r * 0.85, 0, TWO_PI); c.fill();
+    if ((o.crease ?? 0.2) > 0) {
+      c.strokeStyle = rgbaA(hexRGB(S[5]), o.crease ?? 0.2); c.lineWidth = Math.max(1.5, r * 0.06);
+      dskArcRuns(c, x, y, r, Math.PI * 0.15, Math.PI * 0.85, 18, am => { const px = x + Math.cos(am) * r, py = y + Math.sin(am) * r; return inside(px, py, j, -1) && !puffs.some(([qx, qy, qr], q) => q !== j && qy < y && (px - qx) ** 2 + (py - qy) ** 2 < qr * qr); });
+    }
+  }
+  // the warm bounce along the underside and the aurora along the top, only where the edge is the silhouette
+  for (const [kind, al] of [['warm', o.warm ?? 0.25], ['rim', o.rim ?? 0.75]]) {
+    if (al <= 0) continue;
+    puffs.forEach(([x, y, r], j) => {
+      const top = kind === 'rim', lw = r * (top ? 0.16 : 0.18);
+      c.lineWidth = lw; c.strokeStyle = top ? dskAurAt(x, y, t, al) : rgbaA(DSK.warm, al);
+      dskArcRuns(c, x, y + (top ? lw * 0.45 : -lw * 0.45), r, top ? Math.PI * 1.04 : Math.PI * 0.12, top ? Math.PI * 1.96 : Math.PI * 0.88, 24, am => !inside(x + Math.cos(am) * r, y + Math.sin(am) * r, j, -2));
+    });
+  }
+  c.restore();
+  return path;
+}
+// a soft round glow (additive) that never reaches above the catch line
+function dskGlow(c, x, y, r, col, a) { if (a <= 0.005) return; mAGlow(c, x, y, Math.min(r, Math.max(1, y - 1)), col, a); }
+// A four-point twinkle star (its arms flick with tw 0..1), with a soft glow round it
+function dskStar(c, x, y, r, a = 1, rot = 0) {
+  if (a <= 0.01 || r < 0.3) return;
+  dskGlow(c, x, y, r * 2.6, DSK.star, 0.35 * a);
+  c.save(); c.translate(x, y); c.rotate(rot); c.fillStyle = rgbaA(DSK.star, Math.min(1, a));
+  c.beginPath();
+  for (let i = 0; i < 8; i++) { const ang = i * Math.PI / 4, rr = i % 2 ? r * 0.26 : r; i ? c.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr) : c.moveTo(rr, 0); }
+  c.closePath(); c.fill(); c.restore();
+}
+// A crescent: the disc of radius r at (x, y) minus a disc pushed `cut` × r toward `dir` (sampled, so it has no seams)
+function dskCrescentPath(x, y, r, dir, cut = 0.5, r2k = 0.88) {
+  const ix = x + Math.cos(dir) * r * cut, iy = y + Math.sin(dir) * r * cut, r2 = r * r2k, P = [], Q = [];
+  for (let i = 0; i <= 64; i++) { const a = dir + i / 64 * TWO_PI, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (Math.hypot(px - ix, py - iy) >= r2) P.push([px, py]); }
+  for (let i = 0; i <= 64; i++) { const a = dir + i / 64 * TWO_PI, px = ix + Math.cos(a) * r2, py = iy + Math.sin(a) * r2; if (Math.hypot(px - x, py - y) <= r) Q.push([px, py]); }
+  const pts = [...P, ...Q.reverse()];
+  return c2 => { c2.beginPath(); pts.forEach(([px, py], i) => i ? c2.lineTo(px, py) : c2.moveTo(px, py)); c2.closePath(); };
+}
+// A curved moonstone tooth or claw from the base b0..b1 to its tip, bowed sideways by `bow`: a pale blade, a lavender
+// shade down one side, a white glint down the other (no outline)
+function dskFang(c, b0, b1, tip, bow = 0, o = {}) {
+  const T = DSK.tooth, mx = (b0[0] + b1[0]) / 2, my = (b0[1] + b1[1]) / 2, dx = tip[0] - mx, dy = tip[1] - my, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+  const cA = [lerp(b0[0], tip[0], 0.55) + nx * bow, lerp(b0[1], tip[1], 0.55) + ny * bow], cB = [lerp(b1[0], tip[0], 0.55) + nx * bow, lerp(b1[1], tip[1], 0.55) + ny * bow];
+  const path = c2 => { c2.beginPath(); c2.moveTo(b0[0], b0[1]); c2.quadraticCurveTo(cA[0], cA[1], tip[0], tip[1]); c2.quadraticCurveTo(cB[0], cB[1], b1[0], b1[1]); c2.closePath(); };
+  path(c); c.fillStyle = pkLG(c, mx, my, tip[0], tip[1], o.cols || [T[2], T[1], T[0]]); c.fill();
+  // the shaded half (the side away from the light) and a glint
+  c.save(); path(c); c.clip();
+  c.fillStyle = o.shade || 'rgba(120,112,214,.5)'; c.beginPath(); c.moveTo(b1[0], b1[1]); c.quadraticCurveTo(cB[0], cB[1], tip[0], tip[1]); c.quadraticCurveTo(lerp(mx, tip[0], 0.5) + nx * bow * 0.5, lerp(my, tip[1], 0.5) + ny * bow * 0.5, mx, my); c.closePath(); c.fill();
+  c.restore();
+  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = Math.max(1, L * 0.05); c.beginPath(); c.moveTo(lerp(b0[0], mx, 0.4), lerp(b0[1], my, 0.4)); c.quadraticCurveTo(lerp(cA[0], mx, 0.3), lerp(cA[1], my, 0.3), lerp(tip[0], mx, 0.25), lerp(tip[1], my, 0.25)); c.stroke();
+}
+// A tapered wisp of smoke along pts (w0 → 0), fading out toward its tip, its edge kissed by the aurora
+function dskWisp(c, pts, w0, col, a, t, rim = 0.5) {
+  const n = pts.length - 1, L = [], R = [];
+  for (let i = 0; i <= n; i++) {
+    const p = pts[i], q = pts[Math.min(n, i + 1)], o = pts[Math.max(0, i - 1)], tx = q[0] - o[0], ty = q[1] - o[1], l = Math.hypot(tx, ty) || 1, w = w0 * (1 - i / n) ** 0.9;
+    L.push([p[0] - ty / l * w, p[1] + tx / l * w]); R.push([p[0] + ty / l * w, p[1] - tx / l * w]);
+  }
+  const path = c2 => { c2.beginPath(); L.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); for (let i = R.length - 1; i >= 0; i--) c2.lineTo(R[i][0], R[i][1]); c2.closePath(); };
+  c.save(); c.globalAlpha *= a;
+  path(c); c.fillStyle = pkLG(c, pts[0][0], pts[0][1], pts[n][0], pts[n][1], [col, rgbaA(hexRGB(col), 0)]); c.fill();
+  if (rim > 0) { c.strokeStyle = dskAurAt(pts[0][0], pts[0][1], t, rim); c.lineWidth = 1.6; c.beginPath(); L.slice(0, -1).forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
+  c.restore();
+}
+// A loose spiral of lighter smoke (the curls cartoon smoke is drawn with)
+function dskCurl(c, x, y, r, a0, turns, col, w) {
+  c.strokeStyle = col; c.lineWidth = w; c.beginPath();
+  for (let i = 0; i <= 28; i++) { const u = i / 28, a = a0 + u * turns * TWO_PI, rr = r * (1 - 0.75 * u); const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr; i ? c.lineTo(px, py) : c.moveTo(px, py); }
+  c.stroke();
+}
+// Points every `step` along a chain of [x, y, r], starting `start` along it (negative starts before its first point,
+// clamped onto it): [x, y, r, angle, index] (for features that drift smoothly along a limb)
+function dskAlong(pts, step, start = 0) {
+  const out = []; let acc = 0, k = 0, next = start;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0, r0] = pts[i - 1], [x1, y1, r1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0), a = Math.atan2(y1 - y0, x1 - x0);
+    while (next <= acc + L) { const u = L ? clamp((next - acc) / L, 0, 1) : 0; out.push([lerp(x0, x1, u), lerp(y0, y1, u), lerp(r0, r1, u), a, k++]); next += step; }
+    acc += L;
+  }
+  return out;
+}
+// The grab tell (while it winds up a grab it glares, snarls and flattens an ear toward that wall): { d, k }
+function dskGrabTell(inBite) {
+  if (inBite || typeof G === 'undefined' || !G || !G.grab || G.state !== 'play') return { d: 0, k: 0 };
+  return { d: G.grab.side, k: G.grab.t < GRAB.wind ? smooth(0, 0.22, G.grab.t) : 1 - smooth(GRAB.wind, GRAB.wind + 0.45, G.grab.t) };
+}
+// The bite's beats, from its clock bt (seconds after the catch, -1 in the chase):
+//   0 → 0.3 jaws flung wide round the pilot; 0.3 → 0.4 they slam shut; 0.42 → 1.0 it chews, cheeks stuffed with
+//   smoke, puffs escaping the corners; 1.0 → 1.16 the gulp (head stretches, eyes squeeze shut, a glowing lump drops down
+//   its throat); 1.16 → 1.5 the new star flares in its belly; then a smug lick of the lips.
+function dskBeats(bt) {
+  const inBite = bt >= 0, chewOn = inBite && bt >= 0.4 && bt < 1.02;
+  const chomp = chewOn ? Math.max(0, Math.sin((bt - 0.42) * 15)) * (1 - smooth(0.9, 1.02, bt)) : 0;
+  return {
+    inBite, chewOn, chomp,
+    stuffed: inBite ? smooth(0.38, 0.46, bt) * (1 - smooth(0.98, 1.1, bt)) : 0,
+    gulp: inBite ? smooth(0.98, 1.06, bt) * (1 - smooth(1.14, 1.26, bt)) : 0,
+    lump: inBite ? smooth(1.0, 1.18, bt) : 0,
+    fed: inBite ? smooth(1.14, 1.3, bt) : 0,
+    lick: inBite ? smooth(1.3, 1.4, bt) * (1 - smooth(1.7, 1.85, bt)) : 0,
+  };
+}
+// One eye: a glowing lantern (white-hot core to an amber rim) with a cat's slit pupil, set in a soft dark socket,
+// under a smoke lid that slants toward the face's centre (angrier on the lunge) and drops on a blink. No outline: the
+// lid edge is a deeper indigo. o: { look, lid 0..1 (1 shut), slant, wide, slit (pupil width 0..1), glow, d, happy }
+function dskEye(c, x, y, rx, ry, o = {}) {
+  const d = o.d ?? (x < 0 ? 1 : -1), E = DSK.eye, wide = o.wide ?? 1;
+  rx *= wide; ry *= wide;
+  mEye(x, y, rx);
+  mShade(c, x, y + ry * 0.15, rx * 1.55, ry * 1.6, 0.6);
+  dskGlow(c, x, y, rx * 2.1, DSK.glow, 0.32 * (o.glow ?? 1));
+  c.save(); c.translate(x, y);
+  // the almond: rounder on the outside, a little pointed toward the nose
+  const eye = c2 => { c2.beginPath(); c2.moveTo(d * rx * 1.04, ry * 0.12); c2.bezierCurveTo(d * rx * 0.9, -ry * 0.95, -d * rx * 0.8, -ry * 1.05, -d * rx, -ry * 0.05); c2.bezierCurveTo(-d * rx * 0.86, ry * 1.0, d * rx * 0.86, ry * 1.04, d * rx * 1.04, ry * 0.12); c2.closePath(); };
+  eye(c); c.fillStyle = pkRG(c, -rx * 0.1, -ry * 0.2, rx * 1.2, [E[0], E[1], E[2], E[3], E[4]]); c.fill();
+  c.save(); eye(c); c.clip();
+  const lk = clamp(o.look || 0, -1, 1), ix = lk * rx * 0.34, iy = ry * 0.04;
+  // an orange iris ring round the slit, the slit itself (dilating round when it is hungry), two glints
+  pkE(c, ix, iy, rx * 0.56, ry * 0.86, pkRG(c, ix, iy, rx * 0.6, ['rgba(255,170,40,0)', 'rgba(255,170,40,0)', 'rgba(230,100,20,.55)', 'rgba(170,50,10,.0)']), 0);
+  const sw = rx * lerp(0.12, 0.42, clamp(o.slit ?? 0.2, 0, 1)), sh = ry * lerp(0.92, 0.6, clamp(o.slit ?? 0.2, 0, 1));
+  c.fillStyle = DSK.pupil; c.beginPath(); c.moveTo(ix, iy - sh); c.bezierCurveTo(ix + sw * 1.3, iy - sh * 0.5, ix + sw * 1.3, iy + sh * 0.5, ix, iy + sh); c.bezierCurveTo(ix - sw * 1.3, iy + sh * 0.5, ix - sw * 1.3, iy - sh * 0.5, ix, iy - sh); c.fill();
+  pkE(c, ix - rx * 0.3, iy - ry * 0.36, rx * 0.17, ry * 0.15, 'rgba(255,255,255,.95)', 0);
+  pkE(c, ix + rx * 0.22, iy + ry * 0.34, rx * 0.07, ry * 0.07, 'rgba(255,255,255,.75)', 0);
+  // the lid's soft shadow, then the lid (the head's own smoke), slanting down toward the nose
+  const lid = clamp(o.lid || 0, 0, 1), sl = (o.slant ?? 0.4) * ry * (1 - lid);
+  const ly = lerp(-ry * 1.1, ry * 1.12, lid), edge = lx => ly + sl * (lx * -d / rx) + (o.happy || 0) * ry * 0.5 * (1 - (lx / rx) ** 2);
+  c.fillStyle = 'rgba(40,20,90,.35)'; c.beginPath(); c.moveTo(-rx - 3, -ry - 6); c.lineTo(rx + 3, -ry - 6); for (let i = 8; i >= 0; i--) { const lx = -rx - 3 + (2 * rx + 6) * i / 8; c.lineTo(lx, edge(lx) + ry * 0.22); } c.closePath(); c.fill();
+  if (ly > -ry * 1.08 || sl > 0.5) {
+    c.fillStyle = pkLG(c, 0, -ry, 0, ly + ry * 0.3, [DSK.smoke[2], DSK.smoke[3]]);
+    c.beginPath(); c.moveTo(-rx - 3, -ry - 6); c.lineTo(rx + 3, -ry - 6); for (let i = 8; i >= 0; i--) { const lx = -rx - 3 + (2 * rx + 6) * i / 8; c.lineTo(lx, edge(lx)); } c.closePath(); c.fill();
+    c.strokeStyle = DSK.smoke[5]; c.lineWidth = 3; c.beginPath(); for (let i = 0; i <= 8; i++) { const lx = -rx - 3 + (2 * rx + 6) * i / 8; i ? c.lineTo(lx, edge(lx)) : c.moveTo(lx, edge(lx)); } c.stroke();
+    c.strokeStyle = 'rgba(190,196,255,.45)'; c.lineWidth = 1.6; c.beginPath(); for (let i = 1; i < 8; i++) { const lx = -rx + 2 * rx * i / 8; i > 1 ? c.lineTo(lx, edge(lx) - 4) : c.moveTo(lx, edge(lx) - 4); } c.stroke();
+  }
+  // a lower lid pushing up (the smug squint after it eats)
+  if (o.low > 0) { c.fillStyle = pkLG(c, 0, ry, 0, ry * 0.2, [DSK.smoke[3], DSK.smoke[2]]); c.beginPath(); c.ellipse(0, ry * (1.75 - 0.9 * o.low), rx * 1.3, ry * 0.95, 0, 0, TWO_PI); c.fill(); }
+  c.restore();
+  c.restore();
+}
+// A smoke brow: a tapered wisp over the eye, thick and low at its inner end, curling up at its outer end into a little
+// curl of smoke. ang: how hard it slopes down toward the nose.
+function dskBrow(c, x, y, w, ang, t, d) {
+  // a spine from the inner end (low, by the nose) arching up and out, the ribbon tapering along it
+  const ix = x + d * w * 0.55, iy = y + w * ang * 0.5, ox = x - d * w * 0.6, oy = y - w * ang * 0.5 - 6, mx = x - d * w * 0.05, my = y - w * 0.16 - Math.abs(ang) * 4;
+  const th = w * 0.16, L = [], R = [];
+  for (let i = 0; i <= 14; i++) {
+    const u = i / 14, px = (1 - u) ** 2 * ix + 2 * u * (1 - u) * mx + u * u * ox, py = (1 - u) ** 2 * iy + 2 * u * (1 - u) * my + u * u * oy;
+    const tx = 2 * (1 - u) * (mx - ix) + 2 * u * (ox - mx), ty = 2 * (1 - u) * (my - iy) + 2 * u * (oy - my), l = Math.hypot(tx, ty) || 1, ww = th * (1 - 0.72 * u) * (u < 0.1 ? 0.75 + 2.5 * u : 1);
+    L.push([px + ty / l * ww * d, py - tx / l * ww * d]); R.push([px - ty / l * ww * d, py + tx / l * ww * d]);
+  }
+  const path = c2 => { c2.beginPath(); c2.moveTo(L[0][0], L[0][1]); L.forEach(([px, py]) => c2.lineTo(px, py)); for (let i = R.length - 1; i >= 0; i--) c2.lineTo(R[i][0], R[i][1]); c2.closePath(); };
+  path(c); c.fillStyle = pkLG(c, x, y - th * 1.5, x, y + th, [DSK.smoke[2], DSK.smoke[4], DSK.smoke[5]]); c.fill();
+  c.save(); path(c); c.clip(); c.translate(0, 3); path(c); c.strokeStyle = dskAurAt(x, y, t, 0.85); c.lineWidth = 3.6; c.stroke(); c.restore();
+  dskCurl(c, ox + d * 2, oy - 4, th * 0.75, d > 0 ? 0.3 : Math.PI - 0.3, -d * 0.85, 'rgba(176,184,255,.75)', 2.4);
+}
+// One smoke ear (d = 1 right, -1 left), a tall cat's ear swept out and up from the top of the skull, its inside glowing
+// with the aurora and its tip curling over into a little puff of smoke. a: how far it swings back (flattened ears).
+function dskEar(c, d, a, t, glow) {
+  c.save(); c.translate(d * 82, 92); c.rotate(d * (0.12 + a)); c.scale(d, 1);
+  // (tip at about (60, -84) from the base: it never reaches above the catch line, see the swing limits in head)
+  const ear = c2 => { c2.beginPath(); c2.moveTo(-46, 14); c2.bezierCurveTo(-40, -30, 18, -70, 58, -86); c2.bezierCurveTo(66, -50, 66, -12, 50, 26); c2.quadraticCurveTo(0, 6, -46, 14); c2.closePath(); };
+  ear(c); c.fillStyle = pkLG(c, 0, -86, 0, 26, [DSK.smoke[1], DSK.smoke[2], DSK.smoke[4]]); c.fill();
+  c.save(); ear(c); c.clip();
+  // the inner ear: a deep hollow lit from within by the aurora
+  const inner = c2 => { c2.beginPath(); c2.moveTo(-26, 12); c2.bezierCurveTo(-18, -22, 22, -54, 48, -68); c2.bezierCurveTo(52, -40, 48, -10, 36, 16); c2.quadraticCurveTo(4, 4, -26, 12); c2.closePath(); };
+  inner(c); c.fillStyle = pkLG(c, 0, 16, 30, -60, [DSK.smoke[5], rgbaA(dskAurRGB(0.62 + 0.05 * Math.sin(t)), 0.85), rgbaA(dskAurRGB(0.9), 0.9)]); c.fill();
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = rgbaA(dskAurRGB(0.75), 0.25 * glow); inner(c); c.fill(); c.restore();
+  // tufts of smoke fur in the ear
+  c.strokeStyle = 'rgba(200,204,255,.55)'; c.lineWidth = 2;
+  for (let k = 0; k < 3; k++) { c.beginPath(); c.moveTo(-14 + k * 14, 14); c.quadraticCurveTo(-4 + k * 14, -6, 8 + k * 16, -18 - k * 6); c.stroke(); }
+  // the aurora along its outer edge
+  c.translate(-3, 4); ear(c); c.strokeStyle = dskAurAt(d * 120, 40, t, 0.75); c.lineWidth = 4; c.stroke();
+  c.restore();
+  // the tip curls over into a puff of smoke
+  const cx = 56, cy = -76, w = Math.sin(t * 2.2 + d) * 2;
+  dskPuff(c, cx + 4 + w, cy + 6, 11, 1, { rim: 0.9, warm: 0, t });
+  dskCurl(c, cx + 4 + w, cy + 6, 7, 0.4, 0.9, 'rgba(210,214,255,.7)', 1.6);
+  c.restore();
+}
+// Its wall limbs: billowing smoke arms (exactly the rig's capsules: a deeper indigo edge, the smoke body shaded
+// toward the light, puffs rolling along it toward the claws, stars caught inside it, an aurora rim down its lit side),
+// rooted in the smoke mane beside the head. Winding up, the stars flare, a glowing core charges along it and the
+// claws fan wide. The hand: a puffy palm and long glowing moonstone claws hooked into the rock.
+function dskLimb(c, rig, P, layer, t) {
+  if (layer !== 'mid' && layer !== 'front') return;
+  const S = DSK.smoke, d = rig.d, w = rig.wind || 0, ch = layer === 'mid' ? rig.up : armChain(rig), n = litSide(ch, d);
+  capStroke(c, ch, S[5], r => 2 * r);                              // the edge: deeper indigo, exactly the capsules
+  capStroke(c, ch, S[4], r => 2 * r - 3);
+  c.save(); cbCapPath(c, [ch], [], 1.5); c.clip();
+  // the smoke inside: lobes rolling along it from the claws back into the mane (each lit on its upper, shaft-facing
+  // side, rolling into shadow, a faint crease where it tucks under the next), drifting toward the hand
+  const R = chainEvery(ch, 8), L = R.length, flow = t * 1.8, lobes = dskAlong(ch, 17, pmod(t * 26, 17) - 17);
+  for (let j = lobes.length - 1; j >= 0; j--) {
+    const [x, y, r, a, i] = lobes[j], nx = -Math.sin(a), ny = Math.cos(a), lit = nx * -d + ny * -1 > 0 ? 1 : -1, ox = nx * lit, oy = ny * lit, ux = Math.cos(a), uy = Math.sin(a);
+    const rr = r * (0.95 + 0.12 * Math.sin(i * 1.7)), px = x - ox * r * 0.12, py = y - oy * r * 0.12;
+    const g = c.createRadialGradient(px + ox * rr * 0.45 - ux * rr * 0.1, py + oy * rr * 0.45 - uy * rr * 0.1, rr * 0.05, px, py, rr * 1.05);
+    g.addColorStop(0, mixHex(S[2], S[1], 0.35 + 0.4 * w)); g.addColorStop(0.45, S[2]); g.addColorStop(0.8, S[3]); g.addColorStop(1, S[4]);
+    c.fillStyle = g; c.beginPath(); c.arc(px, py, rr, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(10,12,44,.35)'; c.lineWidth = 2; c.beginPath(); c.arc(px, py, rr * 0.98, a - Math.PI / 2 - 0.9, a - Math.PI / 2 + 0.9); c.stroke();   // (the crease on the side toward the hand)
+  }
+  for (let i = 3; i < L - 2; i += 6) { const [x, y, r, a] = R[i]; dskCurl(c, x, y, r * 0.55, flow * d + i, 0.8, 'rgba(176,190,255,.4)', 1.8); }
+  // stars caught in the smoke (twinkling; they flare as it winds up)
+  R.forEach(([x, y, r, a], i) => {
+    if (i % 4 !== 2) return;
+    const nx = -Math.sin(a), ny = Math.cos(a), h = dskH(i, d + 5) - 0.5, tw = 0.5 + 0.5 * Math.sin(t * (2 + dskH(i, 6)) + i * 1.7);
+    dskStar(c, x + nx * r * h * 0.9, y + ny * r * h * 0.9, (1.6 + 1.8 * dskH(i, 7)) * (1 + 0.8 * w), 0.4 + 0.5 * tw + 0.4 * w, t * 0.3 + i);
+  });
+  if (w > 0) {   // the wind-up: a glowing core charges along it toward the claws
+    c.save(); c.globalCompositeOperation = 'lighter';
+    capStroke(c, ch, rgbaA(DSK.aur[(d > 0 ? 3 : 0)], 0.32 * w), r => r * 1.1);
+    capStroke(c, ch, rgbaA(DSK.star, 0.35 * w * (0.7 + 0.3 * Math.sin(t * 34))), r => r * 0.4);
+    c.restore();
+  }
+  c.restore();
+  // the aurora rim down its lit side
+  c.lineWidth = 2.2 + 1.4 * w;
+  for (let i = 1; i < ch.length; i++) {
+    const [x0, y0, r0] = ch[i - 1], [x1, y1, r1] = ch[i];
+    c.strokeStyle = dskAurAt(x1 * 1.3 - 260, y1, t, 0.85 + 0.15 * w); c.beginPath();
+    c.moveTo(x0 + n[i - 1][0] * (r0 - 2.2), y0 + n[i - 1][1] * (r0 - 2.2)); c.lineTo(x1 + n[i][0] * (r1 - 2.2), y1 + n[i][1] * (r1 - 2.2)); c.stroke();
+  }
+  if (layer === 'mid') {   // it billows out of the mane: its root end sinks into shadow
+    const k = Math.max(2, Math.round(rig.up.length * 0.35));
+    for (let i = 1; i < k; i++) capStroke(c, [rig.up[i - 1], rig.up[i]], `rgba(14,12,44,${(0.6 * (1 - i / k)).toFixed(3)})`, r => 2 * r - 2);
+  } else dskHand(c, rig, t);
+}
+// The hand: smoke palm and fingers (the edge a deeper indigo, shaded like the arm), then claws as glowing moonstone
+// blades, each run of claw capsules one tapering hook kept inside its capsules
+function dskHand(c, rig, t) {
+  const S = DSK.smoke, H0 = rig.hand, d = rig.d, w = rig.wind || 0;
+  const soft = H0.filter(p => p[5] !== 'c'), hook = H0.filter(p => p[5] === 'c');
+  for (const [col, wf, dx, dy] of [[S[4], r => 2 * r, 0, 0], [S[3], r => 2 * r - 3.4, 0, 0], [S[2], r => 1.5 * r - 3, -0.18, -0.22], [mixHex(S[2], S[1], 0.6), r => 0.6 * r, -0.36, -0.4]])
+    for (const [x0, y0, x1, y1, r] of soft) { c.strokeStyle = col; c.lineWidth = Math.max(0.5, wf(r)); c.beginPath(); c.moveTo(x0 - d * dx * r, y0 + dy * r); c.lineTo(x1 - d * dx * r + 0.01, y1 + dy * r); c.stroke(); }
+  // stars in the palm, an aurora glint across its knuckles
+  const pm = H0[0];
+  dskStar(c, pm[0] + d * 3, pm[1] + 3, 2.4 * (1 + w), 0.6 + 0.4 * Math.sin(t * 3) + 0.4 * w, t);
+  c.strokeStyle = dskAurAt(pm[0] * 1.3 - 260, pm[1], t, 0.8); c.lineWidth = 2.2; c.beginPath(); c.arc(pm[0], pm[1], Math.max(1, pm[4] - 3), Math.PI * 1.1, Math.PI * 1.7); c.stroke();
+  // the claws
+  const runs = []; for (const p of hook) { const last = runs[runs.length - 1]; if (last && Math.hypot(last[last.length - 1][2] - p[0], last[last.length - 1][3] - p[1]) < 0.5) last.push(p); else runs.push([p]); }
+  for (const run of runs) {
+    const pts = [[run[0][0], run[0][1], run[0][4]], ...run.map(p => [p[2], p[3], p[4]])], nn = pts.length - 1, L = [], Rr = [];
+    for (let i = 0; i <= nn; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(nn, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1, nx = -ty / l, ny = tx / l;
+      const ww = i === nn ? 0 : (Math.min(pts[i][2], pts[Math.max(0, i - 1)][2]) - 0.6) * (i === 0 ? 1 : 0.9);
+      L.push([pts[i][0] + nx * ww, pts[i][1] + ny * ww]); Rr.push([pts[i][0] - nx * ww, pts[i][1] - ny * ww]);
+    }
+    const poly = [...L, ...Rr.slice(0, -1).reverse()], [bx, by] = pts[0], [ex, ey] = pts[nn];
+    dskGlow(c, ex, ey, 9 + 8 * w, DSK.glow, 0.35 + 0.4 * w);
+    c.beginPath(); poly.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+    c.fillStyle = pkLG(c, bx, by, ex, ey, [DSK.tooth[3], DSK.tooth[1], DSK.moon[0]]); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.3; c.beginPath(); L.slice(0, -1).forEach(([x, y], i) => { const q = pts[i]; const px = lerp(x, q[0], 0.4), py = lerp(y, q[1], 0.4); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
+  }
+}
 const MONSTERS = [
   { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], biteDrop: 0.8, halfW: 262,
     // its ringed body: armoured segments shrinking away down the shaft in a slow S, a glass bristle tuft on each side
@@ -22492,52 +22823,248 @@ const MONSTERS = [
     // the domed shell with its sprouting coconut, the eyes on stalks, the coral doors over the mouth
     head(c, m) { kcHead(c, m); },
   },
-  { id: 'shadow', name: 'Shadow beast', label: 'shadow beast', haze: [60, 255, 220], v3: true, mouth: [0, 196, 120, 50],
+  { id: 'shadow', name: 'Duskmaw', label: 'duskmaw', haze: [118, 136, 255], v3: true, hazeK: 0.5, mouth: [0, 214, 96, 58], biteDrop: 0.5, halfW: 250, fit: 0.88,
+    limbArt: dskLimb, ownHands: true,
+    // The body (seen in the bite's pull-back): a great billowing chest of smoke puffs, rim-lit by the aurora, tapering
+    // into a genie's curling smoke tail; a window of starry night glows in its chest (nebulae, a little constellation,
+    // twinkling stars) and that is where the pilot ends up: a glowing lump drops down its throat and flares into a new
+    // star. Wisps of smoke peel off its flanks. No column, no edge: puffs all the way round, fading into the fog.
     body(c, m) {
-      // a column of churning smoke under the head, wisps peeling off its sides, teal motes drifting up through it; the
-      // swallowed pilot's glow sinks down it and fades
-      const T = m.t, gy = mGulpY(m, 300, 900);
-      const sm = (y0, y1, w0, w1, k) => { const L = [], R = []; for (let i = 0; i <= 18; i++) { const u = i / 18, y = lerp(y0, y1, u), w = lerp(w0, w1, u) * (1 + 0.1 * Math.sin(y * 0.02 - T * 2 + k)); L.push([-w + Math.sin(y * 0.01 + T + k) * 20, y]); R.push([w + Math.sin(y * 0.011 - T * 1.2 + k) * 20, y]); } return mASm([...R, ...L.reverse()]); };
-      mAShape(c, sm(200, 1200, 210, 50, 0), pkLG(c, 0, 200, 0, 1100, ['#2a3a42', '#121a20', '#04080a']), { rim: 'rgba(90,255,225,.55)', rw: 7, lw: 4.5 });
-      for (let k = 0; k < 8; k++) { const p = (T * 0.25 + k / 8) % 1, d = k % 2 ? 1 : -1, x = d * (180 + p * 50), y = 300 + k * 100 - p * 80; c.fillStyle = `rgba(30,44,52,${0.8 * (1 - p)})`; c.beginPath(); c.ellipse(x, y, 30 * (1 - p * 0.5), 18, d * 0.5, 0, TWO_PI); c.fill(); }
-      c.save(); c.globalCompositeOperation = 'lighter';
-      for (let k = 0; k < 16; k++) { const p = (T * 0.3 + hash2(k, 111)) % 1, x = (hash2(k, 112) - 0.5) * 300, y = 1100 - p * 860; c.fillStyle = `rgba(60,255,220,${0.7 * Math.sin(p * Math.PI)})`; c.beginPath(); c.arc(x, y, 2 + hash2(k, 113) * 2.5, 0, TWO_PI); c.fill(); }
-      if (gy != null) mAGlow(c, 0, gy, 110, [60, 255, 220], 0.55 * (1 - smooth(700, 900, gy)));
+      const t = m.t, bt = m.bite, B = dskBeats(bt), S = DSK.smoke, br = Math.sin(t * 2.4);
+      if (B.inBite) c.scale(1 - 0.1 * smooth(0, 0.14, bt), 1);   // (drawn in a little as it lunges, so all of it stays on screen in the bite's zoom)
+      // the tail: a genie's tail of smoke sweeping down and curling away under the chest (into the fog): one tapering
+      // swirl, rim-lit down its outer side, smoke curls drifting along it
+      const sw = Math.sin(t * 1.1) * 16, spine = [[0, 560], [30 + sw * 0.2, 650], [96 + sw * 0.5, 730], [132 + sw * 0.8, 820], [112 + sw, 900], [50 + sw * 0.8, 946], [-16 + sw * 0.5, 942], [-58 + sw * 0.3, 906], [-56, 864], [-26, 846]];
+      const sp = mSmooth(spine, 40), TL = [], TR = [];
+      sp.forEach((p, i) => { const q = sp[Math.min(sp.length - 1, i + 1)], o = sp[Math.max(0, i - 1)], tx = q[0] - o[0], ty = q[1] - o[1], l = Math.hypot(tx, ty) || 1, u = i / (sp.length - 1), w = 150 * (1 - u) ** 0.85 * (1 + 0.06 * Math.sin(u * 14 - t * 2.4)) + 2;
+        TL.push([p[0] - ty / l * w, p[1] + tx / l * w]); TR.push([p[0] + ty / l * w, p[1] - tx / l * w]); });
+      const tailP = c2 => { c2.beginPath(); TL.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); for (let i = TR.length - 1; i >= 0; i--) c2.lineTo(TR[i][0], TR[i][1]); c2.closePath(); };
+      tailP(c); c.fillStyle = pkLG(c, -120, 600, 160, 900, [S[3], S[4], S[5]]); c.fill();
+      c.save(); tailP(c); c.clip();
+      c.strokeStyle = dskAurAt(120, 800, t, 0.6); c.lineWidth = 7; c.beginPath(); TR.slice(4, -3).forEach(([x, y], i) => i ? c.lineTo(x - 3, y) : c.moveTo(x - 3, y)); c.stroke();
+      c.strokeStyle = 'rgba(150,156,240,.4)'; c.lineWidth = 9; c.beginPath(); sp.slice(2, -6).forEach(([x, y], i) => { const q = TR[i + 2]; const px = lerp(x, q[0], 0.45), py = lerp(y, q[1], 0.45); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
+      for (let k = 0; k < 4; k++) { const p = sp[6 + k * 7]; dskCurl(c, p[0], p[1], 20 - k * 3, t * 0.5 + k * 1.4, 0.8, 'rgba(170,176,255,.35)', 2.2); }
+      for (let k = 0; k < 5; k++) { const p = sp[4 + k * 6]; dskStar(c, p[0] + (dskH(k, 30) - 0.5) * 50, p[1], 2.2 + 1.2 * Math.sin(t * 2 + k), 0.7, k); }
+      c.restore();
+      // wisps of smoke peeling off its flanks and drifting away
+      for (const d of [-1, 1]) for (let k = 0; k < 3; k++) {
+        const y0 = 330 + k * 92, u = (t * 0.35 + k * 0.33 + (d > 0 ? 0.15 : 0)) % 1, x0 = d * (200 - k * 22), len = 70 + 40 * u;
+        const pts = []; for (let i = 0; i <= 8; i++) { const v = i / 8; pts.push([x0 + d * v * len, y0 + v * 40 + Math.sin(v * 4 + t * 2 + k) * 10 * v - v * v * 60 * u]); }
+        dskWisp(c, pts, 16, S[3], 0.75 * Math.sin(Math.PI * u), t, 0.6);
+      }
+      // the chest: a soft base shape, then big uneven puffs billowing round its edge (its silhouette), near over far
+      const half = [[0, 236], [130, 238], [204, 276], [228, 352], [218, 440], [190, 516], [146, 580], [96, 624], [40, 640]];
+      const torso = mASm(mAMirror(half.map(([x, y]) => [x * (1 + 0.012 * br), y])));
+      torso(c); c.fillStyle = pkLG(c, 0, 240, 0, 640, [S[2], S[3], S[4]]); c.fill();
+      const edge = [];
+      for (const d of [-1, 1]) for (let k = 0; k < 10; k++) {
+        const u = k / 9, p = mAt(half, 0.1 + u * 0.86 + (dskH(k, d + 40) - 0.5) * 0.03), r = (58 - 20 * u) * (0.8 + 0.4 * dskH(k, d + 41)), wob = Math.sin(t * 1.6 + k * 1.3 + d) * 4;
+        edge.push([d * (p[0] - r * 0.55 + wob), p[1] + Math.cos(t * 1.3 + k) * 3, r * (1 + 0.035 * Math.sin(t * 2.1 + k * 1.7 + d))]);
+      }
+      for (const [x, y, r] of [[-120, 290, 56], [120, 296, 52], [-60, 300, 44], [62, 304, 46]]) edge.push([x + Math.sin(t * 1.4 + x) * 3, y, r]);   // (the shoulders under the mane)
+      dskBillow(c, edge, 1, { cx: -40, cy: 250, R: 460, rim: 0.7, warm: 0.22, t });
+      // the night in its chest: deep space with soft edges, nebulae, the constellation, stars
+      const wy = 446, wx = 0, wrx = 138, wry = 150;
+      c.save(); c.translate(wx, wy); c.scale(1, wry / wrx);
+      const sg = c.createRadialGradient(0, 0, 0, 0, 0, wrx);
+      sg.addColorStop(0, 'rgba(10,8,40,1)'); sg.addColorStop(0.62, 'rgba(14,12,52,.96)'); sg.addColorStop(0.86, 'rgba(26,24,80,.6)'); sg.addColorStop(1, 'rgba(40,40,110,0)');
+      c.fillStyle = sg; c.beginPath(); c.arc(0, 0, wrx, 0, TWO_PI); c.fill();
+      c.restore();
+      c.save(); c.beginPath(); c.ellipse(wx, wy, wrx * 0.92, wry * 0.92, 0, 0, TWO_PI); c.clip();
+      dskGlow(c, wx - 46, wy - 40, 96, [150, 100, 255], 0.3 + 0.06 * br);
+      dskGlow(c, wx + 54, wy + 46, 80, [255, 110, 190], 0.24);
+      dskGlow(c, wx - 18, wy + 76, 64, [110, 255, 210], 0.16);
+      dskGlow(c, wx + 30, wy - 70, 54, [104, 206, 255], 0.16);
+      // a milky band of tiny stars swirling across it
+      for (let i = 0; i < 70; i++) {
+        const a = dskH(i, 1) * TWO_PI, rr = Math.sqrt(dskH(i, 2)), px = wx + Math.cos(a) * rr * wrx * 0.88, py = wy + Math.sin(a) * rr * wry * 0.88;
+        const tw = 0.45 + 0.55 * Math.sin(t * (1.5 + 2 * dskH(i, 3)) + i);
+        c.fillStyle = rgbaA(DSK.star, 0.35 + 0.5 * tw * dskH(i, 4)); c.beginPath(); c.arc(px, py, 0.8 + 1.4 * dskH(i, 5), 0, TWO_PI); c.fill();
+      }
+      // the constellation: a little crescent moon of stars, joined by faint gold lines
+      const con = [[-62, -62], [-82, -12], [-70, 42], [-30, 80], [22, 88], [-22, 40], [-36, -6], [-30, -50]].map(([x, y]) => [wx + x * 0.95, wy + y * 0.9]);
+      c.strokeStyle = `rgba(255,226,150,${0.32 + 0.1 * Math.sin(t * 1.2)})`; c.lineWidth = 1.6; c.setLineDash([5, 5]); c.beginPath(); con.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); c.setLineDash([]);
+      con.forEach(([x, y], i) => dskStar(c, x, y, 4 + 2.5 * dskH(i, 9) + Math.sin(t * 2.6 + i * 1.9) * 1.2, 0.85, t * 0.2 + i));
+      for (let i = 0; i < 5; i++) { const px = wx + 30 + (dskH(i, 11) - 0.3) * 120, py = wy + (dskH(i, 12) - 0.5) * 220; dskStar(c, px, py, 5 + 3 * Math.sin(t * 1.7 + i * 2.3), 0.9, i); }
+      // the swallowed pilot: a glowing lump drops down its throat, then flares into a brand-new star in its chest
+      const sx2 = wx + 34, sy2 = wy - 6;
+      if (B.fed > 0) {
+        mInBelly(c, sx2, sy2 + 4, 0.42, 0.9 * B.fed, Math.sin(t * 1.3) * 0.25);
+        const fl = smooth(1.14, 1.24, bt) * (1 - smooth(1.3, 1.9, bt));
+        dskGlow(c, sx2, sy2, 70 + 40 * fl, DSK.glow, 0.25 + 0.5 * fl);
+        dskStar(c, sx2, sy2, 22 + 36 * fl, 0.8 + 0.2 * fl, t * 0.6);
+        if (fl > 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(DSK.glow, 0.7 * fl); c.lineWidth = 4; c.beginPath(); c.arc(sx2, sy2, 30 + 90 * smooth(1.14, 1.7, bt), 0, TWO_PI); c.stroke(); c.restore(); }
+      }
+      c.restore();
+      if (B.lump > 0 && B.lump < 1) {
+        const ly = lerp(262, sy2, B.lump), lx = lerp(0, sx2, B.lump), r = 30 * (1 - 0.3 * B.lump);
+        dskGlow(c, lx, ly, r * 3, DSK.glow, 0.55);
+        dskPuff(c, lx, ly, r, 0, { rim: 1, warm: 0, t });
+        dskStar(c, lx, ly, r * 0.7, 0.9, t * 3);
+      }
+      // smoke curls across the chest
+      c.save(); torso(c); c.clip();
+      for (let k = 0; k < 4; k++) { const d = k % 2 ? 1 : -1, x = d * (150 - (k >> 1) * 40), y = 300 + k * 70; dskCurl(c, x, y, 26, t * 0.4 * d + k, 0.85, 'rgba(176,182,255,.35)', 2.4); }
       c.restore();
     },
     head(c, m) {
-      // a beast made of smoke: two swept horns, wisps curling off its edges, slanted teal eyes, and a huge glowing grin of
-      // jagged teeth. On the bite the grin splits impossibly wide; then it shuts into a smirk and the smoke ripples,
-      // teal sparks fizzing
-      const T = m.t, ct = mChewT(m), ce = mChewE(ct);
-      let J = mJ(m, 0.45); if (ct >= 0) J = 0;
-      const rip = ct >= 0 ? ce * Math.sin(ct * 9) : 0;
-      // horns (behind)
-      for (const d of [-1, 1]) mAShape(c, mASm([[d * 80, 70], [d * 120, 30], [d * 180, 8], [d * 214, 14], [d * 170, 40], [d * 140, 90]]), pkLG(c, d * 80, 0, d * 214, 0, ['#2a3a42', '#0a1014']), { rim: 'rgba(90,255,225,.6)', rw: 4, lw: 4.5 });
-      // the smoky head: a ragged outline that churns
-      const pts = []; for (let k = 0; k < 28; k++) { const a = k / 28 * TWO_PI, rr = (1 + 0.07 * Math.sin(k * 3.1 + T * 3) + 0.05 * rip * Math.sin(k * 2)) * (k % 2 ? 1 : 1.06), x = Math.cos(a) * 196 * rr, y = 150 + Math.sin(a) * 138 * rr; pts.push([x, Math.max(10, y)]); }
-      const head = mASm(pts);
-      mAShape(c, head, pkRG(c, -40, 100, 240, ['#3a4e58', '#1a242c', '#0a1014', '#04080a']), { rim: 'rgba(110,255,230,.85)', rw: 8, lw: 5 });
-      for (let k = 0; k < 6; k++) { const p = (T * 0.35 + k / 6) % 1, d = k % 2 ? 1 : -1, x = d * (180 + p * 40), y = 120 + (k >> 1) * 50 - p * 60; if (y < 14) continue; c.fillStyle = `rgba(40,56,66,${0.9 * (1 - p)})`; c.beginPath(); c.ellipse(x, y, 22 * (1 - p * 0.4), 12, d * 0.6, 0, TWO_PI); c.fill(); }
-      // the grin: a glowing crescent of jagged teeth, splitting wide
-      const w = 112 + 40 * clamp(J - 0.6, 0, 0.7), drop = 20 + 70 * clamp(J, 0, 1.3), top = 180;
-      const upper = [[-w, top - 26], [-w * 0.5, top - 4], [0, top + 2], [w * 0.5, top - 4], [w, top - 26]];
-      const lower = [[-w, top - 26], [-w * 0.6, top + drop * 0.8], [0, top + drop], [w * 0.6, top + drop * 0.8], [w, top - 26]];
-      if (ct < 0) {
-        mAGlow(c, 0, top + drop * 0.4, w * 1.2, [60, 255, 220], 0.4);
-        mMouth(c, upper, lower, { throat: ['#eafffa', '#3affe0', '#0a6a60', '#021412'], glow: [60, 255, 220], deep: true,
-          up: { n: 10, L: 22, grad: ['#ffffff', '#a8fff0'], prof: (u, k) => (k % 2 ? 0.7 : 1.2), lw: 2, gap: 0.04 },
-          low: { n: 9, L: 20, grad: ['#ffffff', '#a8fff0'], prof: (u, k) => (k % 2 ? 1.2 : 0.7), lw: 2, gap: 0.04 } });
-      } else {   // the smirk, glowing through the smoke
-        c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = 'rgba(60,255,220,.9)'; c.lineWidth = 8; c.lineCap = 'round'; c.beginPath(); c.moveTo(-90, 186); c.quadraticCurveTo(0, 206 + 6 * rip, 100, 172); c.stroke(); c.restore();
-        c.strokeStyle = INK; c.lineWidth = 3; c.beginPath(); c.moveTo(-90, 186); c.quadraticCurveTo(0, 206 + 6 * rip, 100, 172); c.stroke();
-        c.save(); c.globalCompositeOperation = 'lighter'; for (let k = 0; k < 10; k++) { const p = (ct * 1.4 + k / 10) % 1, x = Math.sin(k * 2.6) * 120, y = 190 - p * 120; if (y < 12) continue; c.fillStyle = `rgba(120,255,230,${(1 - p) * ce})`; c.beginPath(); c.arc(x, y, 2.6, 0, TWO_PI); c.fill(); } c.restore();
+      const t = m.t, bt = m.bite, B = dskBeats(bt), inBite = B.inBite, S = DSK.smoke, M = DSK.muzzle, look = m.look || 0;
+      const rage = clamp(m.rage || 0, 0, 1), br = Math.sin(t * 2.4), gw = dskGrabTell(inBite);
+      // how open the jaws are: a menacing grin in the chase, flung wide on the catch, chomping while it chews
+      let mo;
+      if (inBite) mo = bt < 0.4 ? m.gape * 1.25 : 0.04 + 0.34 * B.chomp;
+      else mo = 0.2 + 0.36 * clamp(m.open, 0, 1) + 0.28 * rage + 0.18 * gw.k + 0.03 * br;
+      const gape = inBite ? m.gape : 0, h = inBite && bt < 0.4 ? 120 * mo : 70 * mo;
+      const glow = 0.75 + 0.15 * br + 0.35 * rage + (inBite ? 0.5 * (1 - smooth(0.4, 0.9, bt)) : 0);
+      // squash and stretch about the catch line: wide on each chomp, tall on the gulp
+      c.scale(1 + 0.1 * B.chomp - 0.04 * B.gulp, 1 - 0.1 * B.chomp + 0.06 * B.gulp);
+      // 1. a soft shadow on the body under the head, and the smoke mane behind the skull (billowing; the wall limbs'
+      // roots sink into it)
+      mShade(c, 0, 300, 250, 90, 0.5);
+      const mane = [];
+      for (const d of [-1, 1]) {   // (uneven on purpose: the two sides billow differently)
+        const P = d > 0 ? [[120, 94, 30], [152, 120, 40], [184, 160, 36], [200, 204, 48], [218, 246, 30], [194, 276, 50], [154, 310, 46], [104, 330, 52], [48, 344, 44]]
+          : [[124, 98, 34], [160, 128, 36], [190, 170, 46], [212, 214, 34], [200, 250, 50], [176, 292, 44], [132, 318, 52], [80, 338, 46], [24, 348, 40]];
+        P.forEach(([x, y, r], i) => { const b = Math.sin(t * 1.5 + i * 1.1 + d * 0.7); mane.push([d * (x + 4 * b + (d === gw.d ? 6 * gw.k : 0)), y + 2 * Math.cos(t * 1.2 + i), r * (1 + 0.05 * b + 0.04 * rage)]); });
       }
-      // slanted teal eyes, glowing
+      // wisps of smoke curling off the mane and drifting away down its flanks
+      for (const d of [-1, 1]) for (let k = 0; k < 2; k++) {
+        const u = (t * 0.4 + k * 0.5 + (d > 0 ? 0.25 : 0)) % 1, x0 = d * (206 - k * 30), y0 = 200 + k * 90, len = 50 + 40 * u;
+        const pts = []; for (let i = 0; i <= 8; i++) { const v = i / 8; pts.push([x0 + d * v * len * 0.9, y0 + v * len * 0.5 - Math.sin(v * 3) * 16 * u + Math.sin(v * 5 + t * 2) * 5 * v]); }
+        dskWisp(c, pts, 14, S[3], 0.85 * Math.sin(Math.PI * u), t, 0.7);
+      }
+      dskBillow(c, mane, 1, { cx: -50, cy: 90, R: 380, rim: 0.8, warm: 0.25, t });
+      // 2. the ears behind the skull: a slow sway and sharp twitches; pinned back as it lunges, pricked up as it bites,
+      // the one toward a grab flattens
+      const earA = d => clamp(0.04 * Math.sin(t * 1.4 + d) + 0.1 * Math.pow(Math.max(0, Math.sin(t * 0.9 + d * 2.3)), 30) + 0.34 * rage * (inBite ? 0 : 1)
+        - (inBite ? 0.12 * (1 - smooth(0.4, 0.7, bt)) - 0.08 * B.chomp : 0) + (gw.d === d ? 0.4 * gw.k : 0), -0.14, 0.62);
+      dskEar(c, -1, earA(-1), t, glow); dskEar(c, 1, earA(1), t, glow);
+      // 3. the skull: a big round smoke head with puffed cheeks, lit from above
+      const skullPts = mAMirror([[0, 44], [54, 46], [100, 58], [136, 84], [158, 120], [166, 160], [162, 200], [148, 236], [120, 262], [72, 280], [0, 286]]);
+      const skull = mASm(skullPts);
+      skull(c); c.fillStyle = pkRG(c, -40, 60, 260, [S[1], S[2], S[3], S[3], S[4]]); c.fill();
+      c.save(); skull(c); c.clip();
+      c.translate(0, 7); skull(c); c.strokeStyle = pkLG(c, 0, 40, 0, 230, [dskAurAt(-60, 40, t, 0.9), dskAurAt(60, 100, t, 0.4), dskAurAt(140, 150, t, 0)]); c.lineWidth = 10; c.stroke(); c.translate(0, -7);   // the aurora along its crown (fading down its sides)
+      c.translate(0, -9); skull(c); c.strokeStyle = pkLG(c, 0, 180, 0, 286, [rgbaA(DSK.warm, 0), rgbaA(DSK.warm, 0.3)]); c.lineWidth = 12; c.stroke(); c.translate(0, 9);       // a warm bounce under its jaw
+      // smoke curls in the head's surface, a few stars twinkling in its darker reaches
+      dskCurl(c, -112, 132, 22, t * 0.3, 0.8, 'rgba(176,182,255,.32)', 2.2); dskCurl(c, 118, 140, 20, -t * 0.3 + 2, -0.8, 'rgba(176,182,255,.32)', 2.2);
+      dskCurl(c, -60, 70, 16, 1 + t * 0.2, 0.7, 'rgba(200,204,255,.3)', 2); dskCurl(c, 64, 72, 15, 2 - t * 0.2, -0.7, 'rgba(200,204,255,.3)', 2);
+      for (const [x, y, r, i] of [[-138, 188, 2.6, 0], [132, 214, 2.2, 1], [-96, 236, 1.8, 2], [104, 104, 1.6, 3], [-120, 100, 1.5, 4]]) dskStar(c, x, y, r * (1 + 0.5 * Math.sin(t * 2.3 + i * 2)), 0.7, i);
+      // dark sockets round the eyes (so the lanterns burn out of the smoke)
+      for (const d of [-1, 1]) mShade(c, d * 62, 134, 66, 46, 0.55);
+      c.restore();
+      // cheek fluff along the skull's lower sides
+      dskBillow(c, [-1, 1].flatMap(d => [[150, 196, 26], [140, 232, 27], [110, 262, 24]].map(([x, y, r]) => [d * (x + 2 * Math.sin(t * 1.7 + y) - 14 * B.stuffed), y + 6 * B.stuffed, r * (1 + 0.7 * B.stuffed + 0.15 * B.chomp)])), 1, { cx: -40, cy: 150, R: 260, rim: 0, warm: 0, t, crease: 0 });
+      // 4. the crescent moon on its brow, glowing (and a tiny star caught in its curve)
+      {
+        const mx = 0, my = 82, mr = 17, cres = dskCrescentPath(mx, my, mr, -0.55, 0.5, 0.86), mg = glow * (0.85 + 0.15 * Math.sin(t * 1.9));
+        dskGlow(c, mx, my, 52, DSK.glow, 0.4 * mg);
+        cres(c); c.fillStyle = pkRG(c, mx - 6, my + 4, mr * 1.3, DSK.moon); c.fill();
+        c.save(); cres(c); c.clip(); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 2.4; c.beginPath(); c.arc(mx, my, mr - 2.5, Math.PI * 0.55, Math.PI * 1.15); c.stroke(); c.restore();
+        dskStar(c, mx + 10, my - 6, 3.6 + 1.2 * Math.sin(t * 3.1), 0.95, t * 0.4);
+      }
+      // 5. eyes under smoke brows: they glare toward the wall it is about to grab, fly wide as it bites, squeeze shut on
+      // the gulp and go smug and heavy-lidded once it has eaten
+      const blink = inBite ? 0 : mBlink();
       for (const d of [-1, 1]) {
-        mEyeC(c, d * 70, 110, 34, 20, m.look, { sc: '#eafffa', iris: ['#ffffff', '#3affe0', '#0a8a7a'], ir: 0.5, pupil: 'slit', lid: '#121a20', squint: 0.28, slant: 1.1, glow: [60, 255, 220], socket: false, rot: d * 0.28 });
-        mBrowC(c, d * 72, 82, 90, { col: '#04080a', th: 15, ang: 0.5, arch: 0.15, rim: 'rgba(90,255,225,.5)' });
+        const gl = gw.d === d ? gw.k : 0;
+        const wide = inBite ? 1 + 0.22 * (1 - smooth(0.42, 0.6, bt)) : 1 + 0.05 * rage + 0.1 * gl;
+        const lid = inBite ? Math.max(0.92 * B.gulp, (bt < 0.42 ? 0 : 0.28) * (1 - B.gulp) + 0.2 * B.chomp, 0.42 * B.fed) : Math.max(blink, 0.16 + 0.2 * rage - 0.12 * gl);
+        const ex = d * 62, ey = 134;
+        dskEye(c, ex, ey, 37, 31, { d: -d, look: inBite ? 0 : clamp(look * 0.8 + gw.d * gw.k, -1, 1), lid, wide, slant: inBite ? 0.15 + 0.3 * B.fed : 0.34 + 0.38 * rage + 0.2 * gl, slit: inBite ? 0.85 * (1 - smooth(0.4, 0.7, bt)) + 0.25 * B.fed : 0.22 - 0.1 * rage, glow, low: inBite ? 0.5 * B.fed + 0.4 * B.gulp : 0, happy: B.gulp * 0.8 });
+        const bAng = inBite ? (bt < 0.42 ? -0.24 : 0.1 - 0.1 * B.fed) : 0.22 + 0.34 * rage + 0.25 * gl;
+        dskBrow(c, d * 64, 94 - 6 * (inBite && bt < 0.42 ? 1 : 0) + 6 * rage, 74, bAng, t, -d);
       }
+      // 6. the mouth: the chin, the glowing cavity (the throat's sunset, a tongue, the pilot), the teeth and the lips
+      const cw = 100 + 22 * gape + 8 * rage, cy0 = 194;
+      const snarl = d => (gw.d === d ? 8 * gw.k : 0) + 4 * rage;
+      const upper = [[-cw, cy0 - 8 - snarl(-1)], [-cw * 0.64, 200], [-cw * 0.3, 206], [0, 207], [cw * 0.3, 206], [cw * 0.64, 200], [cw, cy0 - 8 - snarl(1)]];
+      const lower = [[-cw, cy0 - 8 - snarl(-1)], [-cw * 0.72, 202 + h * 0.62], [-cw * 0.34, 207 + h * 0.95], [0, 208 + h], [cw * 0.34, 207 + h * 0.95], [cw * 0.72, 202 + h * 0.62], [cw, cy0 - 8 - snarl(1)]];
+      const ly = 208 + h, U = mSmooth(upper, 30), Lw = mSmooth(lower, 30);
+      // the lower jaw: a smoky chin hanging round the open mouth
+      const chin = mASm(mAMirror([[0, 196], [cw + 14, 186], [cw + 10, 204 + h * 0.5], [cw * 0.7, ly + 10], [cw * 0.34, ly + 22], [0, ly + 26]]));
+      chin(c); c.fillStyle = pkLG(c, 0, 200, 0, ly + 26, [M[2], M[3], S[3]]); c.fill();
+      c.save(); chin(c); c.clip(); c.translate(0, -6); chin(c); c.strokeStyle = rgbaA(DSK.warm, 0.3); c.lineWidth = 9; c.stroke(); c.restore();
+      const mpath = c2 => { c2.beginPath(); U.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); for (let i = Lw.length - 1; i >= 0; i--) c2.lineTo(Lw[i][0], Lw[i][1]); c2.closePath(); };
+      const mh = (ly - 204) / 2, mcy = (204 + ly) / 2;
+      if (h > 2) {
+        mpath(c); c.fillStyle = pkRG(c, 0, mcy + mh * 0.6, Math.max(cw, mh) * 1.15, DSK.throat); c.fill();
+        c.save(); mpath(c); c.clip();
+        // the throat: a sunset glowing from deep inside, a few stars in the dark at the back of the mouth
+        c.fillStyle = pkRG(c, 0, mcy + mh * 0.35, Math.max(cw * 0.7, mh), ['#ffe8a6', '#ff9c5c', 'rgba(239,62,114,.6)', 'rgba(124,20,84,0)']); c.globalAlpha = 0.85; c.fillRect(-cw - 10, 190, cw * 2 + 20, h + 40); c.globalAlpha = 1;
+        dskGlow(c, 0, mcy + mh * 0.4, cw * 0.8, [255, 170, 90], 0.35 * glow);
+        if (h > 24) { c.strokeStyle = 'rgba(110,14,60,.45)'; c.lineWidth = 2.4; for (let k = 1; k <= 3; k++) { c.beginPath(); c.ellipse(0, 204, cw * (0.22 + k * 0.17), 9 + k * 6, 0, 0.35, Math.PI - 0.35); c.stroke(); } pkE(c, 0, 212 + mh * 0.2, 6, 8 + mh * 0.1, '#ff6a8a', 0); }
+        for (const [x, y, i] of [[-cw * 0.55, 212, 0], [cw * 0.5, 216, 1], [-cw * 0.25, 220, 2]]) if (h > 30) dskStar(c, x, y + h * 0.15, 2.4 + Math.sin(t * 3 + i * 2), 0.8, i);
+        if (h > 14) { const ty = ly - Math.min(24, mh * 0.42); pkE(c, 0, ty, cw * 0.48, Math.min(28, mh * 0.55), pkRG(c, -10, ty - 8, cw * 0.52, DSK.tongue), 0); c.strokeStyle = 'rgba(150,20,70,.55)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, ty - Math.min(20, mh * 0.4)); c.lineTo(0, ty + 8); c.stroke(); pkE(c, -cw * 0.16, ty - 8, cw * 0.12, 4, 'rgba(255,230,240,.55)', 0); }
+        // a rose gum band just inside the lips
+        c.strokeStyle = '#a8205a'; c.lineWidth = 7; c.beginPath(); U.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); c.beginPath(); Lw.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+        c.restore();
+        mInMouth(c, mpath);
+      }
+      // the lower teeth: two lower fangs and a row of little points
+      const lowAt = u => mAt(lower, u), upAt = u => mAt(upper, u);
+      for (const u of [0.3, 0.37, 0.44, 0.5, 0.56, 0.63, 0.7]) { const p = lowAt(u); dskFang(c, [p[0] - 5, p[1] + 3], [p[0] + 5, p[1] + 3], [p[0], p[1] - 9 - 3 * mo]); }
+      for (const u of [0.18, 0.82]) { const p = lowAt(u), s2 = u < 0.5 ? -1 : 1; dskFang(c, [p[0] - 8, p[1] + 4], [p[0] + 8, p[1] + 4], [p[0] - s2 * 3, p[1] - 22 - 6 * mo], s2 * 3); }
+      // the moonlit muzzle over the upper lip (its lower edge is the lip line itself)
+      const muz = c2 => { c2.beginPath(); U.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); c2.bezierCurveTo(cw * 0.96, 168, 70, 146, 0, 148); c2.bezierCurveTo(-70, 146, -cw * 0.96, 168, U[0][0], U[0][1]); c2.closePath(); };
+      muz(c); c.fillStyle = pkRG(c, -14, 160, cw * 1.05, [M[0], M[1], M[2], M[3]]); c.fill();
+      c.save(); muz(c); c.clip(); c.translate(0, 5); muz(c); c.strokeStyle = 'rgba(235,238,255,.55)'; c.lineWidth = 6; c.stroke(); c.restore();
+      // whisker pads (tiny dark dots) and the lip crease (a deeper indigo, never ink)
+      for (const d of [-1, 1]) for (const [x, y] of [[34, 182], [44, 176], [42, 190], [54, 186]]) pkE(c, d * x, y, 1.9, 1.7, 'rgba(40,30,110,.6)', 0);
+      c.strokeStyle = h > 2 ? 'rgba(40,24,110,.55)' : '#2a2470'; c.lineWidth = h > 2 ? 2.4 : 4; c.beginPath(); U.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+      // the upper teeth: little incisors, sharp premolars and two big curved fangs
+      for (const u of [0.43, 0.48, 0.52, 0.57]) { const p = upAt(u); dskFang(c, [p[0] - 4, p[1] - 2], [p[0] + 4, p[1] - 2], [p[0], p[1] + 9 + 2 * mo]); }
+      for (const u of [0.12, 0.18, 0.82, 0.88]) { const p = upAt(u); dskFang(c, [p[0] - 5, p[1] - 2], [p[0] + 5, p[1] - 2], [p[0], p[1] + 12 + 2 * mo]); }
+      for (const d of [-1, 1]) { const p = upAt(0.5 + d * 0.22), fl = 34 + 14 * gape + 8 * rage + 8 * B.chomp; dskFang(c, [p[0] - 10, p[1] - 3], [p[0] + 10, p[1] - 3], [p[0] - d * 4, p[1] + fl], d * 6); }
+      // drips of smoke curling down off the fangs (longer as it lunges)
+      if (!inBite || bt < 0.4) for (const d of [-1, 1]) {
+        const p = upAt(0.5 + d * 0.22), x0 = p[0] - d * 4, y0 = p[1] + 30, len = 14 + 14 * (0.5 + 0.5 * Math.sin(t * 1.7 + d * 2)) + 20 * rage;
+        const pts = []; for (let i = 0; i <= 6; i++) { const v = i / 6; pts.push([x0 + Math.sin(v * 3 + t * 3 + d) * 4 * v, y0 + v * len]); }
+        dskWisp(c, pts, 4, DSK.smoke[1], 0.85, t, 0);
+        dskPuff(c, pts[6][0], pts[6][1] + 2, 4, 0, { rim: 0, warm: 0, t });
+      }
+      // 7. the nose: a little rounded heart of deep violet with a glint
+      {
+        const nose = mASm([[0, 160], [16, 156], [14, 168], [0, 178], [-14, 168], [-16, 156]]);
+        nose(c); c.fillStyle = pkRG(c, -4, 160, 20, ['#6a58c8', '#3a2c8a', '#221a5e']); c.fill();
+        pkE(c, -5, 160, 5, 2.6, 'rgba(255,255,255,.7)', 0);
+        c.strokeStyle = 'rgba(40,24,110,.55)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, 177); c.lineTo(0, U[15][1] - 2); c.stroke();
+      }
+      // 8. aurora whiskers: glowing wisps curling out from the muzzle, swaying (they flick back as it lunges)
+      c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+      for (const d of [-1, 1]) for (let k = 0; k < 3; k++) {
+        const x0 = d * (58 + k * 4), y0 = 178 + k * 8, sw = Math.sin(t * 1.8 + k * 1.3 + d) * 7 - 12 * rage, x1 = d * (196 + 10 * k), y1 = 160 + k * 26 + sw;
+        const cxp = d * (130 + 6 * k), cyp = y0 - 12 + k * 10 + sw * 0.5;
+        for (const [lw, al] of [[7, 0.14], [2.4, 0.75]]) { c.strokeStyle = dskAurAt(d * 160, y1, t + k, al); c.lineWidth = lw; c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cxp, cyp, x1, y1); c.stroke(); }
+      }
+      c.restore();
+      // 9. the chin tuft: puffs of smoke under the jaw, riding down with it
+      dskBillow(c, [[0, ly + 22, 26], [-34, ly + 14, 21], [34, ly + 14, 21]], 1, { cx: -10, cy: ly, R: 70, rim: 0.5, warm: 0.3, t, crease: 0.2 });
+      // 10. the chew: smoke puffing out of the corners of its stuffed mouth with every chomp, sparks of the rocket;
+      // the gulp's glowing lump drops into its chest (see body); then a long smug lick
+      if (B.chewOn) for (const d of [-1, 1]) {
+        for (let k = 0; k < 3; k++) { const p = ((bt - 0.42) * 1.6 + k / 3) % 1, x = d * (cw + 8 + p * 40), y = cy0 - 4 - p * 34 + k * 4; dskPuff(c, x, y, (8 + 10 * p) * (1 - p * 0.3), 0, { rim: 0.6 * (1 - p), warm: 0, t }); }
+        for (let k = 0; k < 4; k++) {   // bits of the rocket tumbling from the corners (gold, ember, white: no outline)
+          const p = ((bt - 0.42) * 1.3 + k * 0.25) % 1, x = d * (cw - 4 + p * 30 + k * 4), y = cy0 + 8 + p * p * 120, r = (4 + (k % 2) * 2) * (1 - 0.4 * p);
+          c.save(); c.globalAlpha = Math.min(1, (1 - p) * 2); c.translate(x, y); c.rotate(k + p * 7 * d);
+          c.fillStyle = ['#ffd23a', '#ff7a2a', '#fff4e0', '#ff9c5c'][k]; c.beginPath(); c.moveTo(-r, -r * 0.6); c.lineTo(r * 0.9, -r); c.lineTo(r * 0.6, r * 0.9); c.lineTo(-r * 0.8, r * 0.7); c.closePath(); c.fill();
+          c.restore();
+        }
+      }
+      if (B.lick > 0) {
+        const lx = lerp(-60, 60, smooth(1.32, 1.76, bt));
+        c.save(); c.globalAlpha = B.lick;
+        pkE(c, lx, 214, 26, 15, pkRG(c, lx - 6, 208, 28, DSK.tongue), 0);
+        c.strokeStyle = 'rgba(150,20,70,.55)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(lx - 14, 212); c.lineTo(lx + 12, 216); c.stroke();
+        pkE(c, lx - 8, 208, 7, 3, 'rgba(255,255,255,.6)', 0);
+        c.restore();
+      }
+      // the inner glow: the throat's light spilling over the lower face and teeth
+      if (h > 2) dskGlow(c, 0, mcy, cw * 1.3, [255, 140, 110], 0.12 + 0.18 * clamp(h / 80, 0, 1));
+      // motes of starlight drifting off it (always under the catch line)
+      c.save(); c.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 8; k++) { const u = (t * (0.25 + 0.1 * dskH(k, 20)) + dskH(k, 21)) % 1, x = (dskH(k, 22) - 0.5) * 420 + Math.sin(t * 1.5 + k) * 8, y = 300 - u * 260; if (y < 10) continue; c.fillStyle = rgbaA(dskAurRGB(dskH(k, 23)), 0.7 * Math.sin(Math.PI * u)); c.beginPath(); c.arc(x, y, 1.4 + 1.6 * dskH(k, 24), 0, TWO_PI); c.fill(); }
+      c.restore();
     } },
 ];
 // Silhouettes: every monster has its own head and one silhouette hook that reads even in the picker card (the worm's
@@ -22566,7 +23093,7 @@ const MONSTER_FORMS = {
   giant:   {},   // (Grumbelly is a v3 form: his own fit and mouth, see his MONSTERS entry)
   hornet:  {},
   crab:    {},
-  shadow:  { dy: 2, fit: 0.9 },
+  shadow:  { fit: 0.88 },   // (Duskmaw is a v3 form: its own fit and mouth, see its MONSTERS entry)
 };
 const monForm = mon => MONSTER_FORMS[mon.id] || {};
 
@@ -22593,7 +23120,7 @@ const MONSTER_LIMBS = {
   giant:   { kind: 'none', skin: ['#b4bcf6', '#5a63b4', '#363b7c'], claw: '#f4ead0', palm: '#b4bcf6' },
   hornet:  { kind: 'legs', n: 3, thin: true, drones: 4, skin: ['#4a3c28', '#1c140a', '#060402'], claw: '#ffd23a', band: '#ffd23a' },
   crab:    { kind: 'legs', n: 3, crab: true, skin: ['#7ae8f0', '#1e8aa8', '#0a3448'], claw: '#fff4e0', tip: '#ff8a4a' },
-  shadow:  { kind: 'none', skin: ['#3a2a5a', '#120a22', '#040208'], claw: '#f0e4ff', glow: [180, 110, 255] },
+  shadow:  { kind: 'none', skin: ['#8086ea', '#30317e', '#100f34'], claw: '#fffde8' },
 };
 const monLimbs = mon => MONSTER_LIMBS[mon.id] || { kind: 'none', skin: ['#888', '#444', '#111'], claw: '#222' };
 function limbGrad(c, L, y0, y1) { return pkLG(c, 0, y0, 0, y1, L.skin); }
@@ -22848,7 +23375,7 @@ const LIMB_PAL = {
   giant:   { skin: ['#b4bcf6', '#8691e0', '#363b7c'], palm: '#b4bcf6', ink: 'rgba(40,40,100,.85)' },
   hornet:  { skin: ['#ffc23e', '#e08a22', '#9a4610'], claw: '#8a1238', band: '#4c1858' },
   crab:    { skin: ['#9cd8ff', '#4a6ce8', '#100c4c'], claw: '#fffaf0', tip: '#fbe4c4' },
-  shadow:  { skin: ['#44565e', '#141c22', '#04080a'], glow: [58, 255, 224], claw: '#d8fff8' },
+  shadow:  { skin: ['#8086ea', '#30317e', '#100f34'], claw: '#fffde8', glow: [255, 208, 112] },   // (Duskmaw draws its own limbs: dskLimb)
 };
 const limbPal = mon => LIMB_PAL[mon.id] || { skin: ['#aaaaaa', '#666666', '#222222'] };
 const LIMB_RIM = 'rgba(255,240,220,.55)';
@@ -23360,7 +23887,7 @@ const MONSTER_TAGS = {
   flytrap: 'Every vine ends in a mouth, and the big one is all yours', blob: 'It crashed its saucer, kept its appetite, and you can watch yourself sink', spider: 'Headlamp eyes lock on, the fan flares, then it pounces',
   shark: 'Swims up through magma, an eye on each end of its hammer', tiki: 'Every face on the totem gets a bite', spirit: 'A living volcano with a furnace for a grin',
   toad: 'Its tongue snaps you in, its throat glows like lava', giant: 'Pot on his head, napkin on, and you for dinner', hornet: "Long live the queen. Her mandibles saw, her honey burns",
-  crab: "It cracks coconuts for breakfast. You are riding one", shadow: 'Smoke claws and an impossible grin',
+  crab: "It cracks coconuts for breakfast. You are riding one", shadow: 'A night sky with teeth, and you are its next star',
 };
 let monsterIndex = Math.max(0, MONSTERS.findIndex(mn => mn.id === settings.monster));
 const monster = () => MONSTERS[monsterIndex];
