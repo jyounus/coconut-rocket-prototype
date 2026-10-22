@@ -468,7 +468,11 @@ const PILOT_HITS = {
 //   seat point a body stays hidden (a deep nut hides a lot, a glass bowl only its lip band); grip is the [left, right]
 //   hand holds on the lip, or null when there is nothing to hold. A closed ride with no lip to sit in (a hamster ball)
 //   also gives floor, the y its riders stand on (each rider's foot goes there; at most PART_ENV.drop below the seat
-//   point), and room { w, h }, the space above the floor a rider is scaled down to fit.
+//   point), and room { w, h }, the space above the floor a rider is scaled down to fit. A ride whose opening sits off
+//   to one side of its body (the Rubber Ducket's cockpit, with the rubber head and bill out to the right) also gives
+//   shift: how far (x, art units) its envelope's centre lies from the seat point. Its envelope is measured round that
+//   centre instead of round the seat point, and a swapped rider may be moved across the opening towards it, only as far
+//   as the pair needs to fit PILOT_CAP and never further than shift (see the size envelopes).
 // - character { caps, hip, sink, foot, grip, ow, body }: caps is how many capsules at the start of its PILOT_HITS row
 //   are its own; hip is the point of the character that sits on the seat point (in its signature ride the two are the
 //   same point, so that pair draws exactly as the fused drawing did); sink is how far below the hip its drawing is cut
@@ -528,8 +532,9 @@ const CHAR_FIT = {
   // 12 Frankie the dachshund: head, ears, paws and collar are his (4 caps); drawn whole, his chest rests on the bun's
   // top and his long body hangs down the split below it (the body capsule, for other rides); paws over the bun's crest
   dachshund: { caps: 4, hip: [0, -5], sink: 1, grip: [[-6.6, -5.9], [6.6, -5.9]], ow: 14.8, body: [[0, -5, 0, 18.6, 5.8]] },
-  // 13 Pip the duckling
-  duck: null,
+  // 13 Pip the duckling, drawn whole: head, eggshell helmet and fluffy body are his (3 caps); his round bottom rests
+  // just inside the cockpit lip (1.3 below it at most); wings, no hands
+  duck: { caps: 3, hip: [-4, 4.7], sink: 1.3, grip: null },
   // 14 Biscuit the hamster
   hamster: { caps: 1, hip: [0, 5.5], sink: 10.3, foot: 10.3, grip: null, ow: 26, body: [[-8, -15.4, 8, -15.4, 3.6], [0, 4.6, 0, 7, 9.4]] },   // drawn whole inside the ball: his head (1 cap, inside the ball's capsule), ears and body; hip at his belly, feet 10.3 below on the floor (sink too: his legs never hang below a lip); paws, no grip
   // 15 Penny the piggy bank
@@ -574,8 +579,11 @@ const VEH_FIT = {
   // start to cover their rider (frkBunHalf inner corners, y -4.4, their 1.3 edge), the opening between their crumb
   // faces; the split hides nothing straight down the middle, so depth 0
   hotdog: { seat: { x: 0, y: -5, w: 14.8, depth: 0, grip: [[-6.6, -5.9], [6.6, -5.9]] } },
-  // 13 Rubber Ducket
-  ducket: null,
+  // 13 Rubber Ducket: the cockpit's front lip (ellipse at DKP.HX, 3.6, rx 9.4, ry 2.7, its 3.2 ink); the duck's body
+  // is drawn behind its rider, so only the lip band hides; grips at the lip's ends. The cockpit sits 4 left of the
+  // duck's middle and the rubber head and bill reach 24.7 right of it, so its envelope is centred 2.2 to the right
+  // (shift): a swapped rider may slide up to 2.2 towards the bill when a pair needs it to fit the cap
+  ducket: { seat: { x: -4, y: 4.7, w: 18.8, depth: 2.3, grip: [[-12.4, 4.81], [4.4, 4.81]], shift: 2.2 } },
   // 14 Turbo Ball
   turboball: { seat: { x: 0, y: 5.5, w: 31.5, depth: 0, grip: null, floor: 15.8, room: { w: 30, h: 33.2 } } },   // closed ride: the hamster's belly (outer frame); floor = his feet (15.8); room up to the lid's twist ring (-17.4); w = the mounting ring (2 × 14.2 × HMB.S)
   // 15 Jackpot rocket
@@ -609,6 +617,11 @@ const VEH_FIT = {
 // envScale(ch) is the largest scale at which a character fits its envelope (it must be SEAT_FLOOR or more). In a pair
 // it is drawn at the scale the opening asks for, scaled down (to no less than the smaller of that and envScale, which
 // is known to fit) only if the pair would be wider or taller than PILOT_CAP at some tilt.
+// An off-centre seat (seat.shift) moves the vehicle's envelope, not its size: the vehicle is measured round
+// (seat.x + shift, seat.y), and a rider whose hip sits on that point is inside its own envelope round the same point,
+// so the argument above holds there unchanged. A swapped rider starts on the seat point; if the pair would not fit the
+// cap, it is first moved towards the envelope's centre (as little as fits, at most shift), and only then scaled down,
+// with the full shift, to no less than the smaller of its scale and envScale (known to fit).
 const PILOT_CAP = { w: 46.6, h: 73.4 }, PART_ENV = { side: [22.6, 28.6], depth: 42, drop: 12 };
 const SEAT_SCALE = [0.88, 1.12], SEAT_FLOOR = 0.65;   // (lowered from 0.7 so the tall Pico, 0.657, and Axel, 0.674, fit)
 const VEHICLE_IDS = Object.values(SIGNATURE), VEH_OWNER = {};
@@ -639,7 +652,7 @@ const charOnSeat = (ch, s, lift) => { const C = CHAR_FIT[ch]; return moveCaps(ch
 const footOf = C => C.foot != null ? C.foot : C.sink;
 const charFitsEnv = (ch, s) => { const C = CHAR_FIT[ch], k = footOf(C) * s; return [Math.min(0, k - PART_ENV.drop), Math.max(0, k, C.sink * s)].every(lift => envOver('character', charOnSeat(ch, s, lift)) <= 1e-9); };
 const vehicleOver = vh => {   // how far a split vehicle (as drawn, round its seat point) pokes out of its envelope
-  const st = VEH_FIT[vh].seat, o = envOver('vehicle', moveCaps(vehHits(vh), 1, -st.x, -st.y));
+  const st = VEH_FIT[vh].seat, o = envOver('vehicle', moveCaps(vehHits(vh), 1, -st.x - (st.shift || 0), -st.y));
   return st.floor == null ? o : Math.max(o, st.y - st.floor, st.floor - st.y - PART_ENV.drop);
 };
 const envScales = {};
@@ -657,14 +670,16 @@ function capsMax(hits) {
 }
 // Where a character's art goes in a ride at scale s: p -> p * s + (dx, dy). lift: how far it was raised (so its body
 // does not show below the ride's depth) or moved (negative: down) onto the ride's floor; hand: the [left, right] offset
-// of each hand (character frame) onto the ride's grips, or null.
-function seatPlace(C, seat, s, sig) {
+// of each hand (character frame) onto the ride's grips, or null. sh: how far the hip is moved across the opening from
+// the seat point (0 to seat.shift, an off-centre seat only; 0 on its own ride).
+function seatPlace(C, seat, s, sig, sh = 0) {
   const lift = sig ? 0 : seat.floor != null ? seat.y + footOf(C) * s - seat.floor : Math.max(0, C.sink * s - seat.depth);
-  const dx = seat.x - C.hip[0] * s, dy = seat.y - lift - C.hip[1] * s;
+  const dx = seat.x + (sig ? 0 : sh) - C.hip[0] * s, dy = seat.y - lift - C.hip[1] * s;
   const hand = sig || !C.grip || !seat.grip ? null : C.grip.map(([gx, gy], i) => [(seat.grip[i][0] - dx) / s - gx, (seat.grip[i][1] - dy) / s - gy].map(v => Math.max(-4, Math.min(4, v))));
   return { s, dx, dy, lift, hand };
 }
-// How a split character sits in a split vehicle (null when either part is fused): seatPlace's fit plus hits (the pair's
+// How a split character sits in a split vehicle (null when either part is fused): seatPlace's fit plus sh (how far an
+// off-centre seat moved it, see seat.shift), hits (the pair's
 // capsules), sig, fit (the scale the opening and room asked for), env (envScale), cramped (the room wanted it smaller
 // than SEAT_FLOOR) and floored (a part is outside its envelope, so the pair would not fit even at SEAT_FLOOR: the
 // levelgen test fails it).
@@ -674,8 +689,8 @@ function seatFit(ch, vh) {
   if (key in seatFits) return seatFits[key];
   const C = CHAR_FIT[ch], V = VEH_FIT[vh];
   if (!C || !V) return (seatFits[key] = null);
-  const sig = SIGNATURE[ch] === vh, seat = V.seat, vhits = vehHits(vh);
-  const at = s => { const p = seatPlace(C, seat, s, sig); return { ...p, hits: moveCaps(sig ? charHits(ch) : charHits(ch).concat(C.body || []), s, p.dx, p.dy).concat(vhits) }; };
+  const sig = SIGNATURE[ch] === vh, seat = V.seat, vhits = vehHits(vh), shift = sig ? 0 : seat.shift || 0;
+  const at = (s, sh = 0) => { const p = seatPlace(C, seat, s, sig, sh); return { ...p, sh, hits: moveCaps(sig ? charHits(ch) : charHits(ch).concat(C.body || []), s, p.dx, p.dy).concat(vhits) }; };
   if (sig) return (seatFits[key] = { ...at(1), sig, fit: 1, env: envScale(ch), cramped: false, floored: false });
   let fit = Math.min(SEAT_SCALE[1], Math.max(SEAT_SCALE[0], seat.w / (C.ow || VEH_FIT[SIGNATURE[ch]].seat.w))), cramped = false;
   if (seat.room) {   // a closed ride: the character's capsules and its drawn bottom fit the room above the floor
@@ -684,14 +699,21 @@ function seatFit(ch, vh) {
     const room = Math.min(seat.room.w / (x1 - x0), seat.room.h / (y1 - y0));
     if (room < fit) { cramped = room < SEAT_FLOOR; fit = Math.max(SEAT_FLOOR, room); }
   }
-  const env = envScale(ch), ok = s => { const m = capsMax(at(s).hits); return m.w <= PILOT_CAP.w && m.h <= PILOT_CAP.h; };
-  let s = fit, floored = false;
-  if (!ok(s)) {
-    let lo = Math.max(SEAT_FLOOR, Math.min(fit, env)), hi = s;
-    if (!ok(lo)) { s = SEAT_FLOOR; floored = true; }
-    else { for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; } s = lo; }
+  const env = envScale(ch), ok = (s, sh) => { const m = capsMax(at(s, sh).hits); return m.w <= PILOT_CAP.w && m.h <= PILOT_CAP.h; };
+  let s = fit, sh = 0, floored = false;
+  if (!ok(s, 0)) {
+    if (shift && ok(s, shift)) {   // an off-centre seat: moved towards the envelope's centre, as little as fits
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ok(s, shift * m)) hi = m; else lo = m; }
+      sh = shift * hi;
+    } else {                       // scaled down (with the full shift, if any), to no less than the scale known to fit
+      sh = shift;
+      let lo = Math.max(SEAT_FLOOR, Math.min(fit, env)), hi = s;
+      if (!ok(lo, sh)) { s = SEAT_FLOOR; floored = true; }
+      else { for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ok(m, sh)) lo = m; else hi = m; } s = lo; }
+    }
   }
-  return (seatFits[key] = { ...at(s), sig, fit, env, cramped, floored });
+  return (seatFits[key] = { ...at(s, sh), sig, fit, env, cramped, floored });
 }
 // A pair's hitbox: a pilot's own (its signature pair), or a split pair's seat fit; null when the pair cannot fly yet
 // (a fused part away from its own partner).
@@ -11573,10 +11595,10 @@ const DKP = { k: 0, f: 0, t: -1, HX: -4, HY: -16.8,
   rub: ['#d4f6ff', '#6ad0ff', '#2e98ea', '#165aa8'],
   shell: ['#ffffff', '#fdf9ee', '#ece2cc', '#cbbb9a'], speck: 'rgba(176,128,72,.55)', red: ['#ff6a5a', '#e8322a', '#a8181a'],
   chrome: ['#6a7a92', '#f6faff', '#a4b4c8', '#eaf2fc', '#56647a'] };
-function dkpEase(st, thr, fall) {
-  const dt = st.t - DKP.t; DKP.t = st.t;
-  if (!(dt > 0 && dt < 0.1)) { DKP.k = thr; DKP.f = fall; return; }
-  const a = 1 - Math.exp(-dt * 10); DKP.k += (thr - DKP.k) * a; DKP.f += (fall - DKP.f) * a;
+function dkpEase(S, st, thr, fall) {   // S: DKP (Pip) or DKPV (the Rubber Ducket)
+  const dt = st.t - S.t; S.t = st.t;
+  if (!(dt > 0 && dt < 0.1)) { S.k = thr; S.f = fall; return; }
+  const a = 1 - Math.exp(-dt * 10); S.k += (thr - S.k) * a; S.f += (fall - S.f) * a;
 }
 // the rubber duck's body, side-on and facing right: a round rump, a scooped back where Pip sits, a full chest
 function dkpBodyPath(c) {
@@ -11803,83 +11825,125 @@ function dkpRubHead(c, open, mood, t) {
   c.fillStyle = pkLG(c, 0, -6.6, 0, -3, DKP.bill); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.2; c.stroke();
   c.strokeStyle = 'rgba(255,240,200,.9)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(16.4, -5.6); c.quadraticCurveTo(18.6, -6, 20.2, -5.2); c.stroke();
 }
-function dkpDraw(c, st) {
-  const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const fallF = !panic && !grin && !thr && pkLookDown > 0 ? 1 : 0;
-  dkpEase(st, thr ? 1 : 0, fallF);
-  const k = DKP.k, f = bite ? 1 : DKP.f;
-  const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fallF ? 'fall' : 'calm';
-  // the whole rig rocks gently like a bath toy on water; swallowed, it tips right over
-  const rock = bite ? 0.3 + Math.sin(t * 13) * 0.07 : Math.sin(t * 2.1) * 0.035 + (panic ? Math.sin(t * 40) * 0.02 : 0);
-  c.save(); c.translate(0, 12); c.rotate(rock); c.translate(0, -12);
-  // ---- behind the duck: bubbles, feet, nozzle, tail ----
-  if (thr || bite) dkpBubbles(c, t, bite ? 6 : 4, bite ? 1.6 : 1.1);
-  const pad = bite ? [0.9, -0.9] : panic ? [Math.sin(t * 30) * 0.5, Math.sin(t * 30 + 2) * 0.5]
-    : [Math.sin(t * (2.2 + 12 * k)) * (0.1 + 0.28 * k), Math.sin(t * (2.2 + 12 * k) + Math.PI) * (0.1 + 0.28 * k)];
-  dkpFoot(c, -9.6, 20.4, 0.5 + pad[0] - 0.2 * f);
-  dkpFoot(c, 8.6, 20.6, -0.5 + pad[1] + 0.2 * f);
-  dkpNozzle(c, thr, t);
-  dkpTail(c, (thr ? Math.sin(t * 16) * 0.16 : Math.sin(t * 2.6) * 0.06) - 0.1 * f + (bite ? Math.sin(t * 24) * 0.25 : 0));
-  // ---- the rubber duck's body ----
-  dkpBodyPath(c); c.fillStyle = pkRG(c, -4, 6, 20, DKP.rub); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.9; c.stroke();
-  c.save(); dkpBodyPath(c); c.clip();
-  const bel = c.createLinearGradient(0, 12, 0, 23); bel.addColorStop(0, 'rgba(8,36,100,0)'); bel.addColorStop(1, 'rgba(8,36,100,.42)'); c.fillStyle = bel; c.fillRect(-20, 12, 40, 12);
-  // a white bath-wave stripe along the side, and three painted bubbles on the rump
-  c.beginPath(); c.moveTo(-20, 14.6);
-  for (let x = -20; x <= 19; x += 1) c.lineTo(x, 14.6 + Math.sin(x * 0.55 + 0.6) * 0.9);
-  for (let x = 19; x >= -20; x -= 1) c.lineTo(x, 17.2 + Math.sin(x * 0.55 + 0.6) * 0.9);
-  c.closePath(); c.fillStyle = 'rgba(250,254,255,.95)'; c.fill();
-  c.strokeStyle = 'rgba(160,210,250,.9)'; c.lineWidth = 0.5; c.beginPath(); for (let x = -20; x <= 19; x += 1) c.lineTo(x, 15.8 + Math.sin(x * 0.55 + 0.6) * 0.9); c.stroke();
-  for (const [bx, by, r] of [[-12.6, 8.8, 1.6], [-9.2, 7.2, 1.05], [-15.4, 11.6, 0.8]]) { c.strokeStyle = 'rgba(240,252,255,.9)'; c.lineWidth = 0.7; c.beginPath(); c.arc(bx, by, r, 0, TWO_PI); c.stroke(); pkDot(c, bx - r * 0.35, by - r * 0.35, r * 0.28, '#ffffff'); }
-  // gloss: a long specular on the chest and one on the rump; warm bounce light from the flame
-  pkE(c, 13.4, 8.4, 1.5, 3.6, 'rgba(255,255,255,.75)', 0, -0.3);
-  c.strokeStyle = 'rgba(230,250,255,.8)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(-4, 12, 14.4, 9.4, 0, 3.3, 3.9); c.stroke();
-  if (thr) { const bl = c.createRadialGradient(0, 24, 1, 0, 24, 14); bl.addColorStop(0, 'rgba(255,170,70,.45)'); bl.addColorStop(1, 'rgba(255,140,40,0)'); c.fillStyle = bl; c.fillRect(-16, 10, 32, 14); }
-  c.restore();
-  // ---- the seat: a dark cockpit scooped into the duck's back ----
-  pkE(c, DKP.HX, 3.6, 9.4, 2.7, pkLG(c, 0, 1, 0, 6, ['#0e2a5e', '#1a4a90']), 1.2);
-  for (const d of [-1, 1]) dkpTap(c, d, 0, false);
-  // ---- Pip ----
-  const bob = Math.sin(t * 2.4) * 0.55 + (bite ? -4.5 : 0) + k * 0.6 - f * 0.8;
-  const shake = panic ? Math.sin(t * 47) * 0.35 : 0;
-  c.save(); c.translate(shake, bob);
-  if (bite) { c.translate(DKP.HX, 0); c.rotate(-rock * 1.3); c.translate(-DKP.HX, 0); }
-  pkE(c, DKP.HX, -2.6, 7.8, 7.4, pkRG(c, DKP.HX - 1.5, -4.5, 8.4, DKP.fluff), 1.5);
-  pkE(c, DKP.HX, 0, 4.8, 4.6, 'rgba(255,253,236,.7)', 0);
-  c.save(); pkE(c, DKP.HX, -2.6, 7.8, 7.4, null, 0); c.clip();
-  const sink = c.createLinearGradient(0, 1, 0, 5); sink.addColorStop(0, 'rgba(210,130,10,0)'); sink.addColorStop(1, 'rgba(200,120,10,.45)'); c.fillStyle = sink; c.fillRect(DKP.HX - 9, 1, 18, 5);
-  c.restore();
-  c.strokeStyle = 'rgba(214,150,20,.5)'; c.lineWidth = 0.55;
-  for (const [x, y] of [[-3, -1], [2.4, 0.6], [-1, 2.2], [3.6, -2.4], [-4.4, 1.4]]) { c.beginPath(); c.moveTo(DKP.HX + x, -2 + y); c.lineTo(DKP.HX + x + 0.6, -0.6 + y); c.stroke(); }
-  c.restore();
-  // the front lip of the seat, over Pip's bottom
-  c.beginPath(); c.ellipse(DKP.HX, 3.6, 9.4, 2.7, 0, 0.05, Math.PI - 0.05); c.strokeStyle = INK; c.lineWidth = 3.2; c.stroke(); c.strokeStyle = '#7ad6ff'; c.lineWidth = 1.5; c.stroke();
-  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(DKP.HX, 3.6, 9.4, 2.7, 0, 1.9, 2.6); c.stroke();
-  // ---- the rubber duck's head (quacking with the jet) ----
-  const quack = bite ? 0.8 + Math.sin(t * 20) * 0.2 : panic ? 0.7 : thr ? 0.18 + Math.max(0, Math.sin(t * 7)) * 0.4 : grin ? 0.5 : 0;
-  dkpRubHead(c, quack, mood, t);
-  for (const d of [-1, 1]) dkpTap(c, d, 0, true);
-  // ---- Pip's wings and head ----
-  c.save(); c.translate(shake, bob);
-  if (bite) { c.translate(DKP.HX, 0); c.rotate(-rock * 1.3); c.translate(-DKP.HX, 0); }
-  for (const d of [-1, 1]) {
-    let ang, flap = 0;
-    if (bite) { ang = -1.5; flap = Math.sin(t * 34 + d) * 0.35; }
-    else if (panic) { ang = -1.15; flap = Math.sin(t * 30 + d * 1.3) * 0.45; }
-    else if (grin) { ang = d > 0 ? -1.3 : 0.32; flap = d > 0 ? Math.sin(t * 16) * 0.3 : 0; }
-    else if (fallF) { ang = -0.75 + f * -0.1; flap = Math.sin(t * 22 + d) * 0.3; }
-    else { ang = 0.3 + k * 0.08; flap = k * Math.sin(t * 20 + d) * 0.05 + Math.sin(t * 2.4 + d) * 0.03; }
-    dkpWing(c, d, ang, flap);
-  }
-  const hy = DKP.HY + (mood === 'thrust' ? 0.4 : 0);
-  dkpHead(c, st, mood, t, k, hy);
-  // the helmet: snug on, jiggling up in a fright, flying off when swallowed
-  const fl = Math.sin(t * (thr ? 18 : 3)) * (thr ? 0.18 : 0.06) - 0.35 * k;
-  if (bite) dkpHelmet(c, DKP.HX + 3 + Math.sin(t * 7) * 1.2, hy - 15, 0.5 + Math.sin(t * 11) * 0.15, t, fl);
-  else dkpHelmet(c, DKP.HX + st.look * 0.4, hy - 8.6 - (panic ? 2.4 + Math.abs(Math.sin(t * 9)) * 1.4 : 0), -0.06 + (panic ? Math.sin(t * 9) * 0.1 : 0) + (grin ? 0.12 : 0), t, fl);
-  c.restore();
-  c.restore();
-}
+// ---- Pip and the Rubber Ducket, split into a character and a vehicle (see SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: the bubbles, paddling feet, bell, tail, body,
+// cockpit and tap stems (vehicle back), Pip's fluffy body (character body), the cockpit's front lip, the rubber duck's
+// head and the tap cross-heads (vehicle front), then Pip's wings, head and eggshell helmet (character front). The whole
+// rig rocks like a bath toy (the vehicle's tip, about (0, 12), never quite still) and tips right over in the bite, while
+// Pip leans back against it (-seat.tip * 1.3). The rubber duck keeps its own copy of the easing (DKPV), so its feet
+// paddle the same under any rider.
+const DKPV = { k: 0, f: 0, t: -1 };
+const PIP = {
+  id: 'duck', line: '#7a4416', bitePose: true,
+  palette: { fluff: DKP.fluff, bill: DKP.bill, shell: DKP.shell, stripe: DKP.red, eyes: '#2a1a10' },
+  // moods: 'calm' | 'thrust' | 'grin' (near miss) | 'fall' | 'panic' (scared, and the bite)
+  pose(st, seat) {
+    const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fallF = !panic && !grin && !thr && pkLookDown > 0 ? 1 : 0;
+    dkpEase(DKP, st, thr ? 1 : 0, fallF);
+    const k = DKP.k, f = bite ? 1 : DKP.f;
+    const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fallF ? 'fall' : 'calm';
+    const bob = Math.sin(t * 2.4) * 0.55 + (bite ? -4.5 : 0) + k * 0.6 - f * 0.8;
+    const shake = panic ? Math.sin(t * 47) * 0.35 : 0;
+    return { bite, t, thr, panic, grin, fallF, k, f, mood, bob, shake };
+  },
+  draw: {
+    body(c, st, seat) {
+      const { bite, bob, shake } = seat.cp;
+      // ---- Pip ----
+      c.save(); c.translate(shake, bob);
+      if (bite) { c.translate(DKP.HX, 0); c.rotate(-seat.tip * 1.3); c.translate(-DKP.HX, 0); }
+      pkE(c, DKP.HX, -2.6, 7.8, 7.4, pkRG(c, DKP.HX - 1.5, -4.5, 8.4, DKP.fluff), 1.5);
+      pkE(c, DKP.HX, 0, 4.8, 4.6, 'rgba(255,253,236,.7)', 0);
+      c.save(); pkE(c, DKP.HX, -2.6, 7.8, 7.4, null, 0); c.clip();
+      const sink = c.createLinearGradient(0, 1, 0, 5); sink.addColorStop(0, 'rgba(210,130,10,0)'); sink.addColorStop(1, 'rgba(200,120,10,.45)'); c.fillStyle = sink; c.fillRect(DKP.HX - 9, 1, 18, 5);
+      c.restore();
+      c.strokeStyle = 'rgba(214,150,20,.5)'; c.lineWidth = 0.55;
+      for (const [x, y] of [[-3, -1], [2.4, 0.6], [-1, 2.2], [3.6, -2.4], [-4.4, 1.4]]) { c.beginPath(); c.moveTo(DKP.HX + x, -2 + y); c.lineTo(DKP.HX + x + 0.6, -0.6 + y); c.stroke(); }
+      c.restore();
+    },
+    front(c, st, seat) {
+      const { bite, t, thr, panic, grin, fallF, k, f, mood, bob, shake } = seat.cp;
+      // ---- Pip's wings and head ----
+      c.save(); c.translate(shake, bob);
+      if (bite) { c.translate(DKP.HX, 0); c.rotate(-seat.tip * 1.3); c.translate(-DKP.HX, 0); }
+      for (const d of [-1, 1]) {
+        let ang, flap = 0;
+        if (bite) { ang = -1.5; flap = Math.sin(t * 34 + d) * 0.35; }
+        else if (panic) { ang = -1.15; flap = Math.sin(t * 30 + d * 1.3) * 0.45; }
+        else if (grin) { ang = d > 0 ? -1.3 : 0.32; flap = d > 0 ? Math.sin(t * 16) * 0.3 : 0; }
+        else if (fallF) { ang = -0.75 + f * -0.1; flap = Math.sin(t * 22 + d) * 0.3; }
+        else { ang = 0.3 + k * 0.08; flap = k * Math.sin(t * 20 + d) * 0.05 + Math.sin(t * 2.4 + d) * 0.03; }
+        dkpWing(c, d, ang, flap);
+      }
+      const hy = DKP.HY + (mood === 'thrust' ? 0.4 : 0);
+      dkpHead(c, st, mood, t, k, hy);
+      // the helmet: snug on, jiggling up in a fright, flying off when swallowed
+      const fl = Math.sin(t * (thr ? 18 : 3)) * (thr ? 0.18 : 0.06) - 0.35 * k;
+      if (bite) dkpHelmet(c, DKP.HX + 3 + Math.sin(t * 7) * 1.2, hy - 15, 0.5 + Math.sin(t * 11) * 0.15, t, fl);
+      else dkpHelmet(c, DKP.HX + st.look * 0.4, hy - 8.6 - (panic ? 2.4 + Math.abs(Math.sin(t * 9)) * 1.4 : 0), -0.06 + (panic ? Math.sin(t * 9) * 0.1 : 0) + (grin ? 0.12 : 0), t, fl);
+      c.restore();
+    },
+  },
+};
+const RUBBER_DUCKET = {
+  id: 'ducket', line: '#7a4416', exhaust: 'fire', nozzles: [[0, 29]], bitePose: true, tip: { pivot: [0, 12] },
+  desc: 'A glossy azure rubber bath duck with a chrome bell in its squeak hole, paddling feet for fins and bath-tap handlebars',
+  palette: { rubber: DKP.rub, bill: DKP.bill, chrome: DKP.chrome, tint: '46,152,234' },
+  pose(st) {
+    const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fallF = !panic && !grin && !thr && pkLookDown > 0 ? 1 : 0;
+    dkpEase(DKPV, st, thr ? 1 : 0, fallF);
+    const k = DKPV.k, f = bite ? 1 : DKPV.f;
+    const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fallF ? 'fall' : 'calm';
+    // the whole rig rocks gently like a bath toy on water; swallowed, it tips right over
+    const rock = bite ? 0.3 + Math.sin(t * 13) * 0.07 : Math.sin(t * 2.1) * 0.035 + (panic ? Math.sin(t * 40) * 0.02 : 0);
+    return { bite, t, thr, panic, grin, k, f, mood, tip: rock };
+  },
+  draw: {
+    back(c, st, seat) {
+      const { bite, t, thr, panic, k, f } = seat.vp;
+      // ---- behind the duck: bubbles, feet, nozzle, tail ----
+      if (thr || bite) dkpBubbles(c, t, bite ? 6 : 4, bite ? 1.6 : 1.1);
+      const pad = bite ? [0.9, -0.9] : panic ? [Math.sin(t * 30) * 0.5, Math.sin(t * 30 + 2) * 0.5]
+        : [Math.sin(t * (2.2 + 12 * k)) * (0.1 + 0.28 * k), Math.sin(t * (2.2 + 12 * k) + Math.PI) * (0.1 + 0.28 * k)];
+      dkpFoot(c, -9.6, 20.4, 0.5 + pad[0] - 0.2 * f);
+      dkpFoot(c, 8.6, 20.6, -0.5 + pad[1] + 0.2 * f);
+      dkpNozzle(c, thr, t);
+      dkpTail(c, (thr ? Math.sin(t * 16) * 0.16 : Math.sin(t * 2.6) * 0.06) - 0.1 * f + (bite ? Math.sin(t * 24) * 0.25 : 0));
+      // ---- the rubber duck's body ----
+      dkpBodyPath(c); c.fillStyle = pkRG(c, -4, 6, 20, DKP.rub); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.9; c.stroke();
+      c.save(); dkpBodyPath(c); c.clip();
+      const bel = c.createLinearGradient(0, 12, 0, 23); bel.addColorStop(0, 'rgba(8,36,100,0)'); bel.addColorStop(1, 'rgba(8,36,100,.42)'); c.fillStyle = bel; c.fillRect(-20, 12, 40, 12);
+      // a white bath-wave stripe along the side, and three painted bubbles on the rump
+      c.beginPath(); c.moveTo(-20, 14.6);
+      for (let x = -20; x <= 19; x += 1) c.lineTo(x, 14.6 + Math.sin(x * 0.55 + 0.6) * 0.9);
+      for (let x = 19; x >= -20; x -= 1) c.lineTo(x, 17.2 + Math.sin(x * 0.55 + 0.6) * 0.9);
+      c.closePath(); c.fillStyle = 'rgba(250,254,255,.95)'; c.fill();
+      c.strokeStyle = 'rgba(160,210,250,.9)'; c.lineWidth = 0.5; c.beginPath(); for (let x = -20; x <= 19; x += 1) c.lineTo(x, 15.8 + Math.sin(x * 0.55 + 0.6) * 0.9); c.stroke();
+      for (const [bx, by, r] of [[-12.6, 8.8, 1.6], [-9.2, 7.2, 1.05], [-15.4, 11.6, 0.8]]) { c.strokeStyle = 'rgba(240,252,255,.9)'; c.lineWidth = 0.7; c.beginPath(); c.arc(bx, by, r, 0, TWO_PI); c.stroke(); pkDot(c, bx - r * 0.35, by - r * 0.35, r * 0.28, '#ffffff'); }
+      // gloss: a long specular on the chest and one on the rump; warm bounce light from the flame
+      pkE(c, 13.4, 8.4, 1.5, 3.6, 'rgba(255,255,255,.75)', 0, -0.3);
+      c.strokeStyle = 'rgba(230,250,255,.8)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(-4, 12, 14.4, 9.4, 0, 3.3, 3.9); c.stroke();
+      if (thr) { const bl = c.createRadialGradient(0, 24, 1, 0, 24, 14); bl.addColorStop(0, 'rgba(255,170,70,.45)'); bl.addColorStop(1, 'rgba(255,140,40,0)'); c.fillStyle = bl; c.fillRect(-16, 10, 32, 14); }
+      c.restore();
+      // ---- the seat: a dark cockpit scooped into the duck's back ----
+      pkE(c, DKP.HX, 3.6, 9.4, 2.7, pkLG(c, 0, 1, 0, 6, ['#0e2a5e', '#1a4a90']), 1.2);
+      for (const d of [-1, 1]) dkpTap(c, d, 0, false);
+    },
+    front(c, st, seat) {
+      const { bite, t, thr, panic, grin, mood } = seat.vp;
+      // the front lip of the seat, over its rider's bottom
+      c.beginPath(); c.ellipse(DKP.HX, 3.6, 9.4, 2.7, 0, 0.05, Math.PI - 0.05); c.strokeStyle = INK; c.lineWidth = 3.2; c.stroke(); c.strokeStyle = '#7ad6ff'; c.lineWidth = 1.5; c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(DKP.HX, 3.6, 9.4, 2.7, 0, 1.9, 2.6); c.stroke();
+      // ---- the rubber duck's head (quacking with the jet) ----
+      const quack = bite ? 0.8 + Math.sin(t * 20) * 0.2 : panic ? 0.7 : thr ? 0.18 + Math.max(0, Math.sin(t * 7)) * 0.4 : grin ? 0.5 : 0;
+      dkpRubHead(c, quack, mood, t);
+      for (const d of [-1, 1]) dkpTap(c, d, 0, true);
+    },
+  },
+};
+SPLIT_CHARACTERS.duck = PIP; SPLIT_VEHICLES.ducket = RUBBER_DUCKET;
 // ---- Biscuit the hamster and the Turbo Ball (PILOTS 'hamster') ----
 // A golden Syrian hamster with stuffed cheek pouches, buck teeth and a red sweatband, sprinting inside a lilac
 // hamster ball that two white-and-red rocket pods (clamped to a red-striped mounting ring) blast up the shaft.
@@ -14453,7 +14517,7 @@ const PILOTS = [
 
   { id: 'dachshund', name: 'Frankie the dachshund', ride: 'Hot-dog rocket' },   // split: FRANKIE in the HOT_DOG (its two nozzles keep their own exhausts)
 
-  { id: 'duck', name: 'Pip the duckling', ride: 'Rubber Ducket', noInk: '#7a4416', exhaust: 'fire', nozzles: [[0, 29]], bitePose: true, draw(c, st) { dkpDraw(c, st); } },
+  { id: 'duck', name: 'Pip the duckling', ride: 'Rubber Ducket' },   // split: PIP in the RUBBER_DUCKET
   { id: 'hamster', name: 'Biscuit the hamster', ride: 'Turbo Ball' },   // split: BISCUIT in the TURBO_BALL (exhaust, nozzles and art from the parts)
   { id: 'piggy', name: 'Penny the piggy bank', ride: 'Jackpot rocket' },   // split: PENNY on the JACKPOT (exhaust, nozzles and art from the parts)
 
