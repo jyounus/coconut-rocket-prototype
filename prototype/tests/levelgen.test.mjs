@@ -907,6 +907,8 @@ if (zoneMix.gold && zoneMix.goldH) {
 const advStats = { levels: 0, forks: 0, tightMin: Infinity, wideMin: Infinity, tightVal: 0, wideVal: 0, golds: 0, pickClear: Infinity, chiliGap: 0, bossChiliGap: 0, finishClear: Infinity, real: [] };
 const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L)) : 0; return Math.hypot(px - ax - dx * t, py - ay - dy * t); };
 const capsDist = (caps, x, a) => Math.min(...caps.map(q => segDist(x, a, q.x0, q.a0, q.x1, q.a1) - q.r));
+// stages 1-4 are real climbs (35-70 s for a good pilot): each at least 1000 m and longer than the one before, at most 3000 m
+{ let prev = 0; for (const st of ADVENTURE.stages) if (!st.boss) { if (st.len < 1000 || st.len > 3000 || st.len <= prev) fail('adventure stages climb 1000-3000 m, each longer than the last', `${st.name}: ${st.len} m`); prev = st.len; } }
 pinJungle(true);
 try {
   for (let k = 0; k < 150; k++) for (const st0 of ADVENTURE.stages) {
@@ -976,7 +978,13 @@ try {
       const tv = val(inLane(pl.tight)), wv = val(inLane(-pl.tight)), gold = inLane(pl.tight).some(f => f.kind === 'gold');
       advStats.tightVal += tv; advStats.wideVal += wv; if (gold) advStats.golds++;
       if (tv <= wv || !gold) fail('the tight lane holds more coconuts and a golden one', `${tag}: ${tv} vs ${wv}, golden ${gold}`);
-      if (k === 0) advStats.real.push(`${st0.name} ${pl.lo | 0}-${pl.hi | 0}: lanes ${tMin.toFixed(0)}/${wMin.toFixed(0)}, coconut value ${tv}/${wv}`);
+      if (k === 0) {
+        // the real stage: its coconut target (the second star) is within reach of a pilot taking the tight lane (at
+        // most 45% of the coconut value on that path to the finish) without being a gimme (at least 30% of it)
+        const path = val(fruit.filter(f => f.alt < end && laneOf(f) !== -pl.tight));
+        if (st.target > path * 0.45 || st.target < path * 0.3) fail('the coconut target is reachable via the tight lane', `${tag}: target ${st.target} vs ${path} on the tight path`);
+        advStats.real.push(`${st0.name} ${st0.len} m, fork ${pl.lo | 0}-${pl.hi | 0}: lanes ${tMin.toFixed(0)}/${wMin.toFixed(0)}, coconut value ${tv}/${wv}, target ${st.target} of ${path} on the tight path`);
+      }
     }
   }
   // the fork can never be touched by a monster limb: its nearest point to a wall is beyond the grab band plus the widest pilot

@@ -1256,17 +1256,18 @@ const coversCentre = c => c.steps.some(([t, v, w]) => t === 'bat' || t === 'gate
 // ---------- adventure mode (fixed stages; never used by the endless Daily and Practice shafts) ----------
 // World 1, Jungle Roots: four fixed-length climbs on a fixed seed each, ending at a finish deck, then the boss shaft.
 // len: metres to the finish deck; seed: its shaft; reward: coconuts for the first clear (replays pay ADV.replay of it);
-// target: coconuts for the second star; density / intro (m) / diff0 (difficulty added on top of the usual ramp) set its
+// target: coconuts for the second star; density / intro (m) / diff0 (difficulty added on top of the usual ramp) / diffCap
+// (the most difficult it gets: stage 1 stays easy all the way up) set its
 // hazards; branch: where the shaft splits round a central rock pillar (at, len in world units; tight: which side the
 // tight lane is on, -1 left; lane: the tight lane's width). The boss shaft (boss: true) has no end and no fork; its
 // chilies come every chiliGap, and its hazards are `spread` times further apart (the boss is the main threat). Every stage stays in the jungle (pinJungle) however high it climbs.
 const ADVENTURE = {
   id: 'w1', name: 'Jungle Roots',
   stages: [
-    { name: 'Root Run',      len: 300, seed: 'w1-1', reward: 40,  target: 28, density: 1.1, intro: 300, diff0: 0,    branch: { at: 1450, len: 600,  tight: -1, lane: 122 } },
-    { name: 'Vine Gully',    len: 400, seed: 'w1-2', reward: 60,  target: 30, density: 1.4, intro: 160, diff0: 0.05, branch: { at: 1900, len: 700,  tight: 1,  lane: 118 } },
-    { name: 'Thorn Hollow',  len: 500, seed: 'w1-3', reward: 80,  target: 38, density: 1.6,  intro: 60,  diff0: 0.15, branch: { at: 2400, len: 800,  tight: -1, lane: 116 } },
-    { name: 'Spider Drop',   len: 600, seed: 'w1-4', reward: 100, target: 50, density: 1.8,  intro: 0,   diff0: 0.3,  branch: { at: 2900, len: 900,  tight: 1,  lane: 114 } },
+    { name: 'Root Run',      len: 1200, seed: 'w1-1', reward: 50,  target: 70, density: 1.0,  intro: 250, diff0: 0,    diffCap: 0.35, branch: { at: 6600,  len: 700,  tight: -1, lane: 122 } },
+    { name: 'Vine Gully',    len: 1500, seed: 'w1-2', reward: 75,  target: 80, density: 1.2,  intro: 150, diff0: 0.05, diffCap: 0.55, branch: { at: 8200,  len: 800,  tight: 1,  lane: 118 } },
+    { name: 'Thorn Hollow',  len: 1800, seed: 'w1-3', reward: 100, target: 105, density: 1.35, intro: 80,  diff0: 0.15, diffCap: 0.75, branch: { at: 9800,  len: 900,  tight: -1, lane: 116 } },
+    { name: 'Spider Drop',   len: 2200, seed: 'w1-4', reward: 130, target: 125, density: 1.5,  intro: 0,   diff0: 0.25, diffCap: 0.9,  branch: { at: 12000, len: 1000, tight: 1,  lane: 114 } },
     { name: 'Gobblebloom',   boss: true, seed: 'w1-boss', reward: 300, target: 120, density: 0.45, intro: 250, diff0: 0, chiliGap: 380, spread: 2.4 },
   ],
 };
@@ -1283,7 +1284,7 @@ const ADV = { branchWidth: 388, pillarR: 34, tipR: 7, taper: 0.3, step: 30, padL
 // A stage's shaft seed and the createLevel options it runs on (shared by the game and the test).
 const advSeed = st => cyrb32('coconut-rocket/' + st.seed);
 const advLevelOpts = st => ({ density: st.density, intro: st.intro,
-  adv: { end: st.boss ? 0 : st.len * UNITS_PER_M, branch: st.branch || null, diff0: st.diff0 || 0, chiliGap: st.chiliGap || 0, spread: st.spread || 1, boss: !!st.boss } });
+  adv: { end: st.boss ? 0 : st.len * UNITS_PER_M, branch: st.branch || null, diff0: st.diff0 || 0, diffCap: st.diffCap || 1, chiliGap: st.chiliGap || 0, spread: st.spread || 1, boss: !!st.boss } });
 // Pin every zone to the jungle while an adventure stage runs (and back to the endless heights for Daily and Practice):
 // the zone heights move out of reach, so walls, palette, hazard skins, chunk weights and set pieces all stay jungle.
 const ZONES_ENDLESS = RULES.zones.slice();
@@ -1467,7 +1468,7 @@ function createLevel(seed, opts) {
   const intro = opts.intro * UNITS_PER_M, density = opts.density;
   // adventure stages only (opts.adv): a finish height, a fork round a rock pillar, a difficulty head start, a chili gap
   const adv = opts.adv || null, endAt = adv && adv.end || 0, br = adv && adv.branch ? { ...adv.branch, planned: false, placed: false } : null;
-  const difficulty = adv ? a => clamp((a - intro) / RULES.ramp + (adv.diff0 || 0), 0, 1) : a => clamp((a - intro) / RULES.ramp, 0, 1);
+  const difficulty = adv ? a => clamp((a - intro) / RULES.ramp + (adv.diff0 || 0), 0, adv.diffCap || 1) : a => clamp((a - intro) / RULES.ramp, 0, 1);
   const pillars = [];                // the forks' pillars placed so far (adventure only)
   const clearStart = adv ? ADV.clearStart : RULES.clearStart;  // (an adventure stage's hazard-free launch is shorter)
   // Shaft shape: an authored plan of stretches (wide, pinch down to minWidth, or a calm chamber)
@@ -28520,7 +28521,7 @@ setControl(settings.control); // tilt still needs a tap on its button to ask for
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; } };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; } };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
