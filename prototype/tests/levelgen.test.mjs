@@ -164,8 +164,11 @@ const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, t
 }
 for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('beats mix hazard types', sp.name);
 // chili ammo: a pilot that follows the chili line (the guaranteed gap-fill chilies) at the monster's top base speed
-// picks up at least 1.15× the ammo that steady auto-fire (one shot every AMMO.rate s, the monster always in range at
-// its leash) spends, so following the chilies never runs dry. Out of ammo the monster gets hungry (the game's own chase
+// picks up at least 1.15× the ammo that auto-fire spends at the monster's tightest normal leash (the game's own chase
+// and blaster model: CHASE, a shot every AMMO.rate s while it is within AMMO.range, each hit knocking it AMMO.push down
+// and stunning it AMMO.stun s, so it has to climb back into range), so following the chilies never runs dry. And ammo
+// matters for a skilled pilot too: flat out at top speed with the leash opened by clean play (CHASE.open) the blaster
+// still spends at least half of what the chili line supplies at that speed, so the tank does not just sit full. Out of ammo the monster gets hungry (the game's own chase
 // model: CHASE plus hungerLeash): from its normal leash it reaches a pilot climbing at that speed only after more than
 // twice the longest climb without a chili, so running dry right after a chili still leaves time to reach the next one;
 // and the hunger is real: even flat out at top speed it catches you within 12 s.
@@ -173,9 +176,31 @@ const CLEAR = PILOT_W / 2 + 15 + RULES.pickup.r;   // a pickup's clearance from 
 const ammoStats = {};
 {
   const D = DEFAULTS, v = D.wormBase + 60, gap = RULES.chili.gap;
-  const supply = AMMO.per * v / gap, spend = 1 / AMMO.rate;
-  ammoStats.ratio = supply / spend;
-  if (supply < spend * 1.15) fail('following the chilies out-supplies steady auto-fire by 15%', `${supply.toFixed(2)} vs ${spend.toFixed(2)} ammo/s`);
+  // shots per second auto-fire spends on a pilot climbing steadily at pv, the monster (base speed `base`) chasing at
+  // leash `target`: it fires while the monster is in range, shots fly down at AMMO.speed, a hit knocks it back (over a
+  // few frames, as updateBlaster does) and stuns it
+  const spendAt = (pv, target, base) => {
+    let pa = 0, wa = -target, kb = 0, stun = 0, fireT = 0, n = 0, t = 0; const dt = 1 / 240, shots = [];
+    while (t < 60) {
+      pa += pv * dt;
+      const g = pa - wa;
+      let mv = base + Math.max(-base, Math.min(CHASE.cap, (g - target) * CHASE.k)), floor = base * CHASE.floor;
+      if (stun > 0) { mv = Math.min(mv, -40); floor = Math.min(floor, -40); }
+      wa += Math.max(mv, floor) * dt; fireT -= dt; stun -= dt;
+      if (fireT <= 0 && g < AMMO.range && g > 0) { shots.push(pa - 20); n++; fireT = AMMO.rate; }
+      for (let i = shots.length - 1; i >= 0; i--) { shots[i] -= AMMO.speed * dt; if (shots[i] <= wa) { shots.splice(i, 1); kb += AMMO.push; stun = AMMO.stun; } }
+      if (kb > 0) { const d = Math.min(kb, kb * dt * 14 + 20 * dt); wa -= d; kb -= d; }
+      t += dt;
+    }
+    return n / 60;
+  };
+  const supply = AMMO.per * v / gap, spend = spendAt(v, D.chase, v);
+  ammoStats.ratio = supply / spend; ammoStats.spend = spend;
+  if (supply < spend * 1.15) fail('following the chilies out-supplies auto-fire at the tightest leash by 15%', `${supply.toFixed(2)} vs ${spend.toFixed(2)} ammo/s`);
+  const flatSupply = AMMO.per * D.maxUp / gap, flatSpend = spendAt(D.maxUp, Math.max(D.chase, CHASE.open), D.wormBase + 30);
+  ammoStats.flat = flatSpend / flatSupply; ammoStats.flatSpend = flatSpend;
+  if (flatSpend < flatSupply * 0.5) fail('a flat-out pilot at the calm leash still spends half the chili line\'s ammo', `${flatSpend.toFixed(2)} vs ${flatSupply.toFixed(2)} ammo/s`);
+  if (flatSpend > flatSupply) fail('a flat-out pilot following the chilies still gains ammo', `${flatSpend.toFixed(2)} vs ${flatSupply.toFixed(2)} ammo/s`);
   const caught = pv => {
     let g = D.chase, h = 0, t = 0; const dt = 1 / 240, base = D.wormBase + 60;
     while (g > 0 && t < 30) {
@@ -996,7 +1021,7 @@ const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
 {
   const cv = zoneMix.coco || [0], cn = zoneMix.cocoN || [0], avg = a => (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1);
-  console.log(`PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo steady fire spends; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
+  console.log(`PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo auto-fire spends at the tightest leash (${ammoStats.spend.toFixed(2)} shots/s); flat out at the calm leash it fires ${ammoStats.flatSpend.toFixed(2)} shots/s, ${Math.round(ammoStats.flat * 100)}% of the chili line's supply; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 console.log(advSummary());

@@ -1129,7 +1129,7 @@ const RULES = {
 // hunger builds over `starve` s (and drains over `sate` s once you have ammo again), pulling its leash down to
 // -`lunge` (past the pilot) and lifting its speed cap by `hungerCap`, so it reaches you within a few seconds unless
 // you grab a chili. `low`: the ammo warning shows at or below this.
-const AMMO = { start: 6, max: 10, per: 3, rate: 0.65, range: 360, speed: 1100, push: 110, stun: 0.3, starve: 12, sate: 1.5, lunge: 170, hungerCap: 220, low: 2 };
+const AMMO = { start: 6, max: 10, per: 2, rate: 0.85, range: 400, speed: 1100, push: 110, stun: 0.1, starve: 12, sate: 1.5, lunge: 170, hungerCap: 220, low: 2 };
 const COCO_BONUS = 25;      // points per coconut (a golden one counts as COCO_GOLD coconuts)
 const COCO_GOLD = 10;       // a golden coconut's worth
 const HIT_BONUS = 10;       // points per chili shot that hits the monster
@@ -2918,7 +2918,8 @@ function revive() {
 // Elastic chase: the monster rubber-bands toward a gap of cfg.chase units below you, which keeps its
 // head peeking up from the bottom of the screen. Its speed is a base speed that ramps with height,
 // plus k × (gap − target), capped both ways: never more than `cap` above its base (enough to keep up
-// with full thrust, now that the engine never runs hot: your chili shots are what hold it off), and
+// with full thrust and to climb back into blaster range soon after a chili knocks it down, so even a
+// flat-out pilot keeps firing and relies on the chili line: your shots are what hold it off), and
 // never under `floor` × base, so stalling or dropping lets it close in. Surge beats pull the target in
 // to `surgeTo` for `beatLen` seconds.
 // While a gate is just above you it eases off (you may have to wait), and during a zone reveal it
@@ -2935,8 +2936,8 @@ function revive() {
 // keep climbing hard (and dodge) until it lets go. Only ever telegraphed (warn), never near a gate (it cancels if
 // one comes up), never while you wait for a gate, never on an empty tank, and never in a zone reveal or a revive.
 /* LEVELGEN:BEGIN */
-const CHASE = { k: 1.35, cap: 200, floor: 0.42, surgeTo: 150, beatLen: 1.2, every: [8, 12], gateEase: 0.45,
-  open: 330, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, gateGap: 170,
+const CHASE = { k: 2.2, cap: 360, floor: 0.42, surgeTo: 150, beatLen: 1.2, every: [8, 12], gateEase: 0.45,
+  open: 220, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, gateGap: 170,
   surgeV: 1.15, surgeK: 1.6, surgeMax: 1.7 };
 /* LEVELGEN:END */
 function gateAhead(reach = RULES.gate.room + 120) {
@@ -2946,7 +2947,7 @@ function gateAhead(reach = RULES.gate.room + 120) {
 function chaseSpeed(gap, dt) {
   const base = cfg.wormBase + Math.min(60, G.maxAlt * cfg.wormRamp);
   // a longer leash while the easy start plays out (room to survive an overheat while you learn)
-  let target = lerp(Math.max(cfg.chase, 330), cfg.chase, smooth(cfg.intro * 10, cfg.intro * 18, G.p.alt));
+  let target = lerp(Math.max(cfg.chase, CHASE.open), cfg.chase, smooth(cfg.intro * 10, cfg.intro * 18, G.p.alt));
   target = lerp(target, Math.max(target, CHASE.open), smooth(0, 1, G.calm || 0));     // the gap opens after clean play
   if (G.worm.beat > 0) target = Math.min(target, CHASE.surgeTo);
   // out of ammo it gets hungry: the leash pulls in past you and its speed cap lifts (see AMMO)
