@@ -593,7 +593,7 @@ const UNITS_PER_M = 10;
 // boost: strength of the kick for pressing again after a short release (it recharges over BOOST_CD seconds).
 // wormBase / wormRamp / chase: the monster's base speed, how much it gains per unit climbed (up to
 // +60), and the gap between the pilot's lowest point and its catch line it rubber-bands toward (see CHASE).
-const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 330, wormRamp: 0.005, chase: 175, density: 1, intro: 300, camPos: 25, boost: 1 };
+const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 330, wormRamp: 0.005, chase: 75, density: 1, intro: 300, camPos: 25, boost: 1 };
 
 // Pilot hitboxes, fitted to each drawing (art units: y points down, drawn at PILOT_SCALE in the world).
 // Each entry is a capsule [x0, y0, x1, y1, r] (a circle when both ends match). They cover the body and the
@@ -942,7 +942,7 @@ function pilotMaxSize(S = PILOT_SCALE) {
 }
 const laneSize = () => pilotMaxSize(LANE_SCALE);
 /* LEVELGEN:END */
-const CFG_KEY = 'cr-cfg7';         // new key: tuned values saved under the old defaults would otherwise stick
+const CFG_KEY = 'cr-cfg8';         // new key: tuned values saved under the old defaults would otherwise stick
 const cfg = Object.assign({}, DEFAULTS, store.get(CFG_KEY, {}));
 const isDefaultTune = () => Object.keys(DEFAULTS).every(k => Math.abs(cfg[k] - DEFAULTS[k]) < 1e-9);
 const settings = Object.assign({ control: 'one', hitboxes: false, character: 'lemur', vehicle: 'coconut', monster: 'worm' }, store.get('cr-settings', {}));
@@ -1008,7 +1008,7 @@ const dayLabel = now.toLocaleDateString(undefined, { weekday: 'short', day: 'num
 const dailySeed = cyrb32('coconut-rocket/' + dayKey);
 const shaftNo = '#' + String(dailySeed % 10000).padStart(4, '0');
 // Scores are points now (height, fruit and close calls each earn points), so they live under new keys.
-let daily = store.get('cr-day2-' + dayKey, { bestPts: 0, bestM: 0, runs: 0, bestAlt: 0 });
+let daily = Object.assign({ bestPts: 0, bestM: 0, runs: 0, bestAlt: 0 }, store.get('cr-day2-' + dayKey, {}));   // (defaults under whatever was saved)
 const practice = store.get('cr-practice', { bestPts: 0, runs: 0 });
 
 // ---------- canvas ----------
@@ -1149,10 +1149,11 @@ const RULES = {
 // monster's catch line is within `range` below the pilot. A shot flies at `speed` (world units / s), costs 1 ammo, and
 // a hit knocks the monster `push` units back down, stops its climb for `stun` s and cancels a surge it is winding up
 // or running. A chili gives `per` ammo, up to `max`; a run starts with `start`. Out of ammo the monster gets hungry:
-// hunger builds over `starve` s (and drains over `sate` s once you have ammo again), pulling its leash down to
-// -`lunge` (past the pilot) and lifting its speed cap by `hungerCap`, so it reaches you within a few seconds unless
-// you grab a chili. `low`: the ammo warning shows at or below this.
-const AMMO = { start: 6, max: 10, per: 2, rate: 0.85, range: 400, speed: 1100, push: 110, stun: 0.1, starve: 12, sate: 1.5, lunge: 170, hungerCap: 220, low: 2 };
+// hunger builds over `starve` s once the tank is empty and the last shot has landed (and drains over `sate` s once you
+// have ammo again), pulling its leash down to -`lunge` (past the pilot) and lifting its speed cap by `hungerCap`; on
+// top of that its gap is held under hungerGap (from wherever it was when the hunger began down to nothing), so it eats
+// you exactly `starve` s after you run dry unless you grab a chili. `low`: the ammo warning shows at or below this.
+const AMMO = { start: 6, max: 10, per: 2, rate: 0.85, range: 145, speed: 1100, push: 70, stun: 0.1, starve: 2, sate: 1.5, lunge: 170, hungerCap: 220, low: 2 };
 const COCO_BONUS = 25;      // points per coconut (a golden one counts as COCO_GOLD coconuts)
 const COCO_GOLD = 10;       // a golden coconut's worth
 const HIT_BONUS = 10;       // points per chili shot that hits the monster
@@ -1170,7 +1171,10 @@ const COMEBACK = { share: 0.5, min: 10, pts: 500, shield: 2.4 };
 let perkHook = null;
 function perk(name, base) { return perkHook ? perkHook(name, base) : base; }
 // The hungry monster's leash: [target gap, speed cap above base] for hunger 0..1 (see chaseSpeed; shared with the test).
-function hungerLeash(target, cap, hunger) { return [lerp(target, -AMMO.lunge, hunger), cap + AMMO.hungerCap * hunger]; }
+function hungerLeash(target, cap, hunger) { return [lerp(target, -AMMO.lunge, Math.pow(hunger, 6)), cap + AMMO.hungerCap * hunger]; }
+// The most gap a hungry monster allows: the gap it had when the hunger began (gap0), closing faster and faster to
+// below zero (caught) as hunger reaches 1 (shared with the test).
+function hungerGap(gap0, hunger) { return Math.max(0, gap0) * (1 - Math.pow(hunger, 1.5)) - 4 * hunger; }
 const FIRE_HUB = 34;               // drawn hub radius (its hitbox is the hub, the bar flame and the tip)
 const WALL_HAZARDS = new Set(['geyser', 'pend', 'spike', 'lavafall']);
 const HEAVY = new Set(['geyser', 'firebar', 'pend', 'crusher', 'gate']);
@@ -2960,8 +2964,8 @@ function revive() {
 // keep climbing hard (and dodge) until it lets go. Only ever telegraphed (warn), never near a gate (it cancels if
 // one comes up), never while you wait for a gate, never on an empty tank, and never in a zone reveal or a revive.
 /* LEVELGEN:BEGIN */
-const CHASE = { k: 2.2, cap: 360, floor: 0.42, surgeTo: 150, beatLen: 1.2, every: [8, 12], gateEase: 0.45,
-  open: 220, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, gateGap: 170,
+const CHASE = { k: 2.2, cap: 360, floor: 0.42, surgeTo: 35, beatLen: 1.2, every: [8, 12], gateEase: 0.45,
+  open: 95, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, gateGap: 170,
   surgeV: 1.15, surgeK: 1.6, surgeMax: 1.7 };
 /* LEVELGEN:END */
 function gateAhead(reach = RULES.gate.room + 120) {
@@ -3144,6 +3148,8 @@ function update(rawDt) {
     let gap = monsterGap();
     G.worm.alt += chaseSpeed(gap, dt) * dt;
     gap = monsterGap();
+    // hungry (an empty tank): it closes in on you, wherever you are, and eats you AMMO.starve s after you ran dry
+    if (G.hunger > 0 && G.state === 'play') { const most = hungerGap(G.hungerGap0 || 0, G.hunger); if (gap > most) { G.worm.alt += gap - most; gap = most; } }
     G.gapLog && G.gapLog.push(gap);
     // embers and grit kicked up the shaft as it nears, and its hot breath rising from the maw
     const prox = clamp(1 - (gap - 100) / 650, 0, 1), haze = monster().haze;
@@ -3312,12 +3318,14 @@ function updateBlaster(dt) {
     else if (G.ammo <= AMMO.low) chainEvent(G.ammo === 1 ? 'Last chili!' : 'Chilies low', '#ff9a3a', 0.9);
   }
   // hunger: builds while the tank is empty, drains once it has ammo again
-  if (G.ammo <= 0) G.hunger = Math.min(1, G.hunger + dt / AMMO.starve);
-  else G.hunger = Math.max(0, G.hunger - dt / AMMO.sate);
+  if (G.ammo <= 0 && !G.shots.length) {
+    if (G.hunger <= 0) G.hungerGap0 = Math.min(monsterGap(), 420);   // (from just below the screen at most)
+    G.hunger = Math.min(1, G.hunger + dt / AMMO.starve);
+  } else if (G.ammo > 0) G.hunger = Math.max(0, G.hunger - dt / AMMO.sate);
   G.dryT = Math.max(0, G.dryT - dt);
-  G.worm.stun = Math.max(0, G.worm.stun - dt); G.worm.hitT = Math.max(0, G.worm.hitT - dt * 3);
-  // the knockback slides it down fast (most of it in about 0.15 s) instead of teleporting
-  if (G.worm.kb > 0) { const d = Math.min(G.worm.kb, G.worm.kb * dt * 14 + 20 * dt); G.worm.alt -= d; G.worm.kb -= d; }
+  G.worm.stun = Math.max(0, G.worm.stun - dt); G.worm.hitT = Math.max(0, G.worm.hitT - dt * 3); G.worm.recoil = Math.max(0, (G.worm.recoil || 0) - dt / 0.65);
+  // the knockback slides it down (most of it in about 0.25 s, so you see it fall back) instead of teleporting
+  if (G.worm.kb > 0) { const d = Math.min(G.worm.kb, G.worm.kb * dt * 8 + 20 * dt); G.worm.alt -= d; G.worm.kb -= d; }
 }
 // shots fly and hit (they keep flying while you are dead, so a last shot can still land); impact bursts age
 function updateShots(dt) {
@@ -3339,7 +3347,7 @@ function shotHit(q) {
   if (G.state !== 'play') return;
   st.hits++;
   const at = W.alt;
-  W.kb = (W.kb || 0) + perk('push', AMMO.push); W.stun = AMMO.stun; W.hitT = 1; W.snap = 0;   // (knocked back over a few frames, see updateBlaster)
+  W.kb = (W.kb || 0) + perk('push', AMMO.push); W.stun = AMMO.stun; W.hitT = 1; W.snap = 0; W.recoil = 1;   // (knocked back over a few frames, see updateBlaster)
   G.shake = Math.max(G.shake, 3);
   for (let k = 0; k < 8; k++) { const a = Math.PI * (0.1 + 0.8 * k / 7); puff(q.x, at + 8, Math.cos(a) * 160, Math.sin(a) * 140, 0.4, 2.2, k % 2 ? 'spark' : 'flame'); }
   addPop(`+${HIT_BONUS}`, q.x, at + 50, { col: '#ffb238', small: true });
@@ -26964,14 +26972,16 @@ function drawMonsterDepths(mon, y, k, tx) {
 // (its brow, eyes and the top of its jaws, in its real silhouette), growing as it closes in, with its wall limbs
 // whole beside it, gripping and grabbing at the walls (capped well below the pilot). It only shows while the real
 // catch line is off screen, and sinks away just before the real head rises into view.
-// How much of the head always shows at the bottom edge: about 8% of the screen height when far, growing to about
+// How much of the head shows at the bottom edge (a chili hit knocks it down for a moment): about 8% of the screen height when far, growing to about
 // 16% as it closes (roughly 60 → 130 px on a phone), but always at least 44 px below the pilot's lowest point, so the
 // head never looks like it has already caught you.
 function sliverFloor(prox) {
   if (G.state === 'dead' || G.state === 'clear' || !pCaps.length) return 0;   // (gone once an adventure stage is cleared)
   const boss = !!G.boss;   // (the boss rears higher into view: see BOSS.sliver)
   const want = H * (boss ? lerp(BOSS.sliver[0], BOSS.sliver[1], prox) : lerp(0.08, 0.16, prox)) + 10 * G.worm.surge, cap = H - sy(pilotLow()) - (boss ? BOSS.sliver[2] : 44);
-  return Math.max(0, Math.min(want, cap));
+  // a chili hit knocks the peeking head down (in about 0.15 s), then it climbs back up into view
+  const r = G.worm.recoil || 0, knock = r > 0.77 ? smooth(1, 0.77, r) : smooth(0, 0.77, r);
+  return Math.max(0, Math.min(want, cap) * (1 - 0.7 * knock));
 }
 function drawSliver(mon, realY, prox, rim, cx, px) {
   if (G.state === 'dead') return;

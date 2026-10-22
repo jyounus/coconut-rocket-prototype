@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, hungerGap, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, hungerGap, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan };')();
 
 // The widest and tallest pilot hitbox at any tilt (every character in every vehicle it can ride, world units): every
 // lane is sized from these.
@@ -169,9 +169,9 @@ for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => 
 // and stunning it AMMO.stun s, so it has to climb back into range), so following the chilies never runs dry. And ammo
 // matters for a skilled pilot too: flat out at top speed with the leash opened by clean play (CHASE.open) the blaster
 // still spends at least half of what the chili line supplies at that speed, so the tank does not just sit full. Out of ammo the monster gets hungry (the game's own chase
-// model: CHASE plus hungerLeash): from its normal leash it reaches a pilot climbing at that speed only after more than
-// twice the longest climb without a chili, so running dry right after a chili still leaves time to reach the next one;
-// and the hunger is real: even flat out at top speed it catches you within 12 s.
+// model: CHASE plus hungerLeash and the hungerGap clamp): it eats you AMMO.starve s after you run dry, which is still
+// more than the longest climb without a chili (with a 20% margin), so running dry right after a chili leaves time to
+// reach the next one; and the hunger is real: even flat out at top speed it catches you within 12 s.
 const CLEAR = PILOT_W / 2 + 15 + RULES.pickup.r;   // a pickup's clearance from every hazard hitbox (pilot half-width, 15, the largest pickup radius)
 const ammoStats = {};
 {
@@ -189,7 +189,7 @@ const ammoStats = {};
       wa += Math.max(mv, floor) * dt; fireT -= dt; stun -= dt;
       if (fireT <= 0 && g < AMMO.range && g > 0) { shots.push(pa - 20); n++; fireT = AMMO.rate; }
       for (let i = shots.length - 1; i >= 0; i--) { shots[i] -= AMMO.speed * dt; if (shots[i] <= wa) { shots.splice(i, 1); kb += AMMO.push; stun = AMMO.stun; } }
-      if (kb > 0) { const d = Math.min(kb, kb * dt * 14 + 20 * dt); wa -= d; kb -= d; }
+      if (kb > 0) { const d = Math.min(kb, kb * dt * 8 + 20 * dt); wa -= d; kb -= d; }
       t += dt;
     }
     return n / 60;
@@ -206,12 +206,12 @@ const ammoStats = {};
     while (g > 0 && t < 30) {
       h = Math.min(1, h + dt / AMMO.starve);
       const [tg, cap] = hungerLeash(D.chase, CHASE.cap, h), mv = Math.max(base * CHASE.floor, base + Math.max(-base, Math.min(cap, (g - tg) * CHASE.k)));
-      g += (pv - mv) * dt; t += dt;
+      g = Math.min(g + (pv - mv) * dt, hungerGap(D.chase, h)); t += dt;
     }
     return t;
   };
   ammoStats.caught = caught(v); ammoStats.caughtFlat = caught(D.maxUp); ammoStats.climb = gap / v;
-  if (ammoStats.climb * 2 > ammoStats.caught) fail('the longest climb without a chili is well inside the time from empty to caught', `${ammoStats.climb.toFixed(2)} s vs ${ammoStats.caught.toFixed(2)} s`);
+  if (ammoStats.climb * 1.2 > ammoStats.caught) fail('the longest climb without a chili is inside the time from empty to caught (20% margin)', `${ammoStats.climb.toFixed(2)} s vs ${ammoStats.caught.toFixed(2)} s`);
   if (ammoStats.caughtFlat > 12) fail('out of ammo the monster catches even a flat-out pilot', `${ammoStats.caughtFlat.toFixed(1)} s`);
   if (AMMO.start > AMMO.max || AMMO.per < 1 || AMMO.range <= D.chase) fail('ammo numbers are sane (start <= max, the leash is in range)', '');
   if (RULES.pickup.clear < CLEAR || RULES.fruitHug < CLEAR) fail('pickups keep the widest pilot half-width plus 15 plus their radius from hazards', `${RULES.pickup.clear} vs ${CLEAR.toFixed(1)}`);
