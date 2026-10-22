@@ -258,6 +258,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 @keyframes tickStamp { to { transform: scale(1) rotate(-8deg); } }
 @keyframes tickDraw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .mtick { animation: none; transform: rotate(-8deg); } .mtick .ok { animation: none; stroke-dashoffset: 0; } }
+
 @media (prefers-reduced-motion: reduce) { .hint, #over:not([hidden]) .panel, .newbest.sting, .total b.bump { animation: none; } }
 
 /* Adventure: the menu button, the World 1 map and the stage results. Stars are drawn in CSS (a clipped gold gradient
@@ -1147,6 +1148,21 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 @keyframes panelLight { from { transform: translate(0, 0); } to { transform: translate(55%, 30%); } }
 .mpanel { position: relative; }
 @media (prefers-reduced-motion: reduce) { .pcardp::before, .ocard::before, .mpanel::before { animation: none; } }
+/* score card: the coconuts' sources as worded chips; a soft divider before the missions; the extra-life button */
+.ochip .ow { font: 800 11px/1 var(--font-body); letter-spacing: .03em; color: inherit; opacity: .85; margin-right: 2px; }
+.ochip { padding: 3px 8px 3px 8px; }
+.odiv { flex: none; width: 100%; height: 2px; margin: 2px 0; border: 0; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255,226,190,.16) 18%, rgba(255,226,190,.16) 82%, transparent); }
+.btn.adlife { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 14px; font-size: 21px; line-height: 1.1; text-align: center; animation: none; }
+.btn.adlife .vid { flex: none; width: 28px; height: 28px; }
+.btn.adlife span { text-wrap: balance; }
+/* pause: each mission like the missions sheet: its title, then the bar with the count inside it and the reward on its right */
+.pmis li { grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 6px 10px; }
+.pmis .mico { grid-column: 1; grid-row: 1 / 3; }
+.pmis .t { grid-column: 2 / 4; grid-row: 1; }
+.pmis .ptrack { position: relative; grid-column: 2; grid-row: 2; align-self: center; height: 18px; border-radius: 99px; overflow: hidden; }
+.pmis .ptrack > i { border-radius: 99px; }
+.pmis .ptrack .n { grid-column: auto; grid-row: auto; justify-self: stretch; align-self: stretch; text-align: center; position: absolute; inset: 0; display: grid; place-items: center; font: 900 11.5px/1 var(--font-body); letter-spacing: .03em; color: #fff3dc; text-shadow: 0 1px 2px rgba(20,10,4,.75); font-variant-numeric: tabular-nums; }
+.pmis .pr { grid-column: 3; grid-row: 2; align-self: center; justify-self: end; }
 </style>
 
 <canvas id="game" aria-label="Coconut Rocket game"></canvas>
@@ -1324,13 +1340,14 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <span class="oe-l"><span class="label">Coconuts earned</span><span class="ochips" id="overEarnWhy"></span></span>
       <span class="oe-r"><b class="oe-num" id="overCoins">+0</b><span class="ototal"><small id="overTotalLbl">Total</small><span class="owallet" id="overWallet" aria-label="Coconuts in your wallet"></span></span></span>
     </div>
+    <hr class="odiv" aria-hidden="true">
     <div class="omissions" id="overMissionsWrap">
       <div class="ohd"><span class="label" id="overMissionsHd">Missions</span><span class="ostreak" id="overStreak"></span></div>
       <div class="mtiles" id="overMissions"></div>
     </div>
     <p class="tunednote" id="overTuned" hidden>Tuned settings: this run can't set today's best. Reset Tune to compete.</p>
     <div class="btns">
-      <button class="btn go big" id="againBtn">Run again</button>
+      <button class="btn go big" id="againBtn">Restart</button>
       <button class="btn alt offer" id="adBtn"></button>
       <div class="btnrow">
         <button class="btn alt small" id="shareBtn"><svg class="bi" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M7.6 7.6 12 3.4l4.4 4.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 11.5v6.2a2.8 2.8 0 0 0 2.8 2.8h7.4a2.8 2.8 0 0 0 2.8-2.8v-6.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>Share score</button>
@@ -3746,11 +3763,12 @@ function finishRun() {
   $('overCoins').textContent = `+${n(total)}`;
   // where they came from, as icon chips (the run's coconuts, the missions it completed, the daily streak); each one
   // lights up in turn as its share counts into the total
-  const parts = [['run', earned, OVER_ICON.run, T('fromRun')]];
-  if (meta.missionPay) parts.push(['mis', meta.missionPay, OVER_ICON.mis, T('fromMissions')]);
-  if (meta.streakPay) parts.push(['stk', meta.streakPay, OVER_ICON.stk, T('fromStreak')]);   // (the streak is said here, and as the chip by the missions)
-  $('overEarnWhy').innerHTML = parts.map(([k, v, ico, what]) => `<i class="ochip ${k}" aria-label="${n(v)} ${what}">${ico}<b>+${n(v)}</b></i>`).join('')
-    + (parts.length === 1 ? `<span class="ochipnote">${T('fromRunOnly')}</span>` : '');
+  // (each chip names where its share came from: "Run +118", "Missions +85", "Streak +20"; only the run when that's all)
+  const parts = [['run', earned, T('chipRun'), T('fromRun')]];
+  if (meta.missionPay) parts.push(['mis', meta.missionPay, T('chipMissions'), T('fromMissions')]);
+  if (meta.streakPay) parts.push(['stk', meta.streakPay, T('chipStreak'), T('fromStreak')]);
+  $('overEarnWhy').innerHTML = parts.length > 1 ? parts.map(([k, v, word, what]) => `<i class="ochip ${k}" aria-label="${n(v)} ${what}"><span class="ow">${word}</span><b>+${n(v)}</b></i>`).join('')
+    : `<span class="ochipnote">${T('fromRunOnly')}</span>`;
   const coinPhases = parts.map(p => p[1]).filter(v => v > 0);
   walletBeat(WALLET.get() - total, WALLET.get(), 1150 + Math.max(1, coinPhases.length) * COIN_PHASE + 100);
   $('overMissions').innerHTML = overMissionTiles();
@@ -3785,15 +3803,15 @@ function finishRun() {
   // (the best is left out when this run is it: the score above already says so)
   $('overBestWrap').hidden = (G.isDaily ? daily.bestPts : practice.bestPts) <= score;
   // the revive: one offer, a reward (the score is kept and topped up), clearly second to Run again
-  $('adBtn').hidden = G.reviveUsed;
-  if (!G.reviveUsed) {
-    // (what it pays as reward chips with icons: coconuts, points, a full load of chilies)
-    $('adBtn').innerHTML = `<span class="vid" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="4.5" width="20" height="15" rx="4" fill="currentColor" opacity=".22"/><path d="M9.6 8.4v7.2c0 .7.8 1.1 1.4.7l5.4-3.6c.5-.3.5-1.1 0-1.4L11 7.7c-.6-.4-1.4 0-1.4.7z" fill="currentColor"/></svg></span>`
-      + `<span class="ot"><span class="oth"><b>${T('keepFlying')}</b><small>${T('scoreKept')}</small></span>`
-      + `<span class="orw"><i>${coinHTML}+${comebackCoins()}</i><i><svg class="star" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.8l2.5 5.3 5.7.7-4.2 4 1.1 5.7L10 14.7l-5.1 2.8 1.1-5.7-4.2-4 5.7-.7z" fill="#ffd23f" stroke="#ffeeb0" stroke-width="1" stroke-linejoin="round"/></svg>+${n(COMEBACK.pts)} pts</i><i><canvas class="micv" data-kind="chili" width="48" height="48" aria-hidden="true"></canvas>${T('full')}</i></span></span>`;
-    paintMissionIcons($('adBtn'));
-    $('adBtn').setAttribute('aria-label', `Watch a video to keep flying: keep your score, plus ${comebackCoins()} coconuts, ${n(COMEBACK.pts)} points and full chilies`);
-  }
+  // the revive (an extra life from a rewarded ad) is the green primary call to action while it's on offer, with Restart
+  // neutral under it; once it's used (or for a revived run's second ending) Restart is the green primary
+  const canRevive = !G.reviveUsed, ag = $('againBtn'), ad = $('adBtn');
+  ad.hidden = !canRevive;
+  ad.className = 'btn go big adlife';
+  ad.innerHTML = `<svg class="vid" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4.5" width="20" height="15" rx="4" fill="currentColor" opacity=".2"/><path d="M9.6 8.4v7.2c0 .7.8 1.1 1.4.7l5.4-3.6c.5-.3.5-1.1 0-1.4L11 7.7c-.6-.4-1.4 0-1.4.7z" fill="currentColor"/></svg><span>${noOrphan(T('watchAd'))}</span>`;
+  ad.setAttribute('aria-label', T('watchAd'));
+  ag.className = canRevive ? 'btn alt' : 'btn go big';
+  if (canRevive) ag.parentNode.insertBefore(ad, ag); else ag.parentNode.insertBefore(ag, ad);
   $('shareBtn').hidden = !G.isDaily;
   show('over');
   layoutMissionBars();
@@ -28394,7 +28412,7 @@ function fillPause() {
   $('pauseMissions').innerHTML = rows.map(r => {
     const waits = r.m.since && r.m.since === G.runTok, v = r.k.stat && !waits ? Math.min(r.k.stat(G.stats, G), r.n) : 0, p = v / r.n;
     const num = r.k.stat && !r.k.once ? `${fmtN(v)}/${fmtN(r.n)}` : `${v >= r.n ? 1 : 0}/1`;
-    return `<li class="${p >= 1 ? 'done' : ''}">${micon(r.kind)}<span class="t">${noOrphan(r.text)}</span><span class="gpill pr">${coinHTML}${r.reward}</span><span class="ptrack" style="--p:${Math.round(p * 100)}%"><i></i></span><span class="n">${num}</span></li>`;
+    return `<li class="${p >= 1 ? 'done' : ''}">${micon(r.kind)}<span class="t">${noOrphan(r.text)}</span><span class="ptrack" style="--p:${Math.round(p * 100)}%"><i></i><span class="n">${num}</span></span><span class="gpill pr">${coinHTML}${r.reward}</span></li>`;
   }).join('');
   $('pauseMissions').hidden = !rows.length;
   paintMissionIcons($('pauseMissions'));
@@ -28950,7 +28968,7 @@ $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); })
 
 // Player-facing words that are not part of a sentence yet live here, so a translation can replace them in one place
 // (the seed of a strings table for localisation).
-const STRINGS = { new: 'New', total: 'Total', scoreKept: 'keep your score', full: 'full', toEarn: 'to earn', today: 'Today', missionsDone: 'Missions complete', missionsHd: 'Missions', streakDay: 'Day', dailyShaft: 'Daily shaft', keepFlying: 'Keep flying', fromRun: 'run', fromMissions: 'missions', fromStreak: 'streak', fromRunOnly: 'All picked up on this run' };
+const STRINGS = { new: 'New', total: 'Total', scoreKept: 'keep your score', full: 'full', toEarn: 'to earn', today: 'Today', missionsDone: 'Missions complete', missionsHd: 'Missions', streakDay: 'Day', dailyShaft: 'Daily shaft', keepFlying: 'Keep flying', fromRun: 'run', fromMissions: 'missions', fromStreak: 'streak', fromRunOnly: 'All picked up on this run', restart: 'Restart', watchAd: 'Watch ad for an extra life', chipRun: 'Run', chipMissions: 'Missions', chipStreak: 'Streak' };
 // each mission kind's icon (a white glyph on its own colour, see .mico)
 // Each mission kind's icon. Coconuts, chilies, monster hits and climbing are drawn with the game's own art on a small
 // canvas (paintMissionIcons); close calls, the daily shaft and adventure are shaded SVG pictures. No black outlines.
@@ -29403,7 +29421,7 @@ function bossFury() { const B = G.boss; return B.mode === 'defeat' ? 0 : B.mode 
 { const base = finishRun; finishRun = function () { base(); advOverCard(); }; }
 function advOverCard() {
   const adv = G.adv;
-  $('againBtn').textContent = adv ? 'Retry' : 'Run again';
+  $('againBtn').textContent = adv ? 'Retry' : T('restart');
   $('menuBtnL').textContent = adv ? 'Map' : 'Menu';
   if (!adv) return;
   const st = adv.st, m = Math.floor(G.maxAlt / UNITS_PER_M), i = adv.i;
