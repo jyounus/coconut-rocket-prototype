@@ -634,6 +634,20 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .shopcard .nm { width: 100%; box-sizing: border-box; padding: 5px 6px 0; font: 800 11.5px var(--font-body); color: var(--cream); text-shadow: none; text-align: center; }
 .shopcard .st { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 22px; padding: 0 6px 5px; font: 900 10px var(--font-body); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .shopcard .st.eq { color: #b6f07a; }
+/* perks: an icon on its kind's colour; on a rocket card a badge over the art's top-left (icon + short value), on the
+   stage a box with the perk's name and what it does */
+.pki { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 7px; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 2px 0 rgba(0,0,0,.25); }
+.pki svg { width: 14px; height: 14px; } .pki .d { fill: #3a2010; }
+.pki.h-red { background: linear-gradient(#ff7a52, #d8381e); } .pki.h-orange { background: linear-gradient(#ffb04a, #e8701a); } .pki.h-yellow { background: linear-gradient(#ffd84a, #e8a012); color: #5a3404; }
+.pki.h-cyan { background: linear-gradient(#5ee0f0, #1e9ec0); } .pki.h-purple { background: linear-gradient(#b48cff, #7448d8); } .pki.h-brown { background: linear-gradient(#d8a06a, #9a5e2c); }
+.pki.h-blue { background: linear-gradient(#6aa8ff, #2e64d8); } .pki.h-green { background: linear-gradient(#8fdc5a, #4c9e2c); }
+.shopcard .pkbadge { position: absolute; left: 6px; top: 6px; z-index: 2; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px 3px 3px; border-radius: 10px; background: rgba(28,16,12,.82); box-shadow: 0 2px 4px rgba(0,0,0,.3); }
+.shopcard .pkbadge b { font: 400 13px/1 var(--font-display); letter-spacing: .02em; color: #fff3dc; }
+.perkbox { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 2px; padding: 6px 10px 6px 6px; border-radius: 12px; background: rgba(28,16,12,.78); text-shadow: none; }
+.perkbox .pki { width: 28px; height: 28px; border-radius: 9px; } .perkbox .pki svg { width: 18px; height: 18px; }
+.perkbox > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.perkbox b { font: 400 14px/1.1 var(--font-display) !important; letter-spacing: .02em; color: #ffd25e !important; -webkit-line-clamp: 1 !important; text-shadow: none !important; }
+.perkbox small { font-size: 11px; font-weight: 800; line-height: 1.25; color: #f1dcc4; text-wrap: pretty; }
 .shopcard .st.price { font: 400 14px var(--font-display); letter-spacing: .02em; color: #ffd25e; text-transform: none; }
 .shopcard .st .cn { width: 13px; height: 13px; }
 .shopcard .st .cn::after { left: 3.2px; top: 3.2px; width: 2px; height: 2px; box-shadow: 4.2px 0 0 #2c1606, 2.1px 3.8px 0 #2c1606; }
@@ -16097,6 +16111,27 @@ const PERKS = {
 };
 for (const vh of VEHICLES) if (!PERKS[vh.id]) console.error(`vehicle ${vh.id}: give it a perk (PERKS)`);
 const perkOf = vhId => PERKS[vhId] || null;
+// How a perk reads in the shop: its kind's name, a colour and icon, a short value for the card badge, and a plain
+// sentence saying what it does in a run.
+const PERK_KIND = {
+  startAmmo:    { name: 'Head start',     hue: 'red',    say: p => `Start every run with ${p.add} extra ${p.add > 1 ? 'chilies' : 'chili'}`, short: p => `+${p.add}`,
+    icon: '<path d="M14.6 5.2c-1-.3-2.1.3-2.4 1.2-1 3.5-3.7 6.1-7.5 7.4-1 .4-1.1 1.8 0 2.2 5.2 1.9 10.8-1.8 11.4-7.6.1-1.3-.4-2.7-1.5-3.2z" fill="currentColor"/><path d="M14.2 5.8c.3-1.4 1.3-2.4 2.7-2.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' },
+  maxAmmo:      { name: 'Bigger tank',    hue: 'orange', say: p => `Carry up to ${p.add} more chilies at once`, short: p => `+${p.add}`,
+    icon: '<rect x="5" y="4.5" width="10" height="13" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.9"/><rect x="7.6" y="2" width="4.8" height="2.6" rx="1" fill="currentColor"/><rect x="7.4" y="9.5" width="5.2" height="5.6" rx="1.2" fill="currentColor"/>' },
+  fireRate:     { name: 'Rapid fire',     hue: 'yellow', say: p => `Fires chili shots ${Math.round((p.rate - 1) * 100)}% faster`, short: p => `+${Math.round((p.rate - 1) * 100)}%`,
+    icon: '<path d="M4 5.5l5 4.5-5 4.5M10 5.5l5 4.5-5 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
+  shotSpeed:    { name: 'Fast shots',     hue: 'cyan',   say: p => `Chili shots fly ${Math.round((p.mul - 1) * 100)}% faster`, short: p => `+${Math.round((p.mul - 1) * 100)}%`,
+    icon: '<circle cx="13" cy="13" r="3.4" fill="currentColor"/><path d="M3 3.5l7.4 7.4M6.5 2.5l5.4 5.4M2.5 6.5l5.4 5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' },
+  push:         { name: 'Big knockback',  hue: 'purple', say: p => `Hits knock the monster ${Math.round((p.mul - 1) * 100)}% further back`, short: p => `+${Math.round((p.mul - 1) * 100)}%`,
+    icon: '<path d="M10 2.5v10M5.8 8.6 10 12.8l4.2-4.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16.5h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' },
+  cocoValue:    { name: 'Coconut bonus',  hue: 'brown',  say: p => `Earn ${Math.round((p.mul - 1) * 100)}% more coconuts from every run`, short: p => `+${Math.round((p.mul - 1) * 100)}%`,
+    icon: '<circle cx="9" cy="11" r="6" fill="currentColor"/><path d="M15.5 2.5v6M12.5 5.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="7.2" cy="9.6" r="1" class="d"/><circle cx="10.6" cy="9.6" r="1" class="d"/><circle cx="8.9" cy="12.4" r="1" class="d"/>' },
+  magnet:       { name: 'Coconut magnet', hue: 'blue',   say: p => `Pulls in nearby coconuts (${p.add >= 80 ? 'big' : p.add >= 65 ? 'medium' : 'small'} reach)`, short: p => p.add >= 80 ? 'Big' : p.add >= 65 ? 'Mid' : 'Small',
+    icon: '<path d="M5 3.5v6.5a5 5 0 0 0 10 0V3.5" fill="none" stroke="currentColor" stroke-width="3.2"/><path d="M3.4 3.5h3.2M13.4 3.5h3.2" stroke="#fff" stroke-width="3.2" opacity=".85"/>' },
+  reviveShield: { name: 'Comeback shield', hue: 'green', say: p => `Your shield lasts ${p.add} s longer after an ad revive`, short: p => `+${p.add}s`,
+    icon: '<path d="M10 2.5l6 2.4v4.6c0 4-2.6 6.9-6 8-3.4-1.1-6-4-6-8V4.9z" fill="currentColor"/><path d="M7.2 10l2 2 3.8-4" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>' },
+};
+const perkIcon = pk => `<i class="pki h-${PERK_KIND[pk.stat].hue}" aria-hidden="true"><svg viewBox="0 0 20 20">${PERK_KIND[pk.stat].icon}</svg></i>`;
 perkHook = (name, base) => {
   const pk = perkOf(pilot().vehicle.id);
   if (!pk || pk.stat !== name) return base;
@@ -28014,7 +28049,9 @@ function buildPilots() {
       const b = document.createElement('button');
       b.className = 'pcard shopcard'; b.id = kind + '-' + it.id;
       b.style.setProperty('--tint', partTint(it));   // each card is tinted with its own character's or vehicle's main colour
-      b.innerHTML = `<canvas width="${px}" height="${Math.round(px * 0.9)}" aria-hidden="true"></canvas><span class="nm">${it.name}</span><em class="st"></em>`;
+      const pk = kind === 'veh' && perkOf(it.id), badge = pk ? `<span class="pkbadge" title="${PERK_KIND[pk.stat].name}">${perkIcon(pk)}<b>${PERK_KIND[pk.stat].short(pk)}</b></span>` : '';
+      b.innerHTML = `<canvas width="${px}" height="${Math.round(px * 0.9)}" aria-hidden="true"></canvas>${badge}<span class="nm">${it.name}</span><em class="st"></em>`;
+      if (pk) b.setAttribute('aria-label', `${it.name}: ${PERK_KIND[pk.stat].say(pk)}`);
       b.addEventListener('click', () => selectItem(kind, it.id));
       grid.appendChild(b); cards.push(b.querySelector('canvas'));
     });
@@ -28033,7 +28070,7 @@ function showPairNames() {
     const pk = perkOf(id), who = CHARACTER_BY[it.signatureOf];
     const line = st === 'cant' ? (pl.character.fused ? `${firstName(pl.character)} can't swap rides yet` : `Only ${firstName(who)} flies this one for now`)
       : it.signatureOf === pl.character.id ? `${firstName(pl.character)}'s signature ride` : `Rocket · ${firstName(who)}'s signature ride`;
-    info = `${line}${pk ? `<em class="perk">${pk.text}</em>` : ''}`;
+    info = `${line}${pk ? `<span class="perkbox">${perkIcon(pk)}<span><b>${PERK_KIND[pk.stat].name}</b><small>${noOrphan(PERK_KIND[pk.stat].say(pk))}</small></span></span>` : ''}`;
   }
   $('pilotInfo').innerHTML = info;
   const tag = $('shopState');
