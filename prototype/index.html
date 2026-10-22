@@ -4854,15 +4854,23 @@ function drawZoneMoments() {
 function drawShimmer() {
   const magma = zoneT(G.camAlt + viewH / 2)[1];
   if (magma < 0.2) return;
-  const W = canvas.width, Hd = canvas.height, y0 = Math.floor(Hd * 0.35), strip = Math.max(4, Math.round(9 * dpr));
+  const W = canvas.width, Hd = canvas.height, y0 = Math.floor(Hd * 0.35), strip = Math.max(4, Math.round(9 * dpr)), hh = Hd - y0;
+  // one snapshot of the frame's lower part per frame, then every strip is drawn from it (copying the canvas onto itself
+  // strip by strip made the GPU snapshot the whole canvas for every strip: dozens of full copies a frame on a phone)
+  if (!shimmerCv) shimmerCv = document.createElement('canvas');
+  if (shimmerCv.width !== W || shimmerCv.height !== hh) { shimmerCv.width = W; shimmerCv.height = hh; }
+  const sc = shimmerCv.getContext('2d');
+  sc.clearRect(0, 0, W, hh); sc.drawImage(canvas, 0, y0, W, hh, 0, 0, W, hh);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
   for (let y = y0; y < Hd; y += strip) {
     const k = (y - y0) / (Hd - y0), dx = Math.sin(y * 0.045 / dpr + G.t * 5.5) * (0.6 + 1.6 * k) * dpr * magma;
     if (Math.abs(dx) < 0.3) continue;
-    ctx.drawImage(canvas, 0, y, W, strip, dx, y, W, strip);
+    const sh = Math.min(strip, Hd - y);
+    ctx.drawImage(shimmerCv, 0, y - y0, W, sh, dx, y, W, sh);
   }
   ctx.restore();
 }
+let shimmerCv = null;   // (drawShimmer's per-frame snapshot)
 
 function drawPlanks() {
   if (G.planks) {          // broken: the pieces tumble away below you
