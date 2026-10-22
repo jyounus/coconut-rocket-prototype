@@ -220,6 +220,20 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pickname b { font: 400 30px var(--font-display); line-height: 1; color: var(--cream); -webkit-text-stroke: 1.5px var(--ink); text-shadow: 0 3px 0 var(--ink); }
 .pickname span { font-size: 13px; font-weight: 800; color: var(--muted); }
 .pcard:focus-visible { outline: 3px solid var(--ember); outline-offset: 2px; }
+.picktabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; margin-top: -4px; border-radius: 16px; background: rgba(0,0,0,.35); border: 2px solid var(--ink); }
+.picktabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; min-height: 44px; padding: 4px 8px; border: 0; border-radius: 11px; cursor: pointer; background: transparent; color: var(--muted); line-height: 1.1; }
+.picktabs button:focus-visible { outline: 3px solid var(--ember); outline-offset: 2px; }
+.picktabs small { font: 900 10px var(--font-body); letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
+.picktabs b { font: 400 15px var(--font-display); letter-spacing: .02em; max-width: 100%; white-space: nowrap; overflow: hidden; }   /* fitted to one line (showPairNames) */
+.picktabs button[aria-selected="true"] { background: linear-gradient(var(--ember), #f08a1c); color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.pickbtn i { font: 800 10.5px var(--font-body); font-style: normal; color: var(--muted); white-space: nowrap; overflow: hidden; margin-top: 1px; }   /* the menu's ride line, fitted to one line */
+.pcard { position: relative; }
+.pcard .ptag { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 14px); padding: 2px 6px; border-radius: 8px; background: rgba(20,12,10,.82); color: var(--ember); font: 900 8.5px var(--font-body); font-style: normal; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.pcard .ptag:empty { display: none; }
+.pcard.other .ptag, .pcard.locked .ptag { color: var(--muted); }
+.pcard.other canvas { opacity: .55; filter: saturate(.6); }
+.pcard.other span { opacity: .7; }
+.pcard.locked canvas { filter: grayscale(1) brightness(.6); }
 .pickbtn { display: flex; align-items: center; gap: 8px; padding: 0 8px; min-height: 58px; text-align: left; min-width: 0; }
 .pickbtn canvas { flex: none; width: 42px; height: 42px; border-radius: 9px; }
 .pickbtn span { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; }
@@ -274,7 +288,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="btns">
       <div class="btnrow">
-        <button class="btn alt pickbtn" id="openPilots"><canvas id="pilotMini" width="72" height="72" aria-hidden="true"></canvas><span><small>Pilot</small><b id="pilotName">Lemur</b></span></button>
+        <button class="btn alt pickbtn" id="openPilots"><canvas id="pilotMini" width="72" height="72" aria-hidden="true"></canvas><span><small>Pilot</small><b id="pilotName">Lemur</b><i id="pilotRide"></i></span></button>
         <button class="btn alt pickbtn" id="openMonsters"><canvas id="monsterMini" width="72" height="72" aria-hidden="true"></canvas><span><small>Monster</small><b id="monsterName">Magma worm</b></span></button>
       </div>
       <div class="btnrow">
@@ -285,13 +299,18 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   </div>
 </div>
 
-<!-- Pilot picker -->
+<!-- Pilot picker: a character and a vehicle, picked separately -->
 <div class="screen" id="pilotScreen" hidden>
   <div class="panel wide">
     <div class="eyebrow">Choose your pilot</div>
     <canvas class="preview" id="pilotPreview" width="480" height="270" aria-hidden="true"></canvas>
     <div class="pickname"><b id="pilotSelName"></b><span id="pilotInfo"></span></div>
-    <div class="pilotgrid" id="pilotGrid"></div>
+    <div class="picktabs" role="tablist" aria-label="Character or vehicle">
+      <button id="tabChar" role="tab" aria-controls="charGrid"><small>Character</small><b id="tabCharName"></b></button>
+      <button id="tabVeh" role="tab" aria-controls="vehGrid"><small>Vehicle</small><b id="tabVehName"></b></button>
+    </div>
+    <div class="pilotgrid" id="charGrid" role="tabpanel" aria-labelledby="tabChar"></div>
+    <div class="pilotgrid" id="vehGrid" role="tabpanel" aria-labelledby="tabVeh" hidden></div>
     <button class="btn go" id="pilotDone">Done</button>
   </div>
 </div>
@@ -436,25 +455,273 @@ const PILOT_HITS = {
   mushroom:  [[-5, -30, 5, -30, 8.5], [-13.5, -23.5, 13.5, -23.5, 4], [0, -14, 0, -12, 10.8], [0, 12, 0, 12, 14], [-13.2, -5.6, -13.2, -5.6, 3.3], [13.2, -5.6, 13.2, -5.6, 3.3], [-10.5, 23, -12.5, 26.5, 2.4], [10.5, 23, 12.5, 26.5, 2.4], [0, 26, 0, 28.5, 3.6]],
   robot:     [[-2, -25.8, 2, -25.8, 9.6], [-12.2, -25.2, -12.2, -25.2, 2.4], [12.2, -25.2, 12.2, -25.2, 2.4], [0, -10, 0, -6, 8.5], [-1.5, 6, 1.5, 10, 13.5], [-15.5, 10, -17.5, 18.5, 2.6], [15.5, 10, 17.5, 18.5, 2.6], [-6.5, 24.5, -6.5, 26.5, 3.4], [6.5, 24.5, 6.5, 26.5, 3.4]],
 };
+// ---- Characters × vehicles: the hit side (the art side is with PILOTS) ----
+// Players pick a character and a vehicle separately: 21 × 21 pairs. A character's own ride is its signature ride
+// (SIGNATURE: character id -> vehicle id; vehicle ids are fixed now, so saved picks survive later splits). A pilot that
+// is not split yet is "fused": one drawing and one hitbox (PILOT_HITS) for character and ride together, so it only flies
+// as its signature pair. A split character (CHAR_FIT) and a split vehicle (VEH_FIT) fly in any pair of split parts.
+// Art units, y down, each part in the frame of its signature drawing. PILOT_HITS keeps every pilot's own hitbox; a
+// split pilot's row lists the character's capsules first (caps of them) and then its ride's.
+// The seat contract:
+// - vehicle seat { x, y, w, depth, grip }: (x, y) is the seat point, the middle of the top edge of the front lip, where
+//   the vehicle's front layer starts to cover a seated character; w is the opening's width; depth is how far below the
+//   seat point a body stays hidden (a deep nut hides a lot, a glass bowl only its lip band); grip is the [left, right]
+//   hand holds on the lip, or null when there is nothing to hold. A closed ride with no lip to sit in (a hamster ball)
+//   also gives floor, the y its riders stand on (each rider's foot goes there; at most PART_ENV.drop below the seat
+//   point), and room { w, h }, the space above the floor a rider is scaled down to fit.
+// - character { caps, hip, sink, foot, grip, ow, body }: caps is how many capsules at the start of its PILOT_HITS row
+//   are its own; hip is the point of the character that sits on the seat point (in its signature ride the two are the
+//   same point, so that pair draws exactly as the fused drawing did); sink is how far below the hip its drawing is cut
+//   off (the flat bottom of a bust, which a ride must hide; for a character drawn whole, how far its body may hang
+//   below a lip); foot is how far below the hip it stands on a floor (its feet or the bottom of its body, not thin trim
+//   such as a tail tip; default: sink); grip is where its hands hold in its signature ride (null: no hands); ow (optional) is the opening width it
+//   was drawn for (default: its signature ride's w); body (optional) covers the part of it that its signature ride's
+//   capsules already cover (Kiko's torso, inside the nut): added in every other ride, left out of its own pair.
+// In another ride the character is scaled to the opening (w / ow, within SEAT_SCALE, and to the room if there is one),
+// its hip put on the seat point, raised if its body would show below the ride's depth (or moved onto the floor), its
+// hands moved onto the ride's grips, and scaled down further only if the pair would not fit PILOT_CAP (see below).
+const SIGNATURE = { lemur: 'coconut', ember: 'stove', snail: 'turboshell', puffer: 'fishbowl', firefly: 'jamjar', octopus: 'fountainpen',
+  lobster: 'stockpot', bear: 'iceblock', penguin: 'swingtop', mole: 'minecart', cat: 'cardboard', raccoon: 'trashcan', dachshund: 'hotdog',
+  duck: 'ducket', hamster: 'turboball', piggy: 'jackpot', goat: 'firework', chameleon: 'chilli', axolotl: 'hydrant', mushroom: 'puffball', robot: 'tintub' };
+// One entry per pilot in slot order, null until it is split. Each sits on its own line between comment lines, so pilots
+// split in parallel merge cleanly: replace only your own null.
+const CHAR_FIT = {
+  // 0 Kiko the lemur: head and ears are his (2 caps); his torso's flat bottom is cut 1.7 below the nut's lip (at its
+  // corners); his hands hook over the lip
+  lemur: { caps: 2, hip: [0, 0.1], sink: 1.7, grip: [[-10.4, 0.28], [10.4, 0.28]], body: [[-5, -4.5, 5, -4.5, 7]] },
+  // 1 Ember the dragon
+  ember: null,
+  // 2 Shellby the snail
+  snail: null,
+  // 3 Captain Puff, drawn whole: head and cap, fins (2 caps); his round belly rests on the lip (0.7 below it at most,
+  // puffed up), and on a floor (his thin tail may flick below it); fins, no hands
+  puffer: { caps: 2, hip: [0, -4.5], sink: 0.7, grip: null },
+  // 4 Lumo the firefly
+  firefly: null,
+  // 5 Doodle the octopus
+  octopus: null,
+  // 6 Pinch the lobster
+  lobster: null,
+  // 7 Bjorn the polar bear
+  bear: null,
+  // 8 Rocco the rockhopper
+  penguin: null,
+  // 9 Digby the mole
+  mole: null,
+  // 10 Miso the calico
+  cat: null,
+  // 11 Rascal the raccoon
+  raccoon: null,
+  // 12 Frankie the dachshund
+  dachshund: null,
+  // 13 Pip the duckling
+  duck: null,
+  // 14 Biscuit the hamster
+  hamster: null,
+  // 15 Penny the piggy bank
+  piggy: null,
+  // 16 Billy Boom the goat
+  goat: null,
+  // 17 Pico the chameleon
+  chameleon: null,
+  // 18 Axel the axolotl
+  axolotl: null,
+  // 19 Cappy the toadstool
+  mushroom: null,
+  // 20 Bolt the robot
+  robot: null,
+};
+const VEH_FIT = {
+  // 0 Coco-Rocket: the cut lip (LM_RIM) and its deep cavity
+  coconut: { seat: { x: 0, y: 0.1, w: 25.6, depth: 22, grip: [[-10.4, 0.28], [10.4, 0.28]] } },
+  // 1 Potbelly stove rocket
+  stove: null,
+  // 2 Turbo shell
+  turboshell: null,
+  // 3 Fishbowl water-jet: the glass lip (PF.ry); glass hides only the lip band
+  fishbowl: { seat: { x: 0, y: -4.5, w: 25.24, depth: 4, grip: [[-10.4, -3.6], [10.4, -3.6]] } },
+  // 4 Jam-jar lantern
+  jamjar: null,
+  // 5 Fountain-pen rocket
+  fountainpen: null,
+  // 6 Stockpot steamer
+  stockpot: null,
+  // 7 Ice-block steamer
+  iceblock: null,
+  // 8 Swing-top fizz rocket
+  swingtop: null,
+  // 9 Mine-cart rocket
+  minecart: null,
+  // 10 Cardboard Comet
+  cardboard: null,
+  // 11 Trash-can rocket
+  trashcan: null,
+  // 12 Hot-dog rocket
+  hotdog: null,
+  // 13 Rubber Ducket
+  ducket: null,
+  // 14 Turbo Ball
+  turboball: null,
+  // 15 Jackpot rocket
+  jackpot: null,
+  // 16 Triple-Bang firework
+  firework: null,
+  // 17 Hot-chilli rocket
+  chilli: null,
+  // 18 Runaway hydrant
+  hydrant: null,
+  // 19 Earthstar puffball
+  puffball: null,
+  // 20 Twin-jet tin tub
+  tintub: null,
+};
+// Size envelopes. Lanes are sized from the widest and tallest pair at any tilt and must not grow, so every pair fits
+// PILOT_CAP (art units, just inside today's widest pilot, the goat, and tallest, the firefly). To make that hold for all
+// 441 pairs, including ones whose parts are not split yet, each part is held on its own to an envelope round the seat
+// point (where the hip sits), turned with the tilt about that point:
+// - a vehicle, as drawn: fits PILOT_CAP by itself at every tilt, reaches at most side(tilt) to either side of the seat
+//   point, at most PART_ENV.depth below it and at most PILOT_CAP.h - depth above it;
+// - a character, at its scale and at every lift a ride can give it (from PART_ENV.drop below its foot, onto a floor, to
+//   its sink or foot, in a ride that hides nothing): fits PILOT_CAP by itself, reaches at most PILOT_CAP.w - side(tilt) to
+//   either side, PILOT_CAP.h - depth above and depth below.
+// side(tilt) runs from PART_ENV.side[0] upright to side[1] at full tilt (wide fins low on a ride swing out as it tilts;
+// a tall character's head swings out the other way, and the two share the cap). Then any character fits any vehicle:
+// at each tilt the pair reaches as far left as the further of its two parts and as far right as the further; when one
+// part reaches furthest both ways, the pair is no wider than that part, which fits alone; otherwise the pair is at most
+// side + (w - side) = w across. Up and down work the same way with depth. So a part that passes on its own works with
+// every other part, split now or later, and the levelgen test checks each part as well as every pair that flies.
+// envScale(ch) is the largest scale at which a character fits its envelope (it must be SEAT_FLOOR or more). In a pair
+// it is drawn at the scale the opening asks for, scaled down (to no less than the smaller of that and envScale, which
+// is known to fit) only if the pair would be wider or taller than PILOT_CAP at some tilt.
+const PILOT_CAP = { w: 46.6, h: 73.4 }, PART_ENV = { side: [22.6, 28.6], depth: 42, drop: 12 };
+const SEAT_SCALE = [0.88, 1.12], SEAT_FLOOR = 0.7;
+const VEHICLE_IDS = Object.values(SIGNATURE), VEH_OWNER = {};
+for (const ch in SIGNATURE) VEH_OWNER[SIGNATURE[ch]] = ch;
+const charHits = ch => PILOT_HITS[ch].slice(0, CHAR_FIT[ch].caps);
+const vehHits = vh => PILOT_HITS[VEH_OWNER[vh]].slice(CHAR_FIT[VEH_OWNER[vh]].caps);
+const moveCaps = (hits, s, dx, dy) => hits.map(([ax, ay, bx, by, r]) => [ax * s + dx, ay * s + dy, bx * s + dx, by * s + dy, r * s]);
+const PART_TILTS = Array.from({ length: 21 }, (_, k) => PILOT_TILT * (k - 10) / 10);
+const envSide = tilt => PART_ENV.side[0] + (PART_ENV.side[1] - PART_ENV.side[0]) * Math.abs(tilt) / PILOT_TILT;
+// how far a capsule list reaches from (0, 0) at each tilt in PART_TILTS: [left, right, up, down]
+const capsReach = hits => PART_TILTS.map(a => {
+  const cs = Math.cos(a), sn = Math.sin(a); let l = -Infinity, r = -Infinity, u = -Infinity, d = -Infinity;
+  for (const [ax, ay, bx, by, R] of hits) for (const [x, y] of [[ax, ay], [bx, by]]) {
+    const X = x * cs - y * sn, Y = x * sn + y * cs; l = Math.max(l, R - X); r = Math.max(r, X + R); u = Math.max(u, R - Y); d = Math.max(d, Y + R);
+  }
+  return [l, r, u, d];
+});
+// how far a part (capsules relative to the seat point) pokes out of its envelope, in art units (0 or less: inside)
+function envOver(kind, hits) {
+  const { w: W, h: H } = PILOT_CAP, D = PART_ENV.depth;
+  return Math.max(...capsReach(hits).map(([l, r, u, d], k) => {
+    const side = kind === 'vehicle' ? envSide(PART_TILTS[k]) : W - envSide(PART_TILTS[k]);
+    return Math.max(l + r - W, u + d - H, l - side, r - side, u - (H - D), d - D);
+  }));
+}
+// a character's capsules (its own and its body ones) with its hip on (0, 0) at scale s, lifted by lift
+const charOnSeat = (ch, s, lift) => { const C = CHAR_FIT[ch]; return moveCaps(charHits(ch).concat(C.body || []), s, -C.hip[0] * s, -C.hip[1] * s - lift); };
+const footOf = C => C.foot != null ? C.foot : C.sink;
+const charFitsEnv = (ch, s) => { const C = CHAR_FIT[ch], k = footOf(C) * s; return [Math.min(0, k - PART_ENV.drop), Math.max(0, k, C.sink * s)].every(lift => envOver('character', charOnSeat(ch, s, lift)) <= 1e-9); };
+const vehicleOver = vh => {   // how far a split vehicle (as drawn, round its seat point) pokes out of its envelope
+  const st = VEH_FIT[vh].seat, o = envOver('vehicle', moveCaps(vehHits(vh), 1, -st.x, -st.y));
+  return st.floor == null ? o : Math.max(o, st.y - st.floor, st.floor - st.y - PART_ENV.drop);
+};
+const envScales = {};
+function envScale(ch) {
+  if (ch in envScales) return envScales[ch];
+  let lo = 0, hi = SEAT_SCALE[1];
+  if (charFitsEnv(ch, hi)) lo = hi;
+  else for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (charFitsEnv(ch, m)) lo = m; else hi = m; }
+  return (envScales[ch] = lo);
+}
+function capsMax(hits) {
+  let w = 0, h = 0;
+  for (const [l, r, u, d] of capsReach(hits)) { w = Math.max(w, l + r); h = Math.max(h, u + d); }
+  return { w, h };
+}
+// Where a character's art goes in a ride at scale s: p -> p * s + (dx, dy). lift: how far it was raised (so its body
+// does not show below the ride's depth) or moved (negative: down) onto the ride's floor; hand: the [left, right] offset
+// of each hand (character frame) onto the ride's grips, or null.
+function seatPlace(C, seat, s, sig) {
+  const lift = sig ? 0 : seat.floor != null ? seat.y + footOf(C) * s - seat.floor : Math.max(0, C.sink * s - seat.depth);
+  const dx = seat.x - C.hip[0] * s, dy = seat.y - lift - C.hip[1] * s;
+  const hand = sig || !C.grip || !seat.grip ? null : C.grip.map(([gx, gy], i) => [(seat.grip[i][0] - dx) / s - gx, (seat.grip[i][1] - dy) / s - gy].map(v => Math.max(-4, Math.min(4, v))));
+  return { s, dx, dy, lift, hand };
+}
+// How a split character sits in a split vehicle (null when either part is fused): seatPlace's fit plus hits (the pair's
+// capsules), sig, fit (the scale the opening and room asked for), env (envScale), cramped (the room wanted it smaller
+// than SEAT_FLOOR) and floored (a part is outside its envelope, so the pair would not fit even at SEAT_FLOOR: the
+// levelgen test fails it).
+const seatFits = {};
+function seatFit(ch, vh) {
+  const key = ch + '+' + vh;
+  if (key in seatFits) return seatFits[key];
+  const C = CHAR_FIT[ch], V = VEH_FIT[vh];
+  if (!C || !V) return (seatFits[key] = null);
+  const sig = SIGNATURE[ch] === vh, seat = V.seat, vhits = vehHits(vh);
+  const at = s => { const p = seatPlace(C, seat, s, sig); return { ...p, hits: moveCaps(sig ? charHits(ch) : charHits(ch).concat(C.body || []), s, p.dx, p.dy).concat(vhits) }; };
+  if (sig) return (seatFits[key] = { ...at(1), sig, fit: 1, env: envScale(ch), cramped: false, floored: false });
+  let fit = Math.min(SEAT_SCALE[1], Math.max(SEAT_SCALE[0], seat.w / (C.ow || VEH_FIT[SIGNATURE[ch]].seat.w))), cramped = false;
+  if (seat.room) {   // a closed ride: the character's capsules and its drawn bottom fit the room above the floor
+    const hs = charHits(ch).concat(C.body || []), x0 = Math.min(...hs.map(([ax, , bx, , r]) => Math.min(ax, bx) - r)), x1 = Math.max(...hs.map(([ax, , bx, , r]) => Math.max(ax, bx) + r));
+    const y0 = Math.min(...hs.map(([, ay, , by, r]) => Math.min(ay, by) - r)), y1 = Math.max(C.hip[1] + footOf(C), ...hs.map(([, ay, , by, r]) => Math.max(ay, by) + r));
+    const room = Math.min(seat.room.w / (x1 - x0), seat.room.h / (y1 - y0));
+    if (room < fit) { cramped = room < SEAT_FLOOR; fit = Math.max(SEAT_FLOOR, room); }
+  }
+  const env = envScale(ch), ok = s => { const m = capsMax(at(s).hits); return m.w <= PILOT_CAP.w && m.h <= PILOT_CAP.h; };
+  let s = fit, floored = false;
+  if (!ok(s)) {
+    let lo = Math.max(SEAT_FLOOR, Math.min(fit, env)), hi = s;
+    if (!ok(lo)) { s = SEAT_FLOOR; floored = true; }
+    else { for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; } s = lo; }
+  }
+  return (seatFits[key] = { ...at(s), sig, fit, env, cramped, floored });
+}
+// A pair's hitbox: a pilot's own (its signature pair), or a split pair's seat fit; null when the pair cannot fly yet
+// (a fused part away from its own partner).
+function comboHits(ch, vh) {
+  if (SIGNATURE[ch] === vh) return PILOT_HITS[ch];
+  const f = seatFit(ch, vh);
+  return f ? f.hits : null;
+}
+// a hitbox by key: a pilot id (its signature pair), a 'character+vehicle' pair id, or a capsule list
+function hitsFor(key) {
+  if (Array.isArray(key)) return key;
+  const i = key.indexOf('+');
+  return i < 0 ? PILOT_HITS[key] : comboHits(key.slice(0, i), key.slice(i + 1));
+}
+// A point in a character's frame as seen from inside its ride's tip (for a character that reaches from a part that tips
+// with the ride to one that does not, such as Shellby's body reaching his head): the point turned back about the
+// ride's tip pivot. The same point when the ride does not tip the pair.
+function seatLocal(seat, x, y) {
+  const pv = seat.vehicle.tip && seat.vehicle.tip.pivot, a = seat.tip;
+  if (!pv || !a) return [x, y];
+  const px = (pv[0] - seat.dx) / seat.s, py = (pv[1] - seat.dy) / seat.s;
+  return [px + (x - px) * Math.cos(a) + (y - py) * Math.sin(a), py - (x - px) * Math.sin(a) + (y - py) * Math.cos(a)];
+}
 // A pilot's hitbox extent in world units at a given tilt: [left, right, bottom, top] relative to its centre
-// (bottom and top as heights, so top is positive).
+// (bottom and top as heights, so top is positive). id: a pilot id, a 'character+vehicle' pair id or a capsule list.
 function pilotExtent(id, rot, S = PILOT_SCALE) {
   const cs = Math.cos(rot), sn = Math.sin(rot);
   let x0 = Infinity, x1 = -Infinity, a0 = Infinity, a1 = -Infinity;
-  for (const [ax, ay, bx, by, r] of PILOT_HITS[id]) for (const [lx, ly] of [[ax, ay], [bx, by]]) {
+  for (const [ax, ay, bx, by, r] of hitsFor(id)) for (const [lx, ly] of [[ax, ay], [bx, by]]) {
     const x = (lx * cs - ly * sn) * S, a = -(lx * sn + ly * cs) * S, R = r * S;
     x0 = Math.min(x0, x - R); x1 = Math.max(x1, x + R); a0 = Math.min(a0, a - R); a1 = Math.max(a1, a + R);
   }
   return [x0, x1, a0, a1];
 }
-// The widest and tallest any pilot's hitbox gets at any tilt (at scale S): lanes and gaps are sized from these.
+// The widest and tallest any pair's hitbox (any character in any vehicle it can ride) gets at any tilt (at scale S):
+// lanes and gaps are sized from these.
 const pilotMax = {};
 function pilotMaxSize(S = PILOT_SCALE) {
   if (pilotMax[S]) return pilotMax[S];
   let w = 0, h = 0;
-  for (const id in PILOT_HITS) for (let k = -10; k <= 10; k++) {
-    const [x0, x1, a0, a1] = pilotExtent(id, PILOT_TILT * k / 10, S);
-    w = Math.max(w, x1 - x0); h = Math.max(h, a1 - a0);
+  for (const ch in SIGNATURE) for (const vh of VEHICLE_IDS) {
+    const hits = comboHits(ch, vh);
+    if (hits) for (let k = -10; k <= 10; k++) {
+      const [x0, x1, a0, a1] = pilotExtent(hits, PILOT_TILT * k / 10, S);
+      w = Math.max(w, x1 - x0); h = Math.max(h, a1 - a0);
+    }
   }
   return (pilotMax[S] = { w, h });
 }
@@ -463,7 +730,13 @@ const laneSize = () => pilotMaxSize(LANE_SCALE);
 const CFG_KEY = 'cr-cfg6';         // new key: tuned values saved under the old defaults would otherwise stick
 const cfg = Object.assign({}, DEFAULTS, store.get(CFG_KEY, {}));
 const isDefaultTune = () => Object.keys(DEFAULTS).every(k => Math.abs(cfg[k] - DEFAULTS[k]) < 1e-9);
-const settings = Object.assign({ control: 'one', hitboxes: false, pilot: 'lemur', monster: 'worm' }, store.get('cr-settings', {}));
+const settings = Object.assign({ control: 'one', hitboxes: false, character: 'lemur', vehicle: 'coconut', monster: 'worm' }, store.get('cr-settings', {}));
+// (saves from before characters and vehicles were picked separately hold one pilot: it becomes that character on its
+// signature ride; owned/locked parts will be kept here too once there is something to unlock)
+if ('pilot' in settings) {
+  const id = SIGNATURE[settings.pilot] ? settings.pilot : 'lemur';
+  settings.character = id; settings.vehicle = SIGNATURE[id]; delete settings.pilot; store.set('cr-settings', settings);
+}
 
 const TUNE = [
   ['gravity', 'Gravity', 500, 2200, 10, v => v],
@@ -2561,7 +2834,7 @@ let nearMode = false;
 // The pilot's capsules in the world for its centre and drawn tilt (squash and stretch are left out).
 function pilotCaps(pl, x, alt, rot) {
   const cs = Math.cos(rot), sn = Math.sin(rot), S = PILOT_SCALE;
-  return PILOT_HITS[pl.id].map(([ax, ay, bx, by, r]) => ({
+  return hitsFor(pl.id).map(([ax, ay, bx, by, r]) => ({
     x0: x + (ax * cs - ay * sn) * S, a0: alt - (ax * sn + ay * cs) * S,
     x1: x + (bx * cs - by * sn) * S, a1: alt - (bx * sn + by * cs) * S, r: r * S,
   }));
@@ -6421,6 +6694,10 @@ const EXHAUST = {
 };
 const rgbaA = (col, a) => `rgba(${col[0]},${col[1]},${col[2]},${a})`;
 
+// Split characters and vehicles (see SPLIT_GUIDE.md and "Characters and vehicles: the art side" after PILOTS): each
+// registers itself right after its art, SPLIT_CHARACTERS[character id] = its character, SPLIT_VEHICLES[vehicle id] = its ride.
+const SPLIT_CHARACTERS = {}, SPLIT_VEHICLES = {};
+
 // ---- Kiko the ring-tailed lemur and the Coco-Rocket (PILOTS[0]) ----
 // A hollowed coconut with a riveted brass strap, a racing roundel, a hammered copper bell and striped
 // sail-cloth fins on bamboo spars. Kiko rides in the cut-open top, aviator goggles on, a teal scarf and
@@ -6428,10 +6705,10 @@ const rgbaA = (col, a) => `rgba(${col[0]},${col[1]},${col[2]},${a})`;
 const LM = { k: 0, f: 0, t: -1 };
 const LM_FUR = ['#e2dce8', '#a49cb0', '#5e5668'], LM_WARM = ['#e6d4c6', '#b4967f', '#705648'], LM_DARK = '#27212c', LM_WHITE = '#fbf8fc';
 function lmRand(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
-function lmEase(st, thr, fall) {
-  const dt = st.t - LM.t; LM.t = st.t;
-  if (!(dt > 0 && dt < 0.1)) { LM.k = thr; LM.f = fall; return; }
-  const a = 1 - Math.exp(-dt * 10); LM.k += (thr - LM.k) * a; LM.f += (fall - LM.f) * a;
+function lmEase(S, st, thr, fall) {   // S: LM (Kiko) or LMV (the Coco-Rocket)
+  const dt = st.t - S.t; S.t = st.t;
+  if (!(dt > 0 && dt < 0.1)) { S.k = thr; S.f = fall; return; }
+  const a = 1 - Math.exp(-dt * 10); S.k += (thr - S.k) * a; S.f += (fall - S.f) * a;
 }
 const lmMix = (a, b, t) => a.map((v, i) => [v[0] + (b[i][0] - v[0]) * t, v[1] + (b[i][1] - v[1]) * t]);
 function lmBez(p, u) {
@@ -6732,7 +7009,7 @@ function lmHand(c, hx, hy, d, up) {
   // the furred back of the hand over the knuckles
   pkE(c, hx, hy - 0.7, 2.3, 1.45, pkRG(c, hx, hy - 1, 2.3, ['#c4bccf', '#918a9e', '#625a6e']), 1.1);
 }
-function lmArm(c, d, mood, t, up = 0) {
+function lmArm(c, d, mood, t, up = 0, hand = null) {   // hand: [dx, dy] onto another ride's lip (seat.hand)
   const jit = mood === 'panic' ? Math.sin(t * 55 + d) * 0.35 : 0;
   if (up) {   // the bite: both arms flung up, waving
     const w = Math.sin(t * 19 + d * 1.7), hx = d * (18.6 + w * 0.8), hy = -24.6 + Math.cos(t * 19 + d) * 0.9;
@@ -6740,10 +7017,85 @@ function lmArm(c, d, mood, t, up = 0) {
     lmHand(c, hx, hy, d, true);
     return;
   }
-  const hx = d * 10.4 + jit, hy = -1;
-  pkCurve(c, [d * 7.6, -6.4], [d * 13.4, -6.2], [hx, hy - 1.2], '#a199ae', 3.4);
+  const [gx, gy] = hand || [0, 0], hx = d * 10.4 + jit + gx, hy = -1 + gy;
+  pkCurve(c, [d * 7.6, -6.4], [d * 13.4 + gx * 0.5, -6.2 + gy * 0.5], [hx, hy - 1.2], '#a199ae', 3.4);
   lmHand(c, hx, hy, d, false);
 }
+// ---- Kiko and the Coco-Rocket, split into a character and a vehicle (a reference split: see SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: Kiko's tail behind everything (character back),
+// the nut's fins, bell, shell and cavity (vehicle back), Kiko's torso (character body), the front shell and cut lip
+// over Kiko's waist (vehicle front), then Kiko's arms, scarf and head (character front). In the bite the nut tips over
+// (the vehicle's tip, about (0, 10)); Kiko rises out of it, leans back against the tip and flings both arms up. Kiko's
+// hands hook over whatever lip the ride has (seat.hand moves them onto its grips). The Coco-Rocket keeps its own copy
+// of the thrust/fall easing (LMV), so its fins and glowing bell animate the same under any character.
+const LMV = { k: 0, f: 0, t: -1 };
+function lmLean(c, p, seat) { c.translate(p.shake, p.bob); if (p.bite) { c.translate(0, -2.6); c.rotate(-seat.tip * 1.6); } }
+const KIKO = {
+  id: 'lemur', line: '#45325a', bitePose: true,
+  palette: { fur: LM_FUR, warm: LM_WARM, dark: LM_DARK, white: LM_WHITE, scarf: '#22d0cc', eyes: '#ffb21a' },
+  // moods: 'calm' | 'thrust' | 'grin' (near miss) | 'fall' | 'panic' (scared, and the bite)
+  pose(st, seat) {
+    const t = st.t, panic = pkMood === 'panic', thr = st.thrust ? 1 : 0, fall = !thr && pkLookDown && !panic ? 1 : 0;
+    const bite = st.bite >= 0;
+    lmEase(LM, st, thr, fall);
+    const mood = panic ? 'panic' : pkMood === 'grin' ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
+    const bob = Math.sin(t * 2.4) * 0.5 + (mood === 'thrust' ? 0.7 : 0) + (mood === 'fall' ? -0.6 : 0), shake = panic ? Math.sin(t * 47) * 0.4 : 0;
+    return { t, panic, bite, k: LM.k, f: bite ? 1 : LM.f, mood, bob, shake };
+  },
+  draw: {
+    back(c, st, seat) { const p = seat.cp; lmTail(c, p.t, p.k, p.f, p.panic); },
+    body(c, st, seat) {
+      const p = seat.cp;
+      c.save(); lmLean(c, p, seat);
+      lmBody(c, st, p.mood, p.t, p.k);
+      c.restore();
+    },
+    front(c, st, seat) {
+      const p = seat.cp, mood = p.mood, t = p.t;
+      c.save(); lmLean(c, p, seat);
+      if (!p.bite) for (const d of [-1, 1]) lmArm(c, d, mood, t, 0, seat.hand && seat.hand[d > 0 ? 1 : 0]);
+      lmScarfTails(c, t, p.k, p.f);
+      lmScarf(c);
+      c.translate(0, mood === 'thrust' ? 0.5 : 0);
+      lmHead(c, st, mood, t);
+      if (p.bite) for (const d of [-1, 1]) lmArm(c, d, mood, t, 1);   // (flung up past the cheeks, in front of the head)
+      c.restore();
+    },
+  },
+};
+const COCO_ROCKET = {
+  id: 'coconut', line: '#45325a', exhaust: 'fire', nozzles: [[0, 33]], bitePose: true, tip: { pivot: [0, 10] },
+  desc: 'A hollowed coconut with a riveted brass strap, a hammered copper bell and striped sail-cloth fins',
+  palette: { husk: '#dca86a', shell: '#7e4826', brass: '#e8b44a', copper: '#c8673a', fins: '#e8402c', tint: '168,104,58', bounce: 'rgba(255,226,180,.45)' },
+  pose(st) {
+    const t = st.t, panic = pkMood === 'panic', thr = st.thrust ? 1 : 0, fall = !thr && pkLookDown && !panic ? 1 : 0;
+    const bite = st.bite >= 0;   // swallowed: the nut tips over
+    lmEase(LMV, st, thr, fall);
+    return { t, k: LMV.k, f: bite ? 1 : LMV.f, tip: bite ? 0.24 + 0.06 * Math.sin(t * 13) : 0 };
+  },
+  draw: {
+    back(c, st, seat) {
+      const { t, k, f } = seat.vp;
+      const flap = 0.1 * k + 0.04 * k * Math.sin(t * 32) - 0.1 * f + 0.02 * Math.sin(t * 2.4);
+      for (const d of [-1, 1]) lmFin(c, d, flap + (d > 0 ? 0.01 : 0), t);
+      lmBell(c, k, t);
+      // the nut: the whole shell, then the cavity (the character sits in it, then the front shell goes over its waist)
+      lmShellPath(c); lmHusk(c, k, t); lmShellPath(c); c.strokeStyle = INK; c.lineWidth = 2.2; c.stroke();
+      const [rx0, ry0, rrx, rry] = LM_RIM;
+      pkE(c, rx0, ry0, rrx, rry, '#fff6e4', 1.6);
+      pkE(c, rx0, ry0 + 0.5, rrx - 2, rry - 1.2, pkLG(c, 0, ry0 - 3, 0, ry0 + 3, ['#1e0c06', '#4a2410']), 1);
+    },
+    front(c, st, seat) {
+      const { t, k } = seat.vp, [rx0, ry0, rrx, rry] = LM_RIM;
+      lmFrontPath(c); c.save(); lmHusk(c, k, t); c.restore(); lmFrontPath(c); c.strokeStyle = INK; c.lineWidth = 2.2; c.stroke();
+      // the cut lip: white coconut meat with a thin dark shell line under it
+      c.beginPath(); c.ellipse(rx0, ry0, rrx - 0.6, rry - 0.4, 0, Math.PI, 0, true); c.strokeStyle = INK; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = '#fff6e4'; c.lineWidth = 1.7; c.stroke();
+      // rim light on the nut's lit edge
+      c.strokeStyle = 'rgba(255,236,200,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 9, 16, 15, 0, -0.5, 0.6); c.stroke();
+    },
+  },
+};
+SPLIT_CHARACTERS.lemur = KIKO; SPLIT_VEHICLES.coconut = COCO_ROCKET;
 // Ember the dragon: a jade hatchling with a big cream belly and muzzle, a crimson neck scarf and a tiny plaster
 // tucked in a notch of one horn, riding a matte black cast-iron potbelly stove with bright brass trim that it
 // stokes with its own fire (stove legs as fins, the grate glowing hotter while you thrust).
@@ -7343,19 +7695,14 @@ function pfHat(c, x, y, rot, sc) {
   c.restore();
 }
 
-function pfDraw(c, st) {
-  const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const alarm = !panic && !grin && !thr && pkLookDown > 0;
-  const mood = panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
-  const { by: BY, br: BR, ry: RY, rx: RX, cy: CY, cx: CX } = PF;
-  // swallowed: the water slops hard to one side and spills over the lip
-  const tilt = bite ? 0.42 + Math.sin(t * 13) * 0.12 : clamp(-st.vx * 0.0011, -0.22, 0.22) + Math.sin(t * 3.1) * (thr ? 0.07 : 0.04);
-  const WY = RY + 2.6 + Math.sin(t * 2.3) * 0.5 + (bite ? 1.2 : 0);
-  const breathe = Math.sin(t * 2.6);
-  const inf = bite ? 1.26 + 0.04 * Math.sin(t * 31) : panic ? 1.2 + 0.03 * Math.sin(t * 24) : 1 + 0.022 * breathe;
-  const PY = -17 + breathe * 0.5 - (panic ? 2.2 : 0) - (thr ? 0.6 : 0) - (bite ? 1.2 : 0) + (bite ? Math.sin(t * 27) * 0.5 : 0);
-  const prx = 13.2 * inf, pry = (panic ? 12.8 : 12) * inf;
-
+// Captain Puff and the Fishbowl water-jet, split into a character and a vehicle (a reference split: see SPLIT_GUIDE.md).
+// The old single drawing cut into layers, every statement unchanged: the pump bell, ballast tanks, glass and water and
+// the back of the lip (vehicle back), the fish (character body), then the water and glass in front of him, the navy
+// hull cup and the front of the lip (vehicle front). The bowl does not tip in the bite: its water slops over the lip
+// while the fish puffs up and loses his cap.
+function pfBowlBack(c, st, vp) {
+  const { t, thr, tilt, WY } = vp;
+  const { by: BY, br: BR, ry: RY, rx: RX } = PF;
   // ---- vehicle, behind the bowl ----
   c.save(); c.translate(0, 2); pfNozzle(c, thr, t);
   for (const d of [-1, 1]) pfTank(c, d, st, thr);
@@ -7370,7 +7717,10 @@ function pfDraw(c, st) {
   c.beginPath(); c.ellipse(0, RY, RX, 2.5, 0, Math.PI, TWO_PI); c.strokeStyle = INK; c.lineWidth = 3.8; c.stroke();
   c.strokeStyle = '#e8fbff'; c.lineWidth = 1.6; c.stroke();
   c.beginPath(); c.ellipse(0, RY, RX - 1, 1.8, 0, 0, TWO_PI); c.fillStyle = 'rgba(30,110,170,.55)'; c.fill();
-
+}
+function pfFish(c, st, p, bounce = 'rgba(120,230,255,.5)') {   // bounce: the light his ride throws up on him (the water, in his bowl)
+  const { t, thr, bite, panic, alarm, mood, inf, PY, prx, pry } = p;
+  const { ry: RY } = PF;   // (his own frame: RY is the lip of the bowl he was drawn in, his tail flicks up from it)
   // ---- Captain Puff ----
   pfTail(c, 8.5, RY + 1.2, 0.5 + Math.sin(t * (thr ? 14 : bite ? 30 : 4)) * (thr ? 0.22 : bite ? 0.35 : 0.12) + (panic ? 0.4 : 0));
   // spines: flat nubs at rest, bristling out when scared; cream quills with hot orange tips (two-tone, warm edges)
@@ -7391,12 +7741,12 @@ function pfDraw(c, st) {
   pkE(c, 0, PY + pry * 0.92, prx * 0.8, pry * 0.5, pkLG(c, 0, PY, 0, PY + pry, ['#fffdf6', '#fff1d0']), 0);   // pale belly
   for (const [sx_, sy_, sr] of [[-8.6, -6, 1.6], [-3, -9.6, 1.3], [2.6, -9.8, 1.5], [8.8, -5.6, 1.5], [-11, -1.2, 1.3], [11, -0.6, 1.4], [-10.4, 3.4, 1], [10.6, 3.8, 1.1], [6, -8.6, 1], [-6, -9, 1]])
     pkE(c, sx_ * inf, PY + sy_ * inf, sr * inf, sr * 0.85 * inf, PF.spot, 0);
-  // a warm orange shade round the lower flank, AO under the cap brim, bounce light from the water
+  // a warm orange shade round the lower flank, AO under the cap brim, bounce light from the ride (the water in his bowl)
   const fl = c.createRadialGradient(-prx * 0.25, PY - pry * 0.35, prx * 0.5, 0, PY, prx * 1.08); fl.addColorStop(0, 'rgba(240,150,40,0)'); fl.addColorStop(1, 'rgba(236,132,32,.26)');
   c.fillStyle = fl; c.fillRect(-prx, PY - pry, prx * 2, pry * 2);
   const ao = c.createRadialGradient(0, PY - pry * 1.05, 1, 0, PY - pry * 1.05, prx * 0.9); ao.addColorStop(0, 'rgba(160,70,0,.3)'); ao.addColorStop(1, 'rgba(160,70,0,0)');
   c.fillStyle = ao; c.fillRect(-prx, PY - pry, prx * 2, pry);
-  c.strokeStyle = 'rgba(120,230,255,.5)'; c.lineWidth = 2; c.beginPath(); c.ellipse(0, PY, prx - 0.8, pry - 0.8, 0, 0.3, 1.3); c.stroke();
+  c.strokeStyle = bounce; c.lineWidth = 2; c.beginPath(); c.ellipse(0, PY, prx - 0.8, pry - 0.8, 0, 0.3, 1.3); c.stroke();
   c.restore();
   pkRim(c, 0, PY, prx - 1.6, pry - 1.6, 3.6, 4.7, 0.75);
   // pectoral fins growing from his cheeks: a lazy scull at rest, swept back and buzzing while he jets, flung up in a fright
@@ -7424,7 +7774,10 @@ function pfDraw(c, st) {
   // the captain's cap, cocked to one side; it pops up when the fish inflates (and flies right off when swallowed)
   if (bite) pfHat(c, -3 + Math.sin(t * 7) * 1.5, PY - pry - 4.5, -0.55 + Math.sin(t * 11) * 0.2, 0.95);
   else pfHat(c, 0.8 + st.look * 0.6, PY - pry + 0.6 - (panic ? 2.4 + Math.abs(Math.sin(t * 9)) * 1.2 : 0), -0.16 + (panic ? Math.sin(t * 9) * 0.12 : 0) + (thr ? 0.04 : 0), 0.95);
-
+}
+function pfBowlFront(c, st, vp) {
+  const { t, thr, bite, tilt, WY } = vp;
+  const { by: BY, br: BR, ry: RY, rx: RX, cy: CY, cx: CX } = PF;
   // ---- glass and water in front of the fish ----
   c.save(); pfBowlPath(c); c.clip();
   pfWater(c, WY, tilt); c.fillStyle = 'rgba(40,150,225,.5)'; c.fill();
@@ -7488,6 +7841,37 @@ function pfDraw(c, st) {
     pkDot(c, x - r * 0.35, y - r * 0.2, r * 0.3, '#e8fbff');
   }
 }
+const CAPTAIN_PUFF = {
+  id: 'puffer', line: '#6a3412', bitePose: true,
+  palette: { body: PF.body, spot: PF.spot, spine: PF.spine, tip: PF.tip, fin: '#ffae3e', cap: '#1a2c60', eyes: '#2ccab0' },
+  // moods: 'calm' | 'grit' (thrust: puffing hard) | 'grin' (near miss) | 'alarm' (the monster is close) | 'panic' (puffed up, and the bite)
+  pose(st, seat) {
+    const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const alarm = !panic && !grin && !thr && pkLookDown > 0;
+    const mood = panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
+    const breathe = Math.sin(t * 2.6);
+    const inf = bite ? 1.26 + 0.04 * Math.sin(t * 31) : panic ? 1.2 + 0.03 * Math.sin(t * 24) : 1 + 0.022 * breathe;
+    const PY = -17 + breathe * 0.5 - (panic ? 2.2 : 0) - (thr ? 0.6 : 0) - (bite ? 1.2 : 0) + (bite ? Math.sin(t * 27) * 0.5 : 0);
+    const prx = 13.2 * inf, pry = (panic ? 12.8 : 12) * inf;
+    return { bite, t, thr, panic, alarm, mood, inf, PY, prx, pry };
+  },
+  draw: { body(c, st, seat) { pfFish(c, st, seat.cp, seat.vehicle.palette && seat.vehicle.palette.bounce); } },
+};
+const FISHBOWL = {
+  id: 'fishbowl', line: '#6a3412', exhaust: 'water', nozzles: [[0, 29]], bitePose: true,
+  desc: 'A riveted fishbowl on a navy hull cup, with ballast tanks, red dive fins and a brass pump bell',
+  palette: { glass: '#cfeefc', water: '#2a9ce0', hull: '#2a4c90', brass: '#e0a43a', fins: '#cc4434', tint: '42,156,224', bounce: 'rgba(120,230,255,.5)' },
+  pose(st) {
+    const bite = st.bite >= 0, t = st.t, thr = !!st.thrust && !bite;
+    const { ry: RY } = PF;
+    // swallowed: the water slops hard to one side and spills over the lip
+    const tilt = bite ? 0.42 + Math.sin(t * 13) * 0.12 : clamp(-st.vx * 0.0011, -0.22, 0.22) + Math.sin(t * 3.1) * (thr ? 0.07 : 0.04);
+    const WY = RY + 2.6 + Math.sin(t * 2.3) * 0.5 + (bite ? 1.2 : 0);
+    return { bite, t, thr, tilt, WY };
+  },
+  draw: { back(c, st, seat) { pfBowlBack(c, st, seat.vp); }, front(c, st, seat) { pfBowlFront(c, st, seat.vp); } },
+};
+SPLIT_CHARACTERS.puffer = CAPTAIN_PUFF; SPLIT_VEHICLES.fishbowl = FISHBOWL;
 
 // ---- Lumo the firefly (PILOTS 'firefly') ----
 // A warm amber-tan firefly in an olive leather flying cap (fleece trim, ear flaps, goggles pushed up), riding a jam
@@ -12721,46 +13105,7 @@ function rbtDraw(c, st) {
   c.restore();
 }
 const PILOTS = [
-  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket', noInk: '#45325a', exhaust: 'fire', nozzles: [[0, 33]], bitePose: true, draw(c, st) {
-    const t = st.t, panic = pkMood === 'panic', thr = st.thrust ? 1 : 0, fall = !thr && pkLookDown && !panic ? 1 : 0;
-    const bite = st.bite >= 0;   // swallowed: the nut tips over, Kiko pops half out of it with both arms flung up
-    lmEase(st, thr, fall);
-    const k = LM.k, f = bite ? 1 : LM.f;
-    const mood = panic ? 'panic' : pkMood === 'grin' ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
-    c.lineJoin = 'round'; c.lineCap = 'round';
-    const tip = bite ? 0.24 + 0.06 * Math.sin(t * 13) : 0;
-    c.save(); c.translate(0, 10); c.rotate(tip); c.translate(0, -10);
-    // back layer: tail, fins, bell
-    lmTail(c, t, k, f, panic);
-    const flap = 0.1 * k + 0.04 * k * Math.sin(t * 32) - 0.1 * f + 0.02 * Math.sin(t * 2.4);
-    for (const d of [-1, 1]) lmFin(c, d, flap + (d > 0 ? 0.01 : 0), t);
-    lmBell(c, k, t);
-    // the nut: the whole shell, then the cavity, then Kiko, then the front shell over Kiko's waist
-    lmShellPath(c); lmHusk(c, k, t); lmShellPath(c); c.strokeStyle = INK; c.lineWidth = 2.2; c.stroke();
-    const [rx0, ry0, rrx, rry] = LM_RIM;
-    pkE(c, rx0, ry0, rrx, rry, '#fff6e4', 1.6);
-    pkE(c, rx0, ry0 + 0.5, rrx - 2, rry - 1.2, pkLG(c, 0, ry0 - 3, 0, ry0 + 3, ['#1e0c06', '#4a2410']), 1);
-    const bob = Math.sin(t * 2.4) * 0.5 + (mood === 'thrust' ? 0.7 : 0) + (mood === 'fall' ? -0.6 : 0), shake = panic ? Math.sin(t * 47) * 0.4 : 0;
-    // (in the bite Kiko leans back upright against the tipped nut and rises out of it)
-    const lean = () => { c.translate(shake, bob); if (bite) { c.translate(0, -2.6); c.rotate(-tip * 1.6); } };
-    c.save(); lean();
-    lmBody(c, st, mood, t, k);
-    c.restore();
-    lmFrontPath(c); c.save(); lmHusk(c, k, t); c.restore(); lmFrontPath(c); c.strokeStyle = INK; c.lineWidth = 2.2; c.stroke();
-    // the cut lip: white coconut meat with a thin dark shell line under it
-    c.beginPath(); c.ellipse(rx0, ry0, rrx - 0.6, rry - 0.4, 0, Math.PI, 0, true); c.strokeStyle = INK; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = '#fff6e4'; c.lineWidth = 1.7; c.stroke();
-    // rim light on the nut's lit edge
-    c.strokeStyle = 'rgba(255,236,200,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 9, 16, 15, 0, -0.5, 0.6); c.stroke();
-    c.save(); lean();
-    if (!bite) for (const d of [-1, 1]) lmArm(c, d, mood, t);
-    lmScarfTails(c, t, k, f);
-    lmScarf(c);
-    c.translate(0, mood === 'thrust' ? 0.5 : 0);
-    lmHead(c, st, mood, t);
-    if (bite) for (const d of [-1, 1]) lmArm(c, d, mood, t, 1);   // (flung up past the cheeks, in front of the head)
-    c.restore();
-    c.restore();
-  } },
+  { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket' },   // split: KIKO on the COCO_ROCKET (exhaust, nozzles and art from the parts)
 
   { id: 'ember', name: 'Ember the dragon', ride: 'Potbelly stove rocket', noInk: '#0d4a40', exhaust: 'fire', nozzles: [[0, 31]], bitePose: true, draw(c, st) {
     const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, mood = bite ? 'panic' : pkMood, panic = mood === 'panic', grin = mood === 'grin';
@@ -12978,7 +13323,7 @@ const PILOTS = [
 
   { id: 'snail', name: 'Shellby the snail', ride: 'Turbo shell', noInk: '#26406e', exhaust: 'fire', bitePose: true, nozzles: [[1, 36]], draw(c, st) { snlDraw(c, st); } },
 
-  { id: 'puffer', name: 'Captain Puff', ride: 'Fishbowl water-jet', noInk: '#6a3412', exhaust: 'water', nozzles: [[0, 29]], bitePose: true, draw(c, st) { pfDraw(c, st); } },
+  { id: 'puffer', name: 'Captain Puff', ride: 'Fishbowl water-jet' },   // split: CAPTAIN_PUFF in the FISHBOWL
 
   { id: 'firefly', name: 'Lumo the firefly', ride: 'Jam-jar lantern', noInk: '#4e2c2a', bitePose: true, exhaust: 'glow', nozzles: [[0, 30]], draw(c, st) {
     const t = st.t, thr = !!st.thrust, bite = st.bite >= 0, panic = pkMood === 'panic' || bite, grin = pkMood === 'grin';
@@ -13275,8 +13620,104 @@ for (const pl of PILOTS) if (pl.noInk) {
     try { return draw.call(this, c, st); } finally { pkSoft = was; if (own) pkSoftOff(c); }
   };
 }
-let pilotIndex = Math.max(0, PILOTS.findIndex(p => p.id === settings.pilot));
-const pilot = () => PILOTS[pilotIndex];
+// ---- Characters and vehicles: the art side (the hit side, the seat contract and the size envelopes are with PILOT_HITS) ----
+// CHARACTERS and VEHICLES hold the 21 of each in PILOTS order (slot i: pilot i's character and its signature ride).
+// A split character: { id, name, line, palette, signature, bitePose, unlock, pose(st, seat), draw: { back, body, front, top } }.
+// A split vehicle: { id, name, desc, line, palette, exhaust, nozzles, junk, bitePose, tip, inner, unlock, pose(st), draw: { back, front, over } }.
+// Each registers itself right after its art (SPLIT_CHARACTERS, SPLIT_VEHICLES, with the pilot helpers).
+// line is the part's no-border line colour (noInk): each part draws its edges in its own. A vehicle owns the exhaust,
+// the nozzles (its frame), its effects (junk: it sheds debris while it burns), the thrust animation, the light it throws
+// on its rider (palette.bounce, an rgba() string a character may use for bounce light) and how it reacts to the bite:
+// its pose's tip is the angle it tips by (0 or left out when it does not). tip: { pivot } tips the whole pair about that
+// point (the character tips with it, and can lean against it via seat.tip); a vehicle that tips only itself (Ember's
+// stove, while Ember is thrown the other way) leaves tip null, turns its own layers and still reports the angle, so
+// any character can react to it; a vehicle that moves the whole pair some other way gives frame(c, st, seat) instead.
+// Each draw layer is (c, st, seat): st is the usual pilot state (t, vx, look, thrust, blink, bite); seat holds the fit
+// (s, dx, dy, lift, sig, hand: see seatFit), tip, the two parts, and both poses, each worked out once per draw (seat.cp
+// the character's, seat.vp the vehicle's). The pair draws in the vehicle's frame, back to front: character back (tails),
+// vehicle back (fins, shell, cavity, glass), character body (what sits in the seat), vehicle front (front shell, lip,
+// glass and water in front), character front (arms over the lip, head), vehicle over (rare: anything of the ride in
+// front of the character's head, such as a windscreen or a hood), all inside the ride's tip; then character top (rare:
+// anything of the character that stays upright while the ride tips, such as Shellby's eyestalks and head). Any layer
+// may be left out. The character layers draw in the character's own frame, moved onto the seat. A vehicle whose back
+// layer leaves a transform open round its rider (Biscuit's ball scales its inside, and clips it, from its back layer to
+// its front layer) declares the transform as inner: { pivot, s }; a rider's body layer is drawn inside it, so the
+// framework takes that transform back out for a rider and puts in the one the rider was drawn in (its own ride's inner). A fused pilot (not
+// split yet) is a character and a vehicle that both point at its PILOTS entry (fused); it only flies its own pair
+// (canRide), drawn by its old draw().
+// unlock: groundwork for a shop or unlockables (no shop UI yet): null means free; ownership is UNLOCKS.
+const CHARACTERS = [], VEHICLES = [], CHARACTER_BY = {}, VEHICLE_BY = {};
+PILOTS.forEach((pl, slot) => {
+  const vid = SIGNATURE[pl.id], sc = SPLIT_CHARACTERS[pl.id], sv = SPLIT_VEHICLES[vid];
+  if (!sc !== !sv || !sc !== !CHAR_FIT[pl.id] || !sv !== !VEH_FIT[vid]) console.error(`pilot ${pl.id}: split its character and its ride together, art and fit`);
+  const ch = sc ? Object.assign(sc, { name: pl.name, signature: vid, slot, fit: CHAR_FIT[pl.id] })
+    : { id: pl.id, name: pl.name, line: pl.noInk, signature: vid, slot, bitePose: pl.bitePose, fused: pl };
+  const vh = sv ? Object.assign(sv, { name: pl.ride, signatureOf: pl.id, slot, fit: VEH_FIT[vid] })
+    : { id: vid, name: pl.ride, line: pl.noInk, exhaust: pl.exhaust, nozzles: pl.nozzles, junk: pl.junk, bitePose: pl.bitePose, signatureOf: pl.id, slot, fused: pl };
+  ch.unlock = ch.unlock || null; vh.unlock = vh.unlock || null;
+  CHARACTERS.push(ch); VEHICLES.push(vh); CHARACTER_BY[ch.id] = ch; VEHICLE_BY[vh.id] = vh;
+});
+// A character can ride a vehicle once both are split; a fused one only rides (or carries) its own partner.
+const canRide = (ch, vh) => ch.signature === vh.id || (!ch.fused && !vh.fused);
+// Ownership: groundwork for a shop or unlockables (no shop UI). owned stays null while everything is free; later it
+// becomes a Set of 'char:<id>' / 'veh:<id>' keys kept with the save. A tap on a locked card calls onLocked (the hook a
+// shop or an unlock screen plugs into); unlock() grants one and calls onUnlock.
+const UNLOCKS = {
+  owned: null, onLocked: null, onUnlock: null,
+  has(kind, id) { return !this.owned || this.owned.has(kind + ':' + id); },
+  locked(kind, id) { if (this.onLocked) this.onLocked(kind, id); },
+  unlock(kind, id) { if (this.owned) this.owned.add(kind + ':' + id); if (this.onUnlock) this.onUnlock(kind, id); },
+};
+// A pair: the object the rest of the game calls "the pilot" (pilot()): { id, name, ride, noInk, exhaust, nozzles,
+// bitePose, draw(c, st), character, vehicle, sig, fit }. Its id is the character's id on its signature ride (as before,
+// and a PILOTS entry), 'character+vehicle' otherwise; hitsFor(id) is its hitbox. A pair a fused part cannot fly falls
+// back to the character on its signature ride.
+const PAIRS = {};
+function comboOf(chId, vhId) {
+  const ch = CHARACTER_BY[chId] || CHARACTERS[0], want = VEHICLE_BY[vhId], vh = want && canRide(ch, want) ? want : VEHICLE_BY[ch.signature];
+  const sig = vh.id === ch.signature, key = sig ? ch.id : ch.id + '+' + vh.id;
+  if (PAIRS[key]) return PAIRS[key];
+  const pl = sig ? PILOTS[ch.slot] : { id: key };
+  Object.assign(pl, { character: ch, vehicle: vh, sig });
+  if (!ch.fused) Object.assign(pl, { name: ch.name, ride: vh.name, noInk: ch.line, exhaust: vh.exhaust, nozzles: vh.nozzles, junk: vh.junk,
+    bitePose: ch.bitePose !== false && vh.bitePose !== false, fit: seatFit(ch.id, vh.id), draw: drawPair });
+  return (PAIRS[key] = pl);
+}
+// Draws a split pair (as pair.draw): the layers, each part in its own line colour, inside the vehicle's tip. only
+// (optional, for measuring tools): a Set of the layers to draw, such as 'V.front' or 'C.body'.
+function drawPair(c, st, only) {
+  const ch = this.character, vh = this.vehicle, f = this.fit, was = pkSoft, own = pkSoftOn(c);
+  try {
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    const vp = vh.pose(st), seat = { s: f.s, dx: f.dx, dy: f.dy, lift: f.lift, sig: this.sig, hand: f.hand, tip: vp.tip || 0, vp, cp: null, character: ch, vehicle: vh };
+    seat.cp = ch.pose(st, seat);
+    const moved = f.s !== 1 || f.dx !== 0 || f.dy !== 0, inner = vh.inner, home = VEHICLE_BY[ch.signature].inner;
+    const sameInner = inner === home || !!(inner && home && inner.s === home.s && inner.pivot[0] === home.pivot[0] && inner.pivot[1] === home.pivot[1]);
+    const C = layer => {
+      const fn = ch.draw[layer]; if (!fn || only && !only.has('C.' + layer)) return;
+      pkSoft = ch.line;
+      const body = layer === 'body', mv = moved || body && !sameInner;
+      if (mv) {
+        c.save();
+        if (body && inner) { c.translate(inner.pivot[0], inner.pivot[1]); c.scale(1 / inner.s, 1 / inner.s); c.translate(-inner.pivot[0], -inner.pivot[1]); }
+        c.translate(f.dx, f.dy); c.scale(f.s, f.s);
+        if (body && home) { c.translate(home.pivot[0], home.pivot[1]); c.scale(home.s, home.s); c.translate(-home.pivot[0], -home.pivot[1]); }
+      }
+      fn(c, st, seat);
+      if (mv) c.restore();
+    };
+    const V = layer => { const fn = vh.draw[layer]; if (!fn || only && !only.has('V.' + layer)) return; pkSoft = vh.line; fn(c, st, seat); };
+    const pv = vh.tip && vh.tip.pivot, wrap = !!(vh.frame || pv);
+    if (wrap) { c.save(); if (vh.frame) vh.frame(c, st, seat); else { c.translate(pv[0], pv[1]); c.rotate(seat.tip); c.translate(-pv[0], -pv[1]); } }
+    C('back'); V('back'); C('body'); V('front'); C('front'); V('over');
+    if (wrap) c.restore();
+    C('top');
+  } finally { pkSoft = was; if (own) pkSoftOff(c); }
+}
+for (const ch of CHARACTERS) comboOf(ch.id, ch.signature);   // every pilot's own pair is ready (and every PILOTS entry whole)
+// The chosen pair (settings.character on settings.vehicle).
+let curPilot = null;
+const pilot = () => curPilot || (curPilot = comboOf(settings.character, settings.vehicle));
 
 function pilotState(t, vx, thrust) {
   const b = pmod(t, 3.6);
@@ -24765,7 +25206,7 @@ function frame(ts) {
     draw();
     if (G && currentScreen === null) updateHud();
     const tt = Math.max(0, ts / 1000);
-    if (currentScreen === 'pilotScreen') { drawPilotThumb($('pilotPreview'), pilot(), tt, true); pilotCards.forEach((cv, i) => drawPilotThumb(cv, PILOTS[i], tt + i * 0.37, false)); }
+    if (currentScreen === 'pilotScreen') { drawPilotThumb($('pilotPreview'), pilot(), tt, true); (pickTab === 'char' ? charCards : vehCards).forEach((cv, i) => drawPilotThumb(cv, cardPair(pickTab, i), tt + i * 0.37, false)); }
     if (currentScreen === 'monsterScreen') { drawMonsterThumb($('monsterPreview'), monster(), tt, false); monsterCards.forEach((cv, i) => drawMonsterThumb(cv, MONSTERS[i], tt + i * 0.41, false)); }
     if (currentScreen === 'menu') { drawPilotThumb($('pilotMini'), pilot(), tt, true); drawMonsterThumb($('monsterMini'), monster(), tt, true); drawKeyArt($('keyArt'), tt); }
   } catch (err) {
@@ -24896,7 +25337,7 @@ function fitPickName(el) {
 // picker card names: one line each, shrunk to fit their card (never wrapped or clipped)
 function fitCards(grid) { requestAnimationFrame(() => document.querySelectorAll(`#${grid} .pcard span`).forEach(el => fitText(el, 8))); }
 function refreshMenu() {
-  $('pilotName').textContent = pilot().name;
+  showPairNames();   // the pilot button: the character, and its ride under it
   $('monsterName').textContent = monster().name;
   setTimeout(fitMenu, 0);
   $('menuDate').textContent = `Daily shaft · ${dayLabel}`;
@@ -24980,29 +25421,92 @@ function fitTune() { document.querySelectorAll('#tuneRows label').forEach(el => 
 tap($('openTune'), () => { tuneReturn = 'menu'; show('tuneScreen'); buildTune(); fitTune(); });
 $('tuneDone').addEventListener('click', () => show(tuneReturn));
 $('tuneReset').addEventListener('click', () => { Object.assign(cfg, DEFAULTS); store.set(CFG_KEY, cfg); buildTune(); fitTune(); toast('Back to the default feel.'); });
-window.addEventListener('resize', () => { if (currentScreen === 'tuneScreen') fitTune(); if (currentScreen === 'menu') fitMenu(); if (currentScreen === 'pilotScreen') fitCards('pilotGrid'); if (currentScreen === 'monsterScreen') fitCards('monsterGrid'); });
+window.addEventListener('resize', () => { if (currentScreen === 'tuneScreen') fitTune(); if (currentScreen === 'menu') fitMenu(); if (currentScreen === 'pilotScreen' || currentScreen === 'menu') showPairNames(); if (currentScreen === 'pilotScreen') fitCards(pickTab + 'Grid'); if (currentScreen === 'monsterScreen') fitCards('monsterGrid'); });
 
-// pilot picker: each card is a live mini shaft with the pilot firing its rocket
-const pilotCards = [];
+// pilot picker: two card grids, Character and Vehicle, each card a live mini shaft showing what tapping it gives you.
+// A new character keeps the vehicle you chose for the last one when it can ride it, and otherwise starts on its own
+// (signature) ride. Vehicle cards show your character in each vehicle; one it cannot ride yet (a pilot not split into
+// a character and a vehicle yet flies only its own pair) shows its own pilot, dimmed and marked "Not yet", and a tap on
+// it only says so. The big preview and the menu button show the chosen pair.
+const charCards = [], vehCards = [];
+let pickTab = 'char';
+const partTint = it => it.palette && it.palette.tint || pilotTint(it.signatureOf ? comboOf(it.signatureOf, it.id) : comboOf(it.id, it.signature));
+// the vehicle a character gets when picked: the current one if the player chose it (it is not the current character's
+// own ride) and the new character can ride it, otherwise the new character's own ride
+function vehicleFor(ch) { const cur = pilot(); return cur.vehicle.id !== cur.character.signature && canRide(ch, cur.vehicle) ? cur.vehicle.id : ch.signature; }
+function cardPair(kind, i) {
+  if (kind === 'char') return comboOf(CHARACTERS[i].id, vehicleFor(CHARACTERS[i]));
+  const vh = VEHICLES[i], ch = pilot().character;
+  return comboOf(canRide(ch, vh) ? ch.id : vh.signatureOf, vh.id);
+}
 function buildPilots() {
-  const grid = $('pilotGrid'); grid.innerHTML = ''; pilotCards.length = 0;
-  PILOTS.forEach((pl, i) => {
-    const b = document.createElement('button');
-    b.className = 'pcard'; b.id = 'pilot-' + pl.id; b.setAttribute('aria-pressed', String(i === pilotIndex));
-    b.style.setProperty('--tint', pilotTint(pl));   // each card is tinted with its own pilot's main colour
-    b.innerHTML = `<canvas width="120" height="120" aria-hidden="true"></canvas><span>${pl.name}</span>`;
-    b.addEventListener('click', () => selectPilot(i));
-    grid.appendChild(b); pilotCards.push(b.querySelector('canvas'));
+  for (const [kind, list, cards] of [['char', CHARACTERS, charCards], ['veh', VEHICLES, vehCards]]) {
+    const grid = $(kind + 'Grid'); grid.innerHTML = ''; cards.length = 0;
+    list.forEach((it, i) => {
+      const b = document.createElement('button');
+      b.className = 'pcard'; b.id = kind + '-' + it.id;
+      b.style.setProperty('--tint', partTint(it));   // each card is tinted with its own character's or vehicle's main colour
+      b.innerHTML = `<canvas width="120" height="120" aria-hidden="true"></canvas><span>${it.name}</span><i class="ptag"></i>`;
+      b.addEventListener('click', () => (kind === 'char' ? selectCharacter : selectVehicle)(i));
+      grid.appendChild(b); cards.push(b.querySelector('canvas'));
+    });
+  }
+  refreshPicker();
+}
+// the chosen pair's names: the picker's heading and the menu button (character, and the ride under it)
+function showPairNames() {
+  const pl = pilot(), ch = pl.character, vh = pl.vehicle;
+  $('pilotSelName').textContent = ch.name;
+  $('pilotInfo').textContent = pl.sig ? `${vh.name} · signature ride` : `in the ${vh.name}`;
+  $('pilotName').textContent = ch.name; $('pilotRide').textContent = vh.name; fitPickName($('pilotName'));
+  $('tabCharName').textContent = ch.name; $('tabVehName').textContent = vh.name;
+  requestAnimationFrame(() => ['pilotRide', 'tabCharName', 'tabVehName'].forEach(id => fitText($(id), 8)));
+}
+function refreshPicker() {
+  const pl = pilot(), ch = pl.character, vh = pl.vehicle;
+  document.querySelectorAll('#charGrid .pcard').forEach((b, k) => {
+    const it = CHARACTERS[k], own = UNLOCKS.has('char', it.id);
+    b.setAttribute('aria-pressed', String(it === ch)); b.classList.toggle('locked', !own); b.querySelector('.ptag').textContent = own ? '' : 'Locked';
   });
-  $('pilotInfo').textContent = pilot().ride; $('pilotSelName').textContent = pilot().name;
+  document.querySelectorAll('#vehGrid .pcard').forEach((b, k) => {
+    const it = VEHICLES[k], ok = canRide(ch, it), own = UNLOCKS.has('veh', it.id);
+    b.setAttribute('aria-pressed', String(it === vh)); b.classList.toggle('other', !ok); b.classList.toggle('locked', !own);
+    if (ok) b.removeAttribute('aria-disabled'); else b.setAttribute('aria-disabled', 'true');
+    b.querySelector('.ptag').textContent = !own ? 'Locked' : !ok ? 'Not yet' : it.id === ch.signature ? '★ Signature' : '';
+  });
+  showPairNames();
+  $('tabChar').setAttribute('aria-selected', String(pickTab === 'char')); $('tabVeh').setAttribute('aria-selected', String(pickTab === 'veh'));
+  $('charGrid').hidden = pickTab !== 'char'; $('vehGrid').hidden = pickTab !== 'veh';
 }
-function selectPilot(i) {
-  pilotIndex = i; settings.pilot = PILOTS[i].id; store.set('cr-settings', settings);
-  document.querySelectorAll('#pilotGrid .pcard').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
-  $('pilot-' + PILOTS[i].id)?.scrollIntoView({ block: 'nearest' });
-  $('pilotInfo').textContent = pilot().ride; $('pilotSelName').textContent = pilot().name;
-  $('pilotName').textContent = pilot().name; fitPickName($('pilotName'));
+function setPair(chId, vhId) {
+  settings.character = chId; settings.vehicle = vhId; curPilot = null;
+  store.set('cr-settings', settings);
+  refreshPicker();
 }
+function selectCharacter(i) {
+  const ch = CHARACTERS[i];
+  if (!UNLOCKS.has('char', ch.id)) return UNLOCKS.locked('char', ch.id);
+  if (ch !== pilot().character) setPair(ch.id, vehicleFor(ch));
+  $('char-' + ch.id)?.scrollIntoView({ block: 'nearest' });
+}
+function selectVehicle(i) {
+  const vh = VEHICLES[i], ch = pilot().character;
+  if (!UNLOCKS.has('veh', vh.id)) return UNLOCKS.locked('veh', vh.id);
+  if (!canRide(ch, vh)) {   // not split yet: say who flies it, change nothing
+    $('pilotInfo').textContent = ch.fused ? `${ch.name.split(' the ')[0]} can't swap rides yet` : `Only ${CHARACTER_BY[vh.signatureOf].name.split(' the ')[0]} flies this one for now`;
+    return;
+  }
+  setPair(ch.id, vh.id);
+  $('veh-' + vh.id)?.scrollIntoView({ block: 'nearest' });
+}
+// pilot i (a character) on its signature ride (old saves and tools)
+function selectPilot(i) { const ch = CHARACTERS[i]; setPair(ch.id, ch.signature); }
+function showPickTab(tab) {
+  pickTab = tab; refreshPicker(); fitCards(tab + 'Grid');
+  $(tab === 'char' ? 'char-' + pilot().character.id : 'veh-' + pilot().vehicle.id)?.scrollIntoView({ block: 'center' });
+}
+$('tabChar').addEventListener('click', () => showPickTab('char'));
+$('tabVeh').addEventListener('click', () => showPickTab('veh'));
 // Each pilot's drawn bounding box in art units (solid body only, not glows), measured once offscreen.
 const boundsCache = {};
 function pilotBounds(pl) {
@@ -25129,7 +25633,7 @@ function drawKeyArt(cv, t) {
   c.fillStyle = tg; c.fillText('Rocket', 0, y2);
   c.restore();
 }
-tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); fitCards('pilotGrid'); $('pilot-' + pilot().id).scrollIntoView({ block: 'center' }); });
+tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); showPickTab(pickTab); });
 
 // monster picker: each card shows the monster alone, jaws open, lit from below
 const monsterCards = [];

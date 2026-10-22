@@ -8,9 +8,10 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal };')();
 
-// The widest and tallest pilot hitbox at any tilt (all 21 pilots, world units): every lane is sized from these.
+// The widest and tallest pilot hitbox at any tilt (every character in every vehicle it can ride, world units): every
+// lane is sized from these.
 const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
 const FRUIT_PAD = RULES.crystal.r + 2;       // a crystal's pickup radius (its drawn size) plus a little
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
@@ -45,6 +46,94 @@ if (RULES.minLane < 2.2 * PILOT_W) fail('open lanes are at least 2.2 widest pilo
 if (RULES.crusher.slot < 1.5 * PILOT_W + 8 || RULES.crusher.slot > 1.5 * PILOT_W + 30) fail('a shut crusher leaves a slot of about 1.5 widest pilots', `${RULES.crusher.slot}`);
 if (RULES.minSpacing < 1.25 * PILOT_H) fail('hazards are spaced at least 1.25 tallest pilot hitboxes apart', `${RULES.minSpacing} vs ${PILOT_H.toFixed(1)}`);
 if (RULES.minWidth < WORLD_W * 0.6) fail('the shaft minimum is 60% of the screen', `${RULES.minWidth}`);
+// characters × vehicles: all 441 pairs (index.html, "Characters × vehicles: the hit side"). Lanes are sized from the widest
+// and tallest pair, so no pair may be wider or taller than today's widest and tallest pilot (fixed here, not read from
+// the file under test). Each split part must sit inside its size envelope (worked out again here), which makes every
+// pair of split parts fit the cap, including pairs whose parts are split later. Every pair that flies now is checked
+// too: its hitbox is exactly its character's capsules moved onto the seat plus its vehicle's capsules, and it fits.
+const LANE_LIMIT = { w: 46.627, h: 73.5 };   // art units: the goat (69.94 world units across at full tilt) and the firefly
+const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, tallest: 0, worst: '', worstW: 0, vehicles: 0, characters: 0, minEnv: Infinity, cramped: 0 };
+{
+  const chars = Object.keys(SIGNATURE), rides = Object.values(SIGNATURE), owner = {};
+  chars.forEach(ch => { owner[SIGNATURE[ch]] = ch; });
+  const near = (a, b) => Math.abs(a - b) <= 1e-9;
+  if (chars.length !== 21 || new Set(rides).size !== 21) fail('21 characters, each with its own signature ride', `${chars.length} characters, ${new Set(rides).size} rides`);
+  for (const id in PILOT_HITS) if (!SIGNATURE[id]) fail('every pilot hitbox belongs to a character', id);
+  if (Object.keys(CHAR_FIT).sort().join() !== chars.slice().sort().join() || Object.keys(VEH_FIT).sort().join() !== rides.slice().sort().join()) fail('CHAR_FIT and VEH_FIT list every character and vehicle (null until split)', '');
+  if (PILOT_CAP.w > LANE_LIMIT.w || PILOT_CAP.h > LANE_LIMIT.h) fail('the pair cap is no bigger than today\'s widest and tallest pilot', `${PILOT_CAP.w} × ${PILOT_CAP.h}`);
+  if (!(SEAT_FLOOR >= 0.7) || SEAT_SCALE[0] < SEAT_FLOOR || SEAT_SCALE[1] > 1.12) fail('a swapped character is drawn at 0.7 to 1.12 of its size', `floor ${SEAT_FLOOR}, ${SEAT_SCALE}`);
+  const W = PILOT_CAP.w, H = PILOT_CAP.h, D = PART_ENV.depth;
+  // reach of a capsule list from (0, 0) at each of the 21 tilts: [left, right, up, down]
+  const reach = hits => Array.from({ length: 21 }, (_, k) => {
+    const a = PILOT_TILT * (k - 10) / 10, cs = Math.cos(a), sn = Math.sin(a); let l = -Infinity, r = -Infinity, u = -Infinity, d = -Infinity;
+    for (const [ax, ay, bx, by, R] of hits) for (const [x, y] of [[ax, ay], [bx, by]]) { const X = x * cs - y * sn, Y = x * sn + y * cs; l = Math.max(l, R - X); r = Math.max(r, X + R); u = Math.max(u, R - Y); d = Math.max(d, Y + R); }
+    return [l, r, u, d];
+  });
+  const size = hits => reach(hits).reduce(([w, h], [l, r, u, d]) => [Math.max(w, l + r), Math.max(h, u + d)], [0, 0]);
+  const mv = (hits, k, dx, dy) => hits.map(([ax, ay, bx, by, r]) => [ax * k + dx, ay * k + dy, bx * k + dx, by * k + dy, r * k]);
+  const side = k => PART_ENV.side[0] + (PART_ENV.side[1] - PART_ENV.side[0]) * Math.abs(k - 10) / 10;
+  const inside = (kind, hits) => reach(hits).every(([l, r, u, d], k) => { const sd = kind === 'vehicle' ? side(k) : W - side(k), e = 1e-9;
+    return l + r <= W + e && u + d <= H + e && l <= sd + e && r <= sd + e && u <= H - D + e && d <= D + e; });
+  const split = ch => !!(CHAR_FIT[ch] && VEH_FIT[SIGNATURE[ch]]);
+  const cOwn = ch => PILOT_HITS[ch].slice(0, CHAR_FIT[ch].caps), vOwn = vh => PILOT_HITS[owner[vh]].slice(CHAR_FIT[owner[vh]].caps);
+  for (const ch of chars) {
+    const C = CHAR_FIT[ch], V = VEH_FIT[SIGNATURE[ch]];
+    if (!C !== !V) { fail('a character is split together with its signature ride', ch); continue; }
+    if (!C) continue;
+    if (!(Number.isInteger(C.caps) && C.caps >= 1 && C.caps < PILOT_HITS[ch].length)) { fail('a split pilot\'s hitbox row starts with its character\'s capsules (caps)', ch); continue; }
+    // its own pair: exactly the pilot's fitted hitbox, drawn where it always was
+    const f = seatFit(ch, SIGNATURE[ch]);
+    if (f.s !== 1 || f.dx !== 0 || f.dy !== 0 || f.hand || JSON.stringify(comboHits(ch, SIGNATURE[ch])) !== JSON.stringify(PILOT_HITS[ch])) fail('a split pilot sits on its own ride exactly as drawn, with its own hitbox', ch);
+    if (C.hip[0] !== V.seat.x || C.hip[1] !== V.seat.y) fail('a split character\'s hip is its own ride\'s seat point', ch);
+    // the vehicle's envelope: as drawn, round its seat point
+    pairStats.vehicles++;
+    const st = V.seat;
+    if (!inside('vehicle', mv(vOwn(SIGNATURE[ch]), 1, -st.x, -st.y)) || (st.floor != null && !(st.floor >= st.y && st.floor - st.y <= PART_ENV.drop))) fail('every split vehicle sits inside the vehicle envelope', SIGNATURE[ch]);
+    // the character's envelope, at its envelope scale and at the floor, at both ends of the lift a ride can give it
+    pairStats.characters++;
+    const env = envScale(ch), body = cOwn(ch).concat(C.body || []);
+    pairStats.minEnv = Math.min(pairStats.minEnv, env);
+    const foot = C.foot != null ? C.foot : C.sink;
+    for (const k of [env, SEAT_FLOOR]) for (const lift of [Math.min(0, foot * k - PART_ENV.drop), Math.max(0, foot * k, C.sink * k)])
+      if (k < SEAT_FLOOR || !inside('character', mv(body, k, -C.hip[0] * k, -C.hip[1] * k - lift))) fail('every split character fits the character envelope at 0.7 of its size or more', `${ch}: envelope scale ${env.toFixed(3)}`);
+  }
+  for (const ch of chars) for (const vh of rides) {
+    pairStats.pairs++;
+    const hits = comboHits(ch, vh), own = SIGNATURE[ch] === vh, both = split(ch) && split(owner[vh]);
+    if (!hits) { if (own || both) fail('every pilot on its own ride, and every pair of split parts, can fly', `${ch}+${vh}`); continue; }
+    if (!own && !both) { fail('a fused pilot only flies with its own partner', `${ch}+${vh}`); continue; }
+    pairStats.flyable++;
+    const [w, h] = size(hits);
+    pairStats.widest = Math.max(pairStats.widest, w); pairStats.tallest = Math.max(pairStats.tallest, h);
+    if (own) continue;
+    pairStats.swaps++;
+    // the swap's hitbox is the character's capsules (and body capsules) moved onto the seat by the seat contract, plus
+    // the vehicle's capsules: nothing dropped, nothing added
+    const f = seatFit(ch, vh), C = CHAR_FIT[ch], st = VEH_FIT[vh].seat, k = f.s;
+    const lift = st.floor != null ? st.y + (C.foot != null ? C.foot : C.sink) * k - st.floor : Math.max(0, C.sink * k - st.depth), dx = st.x - C.hip[0] * k, dy = st.y - lift - C.hip[1] * k;
+    const want = mv(cOwn(ch).concat(C.body || []), k, dx, dy).concat(vOwn(vh));
+    if (!near(f.dx, dx) || !near(f.dy, dy) || hits.length !== want.length || hits.some((c, i) => c.some((v, j) => !near(v, want[i][j])))) fail('a swapped pair\'s hitbox is its character\'s capsules on the seat plus its vehicle\'s', `${ch}+${vh}`);
+    pairStats.minS = Math.min(pairStats.minS, k); if (f.cramped) pairStats.cramped++;
+    if (f.floored || !(k >= SEAT_FLOOR - 1e-12) || k > SEAT_SCALE[1] + 1e-12) fail('every character fits every vehicle at 0.7 to 1.12 of its size', `${ch}+${vh}: scale ${k.toFixed(3)}`);
+    if (w > W + 1e-9 || h > H + 1e-9) fail('every character in every vehicle stays inside the pair cap at any tilt', `${ch}+${vh}: ${w.toFixed(2)} × ${h.toFixed(2)} vs ${W} × ${H}`);
+    if (w > pairStats.worstW) { pairStats.worstW = w; pairStats.worst = `${ch}+${vh}`; }
+  }
+  if (pairStats.pairs !== 441) fail('all 21 × 21 character and vehicle pairs are checked', `${pairStats.pairs}`);
+  if (pairStats.widest > LANE_LIMIT.w || pairStats.tallest > LANE_LIMIT.h) fail('no pair is wider or taller than today\'s widest and tallest pilot (the lanes stay as they are)', `${pairStats.widest.toFixed(3)} × ${pairStats.tallest.toFixed(3)} art units`);
+  if (Math.abs(pairStats.widest * PILOT_SCALE - PILOT_W) > 1e-9 || Math.abs(pairStats.tallest * PILOT_SCALE - PILOT_H) > 1e-9) fail('lanes are sized from the widest and tallest pair', `${(pairStats.widest * PILOT_SCALE).toFixed(3)} vs ${PILOT_W.toFixed(3)}`);
+  // the seat contract on made-up parts: a bust's cut stays hidden (lifted to the ride's depth when it would show), a
+  // rider stands on a closed ride's floor, its own ride moves nothing
+  const bust = { hip: [0, -2], sink: 3, grip: null }, whole = { hip: [0, -2], sink: 0.5, foot: 6, grip: null };
+  const lipSeat = { x: 1, y: -3, w: 25, depth: 1.2, grip: null }, ballSeat = { x: 0, y: -4, w: 30, depth: 0, floor: 5, grip: null };
+  const p1 = seatPlace(bust, lipSeat, 0.9, false), p2 = seatPlace(whole, ballSeat, 0.95, false), p3 = seatPlace(bust, lipSeat, 1, true);
+  if (!near((bust.hip[1] + bust.sink) * 0.9 + p1.dy, lipSeat.y + lipSeat.depth) || !near(bust.hip[0] * 0.9 + p1.dx, lipSeat.x)) fail('a bust\'s cut is lifted to the ride\'s hidden depth', JSON.stringify(p1));
+  if (!near((whole.hip[1] + whole.foot) * 0.95 + p2.dy, ballSeat.floor)) fail('a rider stands on a closed ride\'s floor', JSON.stringify(p2));
+  if (p3.dx !== lipSeat.x - bust.hip[0] || p3.dy !== lipSeat.y - bust.hip[1] || p3.lift !== 0) fail('a character\'s own ride lifts nothing', JSON.stringify(p3));
+  // seatLocal: no change when the ride does not tip the pair; Shellby's own point mapping when it does
+  const sl = (tip, pivot, f) => seatLocal({ s: f[0], dx: f[1], dy: f[2], tip, vehicle: { tip: pivot && { pivot } } }, 3.5, -12.25);
+  const a = 0.33, own = [1 + (3.5 - 1) * Math.cos(a) + (-12.25 - 14) * Math.sin(a), 14 - (3.5 - 1) * Math.sin(a) + (-12.25 - 14) * Math.cos(a)];
+  if (sl(a, null, [1, 0, 0]).join() !== '3.5,-12.25' || sl(0, [1, 14], [1, 0, 0]).join() !== '3.5,-12.25' || sl(a, [1, 14], [1, 0, 0]).join() !== own.join()) fail('seatLocal turns a point back about the ride\'s tip pivot', '');
+}
 for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('beats mix hazard types', sp.name);
 // crystals: a pilot that follows the crystals and feathers its thrust just enough to hold a steady climb (thrust on
 // gravity / thrust of the time) at the monster's top base speed heats less over the longest crystal gap than one
@@ -709,4 +798,5 @@ if (failures.size) {
 }
 const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
+console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs, the rest wait on a split); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
