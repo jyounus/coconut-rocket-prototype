@@ -337,7 +337,7 @@ for (const cfg of CONFIGS) {
           box(h.lb - 40, h.lb + h.maxL + 2, h.alt - h.hb, h.alt + h.hb); box(h.rb - h.maxR - 2, h.rb + 40, h.alt - h.hb, h.alt + h.hb);
         } else if (h.type === 'spider') {
           const k = 1.3, a0 = h.aAlt - h.mid - h.amp, a1 = h.aAlt - h.mid + h.amp;   // the body capsule and the legs, over the whole bob
-          seg(h.x, a0 - 8 * k, h.x, a1 + 9 * k, 12 * k); box(h.x - 18 * k - 6.5 * k, h.x + 18 * k + 6.5 * k, a0 - 2 * k - 6.5 * k, a1 - 2 * k + 6.5 * k);
+          seg(h.x, a0 - 8 * k, h.x, a1 + 9 * k, 12 * k); box(h.x - 24.6 * k, h.x + 24.6 * k, a0 - 10.7 * k, a1 + 14.1 * k);   // legs: 24.6 out, 14.1 up, 10.7 down
         } else if (h.type === 'firebar') seg(h.cx, h.alt, h.cx, h.alt, h.len + h.br * 1.08);
         else if (h.type === 'hang') box(h.x - h.hw - RULES.hang.sway, h.x + h.hw + RULES.hang.sway, h.lo, h.aAlt);
         if (d < CLEAR - 0.5) { fail('crystals keep clear of hazard hitboxes', `${fw}: ${h.type} ${d.toFixed(0)} < ${CLEAR.toFixed(0)}`); break; }

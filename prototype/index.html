@@ -2507,10 +2507,12 @@ function hazardShapes(h) {
   const S = [], c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r }), box = (x0, x1, a0, a1) => S.push({ k: 'b', x0, x1, a0, a1 });
   switch (h.type) {
     case 'bat': {
-      // body, ears, and the inner wings (out to RULES.hit.batWing of the span), flapping with the art
-      const L = BAT_LOOKS[h.look || 0], k = 1.35, lift = Math.sin(G.t * L.flap + h.ph) * 13;
+      // body, ears (one capsule each, fitted to the drawn ear; the fuzzball's crest too), and the inner wings (out
+      // to RULES.hit.batWing of the span), flapping with the art
+      const L = BAT_LOOKS[h.look || 0], k = 1.35, lift = Math.sin(G.t * L.flap + h.ph) * 13, [ex0, ey0, ex1, ey1, er] = L.ear;
       c(h.x, h.alt, 12.5 * L.body * k + 1);
-      cap(h.x, h.alt + 8 * k, h.x, h.alt + (6 + 8 * L.ear) * k, 4 * k);
+      for (const d of [-1, 1]) cap(h.x + d * ex0 * k, h.alt - ey0 * k, h.x + d * ex1 * k, h.alt - ey1 * k, er * k);
+      if (L.tuft) cap(h.x - 3.4 * k, h.alt + 17.6 * k, h.x + 3.4 * k, h.alt + 17.6 * k, 3 * k);
       const span = 37 * L.wing * RULES.hit.batWing;
       for (const d of [-1, 1]) cap(h.x + d * 8 * L.wing * k, h.alt + 3 * k, h.x + d * span * k, h.alt + (8 + lift * 0.7) * k, 7.5 * k);
       break;
@@ -2520,12 +2522,24 @@ function hazardShapes(h) {
     case 'spider': {
       const k = 1.3;
       cap(h.x, h.alt + 9 * k, h.x, h.alt - 8 * k, 12 * k);                    // abdomen, head and fangs
-      cap(h.x - 18 * k, h.alt - 2 * k, h.x + 18 * k, h.alt - 2 * k, 6.5 * k);  // the legs
+      // the legs, fitted to the drawn ones on each side: the raised rear legs' knees and ankles, then the front
+      // legs fanning down to their feet (out to 24.6, 14.1 above and 10.7 below the centre, art units)
+      for (const d of [-1, 1]) {
+        cap(h.x + d * 11 * k, h.alt + 9.5 * k, h.x + d * 20 * k, h.alt + 1 * k, 4.6 * k);
+        cap(h.x + d * 13 * k, h.alt - 2.7 * k, h.x + d * 17.7 * k, h.alt - 3.8 * k, 6.9 * k);
+      }
       break;
     }
     case 'boulder':
       if (h.state !== 'fall') break;
-      if (h.col) { const w = h.r * 0.86, hh = h.r * 1.35; cap(h.x, h.cur + hh - w, h.x, h.cur - hh + w, w); }
+      if (h.col) {
+        // the column's round-capped body, plus a chain of small capsules just inside its flat top hexagon, so the
+        // top corners are covered too (drawColumnSeg: corners at ±0.95w, hh − 0.4w and ±0.5w, hh − 0.5)
+        const w = h.r * 0.86, hh = h.r * 1.35, q = h.r * 0.15, W = w * 0.95 - q * 0.7, e = w * 0.5 - q * 0.3;
+        const aS = h.cur + hh - w * 0.4 - q * 0.7, aT = h.cur + hh - 0.5 - q * 0.95;
+        cap(h.x, h.cur + hh - w, h.x, h.cur - hh + w, w);
+        cap(h.x - W, aS, h.x - e, aT, q); cap(h.x - e, aT, h.x + e, aT, q); cap(h.x + e, aT, h.x + W, aS, q);
+      }
       else c(h.x, h.cur, h.r);
       break;
     case 'lavafall': case 'geyser': case 'spike': staticShapes(h, S); break;
@@ -4280,11 +4294,13 @@ function drawHazards() {
 
 // Three bat breeds per zone, so a flight of bats never looks like clones: the classic, a long-eared
 // glider with a pale belly and long fangs, and a round fuzzball with stubby wings and a crest.
-// (wing, ear, flap and body also size the hitbox in hazardShapes; belly, fang and tuft are art only.)
+// (wing, flap, body, ear and tuft also size the hitbox in hazardShapes: ear is each ear's capsule [x, y, x, y, r] on
+// the right side in the bat's own frame, fitted to the drawn ear; tuft adds a capsule over the crest; belly and fang
+// are art only.)
 const BAT_LOOKS = [
-  { wing: 1, ear: 1, flap: 16, body: 1 },
-  { wing: 1.2, ear: 1.75, flap: 12, body: 0.9, belly: true, fang: 1.6 },
-  { wing: 0.8, ear: 0.55, flap: 26, body: 1.2, tuft: true },
+  { wing: 1, ear: [6.9, -9.3, 6.7, -15.7, 4], flap: 16, body: 1 },
+  { wing: 1.2, ear: [6.3, -9.9, 6.2, -22.8, 3.8], flap: 12, body: 0.9, belly: true, fang: 1.6 },
+  { wing: 0.8, ear: [10.2, -10.9, 10, -11.6, 4.1], flap: 26, body: 1.2, tuft: true },
 ];
 // The bat's tell, read from its own flight (batPos; art only, the flight never changes): it flares just before it
 // turns, most of all at the end of a dart pattern's hover, right before the dart. 0..1.
