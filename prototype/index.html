@@ -3564,34 +3564,96 @@ function drawBestLine() {
   ctx.restore();
 }
 
-// Ice crystals that line the safe lanes: glowing blue frost shards with a cold sparkle, reading as cold
-// against the warm volcano. Their glow grows in the hotter zones.
+// Borderless art helpers shared by the crushers, gates, hanging hazards, boulders and ice crystals. Colours are
+// [r, g, b] arrays. Nothing is outlined in black: form comes from facets, gradients, occlusion and highlights, and an
+// edge that needs definition gets a darker shade of the shape's own colour (h3Dk).
+function h3Mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+function h3Dk(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
+function h3LG(x0, y0, x1, y1, stops) { const g = ctx.createLinearGradient(x0, y0, x1, y1); for (const [o, c, a = 1] of stops) g.addColorStop(o, rgb(c, a)); return g; }
+function h3RG(x0, y0, r0, x1, y1, r1, stops) { const g = ctx.createRadialGradient(x0, y0, r0, x1, y1, r1); for (const [o, c, a = 1] of stops) g.addColorStop(o, rgb(c, a)); return g; }
+function h3Poly(pts) { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+function h3Glow(x, y, r, col, a) {   // an additive soft light
+  if (a < 0.01) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = h3RG(x, y, 0, x, y, r, [[0, col, a], [0.45, col, a * 0.4], [1, col, 0]]); ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  ctx.restore();
+}
+
+// Ice crystals that line the safe lanes: a cluster of three faceted ice prisms on a little drift of frost, lit from
+// inside, with a cold halo, frost motes and a twinkle on the tallest tip, so they read as cold and cooling against the
+// warm volcano (and as pickups, never as the dark, red-tipped hazards). The halo grows in the hotter zones. Drawn at
+// CRYSTAL_ART scale centred on the pickup circle: every shard, the frost and the bob stay inside CRYSTAL_R.
+const CRYSTAL_SHARDS = [   // [base x, base y, lean (rad), height, half-width]: the two short side prisms, then the tall one
+  [-3.1, 5.0, -0.5, 10.2, 2.6], [3.3, 5.2, 0.52, 9.2, 2.45], [0, 6.0, 0, 15.2, 3.75],
+];
+function drawCrystalShard(bx, by, lean, hgt, w, k) {
+  ctx.save(); ctx.translate(bx, by); ctx.rotate(lean);
+  const sh = -hgt * 0.62, tip = -hgt, c = w * 0.34;   // the shoulder where the point starts; the centre facet's half-width
+  const ICE = [[244, 254, 255], [168, 232, 255], [78, 176, 246], [34, 104, 210], [22, 66, 160]];
+  // the silhouette, then three facets: lit left, glowing centre, deep right
+  h3Poly([[-w, 0], [-w, sh], [0, tip], [w, sh], [w, 0], [0, w * 0.55]]);
+  ctx.fillStyle = h3LG(-w, 0, w, 0, [[0, ICE[1]], [0.5, ICE[2]], [1, ICE[3]]]); ctx.fill();
+  ctx.lineJoin = 'round'; ctx.strokeStyle = rgb(ICE[4], 0.9); ctx.lineWidth = 0.75; ctx.stroke();
+  h3Poly([[-w, 0], [-w, sh], [0, tip], [-c, sh + 0.6], [-c, w * 0.36]]);
+  ctx.fillStyle = h3LG(-w, tip, -c, 0, [[0, ICE[0]], [0.6, ICE[1]], [1, h3Mix(ICE[1], ICE[2], 0.4)]]); ctx.fill();
+  h3Poly([[c, w * 0.36], [c, sh + 0.6], [0, tip], [w, sh], [w, 0]]);
+  ctx.fillStyle = h3LG(c, 0, w, tip, [[0, ICE[3]], [1, h3Mix(ICE[3], ICE[4], 0.5)]]); ctx.fill();
+  h3Poly([[-c, w * 0.36], [-c, sh + 0.6], [0, tip], [c, sh + 0.6], [c, w * 0.36], [0, w * 0.5]]);
+  ctx.fillStyle = h3LG(0, tip, 0, 0, [[0, ICE[0]], [0.45, ICE[1]], [1, ICE[2]]]); ctx.fill();
+  // the light inside it, the facet ridges catching the light, and a specular streak
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = h3RG(0, sh * 0.55, 0, 0, sh * 0.55, w * 1.6, [[0, [200, 245, 255], 0.55 * k], [1, [60, 160, 255], 0]]);
+  ctx.fillRect(-w, tip, w * 2, -tip + w);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 0.55; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-c, w * 0.3); ctx.lineTo(-c, sh + 0.6); ctx.lineTo(0, tip + 0.4); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  h3Poly([[-w * 0.78, -0.6], [-w * 0.78, sh + 0.4], [-w * 0.46, sh - 0.9], [-w * 0.5, -1.4]]); ctx.fill();
+  ctx.fillStyle = rgb(ICE[4], 0.35); h3Poly([[w * 0.55, -0.4], [w, -0.4], [w, 0], [0, w * 0.55], [0, w * 0.2]]); ctx.fill();   // occlusion at its root
+  ctx.restore();
+}
 function drawFruit() {
   const midA = G.camAlt + viewH / 2, [t1, t2] = zoneT(midA), heatGlow = 0.45 + 0.25 * t1 + 0.4 * t2;
   for (const f of G.fruit) {
     const y = sy(f.alt);
     if (y < -40 || y > H + 40) continue;
-    // drawn at CRYSTAL_ART scale, centred on its pickup circle (the bob stays inside it)
-    const ph = f.alt * 0.05, x = sx(f.x), bob = Math.sin(G.t * 3.5 + ph) * 1.2 * s, spin = Math.sin(G.t * 1.6 + ph) * 0.12;
-    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * CRYSTAL_ART, s * CRYSTAL_ART); ctx.translate(0, 1);
-    ctx.globalCompositeOperation = 'lighter';
-    const R = (22 + 6 * t2) / 1.3, gl = ctx.createRadialGradient(0, 0, 1, 0, 0, R);   // (a soft halo of light round it)
-    gl.addColorStop(0, `rgba(170,235,255,${0.55 * heatGlow})`); gl.addColorStop(0.5, `rgba(80,180,255,${0.22 * heatGlow})`); gl.addColorStop(1, 'rgba(60,140,255,0)');
-    ctx.fillStyle = gl; ctx.fillRect(-R, -R, R * 2, R * 2);
-    ctx.globalCompositeOperation = 'source-over';
+    // drawn at CRYSTAL_ART scale, centred on its pickup circle (art radius 9.6 plus the 0.7 bob: inside CRYSTAL_R / CRYSTAL_ART)
+    const ph = f.alt * 0.05, x = sx(f.x), bob = Math.sin(G.t * 3.5 + ph) * 1.2 * s, spin = Math.sin(G.t * 1.6 + ph) * 0.1;
+    const pulse = 0.85 + 0.15 * Math.sin(G.t * 3 + ph);
+    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * CRYSTAL_ART, s * CRYSTAL_ART);
+    // a cold halo: a white-cyan heart that pops on warm rock and on the blue caves alike, and a wider icy wash
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const R = (22 + 6 * t2) / 1.3;
+    ctx.fillStyle = h3RG(0, -1, 1, 0, -1, R, [[0, [200, 244, 255], 0.6 * heatGlow * pulse], [0.4, [90, 190, 255], 0.26 * heatGlow], [1, [60, 140, 255], 0]]);
+    ctx.fillRect(-R, -R - 1, R * 2, R * 2);
+    ctx.restore();
+    // a cool shadow pooled under the drift, so the cluster sits in space rather than floating flat
+    ctx.fillStyle = h3RG(0, 7.2, 0.5, 0, 7.2, 5.6, [[0, [10, 40, 90], 0.42], [1, [10, 40, 90], 0]]);
+    ctx.beginPath(); ctx.ellipse(0, 7.2, 5.6, 2, 0, 0, 6.283); ctx.fill();
     ctx.rotate(spin); ctx.lineJoin = 'round';
-    // a cluster of three shards: a tall one and two short ones leaning out
-    for (const [dx, h, w, r] of [[-5, 8, 3.2, -0.5], [5, 9, 3.4, 0.45], [0, 13, 4.6, 0]]) {
-      ctx.save(); ctx.translate(dx * 0.6, 4); ctx.rotate(r);
-      pkPath(ctx, [[-w, 0], [-w * 0.8, -h * 0.65], [0, -h], [w * 0.8, -h * 0.65], [w, 0], [0, w * 0.6]], pkLG(ctx, -w, 0, w, 0, ['#e8fbff', '#7fd8ff', '#2a7ad8']), 1.8);
-      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.moveTo(-w * 0.55, -h * 0.1); ctx.lineTo(-w * 0.45, -h * 0.6); ctx.lineTo(-w * 0.1, -h * 0.85); ctx.lineTo(-w * 0.15, -h * 0.15); ctx.closePath(); ctx.fill();
-      ctx.restore();
+    for (const [bx, by, lean, hgt, w] of CRYSTAL_SHARDS) drawCrystalShard(bx, by, lean, hgt, w, heatGlow);
+    // the frost drift at their feet: soft snow, lit on top, blue in its folds, with glittering grains
+    ctx.fillStyle = h3LG(0, 3.6, 0, 8.4, [[0, [252, 255, 255]], [0.55, [206, 238, 255]], [1, [120, 182, 236]]]);
+    ctx.beginPath(); ctx.moveTo(-5.9, 7.0);
+    ctx.bezierCurveTo(-6.1, 5.1, -4.4, 4.2, -3, 5.1); ctx.bezierCurveTo(-2, 3.7, 1.4, 3.5, 2.4, 4.9);
+    ctx.bezierCurveTo(4.2, 4.1, 6.0, 5.0, 5.8, 6.9); ctx.bezierCurveTo(3.6, 8.3, -3.6, 8.4, -5.9, 7.0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgb([70, 140, 214], 0.75); ctx.lineWidth = 0.55; ctx.stroke();
+    ctx.strokeStyle = rgb([150, 200, 245], 0.9); ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(-3, 5.4); ctx.quadraticCurveTo(-2.4, 6.6, -1.2, 6.9); ctx.moveTo(2.4, 5.2); ctx.quadraticCurveTo(3.2, 6.4, 4.4, 6.6); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const [gx, gy, gr] of [[-4.6, 5.9, 0.5], [-0.6, 5.0, 0.42], [3.6, 5.6, 0.48], [1.4, 7.0, 0.36], [-2.6, 7.3, 0.34]]) { ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 6.283); ctx.fill(); }
+    // frost motes drifting round it, and a cold twinkle on the tallest tip
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 3; k++) {
+      const a = G.t * 0.9 + ph + k * 2.1, rr = 7.2 + 1.2 * Math.sin(G.t * 1.7 + k), mx = Math.cos(a) * rr, my = Math.sin(a) * rr * 0.8 - 1;
+      ctx.fillStyle = `rgba(220,248,255,${0.55 + 0.35 * Math.sin(G.t * 5 + k * 2 + ph)})`;
+      ctx.beginPath(); ctx.arc(mx, my, 0.55, 0, 6.283); ctx.fill();
     }
-    // a cold twinkle
     const tw = Math.max(0, Math.sin(G.t * 4 + ph * 3));
-    if (tw > 0.6) {
-      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(230,250,255,${(tw - 0.6) * 2.4})`;
-      ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, rr = k % 2 ? 1 : 4; ctx.lineTo(2 + Math.cos(a) * rr, -6 + Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
+    if (tw > 0.55) {
+      const a = (tw - 0.55) * 2.2, r1 = 2.4 * a + 0.5;
+      ctx.fillStyle = `rgba(235,252,255,${a})`;
+      ctx.beginPath(); for (let k = 0; k < 8; k++) { const an = k / 8 * 6.283 + G.t, rr = k % 2 ? r1 * 0.24 : r1; ctx.lineTo(0.4 + Math.cos(an) * rr, -6.4 + Math.sin(an) * rr); } ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   }
@@ -4578,93 +4640,188 @@ function drawPend(h) {
   ctx.restore();
 }
 
+// The warning for a boulder about to drop: the column it will fall down, exactly the rock's width (2 × h.r, centred
+// on h.x, the line it falls straight down), filled with amber dashes streaming down, its two edges ruled bright, and
+// an amber hazard sign under the HUD with chevrons pointing down the column. It speeds up as the drop nears.
+function drawBoulderWarn(h) {
+  const x = sx(h.x), y = hudBottom() + 30, blink = Math.sin(G.t * 30) > 0, near = 1 - clamp((h.timer ?? 0) / 0.9, 0, 1), hw = h.r * s;
+  ctx.save();
+  const lg = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+  lg.addColorStop(0, 'rgba(255,178,56,.6)'); lg.addColorStop(1, 'rgba(255,178,56,0)');
+  ctx.strokeStyle = lg; ctx.lineWidth = 2 * hw; ctx.globalAlpha = blink ? 0.38 : 0.22;
+  ctx.setLineDash([10, 10]); ctx.lineDashOffset = -G.t * (60 + 60 * near);
+  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H * 0.8); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+  const eg = ctx.createLinearGradient(0, y, 0, H * 0.75);
+  eg.addColorStop(0, `rgba(255,214,120,${blink ? 0.75 : 0.5})`); eg.addColorStop(1, 'rgba(255,170,60,0)');
+  ctx.strokeStyle = eg; ctx.lineWidth = 1.5;
+  for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + d * hw, y - 6); ctx.lineTo(x + d * hw, H * 0.75); ctx.stroke(); }
+  ctx.restore();
+  ctx.save(); ctx.translate(x, y);
+  h3Glow(0, 0, 38, [255, 140, 40], 0.5);
+  // chevrons down the column
+  for (let k = 0; k < 2; k++) {
+    const cy = 22 + k * 9 + ((G.t * 2.2) % 1) * 3, a = (0.55 + 0.45 * Math.sin(G.t * 12 - k * 1.6)) * (blink ? 1 : 0.8);
+    ctx.strokeStyle = `rgba(150,62,8,${0.55 * a})`; ctx.lineWidth = 5.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-7, cy); ctx.lineTo(0, cy + 6); ctx.lineTo(7, cy); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,${200 - 40 * k},80,${a})`; ctx.lineWidth = 3; ctx.stroke();
+  }
+  // the sign: a rounded amber triangle, lit at the top, a darker amber rim, a deep amber-brown mark
+  const tri = () => { ctx.beginPath(); ctx.moveTo(0, -19); ctx.arcTo(18.5, 13, -18.5, 13, 4.5); ctx.arcTo(-18.5, 13, 0, -19, 4.5); ctx.arcTo(0, -19, 18.5, 13, 4.5); ctx.closePath(); };
+  const sc = 1 + 0.06 * near * (blink ? 1 : 0);
+  ctx.scale(sc, sc);
+  tri(); ctx.fillStyle = h3LG(0, -19, 0, 13, blink ? [[0, [255, 240, 150]], [0.55, [255, 196, 60]], [1, [242, 128, 24]]] : [[0, [255, 214, 120]], [0.55, [255, 150, 44]], [1, [214, 92, 18]]]);
+  ctx.fill(); ctx.strokeStyle = rgb([168, 70, 10]); ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.save(); tri(); ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,230,.7)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-12, 7); ctx.lineTo(-2, -13); ctx.stroke();
+  ctx.fillStyle = 'rgba(150,50,6,.22)'; ctx.fillRect(-20, 7, 40, 8);
+  ctx.restore();
+  ctx.fillStyle = rgb([96, 34, 4]);
+  ctx.beginPath(); ctx.moveTo(-2.4, -9); ctx.lineTo(2.4, -9); ctx.lineTo(1.4, 3); ctx.lineTo(-1.4, 3); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 7.6, 2.2, 0, 6.283); ctx.fill();
+  ctx.restore();
+}
 function drawBoulder(h) {
   if (h.state === 'idle') return;
-  if (h.state === 'warn') {
-    const x = sx(h.x), y = hudBottom() + 30;          // below the HUD, never on top of it
-    const blink = Math.sin(G.t * 30) > 0;
-    const lg = ctx.createLinearGradient(0, 0, 0, H * 0.8);
-    lg.addColorStop(0, 'rgba(255,178,56,.6)'); lg.addColorStop(1, 'rgba(255,178,56,0)');
-    ctx.save(); ctx.strokeStyle = lg; ctx.lineWidth = 2 * h.r * s; ctx.globalAlpha = blink ? 0.38 : 0.22;
-    ctx.setLineDash([10, 10]); ctx.lineDashOffset = -G.t * 60;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H * 0.8); ctx.stroke(); ctx.restore();
-    ctx.save(); ctx.translate(x, y);
-    ctx.globalCompositeOperation = 'lighter';
-    const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
-    halo.addColorStop(0, 'rgba(255,150,40,.5)'); halo.addColorStop(1, 'rgba(255,90,20,0)');
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, 34, 0, 6.283); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = blink ? '#ffcf4a' : '#ff7a2a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(17, 12); ctx.lineTo(-17, 12); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = INK; ctx.font = '900 18px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 0, 9);
-    ctx.restore();
-    return;
-  }
+  if (h.state === 'warn') { drawBoulderWarn(h); return; }
   const x = sx(h.x), y = sy(h.cur);
   if (y < -120 || y > H + 60) return;
   if (h.col) { drawColumnSeg(h, x, y); return; }
+  const r = h.r, T = G.t, seed = h.alt | 0;
   // fire trail streaming up behind the falling rock
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const tl = (70 + h.r * 1.6) * s, wob = Math.sin(G.t * 30 + h.alt) * 3 * s;
+  const tl = (70 + r * 1.6) * s, wob = Math.sin(T * 30 + h.alt) * 3 * s;
   const tg = ctx.createLinearGradient(x, y, x, y - tl);
   tg.addColorStop(0, 'rgba(255,190,80,.9)'); tg.addColorStop(0.45, 'rgba(255,100,25,.45)'); tg.addColorStop(1, 'rgba(255,60,10,0)');
   ctx.fillStyle = tg;
-  ctx.beginPath(); ctx.moveTo(x - h.r * 0.95 * s, y);
-  ctx.quadraticCurveTo(x - h.r * 0.5 * s + wob, y - tl * 0.6, x + wob, y - tl);
-  ctx.quadraticCurveTo(x + h.r * 0.5 * s + wob, y - tl * 0.6, x + h.r * 0.95 * s, y);
+  ctx.beginPath(); ctx.moveTo(x - r * 0.95 * s, y);
+  ctx.quadraticCurveTo(x - r * 0.5 * s + wob, y - tl * 0.6, x + wob, y - tl);
+  ctx.quadraticCurveTo(x + r * 0.5 * s + wob, y - tl * 0.6, x + r * 0.95 * s, y);
   ctx.closePath(); ctx.fill();
-  const glow = ctx.createRadialGradient(x, y, h.r * 0.5 * s, x, y, h.r * 2.2 * s);
+  const glow = ctx.createRadialGradient(x, y, r * 0.5 * s, x, y, r * 2.2 * s);
   glow.addColorStop(0, 'rgba(255,120,40,.4)'); glow.addColorStop(1, 'rgba(255,80,20,0)');
-  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, h.r * 2.2 * s, 0, 6.283); ctx.fill();
-  ctx.restore();
-  // molten rock
-  ctx.save(); ctx.translate(x, y); ctx.rotate(h.rot); ctx.scale(s, s);
-  ctx.beginPath();
-  const pts = [];
-  for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283, rr = h.r * (0.86 + 0.22 * hash2(k, h.alt | 0)); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); ctx.lineTo(pts[k][0], pts[k][1]); }
-  ctx.closePath();
-  const g = ctx.createRadialGradient(-h.r * .35, -h.r * .35, 2, 0, 0, h.r * 1.1);
-  g.addColorStop(0, '#7d6156'); g.addColorStop(1, '#2a1a14');
-  ctx.fillStyle = g; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.clip();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,140,40,.95)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-  for (let k = 0; k < 3; k++) {
-    const a = hash2(k + 7, h.alt | 0) * 6.283;
-    ctx.beginPath(); ctx.moveTo(Math.cos(a) * h.r, Math.sin(a) * h.r);
-    ctx.lineTo(Math.cos(a + 2.4) * h.r * 0.2, Math.sin(a + 2.4) * h.r * 0.2);
-    ctx.lineTo(Math.cos(a + 1.2) * h.r * 0.5, Math.sin(a + 1.2) * h.r * 0.5);
-    ctx.stroke();
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, r * 2.2 * s, 0, 6.283); ctx.fill();
+  // embers shed off the rock
+  for (let k = 0; k < 5; k++) {
+    const q = (T * 1.6 + hash2(k, seed + 3)) % 1, ex = (hash2(k, seed + 5) - 0.5) * r * 1.4 + Math.sin(T * 7 + k) * 3, ey = -r * 0.6 - q * (r * 2.6);
+    ctx.fillStyle = `rgba(255,${180 + 60 * (1 - q) | 0},90,${0.9 * (1 - q)})`;
+    ctx.beginPath(); ctx.arc(x + ex * s, y + ey * s, (1.6 - q) * s, 0, 6.283); ctx.fill();
   }
   ctx.restore();
+  // the rock: a lumpy basalt boulder, inside its round hitbox (0.9 to 1.02 r), turning as it falls; its light stays
+  // put (lit from the top left, the lava glow on its underside and leading edge)
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  const n = 11, cs = Math.cos(h.rot), sn = Math.sin(h.rot), P = [];
+  for (let k = 0; k < n; k++) { const a = k / n * 6.283, rr = r * (0.9 + 0.12 * hash2(k, seed)); const px = Math.cos(a) * rr, py = Math.sin(a) * rr; P.push([px * cs - py * sn, px * sn + py * cs]); }
+  const rot = ([px, py]) => [px * cs - py * sn, px * sn + py * cs];
+  const shape = () => { ctx.beginPath(); for (let k = 0; k <= n; k++) { const p = P[k % n], q = P[(k + 1) % n], m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; k ? ctx.quadraticCurveTo(p[0], p[1], m[0], m[1]) : ctx.moveTo(m[0], m[1]); } ctx.closePath(); };
+  const hot = zoneOf(h.alt) === 2;
+  const RK = hot ? [[156, 112, 96], [92, 56, 46], [40, 20, 16]] : [[160, 132, 108], [100, 76, 60], [44, 30, 24]];
+  shape(); ctx.fillStyle = h3RG(-r * 0.38, -r * 0.42, r * 0.05, 0, 0, r * 1.08, [[0, RK[0]], [0.5, RK[1]], [1, RK[2]]]); ctx.fill();
+  ctx.save(); shape(); ctx.clip();
+  // chipped facets turning with the rock: each a flat plane, lighter or darker than its neighbours
+  for (let k = 0; k < 4; k++) {
+    const a = hash2(k + 20, seed) * 6.283, b = a + 0.7 + hash2(k + 30, seed) * 0.6, i0 = 0.25 + 0.3 * hash2(k + 40, seed);
+    const pts = [[Math.cos(a) * r * 1.1, Math.sin(a) * r * 1.1], [Math.cos(b) * r * 1.1, Math.sin(b) * r * 1.1], [Math.cos((a + b) / 2) * r * i0, Math.sin((a + b) / 2) * r * i0]].map(rot);
+    const lit = -Math.cos((a + b) / 2 + h.rot + 0.8);   // facing the light (top left) or away from it
+    h3Poly(pts); ctx.fillStyle = lit > 0 ? `rgba(255,236,210,${0.16 * lit})` : `rgba(30,12,8,${-0.3 * lit})`; ctx.fill();
+  }
+  // pits and speckles
+  for (let k = 0; k < 5; k++) {
+    const [px, py] = rot([(hash2(k + 50, seed) - 0.5) * r * 1.2, (hash2(k + 60, seed) - 0.5) * r * 1.2]), pr = 1 + 1.6 * hash2(k + 70, seed);
+    ctx.fillStyle = rgb(RK[2], 0.55); ctx.beginPath(); ctx.arc(px, py, pr, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(255,232,200,.25)'; ctx.beginPath(); ctx.arc(px - pr * 0.35, py - pr * 0.35, pr * 0.45, 0, 6.283); ctx.fill();
+  }
+  // molten cracks glowing through it (they pulse)
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pulse = 0.75 + 0.25 * Math.sin(T * 6 + seed);
+  for (let k = 0; k < 3; k++) {   // each a jagged crack from the rim inward, with a short branch
+    const a = hash2(k + 7, seed) * 6.283, pts = [];
+    for (let j = 0; j < 5; j++) { const rr = r * (1 - j * 0.19), da = (hash2(k * 7 + j, seed + 11) - 0.5) * 0.7; pts.push(rot([Math.cos(a + da * (j > 0)) * rr, Math.sin(a + da * (j > 0)) * rr])); }
+    const m = pts[2], bA = a + (hash2(k, seed + 13) < 0.5 ? 1 : -1) * 0.9, br = rot([Math.cos(bA) * r * 0.75, Math.sin(bA) * r * 0.75]);
+    const path = () => { ctx.beginPath(); ctx.moveTo(...pts[0]); for (let j = 1; j < 5; j++) ctx.lineTo(...pts[j]); ctx.moveTo(...m); ctx.lineTo(...br); };
+    path(); ctx.strokeStyle = `rgba(255,90,20,${0.45 * pulse})`; ctx.lineWidth = 4; ctx.stroke();
+    path(); ctx.strokeStyle = `rgba(255,170,60,${0.95 * pulse})`; ctx.lineWidth = 1.7; ctx.stroke();
+    path(); ctx.strokeStyle = `rgba(255,250,200,${0.75 * pulse})`; ctx.lineWidth = 0.7; ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // rim lights: a cool sky highlight on the top left, the lava's hot light on the underside
+  shape(); ctx.strokeStyle = h3LG(-r, -r, r * 0.3, r * 0.3, [[0, [255, 240, 220], 0.6], [0.5, [255, 240, 220], 0]]); ctx.lineWidth = 4; ctx.stroke();
+  shape(); ctx.strokeStyle = h3LG(-r * 0.2, -r * 0.2, r * 0.8, r, [[0, [255, 120, 30], 0], [1, [255, 150, 50], 0.95]]); ctx.lineWidth = 7; ctx.stroke();
+  // occlusion toward its far side
+  ctx.fillStyle = h3RG(r * 0.45, r * 0.3, r * 0.2, r * 0.45, r * 0.3, r * 1.1, [[0, RK[2], 0], [1, RK[2], 0.35]]); ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
   ctx.restore();
-  // hot leading edge (unrotated, always the bottom)
+  shape(); ctx.strokeStyle = rgb(h3Dk(RK[2], 0.8), 0.9); ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+  // hot leading edge (always the bottom)
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const hg = ctx.createRadialGradient(x, y + h.r * 0.7 * s, 1, x, y + h.r * 0.7 * s, h.r * s);
-  hg.addColorStop(0, 'rgba(255,220,120,.7)'); hg.addColorStop(1, 'rgba(255,120,30,0)');
-  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x, y + h.r * 0.7 * s, h.r * s, 0, 6.283); ctx.fill();
+  const hg = ctx.createRadialGradient(x, y + r * 0.7 * s, 1, x, y + r * 0.7 * s, r * s);
+  hg.addColorStop(0, 'rgba(255,220,120,.6)'); hg.addColorStop(1, 'rgba(255,120,30,0)');
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x, y + r * 0.7 * s, r * s, 0, 6.283); ctx.fill();
   ctx.restore();
 }
 
-// A broken basalt column segment falling upright (basalt caves only): a hexagonal prism with a lit
-// top face, cold crystal glints and a dust trail. Its two-circle hitbox sits inside the prism.
+// A broken basalt column segment falling upright (basalt caves only): a hexagonal prism seen a little from above (its
+// lit hexagonal top, a lit narrow face, the front face, a shadowed narrow face) with a jagged broken lower end, pale
+// where it snapped, glints in the break. Its outline stays inside its capsule hitbox (radius 0.86 r, 1.35 r tall each
+// way): the top hexagon's corners and the broken end both sit on the capsule's half-circles. A dust trail streams
+// above it and the lowest shard of its leading end is red-hot.
 function drawColumnSeg(h, x, y) {
-  const r = h.r, w = r * 0.86, hh = r * 1.35;
+  const r = h.r, w = r * 0.86, hh = r * 1.35, seed = h.alt | 0, T = G.t, cy = hh - w;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const tg = ctx.createLinearGradient(x, y, x, y - (90 + r * 2) * s);
-  tg.addColorStop(0, 'rgba(255,170,120,.3)'); tg.addColorStop(1, 'rgba(255,170,120,0)');
+  tg.addColorStop(0, 'rgba(200,190,240,.26)'); tg.addColorStop(1, 'rgba(200,190,240,0)');
   ctx.fillStyle = tg; ctx.fillRect(x - w * s, y - (90 + r * 2) * s, w * 2 * s, (90 + r * 2) * s);
+  ctx.strokeStyle = 'rgba(220,214,255,.28)'; ctx.lineWidth = 1.4 * s; ctx.lineCap = 'round';
+  for (const d of [-0.7, 0.1, 0.8]) { const l = (34 + 26 * hash2(d * 10 + 3, seed)) * s, o = ((T * 3 + d) % 1) * 10 * s; ctx.beginPath(); ctx.moveTo(x + d * w * s, y - (hh + 6) * s - o); ctx.lineTo(x + d * w * s, y - (hh + 6) * s - o - l); ctx.stroke(); }
   ctx.restore();
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round';
-  const body = [[-w, -hh + 6], [-w * 0.5, -hh], [w * 0.5, -hh], [w, -hh + 6], [w, hh - 4], [w * 0.5, hh], [-w * 0.5, hh], [-w, hh - 4]];
-  pkPath(ctx, body, pkLG(ctx, -w, 0, w, 0, ['#2a2d4a', '#5a6090', '#3a3e62', '#1a1c30']), 3.4);
-  pkPath(ctx, [[-w, -hh + 6], [-w * 0.5, -hh], [w * 0.5, -hh], [w, -hh + 6], [w * 0.5, -hh + 12], [-w * 0.5, -hh + 12]], '#8a94c8', 2.4);
-  ctx.strokeStyle = 'rgba(10,10,24,.6)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-w * 0.5, -hh + 12); ctx.lineTo(-w * 0.5, hh); ctx.moveTo(w * 0.5, -hh + 12); ctx.lineTo(w * 0.5, hh); ctx.stroke();
-  ctx.strokeStyle = 'rgba(200,220,255,.5)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-w * 0.15, -hh + 16); ctx.lineTo(-w * 0.15, hh - 6); ctx.stroke();
-  // jagged broken ends
-  pkPath(ctx, [[-w, hh - 4], [-w * 0.5, hh + 6], [-w * 0.1, hh - 2], [w * 0.3, hh + 7], [w, hh - 4], [w * 0.5, hh], [-w * 0.5, hh]], '#24263e', 2.4);
-  ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(-w * 0.5, hh + 6); ctx.lineTo(-w * 0.3, hh + 1); ctx.lineTo(-w * 0.7, hh + 1); ctx.closePath(); ctx.fill();
+  const W = w * 0.95, e = w * 0.5, tTop = -hh + 0.5, tSide = -hh + w * 0.4, tBot = -hh + w * 0.78;   // the top hexagon (its corners ride a couple of units past the capsule's round end)
+  const out = [[-W, tSide], [-e, tTop], [e, tTop], [W, tSide], [W, cy]];
+  for (let k = 1; k < 12; k++) { const a = Math.PI * k / 12, j = 0.8 + 0.18 * hash2(k + 9, seed) - (k % 2) * 0.06; out.push([Math.cos(a) * w * j, cy + Math.sin(a) * w * j]); }
+  out.push([-W, cy]);
+  const shape = () => h3Poly(out);
+  const C = { top: [150, 156, 210], lit: [100, 106, 166], front: [64, 68, 116], dark: [36, 38, 70], deep: [20, 20, 42], frac: [140, 140, 192], fracD: [80, 80, 128] };
+  shape(); ctx.fillStyle = rgb(C.front); ctx.fill();
+  ctx.save(); shape(); ctx.clip();
+  // the three faces below the top, each lit by the top-left key light, darker toward the bottom
+  h3Poly([[-W - 2, tSide], [-e, tBot], [-e, hh + 4], [-W - 2, hh + 4]]); ctx.fillStyle = h3LG(0, tSide, 0, hh, [[0, h3Mix(C.lit, C.top, 0.3)], [1, h3Mix(C.lit, C.front, 0.5)]]); ctx.fill();
+  h3Poly([[-e, tBot], [e, tBot], [e, hh + 4], [-e, hh + 4]]); ctx.fillStyle = h3LG(0, tBot, 0, hh, [[0, C.front], [1, h3Mix(C.front, C.dark, 0.5)]]); ctx.fill();
+  h3Poly([[e, tBot], [W + 2, tSide], [W + 2, hh + 4], [e, hh + 4]]); ctx.fillStyle = h3LG(0, tSide, 0, hh, [[0, C.dark], [1, C.deep]]); ctx.fill();
+  ctx.fillStyle = 'rgba(214,220,255,.5)'; ctx.fillRect(-e - 0.6, tBot, 1.3, hh * 2);      // the lit ridge
+  ctx.fillStyle = rgb(C.deep, 0.65); ctx.fillRect(e - 0.7, tBot, 1.5, hh * 2);            // the dark crease
+  // cooling cracks across the faces
+  for (let k = 0; k < 2; k++) {
+    const yy = lerp(tBot + 6, cy, 0.3 + 0.45 * k) + (hash2(k + 80, seed) - 0.5) * 5;
+    const cr = () => { ctx.beginPath(); ctx.moveTo(-W, yy - 2); ctx.lineTo(-e, yy); ctx.lineTo(e, yy - 1.5); ctx.lineTo(W, yy + 1); };
+    cr(); ctx.strokeStyle = rgb(C.deep, 0.6); ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.save(); ctx.translate(0, 1.2); cr(); ctx.strokeStyle = 'rgba(200,206,255,.25)'; ctx.lineWidth = 0.8; ctx.stroke(); ctx.restore();
+  }
+  // the break at its lower end: pale fresh rock in stepped facets, glints
+  const yb = cy + w * 0.12;
+  h3Poly([[-W - 2, yb + 2], [-e, yb - 2], [0, yb + 3], [e, yb - 1], [W + 2, yb + 2], [W + 2, hh + 4], [-W - 2, hh + 4]]);
+  ctx.fillStyle = h3LG(-w, yb, w, hh, [[0, C.frac], [0.55, h3Mix(C.frac, C.fracD, 0.5)], [1, C.fracD]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(236,236,255,.6)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(-W, yb + 2); ctx.lineTo(-e, yb - 2); ctx.lineTo(0, yb + 3); ctx.stroke();
+  ctx.strokeStyle = rgb(C.deep, 0.45); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, yb + 3); ctx.lineTo(-w * 0.2, cy + w * 0.6); ctx.moveTo(e, yb - 1); ctx.lineTo(w * 0.55, cy + w * 0.5); ctx.stroke();
+  for (let k = 0; k < 3; k++) {
+    const gx = (hash2(k + 100, seed) - 0.5) * w * 1.1, gy = cy + w * (0.15 + 0.4 * hash2(k + 110, seed)), tw = 0.5 + 0.5 * Math.sin(T * 5 + k * 2);
+    ctx.fillStyle = `rgba(240,236,255,${0.55 + 0.45 * tw})`;
+    ctx.beginPath(); ctx.moveTo(gx, gy - 2.2); ctx.lineTo(gx + 0.8, gy); ctx.lineTo(gx, gy + 2.2); ctx.lineTo(gx - 0.8, gy); ctx.closePath(); ctx.fill();
+  }
+  // the top hexagon: the lightest face, a rim light on its far edges and a soft dip in its middle
+  h3Poly([[-W, tSide], [-e, tTop], [e, tTop], [W, tSide], [e, tBot], [-e, tBot]]);
+  ctx.fillStyle = h3LG(-W, tTop, W, tBot, [[0, h3Mix(C.top, [255, 255, 255], 0.25)], [0.6, C.top], [1, h3Mix(C.top, C.lit, 0.5)]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-W + 1, tSide); ctx.lineTo(-e + 0.5, tTop + 1); ctx.lineTo(e - 0.5, tTop + 1); ctx.stroke();
+  ctx.strokeStyle = rgb(C.lit, 0.9); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(W, tSide); ctx.lineTo(e, tBot); ctx.lineTo(-e, tBot); ctx.lineTo(-W, tSide); ctx.stroke();
+  ctx.fillStyle = h3LG(-W, 0, -W + 3, 0, [[0, [200, 210, 255], 0.55], [1, [200, 210, 255], 0]]); ctx.fillRect(-W, tSide, 3, hh * 2);   // a cool rim light down its lit side
+  ctx.restore();
+  shape(); ctx.strokeStyle = rgb(C.deep, 0.9); ctx.lineWidth = 1.3; ctx.stroke();
+  // the leading end's lowest shard glows red-hot from the drop
+  const lo = out.reduce((m, p) => p[1] > m[1] ? p : m, out[0]);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = h3RG(lo[0], lo[1] - 2, 0, lo[0], lo[1] - 2, 9, [[0, DANGER_RGB, 0.9], [1, DANGER_RGB, 0]]); ctx.fillRect(lo[0] - 9, lo[1] - 11, 18, 18);
+  ctx.restore();
+  ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(lo[0] - 3.4, lo[1] - 3.2); ctx.lineTo(lo[0], lo[1]); ctx.lineTo(lo[0] + 3.4, lo[1] - 3.2); ctx.closePath(); ctx.fill();
   ctx.restore();
   dangerGlow(x, y + hh * 0.8 * s, r * 1.6, 0.25);
 }
@@ -5285,155 +5442,343 @@ function drawSpider(h) {
   ctx.restore();
 }
 
-// Shared stone slab for crushers and gates, drawn in the slab's own frame (x from inside the wall to
-// the inner face at L, y from -hb to hb): chunky bevelled stone with a lit top edge, a dark underside,
-// block seams and iron rivets, and an inner face that glows red as its telegraph rises.
-function drawSlab(L, hb, K, tele) {
-  const x0 = -40, x1 = L - 6;
-  ctx.fillStyle = pkLG(ctx, 0, -hb, 0, hb, K.body); ctx.strokeStyle = INK; ctx.lineWidth = 3.6;
-  ctx.beginPath(); ctx.roundRect(x0, -hb, x1 - x0, hb * 2, 4); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.beginPath(); ctx.roundRect(x0, -hb, x1 - x0, hb * 2, 4); ctx.clip();
-  ctx.fillStyle = K.lit; ctx.fillRect(x0, -hb, x1 - x0, 5);                 // lit top bevel
-  ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(x0, -hb + 5, x1 - x0, 1.5);
-  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(x0, hb - 7, x1 - x0, 7);  // dark underside
-  ctx.strokeStyle = K.seam; ctx.lineWidth = 1.6;                              // block seams, staggered
-  for (let gx = x1 - 22, k = 0; gx > x0; gx -= 22, k++) { ctx.beginPath(); ctx.moveTo(gx, -hb + 5); ctx.lineTo(gx, 0); ctx.moveTo(gx - 11, 0); ctx.lineTo(gx - 11, hb - 7); ctx.stroke(); }
-  ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x1, 0); ctx.stroke();
-  for (let gx = x1 - 12; gx > x0 + 2; gx -= 22) for (const ry of [-hb + 9, hb - 11]) {   // rivets
-    ctx.fillStyle = '#20181a'; ctx.beginPath(); ctx.arc(gx, ry, 2.8, 0, 6.283); ctx.fill();
-    ctx.fillStyle = K.rivet; ctx.beginPath(); ctx.arc(gx - 0.5, ry - 0.6, 2, 0, 6.283); ctx.fill();
+// The dark socket in the wall rock a crusher's ram or a gate's jaw slides out of (in the slab's frame: x from inside
+// the wall, 0 at the wall's edge): the wall's own colour sunk deep into shadow, with a soft lip of rim light above.
+function drawSocket(hb, alt) {
+  const deep = pal('wallIn', alt), rim = pal('rim', alt);
+  ctx.fillStyle = h3LG(-16, 0, 4, 0, [[0, h3Dk(deep, 0.5), 0], [0.35, h3Dk(deep, 0.32), 0.92], [1, h3Dk(deep, 0.22), 0.95]]);
+  ctx.beginPath(); ctx.roundRect(-16, -hb - 5, 20, (hb + 5) * 2, 5); ctx.fill();
+  ctx.fillStyle = h3LG(0, -hb - 5, 0, -hb + 2, [[0, h3Dk(deep, 0.15), 0.6], [1, h3Dk(deep, 0.15), 0]]); ctx.fillRect(-14, -hb - 5, 18, 7);
+  ctx.strokeStyle = rgb(rim, 0.45); ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-13, -hb - 5.5); ctx.lineTo(2, -hb - 5.5); ctx.stroke();
+}
+
+// Crusher skins per zone: the ram's stone (lit, mid, shadow), its metal bands and ram head (lit, mid, shadow), the
+// heat in its seam. Jungle: temple sandstone, bronze and moss; caves: blue-violet basalt and steel; core: obsidian,
+// hot copper and lava veins. They read as machines (banded rams with a hammer head), never as the gates' stone beasts.
+const CRUSHER_SKINS = [
+  { st: [[230, 206, 156], [168, 136, 92], [86, 62, 38]], mt: [[255, 226, 150], [206, 142, 58], [104, 60, 22]], heat: [255, 150, 60], moss: [[170, 214, 90], [96, 150, 50], [46, 90, 30]] },
+  { st: [[176, 176, 212], [100, 98, 140], [44, 42, 72]], mt: [[238, 242, 255], [152, 160, 190], [66, 72, 100]], heat: [255, 120, 60] },
+  { st: [[118, 94, 104], [62, 46, 54], [28, 18, 22]], mt: [[255, 204, 136], [210, 106, 46], [98, 38, 16]], heat: [255, 140, 40], molten: true },
+];
+// The ram, in its own frame (x from inside the wall, -40, out to its face at L; y from -hb to hb): a long hexagonal
+// stone prism (a lit top facet, the front face, a shadowed lower facet) bound with riveted metal bands, a heavy metal
+// hammer head and four pyramid teeth on the face whose red-hot points stop exactly at its hitbox (2 past the face).
+// A seam glows hotter as it closes; `tele` lights the face red through the countdown.
+function drawRam(L, hb, K, tele, heat, lampX) {
+  const x0 = -40, hx = L - 12, bt = hb - 2.5, f1 = -bt + 6.5, f2 = bt - 7.5, T = G.t;
+  const [sH, sM, sL] = K.st, [mH, mM, mL] = K.mt;
+  // the stone body
+  ctx.beginPath(); ctx.roundRect(x0, -bt, hx - x0 + 2, bt * 2, 3);
+  ctx.fillStyle = h3LG(0, -bt, 0, bt, [[0, sM], [1, sL]]); ctx.fill();
+  ctx.save(); ctx.clip();
+  h3Poly([[x0, -bt], [hx + 2, -bt], [hx + 2, f1], [x0, f1]]); ctx.fillStyle = h3LG(0, -bt, 0, f1, [[0, h3Mix(sH, [255, 255, 255], 0.15)], [1, sH]]); ctx.fill();
+  h3Poly([[x0, f1], [hx + 2, f1], [hx + 2, f2], [x0, f2]]); ctx.fillStyle = h3LG(0, f1, 0, f2, [[0, h3Mix(sH, sM, 0.55)], [0.5, sM], [1, h3Mix(sM, sL, 0.45)]]); ctx.fill();
+  h3Poly([[x0, f2], [hx + 2, f2], [hx + 2, bt], [x0, bt]]); ctx.fillStyle = h3LG(0, f2, 0, bt, [[0, h3Mix(sM, sL, 0.6)], [1, h3Dk(sL, 0.85)]]); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x0, f1 - 0.6, hx - x0 + 2, 1.2);   // facet ridges
+  ctx.fillStyle = rgb(h3Dk(sL, 0.7), 0.55); ctx.fillRect(x0, f2 - 0.4, hx - x0 + 2, 1.4);
+  // columnar joints across the front, each a dark crease with a lit lip, and flecks in the stone
+  for (let gx = hx - 20, k = 0; gx > x0 + 2; gx -= 17, k++) {
+    const jy = k % 2 ? 0 : 2;
+    ctx.fillStyle = rgb(h3Dk(sL, 0.75), 0.5); ctx.fillRect(gx, f1 + 1 + jy, 1.3, f2 - f1 - 2 - jy);
+    ctx.fillStyle = rgb(sH, 0.4); ctx.fillRect(gx + 1.3, f1 + 1 + jy, 0.8, f2 - f1 - 2 - jy);
+  }
+  for (let k = 0; k < 9; k++) { const fx = x0 + 4 + hash2(k, 77) * (hx - x0 - 8), fy = lerp(f1 + 2, f2 - 2, hash2(k, 78)); ctx.fillStyle = k % 3 ? rgb(sH, 0.45) : rgb(sL, 0.5); ctx.beginPath(); ctx.arc(fx, fy, 0.7 + 0.6 * hash2(k, 79), 0, 6.283); ctx.fill(); }
+  // the heat seam along its middle (molten veins in the core)
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // (an irregular crack through the stone and down its joints, dull at rest, glowing as the ram heats)
+  const seam = () => { ctx.beginPath(); ctx.moveTo(x0, 1); for (let sx2 = x0 + 5, k = 0; sx2 < hx; sx2 += 4 + 5 * hash2(k, 85), k++) ctx.lineTo(sx2, 1 + (hash2(k, 86) - 0.5) * 3); };
+  const hk = (K.molten ? 0.35 : 0.1) + 0.8 * heat, flick = 0.85 + 0.15 * Math.sin(T * 9);
+  seam(); ctx.strokeStyle = rgb(K.heat, 0.22 * hk * flick); ctx.lineWidth = 2.4 + 1.4 * heat; ctx.stroke();
+  seam(); ctx.strokeStyle = rgb(h3Mix(K.heat, [255, 240, 190], 0.35), 0.85 * hk * flick); ctx.lineWidth = 0.9 + 0.7 * heat; ctx.stroke();
+  for (let gx = hx - 20, k = 0; gx > x0 + 2; gx -= 17, k++) { const jy = k % 2 ? 0 : 2; ctx.fillStyle = rgb(K.heat, 0.55 * hk * flick); ctx.fillRect(gx + 0.2, f1 + 1 + jy, 0.9, f2 - f1 - 2 - jy); }
+  if (K.molten) {
+    ctx.strokeStyle = `rgba(255,${130 + 60 * heat | 0},40,${0.55 + 0.3 * Math.sin(T * 4)})`; ctx.lineWidth = 1.2;
+    ctx.beginPath(); for (let k = 0; k < 4; k++) { const vx = x0 + 10 + k * 19 + (k % 2) * 4; ctx.moveTo(vx, f1 + 1); ctx.lineTo(vx + 4, -6); ctx.lineTo(vx + 1, 0); ctx.moveTo(vx + 6, 1); ctx.lineTo(vx + 9, f2 - 1); } ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // moss creeping over the jungle ram's top
+  if (K.moss) {
+    const [gH, gM, gL] = K.moss;
+    for (let k = 0; k < 6; k++) {
+      const mx = x0 + 6 + k * 12 + hash2(k, 81) * 5, mw = 4 + 3 * hash2(k, 82);
+      if (mx > hx - 4) break;
+      ctx.fillStyle = h3LG(0, -bt, 0, -bt + 5, [[0, gH], [1, gM]]); ctx.beginPath(); ctx.ellipse(mx, -bt + 0.6, mw, 2.6, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = rgb(gL, 0.7); ctx.beginPath(); ctx.ellipse(mx + mw * 0.3, -bt + 2.4, mw * 0.6, 1, 0, 0, 6.283); ctx.fill();
+      if (k % 2) { ctx.strokeStyle = rgb(gM, 0.9); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mx, -bt + 2); ctx.quadraticCurveTo(mx + 1.5, -bt + 6, mx - 0.5, -bt + 9 + 2 * hash2(k, 83)); ctx.stroke(); }
+    }
   }
   ctx.restore();
-  // the inner face plate, and its red telegraph
-  pkRect(ctx, x1 - 6, -hb + 1, 8, hb * 2 - 2, 2, K.face, 2.4);
+  // the stone's edge: a darker shade of its own shadow tone
+  ctx.beginPath(); ctx.roundRect(x0, -bt, hx - x0 + 2, bt * 2, 3); ctx.strokeStyle = rgb(h3Dk(sL, 0.7), 0.9); ctx.lineWidth = 1.2; ctx.stroke();
+  // the lamp plate (a recessed metal strip the countdown lamps sit in) and the metal bands, skipping the plate
+  const pl0 = lampX - 23, pl1 = lampX + 5;
+  ctx.beginPath(); ctx.roundRect(pl0, -bt - 1, pl1 - pl0, 9, 3); ctx.fillStyle = h3LG(0, -bt - 1, 0, -bt + 8, [[0, mM], [0.5, mL], [1, h3Dk(mL, 0.7)]]); ctx.fill();
+  ctx.strokeStyle = rgb(mH, 0.5); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(pl0 + 2, -bt - 0.5); ctx.lineTo(pl1 - 2, -bt - 0.5); ctx.stroke();
+  const band = bx => {
+    ctx.fillStyle = h3LG(bx - 7, 0, bx, 0, [[0, h3Dk(mL, 0.9)], [0.28, h3Mix(mH, mM, 0.35)], [0.36, mM], [1, h3Dk(mL, 0.9)]]);
+    ctx.beginPath(); ctx.roundRect(bx - 7, -bt - 1.5, 7, bt * 2 + 3, 1.5); ctx.fill();
+    ctx.fillStyle = h3LG(0, -bt, 0, bt, [[0, [255, 255, 255], 0.25], [0.3, [255, 255, 255], 0], [0.7, [0, 0, 0], 0], [1, h3Dk(mL, 0.5), 0.6]]); ctx.fill();
+    ctx.strokeStyle = rgb(h3Dk(mL, 0.75), 0.9); ctx.lineWidth = 0.9; ctx.stroke();
+    for (const ry of [-bt + 2.5, bt - 2.5]) { ctx.fillStyle = h3RG(bx - 4, ry - 0.7, 0.2, bx - 3.5, ry, 2, [[0, mH], [1, mL]]); ctx.beginPath(); ctx.arc(bx - 3.5, ry, 1.8, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = rgb(h3Dk(sL, 0.6), 0.35); ctx.fillRect(bx, -bt, 2.2, bt * 2);   // its shadow on the stone
+  };
+  band(hx);
+  if (pl0 - 8 > x0 + 6) band(pl0 - 8);
+  // the hammer head: a chamfered metal block, lit on top, its face plate set back in shadow
+  const head = () => h3Poly([[hx - 2, -hb + 3], [hx + 1, -hb], [L - 3, -hb], [L - 1, -hb + 2], [L - 1, hb - 2], [L - 3, hb], [hx + 1, hb], [hx - 2, hb - 3]]);
+  head(); ctx.fillStyle = h3LG(0, -hb, 0, hb, [[0, mH], [0.22, h3Mix(mH, mM, 0.5)], [0.6, mM], [1, mL]]); ctx.fill();
+  ctx.save(); head(); ctx.clip();
+  ctx.fillStyle = h3LG(hx - 2, 0, L, 0, [[0, [255, 255, 255], 0.28], [0.25, [255, 255, 255], 0], [0.75, [0, 0, 0], 0], [1, h3Dk(mL, 0.6), 0.55]]); ctx.fillRect(hx - 2, -hb, L - hx + 2, hb * 2);
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(hx, -hb + 1.4, L - hx - 4, 1.2);
+  ctx.fillStyle = rgb(h3Dk(mL, 0.6), 0.6); ctx.fillRect(L - 3.2, -hb, 2.4, hb * 2);
+  for (const ry of [-hb + 5, 0, hb - 5]) { ctx.fillStyle = h3RG(hx + 2.4, ry - 0.8, 0.2, hx + 3, ry, 2.2, [[0, mH], [1, mL]]); ctx.beginPath(); ctx.arc(hx + 3, ry, 2, 0, 6.283); ctx.fill(); }
+  ctx.restore();
+  head(); ctx.strokeStyle = rgb(h3Dk(mL, 0.7), 0.95); ctx.lineWidth = 1.1; ctx.stroke();
+  // four pyramid teeth, lit on top, shadowed below, red-hot at the point (tips at L + 2: the hitbox's reach)
+  for (let k = 0; k < 4; k++) {
+    const yc = -hb + hb / 4 + k * hb / 2, th = hb / 4 - 1;
+    h3Poly([[L - 2, yc - th], [L + 2, yc], [L - 2, yc]]); ctx.fillStyle = rgb(h3Mix(mH, [255, 255, 255], 0.3)); ctx.fill();
+    h3Poly([[L - 2, yc], [L + 2, yc], [L - 2, yc + th]]); ctx.fillStyle = rgb(mM); ctx.fill();
+    h3Poly([[L - 2, yc - th], [L + 2, yc], [L - 2, yc + th]]); ctx.strokeStyle = rgb(h3Dk(mL, 0.75), 0.8); ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillStyle = DANGER; h3Poly([[L - 0.2, yc - 1.6], [L + 2, yc], [L - 0.2, yc + 1.6]]); ctx.fill();
+  }
+  // the countdown telegraph: the face and its teeth heat to a red glow
   if (tele > 0) {
+    const pulse = 0.75 + 0.25 * Math.sin(T * (18 + 20 * tele));
+    h3Glow(L - 2, 0, hb * 2.2, DANGER_RGB, 0.75 * tele * pulse);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const pulse = 0.75 + 0.25 * Math.sin(G.t * (18 + 20 * tele));
-    const g = ctx.createRadialGradient(x1, 0, 1, x1, 0, hb * 2.2);
-    g.addColorStop(0, rgbaA(DANGER_RGB, 0.75 * tele * pulse)); g.addColorStop(1, rgbaA(DANGER_RGB, 0));
-    ctx.fillStyle = g; ctx.fillRect(x1 - hb * 2.2, -hb * 2.2, hb * 4.4, hb * 4.4);
-    ctx.fillStyle = `rgba(255,70,90,${0.9 * tele * pulse})`; ctx.fillRect(x1 - 5, -hb + 3, 5, hb * 2 - 6);
+    ctx.fillStyle = h3LG(L - 9, 0, L, 0, [[0, DANGER_RGB, 0], [1, [255, 90, 110], 0.85 * tele * pulse]]); ctx.fillRect(L - 9, -hb + 2, 8, hb * 2 - 4);
     ctx.restore();
   }
 }
-// crusher stone per zone (they carry on into the core as black obsidian with hot seams)
-const CRUSHER_SKINS = [
-  { body: ['#9a8a70', '#5a4a36', '#241a10'], lit: '#c8b694', seam: 'rgba(20,10,4,.55)', rivet: '#e0d0b0', face: '#3a2c1c' },
-  { body: ['#8a8494', '#4a4452', '#1c1820'], lit: '#b8b2c4', seam: 'rgba(10,6,12,.55)', rivet: '#c8c0cc', face: '#3a3440' },
-  { body: ['#4a4044', '#221c20', '#0c0809'], lit: '#7a6a66', seam: 'rgba(255,120,40,.5)', rivet: '#e8a070', face: '#1a0c0a' },
-];
 function drawCrusher(h) {
-  const y = sy(h.alt), hb = h.hb, wind = h.wind || 0, tele = h.tele || 0, timing = gateTiming(h), warn = h.warn || 0;
-  // where the slot will be when it slams: two dashed brackets across its band, bright through the countdown
+  const y = sy(h.alt), hb = h.hb, wind = h.wind || 0, tele = h.tele || 0, timing = gateTiming(h), heat = Math.max(h.k || 0, wind), K = CRUSHER_SKINS[h.skin ?? 1];
+  // where the slot will be when it slams: two bracket marks across its band, bright through the countdown
   if (h.k < 0.98) {
     const a = timing === 'soon' ? 0.55 + 0.4 * Math.sin(G.t * 22) : timing === 'held' ? 0.5 : 0.22, x0 = sx(h.mid - h.slot / 2), x1 = sx(h.mid + h.slot / 2);
-    ctx.save(); ctx.setLineDash([5 * s, 5 * s]); ctx.lineCap = 'round';
-    for (const x of [x0, x1]) { ctx.strokeStyle = 'rgba(28,15,11,.6)'; ctx.lineWidth = 4 * s; ctx.beginPath(); ctx.moveTo(x, y - hb * s); ctx.lineTo(x, y + hb * s); ctx.stroke(); ctx.strokeStyle = timing === 'held' ? `rgba(127,224,90,${a})` : timing === 'soon' ? rgbaA(DANGER_RGB, a) : `rgba(255,241,214,${a})`; ctx.lineWidth = 2 * s; ctx.stroke(); }
+    const col = timing === 'held' ? [127, 224, 90] : timing === 'soon' ? DANGER_RGB : [255, 241, 214];
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const [x, d] of [[x0, 1], [x1, -1]]) {
+      const br = () => { ctx.beginPath(); ctx.moveTo(x + d * 5 * s, y - hb * s); ctx.lineTo(x, y - hb * s); ctx.lineTo(x, y + hb * s); ctx.lineTo(x + d * 5 * s, y + hb * s); };
+      ctx.setLineDash([5 * s, 5 * s]);
+      br(); ctx.strokeStyle = rgb(h3Dk(col, 0.35), a * 0.8); ctx.lineWidth = 4 * s; ctx.stroke();
+      br(); ctx.strokeStyle = rgb(col, a); ctx.lineWidth = 2 * s; ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.restore();
   }
-  // wind-up: the pistons shudder for 0.3 s before they slam
+  // wind-up: the pistons shudder before they slam
   const jit = wind > 0 ? Math.sin(G.t * 95) * (1 + 2.2 * wind) * s : 0;
   for (const side of [1, -1]) {
-    const wallX = side > 0 ? h.lb : h.rb, ext = side > 0 ? h.extL : h.extR;
-    const tipX = wallX + side * ext;
+    const wallX = side > 0 ? h.lb : h.rb, ext = side > 0 ? h.extL : h.extR, tipX = wallX + side * ext;
     dangerGlow(sx(tipX), y, 30, 0.3);
-    ctx.fillStyle = '#120a08';
-    ctx.fillRect(Math.min(sx(wallX - side * 6), sx(wallX + side * 4)), y - (hb + 5) * s, 10 * s, (hb + 5) * 2 * s);
+    ctx.save(); ctx.translate(sx(wallX), y); ctx.scale(s * side, s); drawSocket(hb, h.alt); ctx.restore();
     ctx.save(); ctx.translate(sx(wallX) + jit * side, y + (wind > 0 ? Math.cos(G.t * 80) * wind * s : 0)); ctx.scale(s * side, s);
-    const L = ext;
-    drawSlab(L, hb, CRUSHER_SKINS[h.skin ?? 1], tele);
-    drawLamps(h, timing, Math.max(-36 + 2 * 9, L - 30), -hb + 6, 3, 9);
-    // a lava seam that brightens as the jaws close
-    const heat = Math.max(h.k || 0, wind);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = `rgba(255,${110 + 80 * heat | 0},40,${0.3 + 0.5 * heat})`; ctx.lineWidth = 2 + heat;
-    ctx.beginPath(); ctx.moveTo(-36, 0); ctx.lineTo(L - 14, 0); ctx.stroke();
-    ctx.restore();
-    // jagged teeth on the inner face, red-hot at the points
-    ctx.strokeStyle = INK; ctx.lineWidth = 2;
-    for (let k = 0; k < 4; k++) {
-      const y0 = -hb + k * hb / 2, y1 = y0 + hb / 2;
-      ctx.fillStyle = '#e0d0d6';
-      ctx.beginPath(); ctx.moveTo(L - 4, y0 + 1); ctx.lineTo(L + 3, (y0 + y1) / 2); ctx.lineTo(L - 4, y1 - 1); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = DANGER;
-      ctx.beginPath(); ctx.moveTo(L, (y0 + y1) / 2 - 2.2); ctx.lineTo(L + 3, (y0 + y1) / 2); ctx.lineTo(L, (y0 + y1) / 2 + 2.2); ctx.closePath(); ctx.fill();
-    }
+    const lampX = Math.max(-36 + 2 * 9, ext - 30);
+    drawRam(ext, hb, K, tele, heat, lampX);
+    drawLamps(h, timing, lampX, -hb + 6, 3, 9);
     ctx.restore();
   }
 }
 
-// Hanging hazards, drawn exactly over their capsules (hangCaps): a thorn vine on a thin stem (jungle), a crystal
-// stalactite on an iron chain that trembles and drops (caves), a magma drip on a glowing strand (core). The tether
-// above is thin, dark and outline-free: harmless scenery, like a spider's thread.
+// Hanging hazards, drawn over their capsules (hangCaps): a thorn vine on a thin stem (jungle), a crystal stalactite
+// on an iron chain that trembles and drops (caves), a magma drip on a glowing strand (core). The tether above is thin
+// and quiet: harmless scenery, like a spider's thread.
 function drawHang(h) {
   if (h.state === 'gone') return;
-  const caps = hangCaps(h, G.t), zi = h.skin, top = h.aAlt - (h.fall || 0);
-  const shake = h.state === 'warn' ? Math.sin(G.t * 80) * 1.6 * s : 0;
+  const caps = hangCaps(h, G.t), zi = h.skin, top = h.aAlt - (h.fall || 0), T = G.t;
+  const shake = h.state === 'warn' ? Math.sin(T * 80) * 1.6 * s : 0;
   const X = x => sx(x) + shake, Y = a => sy(a);
+  const last = caps[caps.length - 1], bx = X(last.x1), by = Y(last.a1);
+  // the centre line, as screen points from the top down to the end
+  const C = caps.map(c => [X(c.x0), Y(c.a0)]); C.push([bx, by]);
+  const spine = (n = C.length - 1) => { ctx.beginPath(); ctx.moveTo(...C[0]); for (let i = 1; i < n; i++) ctx.quadraticCurveTo(C[i][0], C[i][1], (C[i][0] + C[i + 1][0]) / 2, (C[i][1] + C[i + 1][1]) / 2); ctx.lineTo(...C[n]); };
+  const along = u => { const f = u * (C.length - 1), i = Math.min(C.length - 2, Math.floor(f)), t = f - i; return [lerp(C[i][0], C[i + 1][0], t), lerp(C[i][1], C[i + 1][1], t)]; };
   // the tether, up out of sight
   ctx.save(); ctx.lineCap = 'round';
-  if (zi === 0) { ctx.strokeStyle = 'rgba(40,70,30,.75)'; ctx.lineWidth = 2.2 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.quadraticCurveTo(X(h.x) + 6 * s, Y(top) - 120 * s, X(h.x) - 4 * s, -20); ctx.stroke(); }
-  else if (zi === 1) { ctx.setLineDash([5 * s, 3 * s]); ctx.strokeStyle = 'rgba(60,64,90,.8)'; ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top) - 4 * s); ctx.lineTo(X(h.x), -20); ctx.stroke(); ctx.setLineDash([]); }
-  else { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,120,40,${0.35 + 0.1 * Math.sin(G.t * 3 + h.ph)})`; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.lineTo(X(h.x), -20); ctx.stroke(); }
+  if (zi === 0) {
+    ctx.strokeStyle = 'rgba(46,84,34,.8)'; ctx.lineWidth = 2.2 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.quadraticCurveTo(X(h.x) + 6 * s, Y(top) - 120 * s, X(h.x) - 4 * s, -20); ctx.stroke();
+    ctx.fillStyle = 'rgba(70,120,44,.85)';
+    for (const [u, d] of [[0.25, 1], [0.55, -1]]) { const ty = Y(top) - u * 120 * s, tx = X(h.x) + 3 * s * Math.sin(u * 3); ctx.beginPath(); ctx.ellipse(tx + d * 4 * s, ty, 4.5 * s, 1.8 * s, d * 0.6, 0, 6.283); ctx.fill(); }
+  } else if (zi === 1) {
+    const x = X(h.x), y0 = Y(top) - 6 * s;
+    for (let k = 0, y = y0; y > -12; k++, y -= 6.5 * s) {
+      ctx.strokeStyle = 'rgba(40,42,66,.85)'; ctx.lineWidth = 2.6 * s; ctx.beginPath();
+      if (k % 2) { ctx.moveTo(x, y + 1); ctx.lineTo(x, y - 6.5 * s - 1); } else ctx.ellipse(x, y - 3.25 * s, 2.6 * s, 4.4 * s, 0, 0, 6.283);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,156,190,.75)'; ctx.lineWidth = 1.1 * s; ctx.beginPath();
+      if (k % 2) { ctx.moveTo(x - 0.4 * s, y); ctx.lineTo(x - 0.4 * s, y - 6.5 * s); } else ctx.ellipse(x, y - 3.25 * s, 2.6 * s, 4.4 * s, 0, 2.2, 4.4);
+      ctx.stroke();
+    }
+  } else { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,120,40,${0.35 + 0.1 * Math.sin(T * 3 + h.ph)})`; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.moveTo(X(h.x), Y(top)); ctx.lineTo(X(h.x), -20); ctx.stroke(); }
   ctx.restore();
-  const last = caps[caps.length - 1], bx = X(last.x1), by = Y(last.a1);
   backlight(X(h.x), Y(top - h.len / 2), h.len * 0.75, zi, 0.32);
   dangerGlow(bx, by, 40);
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  if (zi === 1) {
-    // the cone: wide at the top, a sharp tip, ink edge, dark obsidian-glass facets like the cave's crystal spikes
-    // (never the pickups' icy blue); red-hot glint while it trembles
-    const L = [], R = [];
-    for (const c of caps) { L.push([X(c.x0) - c.r * s, Y(c.a0)]); R.push([X(c.x0) + c.r * s, Y(c.a0)]); }
-    const tip = [X(last.x1), Y(last.a1) + 3 * s];
-    ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.lineTo(...tip); for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath();
-    const g = ctx.createLinearGradient(L[0][0], 0, R[0][0], 0); g.addColorStop(0, '#6a5a7e'); g.addColorStop(0.45, '#3a2e4a'); g.addColorStop(1, '#120c1a');
-    ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3 * s; ctx.stroke();
-    ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4 * s;
-    ctx.beginPath(); ctx.moveTo(X(h.x) - 4 * s, Y(top)); ctx.lineTo(X(h.x) + 2 * s, Y(top - h.len * 0.5)); ctx.lineTo(...tip); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,190,220,.75)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(L[0][0] + 4 * s, L[0][1] + 4 * s); ctx.lineTo(L[3][0] + 3 * s, L[3][1]); ctx.stroke();
-    pkRect(ctx, X(h.x) - (h.hw + 3) * s, Y(top) - 7 * s, (h.hw + 3) * 2 * s, 9 * s, 4 * s, '#3a4058', 2.4 * s);   // the rock it grew from
-    ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(tip[0] - 3 * s, tip[1] - 9 * s); ctx.lineTo(...tip); ctx.lineTo(tip[0] + 3 * s, tip[1] - 9 * s); ctx.closePath(); ctx.fill();
-    if (h.state === 'warn') { ctx.globalCompositeOperation = 'lighter'; const k = 1 - h.timer / RULES.hang.warn, gg = ctx.createRadialGradient(tip[0], tip[1], 1, tip[0], tip[1], 34 * s); gg.addColorStop(0, rgbaA(DANGER_RGB, 0.5 + 0.4 * k)); gg.addColorStop(1, rgbaA(DANGER_RGB, 0)); ctx.fillStyle = gg; ctx.fillRect(tip[0] - 34 * s, tip[1] - 34 * s, 68 * s, 68 * s); }
-  } else {
-    // the rope (vine or molten strand), ink-edged, along the capsule centre line
-    const path = () => { ctx.beginPath(); ctx.moveTo(X(caps[0].x0), Y(caps[0].a0)); for (const c of caps) ctx.lineTo(X(c.x1), Y(c.a1)); };
-    const body = zi === 0 ? (h.hw - 3) * 2 * 0.62 : 10;
-    path(); ctx.strokeStyle = INK; ctx.lineWidth = (body + 3.4) * s; ctx.stroke();
-    path(); ctx.strokeStyle = zi === 0 ? '#4f9a2a' : '#ff7a1a'; ctx.lineWidth = body * s; ctx.stroke();
-    path(); ctx.strokeStyle = zi === 0 ? '#a8e060' : '#ffe08a'; ctx.lineWidth = body * 0.3 * s; ctx.stroke();
-    if (zi === 0) {
-      // thorns along the vine, out to its hitbox radius, red-tipped
-      for (let i = 0; i < caps.length - 1; i++) for (const d of [-1, 1]) {
-        const c = caps[i], mx = X((c.x0 + c.x1) / 2), my = Y((c.a0 + c.a1) / 2) + d * 4 * s, r = (h.hw - 3) * s;
-        ctx.fillStyle = '#f3e2a8'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6 * s;
-        ctx.beginPath(); ctx.moveTo(mx, my - 4 * s); ctx.lineTo(mx + d * r, my + 1 * s); ctx.lineTo(mx, my + 3 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(mx + d * r * 0.6, my - 1 * s); ctx.lineTo(mx + d * r, my + 1 * s); ctx.lineTo(mx + d * r * 0.6, my + 2 * s); ctx.closePath(); ctx.fill();
-      }
-      // the thorn bud at the end
-      const r = h.hw * s, cx = X(last.x1), cy = Y(last.a1);
-      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + 0.3; pkPath(ctx, [[cx + Math.cos(a - 0.3) * r * 0.6, cy + Math.sin(a - 0.3) * r * 0.6], [cx + Math.cos(a) * r, cy + Math.sin(a) * r], [cx + Math.cos(a + 0.3) * r * 0.6, cy + Math.sin(a + 0.3) * r * 0.6]], k % 2 ? '#f3e2a8' : DANGER, 1.4 * s); }
-      pkE(ctx, cx, cy, r * 0.62, r * 0.62, pkRG(ctx, cx, cy, r * 0.62, ['#ff9a7a', '#c8203a', '#5a0a1a']), 2.2 * s);
-      pkRim(ctx, cx, cy, r * 0.45, r * 0.45);
-    } else {
-      // the glob, heavy and molten, pulsing
-      const r = h.hw * s, cx = X(last.x1), cy = Y(last.a1), p = 0.5 + 0.5 * Math.sin(G.t * 4 + h.ph);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, r * 2.6); gl.addColorStop(0, `rgba(255,150,40,${0.45 + 0.2 * p})`); gl.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = gl; ctx.fillRect(cx - r * 2.6, cy - r * 2.6, r * 5.2, r * 5.2); ctx.restore();
-      ctx.beginPath(); ctx.moveTo(cx - r * 0.5, cy - r * 1.1); ctx.quadraticCurveTo(cx - r * 1.05, cy - r * 0.2, cx - r * 0.85, cy + r * 0.35); ctx.arc(cx, cy, r, Math.PI * 0.85, Math.PI * 0.15, true); ctx.quadraticCurveTo(cx + r * 1.05, cy - r * 0.2, cx + r * 0.5, cy - r * 1.1); ctx.closePath();
-      const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.2, 1, cx, cy, r * 1.1); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.45, '#ffb238'); g.addColorStop(1, '#c8300a');
-      ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = '#3a0804'; ctx.lineWidth = 2.6 * s; ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,230,.8)'; ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.arc(cx, cy, r * 0.6, -2.6, -1.6); ctx.stroke();
-    }
+  if (zi === 0) drawThornVine(h, C, spine, along, bx, by);
+  else if (zi === 1) drawStalactite(h, caps, X, Y, top, last);
+  else drawMagmaDrip(h, spine, along, bx, by);
+  ctx.restore();
+}
+// Thorn vine: a thick twisting bramble cane (a deep wine-red rind that stands out on the green jungle, lit on its
+// left, a thinner stem spiralling round it, small green leaves), hooked ivory thorns red at the tips reaching out to its hitbox (hw - 3), and a spiky crimson seed bud at
+// the end the size of its end capsule (hw).
+function drawThornVine(h, C, spine, along, bx, by) {
+  const r0 = h.hw - 3, T = G.t, n = C.length - 1, VN = [[214, 132, 112], [140, 58, 58], [92, 30, 38], [56, 16, 26]], LF = [[178, 230, 108], [96, 162, 52], [54, 110, 32], [32, 72, 22]];
+  // the vine itself: a darker rind, the body, a shadow down its right side and a light down its left
+  spine(); ctx.strokeStyle = rgb(VN[3]); ctx.lineWidth = 9 * s; ctx.stroke();
+  spine(); ctx.strokeStyle = rgb(VN[1]); ctx.lineWidth = 7.4 * s; ctx.stroke();
+  ctx.save(); ctx.translate(1.8 * s, 0); spine(); ctx.strokeStyle = rgb(VN[2], 0.85); ctx.lineWidth = 3.4 * s; ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.translate(-1.7 * s, 0); spine(); ctx.strokeStyle = rgb(VN[0], 0.9); ctx.lineWidth = 1.6 * s; ctx.stroke(); ctx.restore();
+  // a thin stem twisting round it (behind on the shadow side, in front on the light side)
+  for (let k = 0; k < 18; k++) {
+    const u0 = k / 18 * 0.86, u1 = (k + 1) / 18 * 0.86, ph = k * 0.9;
+    const [ax, ay] = along(u0), [cx2, cy2] = along(u1), o0 = Math.sin(ph) * 3.4 * s, o1 = Math.sin(ph + 0.9) * 3.4 * s, front = Math.cos(ph + 0.45) > 0;
+    ctx.strokeStyle = front ? rgb(h3Mix(VN[0], VN[1], 0.5), 0.8) : rgb(VN[3], 0.55); ctx.lineWidth = (front ? 1.2 : 1) * s;
+    ctx.beginPath(); ctx.moveTo(ax + o0, ay); ctx.lineTo(cx2 + o1, cy2); ctx.stroke();
+  }
+  // small leaves (inside its reach)
+  for (const [u, d] of [[0.14, 1], [0.38, -1], [0.6, 1]]) {
+    const [lx, ly] = along(u);
+    ctx.save(); ctx.translate(lx, ly); ctx.scale(s * d, s); ctx.rotate(-0.5 + 0.12 * Math.sin(T * 2 + u * 9));
+    ctx.beginPath(); ctx.moveTo(1, 0); ctx.quadraticCurveTo(4.5, -4.2, 8, -0.6); ctx.quadraticCurveTo(4.5, 2.8, 1, 0); ctx.fillStyle = h3LG(1, -3, 6, 2, [[0, LF[0]], [1, LF[2]]]); ctx.fill();
+    ctx.strokeStyle = rgb(LF[3], 0.7); ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.strokeStyle = rgb(LF[0], 0.9); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(1.5, -0.1); ctx.lineTo(7, -0.6); ctx.stroke();
+    ctx.restore();
+  }
+  // thorns along both sides, out to its hitbox radius, hooked a little upward, red at the points
+  for (let i = 0; i < n - 1; i++) for (const d of [-1, 1]) {
+    const [tx, ty] = along((i + 0.5 + (d > 0 ? 0.12 : -0.12)) / n);
+    ctx.save(); ctx.translate(tx, ty); ctx.scale(s * d, s);
+    ctx.fillStyle = rgb(VN[3], 0.5); ctx.beginPath(); ctx.ellipse(2.6, 2, 2.6, 1.4, 0, 0, 6.283); ctx.fill();   // its shadow on the vine
+    const th = () => { ctx.beginPath(); ctx.moveTo(1.6, -3.4); ctx.quadraticCurveTo(4.4, -2.5, r0 - 0.6, -3); ctx.quadraticCurveTo(5, 0.6, 1.6, 3.2); ctx.closePath(); };
+    th(); ctx.fillStyle = h3LG(1.6, 0, r0, 0, [[0, [240, 222, 170]], [0.45, [255, 244, 206]], [0.7, [255, 150, 160]], [1, DANGER_RGB]]); ctx.fill();
+    ctx.fillStyle = 'rgba(160,100,60,.45)'; ctx.beginPath(); ctx.moveTo(1.6, 0.4); ctx.quadraticCurveTo(5, 0.6, r0 - 0.6, -3); ctx.quadraticCurveTo(4.8, 1.8, 1.6, 3.2); ctx.closePath(); ctx.fill();
+    th(); ctx.strokeStyle = 'rgba(150,90,50,.6)'; ctx.lineWidth = 0.55; ctx.stroke();
+    ctx.restore();
+  }
+  // the seed bud: green sepals cupping a crimson pod, ringed with thorns out to hw
+  const R = h.hw * s;
+  ctx.save(); ctx.translate(bx, by);
+  for (let k = 0; k < 10; k++) {
+    const a = k / 10 * 6.283 + 0.31, ca = Math.cos(a), sa = Math.sin(a), pa = [-sa, ca];
+    const b0 = [ca * R * 0.5, sa * R * 0.5], tp = [ca * R, sa * R], w = R * 0.2;
+    ctx.beginPath(); ctx.moveTo(b0[0] + pa[0] * w, b0[1] + pa[1] * w); ctx.lineTo(...tp); ctx.lineTo(b0[0] - pa[0] * w, b0[1] - pa[1] * w); ctx.closePath();
+    ctx.fillStyle = k % 2 ? rgb([246, 230, 180]) : rgb([226, 60, 84]); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(...b0); ctx.lineTo(...tp); ctx.lineTo(b0[0] - pa[0] * w, b0[1] - pa[1] * w); ctx.closePath();
+    ctx.fillStyle = k % 2 ? 'rgba(150,100,50,.35)' : 'rgba(90,0,30,.35)'; ctx.fill();
+    ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(ca * R * 0.8 + pa[0] * w * 0.4, sa * R * 0.8 + pa[1] * w * 0.4); ctx.lineTo(...tp); ctx.lineTo(ca * R * 0.8 - pa[0] * w * 0.4, sa * R * 0.8 - pa[1] * w * 0.4); ctx.closePath(); ctx.fill();
+  }
+  const pr = R * 0.62;
+  ctx.beginPath(); ctx.arc(0, 0, pr, 0, 6.283);
+  ctx.fillStyle = h3RG(-pr * 0.35, -pr * 0.4, pr * 0.05, 0, 0, pr * 1.1, [[0, [255, 168, 140]], [0.45, [214, 40, 66]], [1, [96, 10, 30]]]); ctx.fill();
+  ctx.strokeStyle = rgb([92, 8, 28], 0.9); ctx.lineWidth = 1.1 * s; ctx.stroke();
+  ctx.fillStyle = 'rgba(80,0,20,.4)'; for (const [dx, dy] of [[0.3, 0.2], [-0.25, 0.35], [0.05, -0.05], [0.4, -0.3]]) { ctx.beginPath(); ctx.arc(dx * pr, dy * pr, 0.9 * s, 0, 6.283); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(255,240,230,.75)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.arc(0, 0, pr * 0.68, -2.6, -1.6); ctx.stroke();
+  // the sepals where it hangs from the vine
+  for (const d of [-1, 0, 1]) {
+    ctx.beginPath(); ctx.moveTo(d * 1.2 * s, -pr * 1.05); ctx.quadraticCurveTo(d * pr * 0.9, -pr * 0.95, d * pr * 0.75, -pr * 0.35); ctx.quadraticCurveTo(d * pr * 0.35, -pr * 0.7, 0, -pr * 0.6); ctx.closePath();
+    ctx.fillStyle = h3LG(0, -pr, 0, -pr * 0.3, [[0, LF[1]], [1, LF[2]]]); ctx.fill();
   }
   ctx.restore();
 }
-// Gate skins (the jaws): a row of countdown lamps on each jaw tells the timing
-// (green open, amber countdown, red shut), and for the RULES.gate.warn seconds before it shuts a
-// countdown glow runs along the seam and both slabs' undersides, so you can read it from below.
+// Crystal stalactite: a cone of dark amethyst glass (a lit left facet, a centre ridge, a shadowed right facet with a
+// cold rim light), growth rings, glints, a red-hot tip, grown from a lump of cave rock hung on a chain. Trembling (the
+// warning) it shakes, rattles grit and its tip flares red; falling, streaks trail above it.
+function drawStalactite(h, caps, X, Y, top, last) {
+  const T = G.t, L = [], R = [];
+  for (const c of caps) { L.push([X(c.x0) - c.r * s, Y(c.a0)]); R.push([X(c.x0) + c.r * s, Y(c.a0)]); }
+  const tip = [X(last.x1), Y(last.a1) + 3 * s], top0 = [X(h.x), Y(top)];
+  const cone = () => { ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.lineTo(...tip); for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath(); };
+  const AM = [[196, 170, 232], [130, 104, 176], [78, 58, 118], [40, 28, 66], [24, 16, 42]];
+  if (h.state === 'fall') {   // speed streaks above it
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(210,190,255,.35)'; ctx.lineWidth = 1.6 * s;
+    for (const d of [-0.7, 0, 0.7]) { ctx.beginPath(); ctx.moveTo(top0[0] + d * h.hw * s, top0[1] - 10 * s); ctx.lineTo(top0[0] + d * h.hw * s, top0[1] - (40 + 20 * Math.abs(d)) * s); ctx.stroke(); }
+    ctx.restore();
+  }
+  cone(); ctx.fillStyle = h3LG(L[0][0], 0, R[0][0], 0, [[0, AM[1]], [0.42, AM[2]], [0.75, AM[3]], [1, AM[4]]]); ctx.fill();
+  ctx.save(); cone(); ctx.clip();
+  const rx = top0[0] - h.hw * 0.18 * s;   // the centre ridge
+  h3Poly([[L[0][0] - 4, L[0][1] - 4], [rx, top0[1] - 4], tip, [L[L.length - 1][0] - 4, L[L.length - 1][1]]]);
+  ctx.fillStyle = h3LG(L[0][0], top0[1], rx, tip[1], [[0, AM[0]], [0.5, AM[1]], [1, AM[2]]]); ctx.fill();
+  ctx.fillStyle = h3LG(R[0][0], 0, R[0][0] - 5 * s, 0, [[0, [150, 140, 230], 0.55], [1, [150, 140, 230], 0]]); ctx.fillRect(R[0][0] - 6 * s, top0[1] - 6, 6 * s, tip[1] - top0[1] + 8);   // cold rim light
+  // growth rings
+  for (let k = 1; k < 6; k++) {
+    const u = k / 6, yy = lerp(top0[1], tip[1], u * 0.92), hwk = lerp(h.hw, 3, u) * s;
+    ctx.strokeStyle = 'rgba(220,200,255,.22)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.ellipse(top0[0], yy, hwk, 2.4 * s, 0, 0.15, Math.PI - 0.15); ctx.stroke();
+    ctx.strokeStyle = rgb(AM[4], 0.35); ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.ellipse(top0[0], yy - 1.4 * s, hwk, 2.4 * s, 0, 0.3, Math.PI - 0.3); ctx.stroke();
+  }
+  // the ridge line, a specular streak down the lit facet, glints inside the glass
+  ctx.strokeStyle = 'rgba(236,224,255,.55)'; ctx.lineWidth = 1.1 * s; ctx.beginPath(); ctx.moveTo(rx, top0[1]); ctx.lineTo(...tip); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,250,255,.7)'; ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.moveTo(L[0][0] + 4 * s, L[0][1] + 5 * s); ctx.lineTo(lerp(L[0][0] + 4 * s, tip[0], 0.45), lerp(L[0][1] + 5 * s, tip[1], 0.45)); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 3; k++) { const u = 0.15 + 0.22 * k, gx = lerp(top0[0] - h.hw * 0.4 * s, tip[0], u), gy = lerp(top0[1], tip[1], u), tw = 0.5 + 0.5 * Math.sin(T * 4 + k * 2.3 + h.ph); ctx.fillStyle = `rgba(230,210,255,${0.35 + 0.4 * tw})`; ctx.beginPath(); ctx.moveTo(gx, gy - 2.6 * s); ctx.lineTo(gx + 0.9 * s, gy); ctx.lineTo(gx, gy + 2.6 * s); ctx.lineTo(gx - 0.9 * s, gy); ctx.closePath(); ctx.fill(); }
+  ctx.globalCompositeOperation = 'source-over';
+  // the red-hot point
+  ctx.fillStyle = h3LG(0, tip[1] - 16 * s, 0, tip[1], [[0, DANGER_RGB, 0], [0.5, DANGER_RGB, 0.55], [1, [255, 120, 150], 1]]); ctx.fillRect(tip[0] - 8 * s, tip[1] - 16 * s, 16 * s, 17 * s);
+  ctx.restore();
+  cone(); ctx.strokeStyle = rgb(AM[4], 0.9); ctx.lineWidth = 1.3 * s; ctx.stroke();
+  ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(tip[0] - 2.6 * s, tip[1] - 8 * s); ctx.lineTo(...tip); ctx.lineTo(tip[0] + 2.6 * s, tip[1] - 8 * s); ctx.closePath(); ctx.fill();
+  // the lump of cave rock it grew from (and the chain's ring in it)
+  const w = (h.hw + 3) * s, ry = top0[1];
+  const rock = () => h3Poly([[top0[0] - w, ry + 1.5 * s], [top0[0] - w * 0.9, ry - 4 * s], [top0[0] - w * 0.4, ry - 7.5 * s], [top0[0] + w * 0.3, ry - 7 * s], [top0[0] + w * 0.95, ry - 3.5 * s], [top0[0] + w, ry + 1.5 * s], [top0[0] + w * 0.4, ry + 3 * s], [top0[0] - w * 0.5, ry + 3 * s]]);
+  rock(); ctx.fillStyle = h3LG(0, ry - 7.5 * s, 0, ry + 3 * s, [[0, [138, 134, 170]], [0.5, [86, 82, 118]], [1, [46, 42, 70]]]); ctx.fill();
+  ctx.save(); rock(); ctx.clip(); ctx.fillStyle = 'rgba(30,26,52,.4)'; ctx.fillRect(top0[0] + w * 0.25, ry - 8 * s, w, 12 * s); ctx.fillStyle = 'rgba(220,216,255,.35)'; ctx.fillRect(top0[0] - w, ry - 7.5 * s, w * 1.3, 1.6 * s); ctx.restore();
+  rock(); ctx.strokeStyle = 'rgba(34,30,56,.85)'; ctx.lineWidth = 1.1 * s; ctx.stroke();
+  // the tremble: the tip flares red, and shake marks flicker beside the rock
+  if (h.state === 'warn') {
+    const k = 1 - h.timer / RULES.hang.warn;
+    h3Glow(tip[0], tip[1], 34 * s, DANGER_RGB, 0.5 + 0.4 * k);
+    ctx.strokeStyle = `rgba(255,220,235,${0.5 + 0.4 * Math.sin(T * 40)})`; ctx.lineWidth = 1.6 * s;
+    for (const d of [-1, 1]) for (const o of [0, 5]) { const x = top0[0] + d * (w + (4 + o) * s); ctx.beginPath(); ctx.moveTo(x, ry - 6 * s); ctx.quadraticCurveTo(x + d * 2 * s, ry, x, ry + 6 * s); ctx.stroke(); }
+  }
+}
+// Magma drip: a thin molten strand (a cooler dark-red skin, an orange body, a white-hot core with heat running down
+// it, flakes of cooled crust) ending in a heavy glob the size of its end capsules, crusted and pulsing.
+function drawMagmaDrip(h, spine, along, bx, by) {
+  const T = G.t, r = h.hw * s, p = 0.5 + 0.5 * Math.sin(T * 4 + h.ph);
+  spine(); ctx.strokeStyle = rgb([150, 34, 10]); ctx.lineWidth = 10 * s; ctx.stroke();
+  spine(); ctx.strokeStyle = rgb([244, 104, 24]); ctx.lineWidth = 7.6 * s; ctx.stroke();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  spine(); ctx.strokeStyle = 'rgba(255,214,110,.8)'; ctx.lineWidth = 3.4 * s; ctx.stroke();
+  ctx.setLineDash([6 * s, 10 * s]); ctx.lineDashOffset = -T * 70 * s;
+  spine(); ctx.strokeStyle = 'rgba(255,250,210,.9)'; ctx.lineWidth = 1.6 * s; ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  for (let k = 0; k < 5; k++) {   // flakes of cooled crust riding the strand
+    const u = 0.08 + k * 0.13, [fx, fy] = along(u), d = k % 2 ? 1 : -1;
+    ctx.save(); ctx.translate(fx + d * 2.2 * s, fy); ctx.scale(s, s); ctx.rotate(d * 0.3);
+    ctx.beginPath(); ctx.ellipse(0, 0, 1.2, 3.2, 0, 0, 6.283); ctx.fillStyle = h3LG(0, -3, 0, 3, [[0, [210, 80, 24], 0.95], [1, [150, 40, 12], 0.95]]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,220,140,.6)'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.ellipse(0, 0, 1.2, 3.2, 0, 3.6, 5.2); ctx.stroke();
+    ctx.restore();
+  }
+  // the glob
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = h3RG(bx, by, 2, bx, by, r * 2.6, [[0, [255, 150, 40], 0.45 + 0.2 * p], [1, [255, 80, 20], 0]]); ctx.fillRect(bx - r * 2.6, by - r * 2.6, r * 5.2, r * 5.2); ctx.restore();
+  const glob = () => { ctx.beginPath(); ctx.moveTo(bx - r * 0.42, by - r * 1.1); ctx.quadraticCurveTo(bx - r * 1.02, by - r * 0.25, bx - r * 0.86, by + r * 0.35); ctx.arc(bx, by, r, Math.PI * 0.85, Math.PI * 0.15, true); ctx.quadraticCurveTo(bx + r * 1.02, by - r * 0.25, bx + r * 0.42, by - r * 1.1); ctx.closePath(); };
+  glob(); ctx.fillStyle = h3RG(bx - r * 0.3, by - r * 0.15, 1, bx, by + r * 0.1, r * 1.15, [[0, [255, 248, 200]], [0.3, [255, 200, 80]], [0.7, [244, 100, 22]], [1, [170, 40, 10]]]); ctx.fill();
+  ctx.save(); glob(); ctx.clip();
+  // plates of cooling crust drifting over it, glowing cracks between
+  for (const [dx, dy, pw, ph, rot] of [[0.62, 0.3, 0.3, 0.2, 0.6], [-0.66, 0.48, 0.26, 0.16, -0.6], [0.1, 0.92, 0.36, 0.14, 0.05]]) {
+    ctx.save(); ctx.translate(bx + dx * r, by + dy * r + Math.sin(T * 1.5 + dx * 5) * 0.6 * s); ctx.rotate(rot);
+    ctx.beginPath(); ctx.ellipse(0, 0, pw * r, ph * r, 0, 0, 6.283); ctx.fillStyle = h3LG(0, -ph * r, 0, ph * r, [[0, [196, 70, 24], 0.8], [1, [130, 34, 10], 0.85]]); ctx.fill();
+    ctx.strokeStyle = `rgba(255,${200 + 40 * p | 0},110,.75)`; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    ctx.restore();
+  }
+  ctx.fillStyle = h3RG(bx + r * 0.3, by + r * 0.45, r * 0.2, bx + r * 0.3, by + r * 0.45, r * 1.2, [[0, [120, 20, 4], 0], [1, [120, 20, 4], 0.4]]); ctx.fillRect(bx - r * 1.2, by - r * 1.3, r * 2.4, r * 2.6);
+  ctx.restore();
+  glob(); ctx.strokeStyle = rgb([150, 30, 8], 0.9); ctx.lineWidth = 1.2 * s; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,236,.85)'; ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.arc(bx, by, r * 0.62, -2.6, -1.7); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,240,.9)'; ctx.beginPath(); ctx.arc(bx - r * 0.18, by - r * 0.62, 1.3 * s, 0, 6.283); ctx.fill();
+}
+
+// Gate skins (the jaws): carved stone beast heads per zone, their teeth, the dark of the mouth and the archway glow.
+// A row of countdown lamps on each jaw tells the timing (green open, amber and red countdown, red shut), the beast's
+// eye glows the same colour, and for the RULES.gate.warn seconds before it shuts a countdown glow runs along the seam
+// and both slabs' undersides, so you can read it from below.
 const GATE_SKINS = [
-  { body: ['#a8784a', '#6a4422', '#3a220e'], lit: '#d8a874', seam: 'rgba(40,20,8,.6)', rivet: '#e8c890', face: '#4a2c14', tooth: '#f1dfb0', glow: [255, 210, 120] },
-  { body: ['#6a7090', '#363a58', '#181a2e'], lit: '#9aa4cc', seam: 'rgba(10,12,30,.6)', rivet: '#c8d4ff', face: '#22263e', tooth: '#d8f4ff', glow: [120, 220, 255] },
-  { body: ['#4a3a38', '#241816', '#0e0606'], lit: '#7a6058', seam: 'rgba(255,120,40,.45)', rivet: '#e8a070', face: '#1a0c0a', tooth: '#ffcf8a', glow: [255, 120, 40] },
+  { st: [[236, 200, 142], [176, 126, 72], [92, 58, 28]], tooth: [[255, 248, 226], [232, 206, 156], [160, 120, 72]], mouth: [64, 26, 12], glow: [255, 210, 120], moss: [[170, 214, 90], [96, 150, 50], [46, 90, 30]] },
+  { st: [[156, 168, 218], [80, 88, 140], [34, 38, 72]], tooth: [[244, 250, 255], [200, 216, 240], [112, 128, 166]], mouth: [22, 18, 44], glow: [120, 220, 255] },
+  { st: [[128, 98, 94], [68, 46, 44], [28, 16, 16]], tooth: [[255, 234, 190], [240, 176, 104], [150, 82, 40]], mouth: [70, 14, 4], glow: [255, 120, 40], molten: true },
 ];
 // 'held' (holding at the brink for the committed pilot), 'open', 'soon' (countdown), 'shut', 'opening'
 function gateTiming(h) {
@@ -5441,54 +5786,106 @@ function gateTiming(h) {
   if (u < T.open) return h.held ? 'held' : T.open - u < T.warn ? 'soon' : 'open';
   return u < T.open + tClose(T) + h.shut ? 'shut' : 'opening';
 }
+// The colour a gate or crusher shows for its timing (lamps and the gate's eye): green while open or holding for you,
+// flashing red and amber through the countdown, red while shut and reopening.
+function gateTimingCol(timing) {
+  const flash = Math.sin(G.t * 26) > 0;
+  return timing === 'held' || timing === 'open' ? [127, 224, 90] : timing === 'soon' ? (flash ? [255, 74, 90] : [255, 194, 58]) : [255, 58, 42];
+}
 // Segmented countdown lamps for gates and crushers (in a slab's own frame): while open they go out one by one as
 // the close nears (green, then flashing red through the countdown); while shut they light up red one by one
-// toward the reopen; all green while it holds for you.
+// toward the reopen; all green while it holds for you. Each is a glass bulb in a metal bezel; unlit ones are dark glass.
 function drawLamps(h, timing, x0, y, n, step) {
   const T = timingOf(h), closeIn = gateCloseIn(h, h.clk), reopen = gateReopenIn(h, h.clk), cyc = tClose(T) + h.shut + tReopen(T);
   const on = timing === 'held' ? n : timing === 'open' || timing === 'soon' ? Math.ceil(n * closeIn / T.open - 1e-6) : n - Math.ceil(n * reopen / cyc - 1e-6);
-  const flash = Math.sin(G.t * 26) > 0;
+  const col = gateTimingCol(timing);
   for (let k = 0; k < n; k++) {
     const lit = k < on, x = x0 - k * step;
-    const col = !lit ? '#2a1414' : timing === 'held' ? '#7fe05a' : timing === 'soon' ? (flash ? '#ff4a5a' : '#ffc23a') : timing === 'open' ? '#7fe05a' : '#ff3a2a';
-    pkE(ctx, x, y, 3.2, 3.2, col, 1.4);
-    if (lit) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(x, y, 0.5, x, y, 9); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.55; ctx.fillStyle = g; ctx.fillRect(x - 9, y - 9, 18, 18); ctx.restore(); }
+    ctx.fillStyle = h3RG(x - 1, y - 1.4, 0.3, x, y, 4.2, [[0, [176, 166, 150]], [0.6, [104, 94, 84]], [1, [52, 46, 42]]]);
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 2.9, 0, 6.283);
+    ctx.fillStyle = lit ? h3RG(x - 0.8, y - 0.9, 0.2, x, y, 3, [[0, h3Mix(col, [255, 255, 255], 0.65)], [0.55, col], [1, h3Dk(col, 0.6)]]) : h3RG(x - 0.8, y - 0.9, 0.2, x, y, 3, [[0, [92, 60, 60]], [1, [44, 24, 26]]]);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${lit ? 0.85 : 0.35})`; ctx.beginPath(); ctx.arc(x - 1, y - 1.1, 0.75, 0, 6.283); ctx.fill();
+    if (lit) h3Glow(x, y, 9, col, 0.5);
   }
 }
-// Gate art: two carved stone jaws (a heavy rounded snout, a brow ridge and big interlocking fangs on the inner
-// face), set in a faint carved archway on the back wall, so a gate never reads as a piston crusher. The fangs
-// stop at the hitbox (3 past the face).
-function drawJaw(L, hb, K, warn, side) {
-  const x0 = -40, x1 = L - 8;
-  ctx.beginPath(); ctx.moveTo(x0, -hb); ctx.lineTo(x1 - 6, -hb); ctx.quadraticCurveTo(x1 + 6, -hb, x1 + 6, -hb + 10); ctx.lineTo(x1 + 6, hb - 10); ctx.quadraticCurveTo(x1 + 6, hb, x1 - 6, hb); ctx.lineTo(x0, hb); ctx.closePath();
-  ctx.fillStyle = pkLG(ctx, 0, -hb, 0, hb, K.body); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.stroke();
-  ctx.save(); ctx.clip();
-  ctx.fillStyle = K.lit; ctx.fillRect(x0, -hb, x1 - x0 + 8, 4);
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(x0, hb - 6, x1 - x0 + 8, 6);
-  // clenched teeth along the jaw's whole length: a dark mouth line with cream fangs biting up and down, so the
-  // slab reads as a stone jaw (crushers are plain riveted pistons)
-  ctx.fillStyle = 'rgba(10,4,4,.85)'; ctx.fillRect(x0, -3, x1 - x0 + 2, 6);
-  ctx.fillStyle = K.tooth; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
-  for (let tx = x1 - 4, k = 0; tx > x0; tx -= 9, k++) for (const dy of [-1, 1]) {
-    const o = dy > 0 ? 4.5 : 0; ctx.beginPath(); ctx.moveTo(tx - 4 - o, dy * 2); ctx.lineTo(tx - o, dy * -7); ctx.lineTo(tx + 4 - o, dy * 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+// A gate jaw, in the slab's frame (x from inside the wall, -40, to its face at L; y from -hb to hb): a carved stone
+// beast's head in profile, a heavy rounded snout, a brow ridge over an eye that glows the timing colour, a nostril,
+// carved scales along the lower jaw, a clenched row of teeth on the mouth line and two big interlocking fangs on the
+// face (this jaw's on the top half or the bottom half). Fangs stop at the hitbox (3 past the face). The lamps sit in
+// a groove along the lower jaw.
+function drawJaw(L, hb, K, warn, side, eyeCol, lampX) {
+  const x0 = -40, x1 = L - 8, T = G.t, [sH, sM, sL] = K.st, [tH, tM, tL] = K.tooth;
+  // (the snout's face has the lips' notch at the mouth line, so the head reads as a jaw)
+  const sil = () => { ctx.beginPath(); ctx.moveTo(x0, -hb); ctx.lineTo(x1 - 6, -hb); ctx.quadraticCurveTo(x1 + 6, -hb, x1 + 6, -hb + 10); ctx.lineTo(x1 + 6, -3.2); ctx.quadraticCurveTo(x1 + 3, -2.4, x1 + 1, 0); ctx.quadraticCurveTo(x1 + 2, 2.4, x1 + 5, 3.2); ctx.lineTo(x1 + 5, hb - 10); ctx.quadraticCurveTo(x1 + 5, hb, x1 - 6, hb); ctx.lineTo(x0, hb); ctx.closePath(); };
+  sil(); ctx.fillStyle = h3LG(0, -hb, 0, hb, [[0, sH], [0.18, h3Mix(sH, sM, 0.45)], [0.48, sM], [0.52, h3Mix(sM, sL, 0.35)], [1, sL]]); ctx.fill();
+  ctx.save(); sil(); ctx.clip();
+  // the snout rounds off: light on its upper curve, shadow under the chin
+  ctx.fillStyle = h3RG(x1 - 2, -hb * 0.4, 1, x1 - 2, -hb * 0.2, hb * 1.1, [[0, [255, 255, 255], 0.2], [1, [255, 255, 255], 0]]); ctx.fillRect(x1 - 20, -hb, 28, hb * 2);
+  ctx.fillStyle = h3LG(0, hb - 7, 0, hb, [[0, sL, 0], [1, h3Dk(sL, 0.6), 0.7]]); ctx.fillRect(x0, hb - 7, x1 - x0 + 8, 7);
+  ctx.fillStyle = rgb(h3Mix(sH, [255, 255, 255], 0.25), 0.8); ctx.fillRect(x0, -hb, x1 - x0, 2.2);   // lit top edge
+  // the brow ridge: a raised band, lit above and shadowed below, sweeping down to the eye
+  const brow = () => { ctx.beginPath(); ctx.moveTo(x0, -hb + 5); ctx.quadraticCurveTo(x1 - 22, -hb + 4, x1 - 6, -hb + 7.5); };
+  brow(); ctx.strokeStyle = rgb(h3Dk(sL, 0.8), 0.55); ctx.lineWidth = 2.4; ctx.stroke();
+  ctx.save(); ctx.translate(0, -1.3); brow(); ctx.strokeStyle = rgb(sH, 0.9); ctx.lineWidth = 1.3; ctx.stroke(); ctx.restore();
+  // the lamp groove along the lower jaw
+  ctx.beginPath(); ctx.roundRect(lampX - 36, hb - 13.5, 40, 8, 4); ctx.fillStyle = h3LG(0, hb - 13.5, 0, hb - 5.5, [[0, h3Dk(sL, 0.55)], [1, h3Mix(sM, sL, 0.7)]]); ctx.fill();
+  ctx.strokeStyle = rgb(sH, 0.4); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(lampX - 34, hb - 5.2); ctx.lineTo(lampX + 2, hb - 5.2); ctx.stroke();
+  // the mouth: a dark seam with a clenched row of teeth biting up and down
+  ctx.fillStyle = rgb(K.mouth, 0.95); ctx.beginPath(); ctx.roundRect(x0, -3, x1 - x0 + 2, 6, 2.5); ctx.fill();
+  ctx.fillStyle = h3LG(0, -6, 0, 6, [[0, K.mouth, 0], [0.4, K.mouth, 0.35], [0.6, K.mouth, 0.35], [1, K.mouth, 0]]); ctx.fillRect(x0, -6, x1 - x0 + 2, 12);   // occlusion round the lips
+  for (let tx = x1 - 4, k = 0; tx > x0; tx -= 8, k++) for (const dy of [-1, 1]) {
+    const o = dy > 0 ? 4 : 0, cx = tx - o;
+    h3Poly([[cx - 3.4, dy * 3], [cx, dy * -4.4], [cx + 3.4, dy * 3]]); ctx.fillStyle = rgb(dy < 0 ? tM : tH); ctx.fill();
+    h3Poly([[cx, dy * -4.4], [cx + 3.4, dy * 3], [cx + 0.6, dy * 3]]); ctx.fillStyle = rgb(tL, 0.6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; h3Poly([[cx - 2.2, dy * 2.4], [cx - 0.3, dy * -3.2], [cx - 0.9, dy * 2.4]]); ctx.fill();
   }
-  // the brow ridge and a carved eye socket
-  ctx.strokeStyle = K.seam; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x0, -hb + 8); ctx.quadraticCurveTo(x1 - 14, -hb + 5, x1 - 2, -hb + 10); ctx.stroke();
+  ctx.fillStyle = rgb(K.mouth, 0.45); ctx.fillRect(x0, -0.5, x1 - x0 + 4, 1);
+  // carved scales along the upper jaw, behind the eye
+  for (let cx = x1 - 22, k = 0; cx > x0 + 2; cx -= 8, k++) {
+    const cy = -9.5 + (k % 2) * 3;
+    ctx.strokeStyle = rgb(h3Dk(sL, 0.75), 0.6); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(cx, cy, 4, 0.2, Math.PI - 0.2); ctx.stroke();
+    ctx.strokeStyle = rgb(sH, 0.35); ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(cx, cy + 1.2, 4, 0.4, Math.PI - 0.4); ctx.stroke();
+  }
+  // moss on the jungle stone, lava cracks in the obsidian
+  if (K.moss) {
+    const [gH, gM, gL] = K.moss;
+    for (let k = 0; k < 4; k++) { const mx = x0 + 4 + k * 11 + 3 * hash2(k, 91), mw = 3.5 + 2.5 * hash2(k, 92); if (mx > x1 - 8) break; ctx.fillStyle = h3LG(0, -hb, 0, -hb + 4, [[0, gH], [1, gM]]); ctx.beginPath(); ctx.ellipse(mx, -hb + 0.8, mw, 2.4, 0, 0, 6.283); ctx.fill(); ctx.fillStyle = rgb(gL, 0.6); ctx.beginPath(); ctx.ellipse(mx + 1, -hb + 2.6, mw * 0.6, 0.9, 0, 0, 6.283); ctx.fill(); }
+  }
+  if (K.molten) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    const crack = () => { ctx.beginPath(); for (let k = 0; k < 3; k++) { const cx = x0 + 6 + k * 15 + 4 * hash2(k, 95); ctx.moveTo(cx, -hb); ctx.lineTo(cx + 2, -hb + 4); ctx.lineTo(cx + 1, -hb + 7.5); ctx.moveTo(cx + 2, -hb + 4); ctx.lineTo(cx + 5.5, -hb + 5.5); ctx.moveTo(cx + 4, hb); ctx.lineTo(cx + 2.5, hb - 3.5); ctx.lineTo(cx + 4.5, hb - 6); } };
+    const fl = 0.75 + 0.25 * Math.sin(T * 3);
+    crack(); ctx.strokeStyle = `rgba(255,90,20,${0.35 * fl})`; ctx.lineWidth = 3; ctx.stroke();
+    crack(); ctx.strokeStyle = `rgba(255,190,90,${0.85 * fl})`; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
-  // fangs: this jaw's on the top half or the bottom half, so the two interlock when shut
+  sil(); ctx.strokeStyle = rgb(h3Dk(sL, 0.72), 0.95); ctx.lineWidth = 1.3; ctx.stroke();
+  // the eye in its carved socket, glowing the timing colour, a heavy brow over it; the nostril on the snout
+  const ex = x1 - 11, ey = -hb * 0.42;
+  ctx.fillStyle = rgb(h3Dk(sL, 0.55)); ctx.beginPath(); ctx.ellipse(ex, ey, 4.4, 3.4, -0.15, 0, 6.283); ctx.fill();
+  ctx.fillStyle = h3RG(ex - 0.6, ey - 0.4, 0.2, ex, ey, 3, [[0, h3Mix(eyeCol, [255, 255, 255], 0.7)], [0.5, eyeCol], [1, h3Dk(eyeCol, 0.55)]]); ctx.beginPath(); ctx.ellipse(ex + 0.3, ey + 0.3, 3, 2.3, -0.15, 0, 6.283); ctx.fill();
+  ctx.fillStyle = rgb(h3Dk(eyeCol, 0.3)); ctx.beginPath(); ctx.ellipse(ex + 0.6, ey + 0.3, 0.8, 1.9, 0, 0, 6.283); ctx.fill();
+  h3Glow(ex, ey, 10, eyeCol, 0.55);
+  ctx.fillStyle = rgb(sM); ctx.beginPath(); ctx.moveTo(ex - 6, ey - 3.4); ctx.quadraticCurveTo(ex, ey - 6.6, ex + 5.8, ey - 2.6); ctx.quadraticCurveTo(ex + 0.5, ey - 4.2, ex - 6, ey - 1.8); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = rgb(sH, 0.8); ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(ex - 5.6, ey - 3.6); ctx.quadraticCurveTo(ex, ey - 6.6, ex + 5.6, ey - 2.8); ctx.stroke();
+  ctx.fillStyle = rgb(h3Dk(sL, 0.5)); ctx.beginPath(); ctx.ellipse(x1 + 2.2, -hb + 7, 1.2, 2.2, 0.5, 0, 6.283); ctx.fill();
+  // fangs: this jaw's on the top half or the bottom half, so the two interlock when shut; the tips stop at L + 3
   const top = side > 0;
   for (let k = 0; k < 2; k++) {
-    const yc = (top ? -hb * 0.5 : hb * 0.5) + (k ? (top ? 6 : -6) : (top ? -6 : 6)), w = k ? 5 : 7;
-    pkPath(ctx, [[x1 + 4, yc - w], [L + 3, yc], [x1 + 4, yc + w]], K.tooth, 2);
+    const yc = (top ? -hb * 0.5 : hb * 0.5) + (k ? (top ? 6 : -6) : (top ? -6 : 6)), w = k ? 4.6 : 6.6;
+    ctx.fillStyle = rgb(h3Dk(sL, 0.6), 0.5); ctx.beginPath(); ctx.ellipse(x1 + 4.5, yc, 1.8, w * 0.9, 0, 0, 6.283); ctx.fill();   // the socket it sits in
+    h3Poly([[x1 + 4, yc - w], [L + 3, yc], [x1 + 4, yc]]); ctx.fillStyle = rgb(tH); ctx.fill();
+    h3Poly([[x1 + 4, yc], [L + 3, yc], [x1 + 4, yc + w]]); ctx.fillStyle = rgb(tM); ctx.fill();
+    h3Poly([[x1 + 4, yc - w], [L + 3, yc], [x1 + 4, yc + w]]); ctx.strokeStyle = rgb(tL, 0.85); ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x1 + 5, yc - w * 0.6); ctx.lineTo(L + 1, yc - 0.4); ctx.stroke();
   }
-  if (warn > 0) {
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(x1 + 4, 0, 1, x1 + 4, 0, hb * 2); g.addColorStop(0, rgbaA(DANGER_RGB, 0.7 * warn)); g.addColorStop(1, rgbaA(DANGER_RGB, 0));
-    ctx.fillStyle = g; ctx.fillRect(x1 - hb * 2, -hb * 2, hb * 4, hb * 4); ctx.restore();
-  }
+  if (warn > 0) h3Glow(x1 + 4, 0, hb * 2, DANGER_RGB, 0.7 * warn);
 }
 function drawGate(h) {
-  const y = sy(h.alt), hb = h.hb, K = GATE_SKINS[h.skin || 0], timing = gateTiming(h), warn = h.warn || 0;
+  const y = sy(h.alt), hb = h.hb, K = GATE_SKINS[h.skin || 0], timing = gateTiming(h), warn = h.warn || 0, eyeCol = gateTimingCol(timing);
   // the carved archway on the back wall: faint, dark and outline-free (scenery: it never blocks)
   ctx.save(); ctx.globalAlpha = 0.32; ctx.strokeStyle = rgb(K.glow.map(v => v * 0.35)); ctx.lineWidth = 7 * s; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(sx(h.lb + 6), y - hb * s); ctx.quadraticCurveTo(sx(h.mid), y - (hb + 120) * s, sx(h.rb - 6), y - hb * s); ctx.stroke();
@@ -5508,23 +5905,22 @@ function drawGate(h) {
   // the closing line where the jaws will meet: faint while safely open (green while it holds for you), racing red in the countdown
   if (timing !== 'shut' && h.k < 0.98) {
     const soon = timing === 'soon', x0 = sx(h.lb + h.extL + 4), x1 = sx(h.rb - h.extR - 4);
+    const col = soon ? DANGER_RGB : timing === 'held' ? [127, 224, 90] : [255, 241, 214], a = soon ? 0.6 + 0.4 * Math.sin(G.t * 26) : timing === 'held' ? 0.7 : 0.35;
     ctx.save(); ctx.lineCap = 'round';
     ctx.setLineDash([8 * s, 8 * s]); ctx.lineDashOffset = -G.t * (soon ? 90 : 20) * s;
-    ctx.strokeStyle = 'rgba(28,15,11,.6)'; ctx.lineWidth = (soon ? 6 : 4) * s; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
-    ctx.strokeStyle = soon ? rgbaA(DANGER_RGB, 0.6 + 0.4 * Math.sin(G.t * 26)) : timing === 'held' ? 'rgba(127,224,90,.7)' : 'rgba(255,241,214,.35)';
-    ctx.lineWidth = (soon ? 3.2 : 2) * s; ctx.stroke();
+    ctx.strokeStyle = rgb(h3Dk(col, 0.35), Math.min(1, a + 0.15)); ctx.lineWidth = (soon ? 6 : 4) * s; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    ctx.strokeStyle = rgb(col, a); ctx.lineWidth = (soon ? 3.2 : 2) * s; ctx.stroke();
     ctx.setLineDash([]); ctx.restore();
   }
   for (const side of [1, -1]) {
     const wallX = side > 0 ? h.lb : h.rb, ext = side > 0 ? h.extL : h.extR;
-    ctx.fillStyle = '#0a0606';
-    ctx.fillRect(Math.min(sx(wallX - side * 6), sx(wallX + side * 4)), y - (hb + 5) * s, 10 * s, (hb + 5) * 2 * s);
+    ctx.save(); ctx.translate(sx(wallX), y); ctx.scale(s * side, s); drawSocket(hb, h.alt); ctx.restore();
     const shiver = timing === 'soon' ? Math.sin(G.t * 90) * warn * 0.8 * s : 0;
     ctx.save(); ctx.translate(sx(wallX) + shiver * side, y); ctx.scale(s * side, s);
-    drawJaw(ext, hb, K, warn, side);
-    // the countdown lamps: a row along the jaw (they show over the wall rock while it is open)
-    const n = RULES.gate.lamps;
-    drawLamps(h, timing, Math.max(-36 + (n - 1) * 8, ext - 22), -hb + 10.5, n, 8);
+    // the countdown lamps: a row along the jaw's groove (they show over the wall rock while it is open)
+    const n = RULES.gate.lamps, lampX = Math.max(-36 + (n - 1) * 8, ext - 22);
+    drawJaw(ext, hb, K, warn, side, eyeCol, lampX);
+    drawLamps(h, timing, lampX, hb - 9.5, n, 8);
     ctx.restore();
   }
 }
