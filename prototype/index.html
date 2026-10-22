@@ -2168,6 +2168,7 @@ function chaseSpeed(gap, dt) {
 // (RULES.landmarkAfter) and the monster holds back, so it is pure show.
 const REVEAL = 1.5;
 let drawPad = 0;                     // extra world units to draw past the screen edges while zoomed out
+const camZoom = { x: 0, k: 1 };      // this frame's camera zoom (see draw): the screen x it zooms about, and its scale
 
 // ---------- update ----------
 function update(rawDt) {
@@ -2835,6 +2836,7 @@ function draw() {
   let zx = sx(G.p.x), zy = sy(G.p.alt), zoom = G.zoom;
   if (G.state === 'dead' && G.bite) { const e = 1 - (1 - G.punch) ** 3; zx = sx(G.bite.x); zy = sy(G.bite.alt); zoom = lerp(G.zoom, 1.16, e); }
   if (G.state === 'dead' && G.knock && G.knock.frozen) { zx = sx(G.knock.x); zy = sy(G.knock.alt); zoom = lerp(G.zoom, 1.16, smooth(0.1, 0.6, G.deadTimer)); }
+  camZoom.x = zx; camZoom.k = zoom;
   drawPad = zoom < 1 ? viewH * (1 / zoom - 1) + 40 : 0;
   if (zoom < 1) { ctx.fillStyle = rgb(pal('bgBot', G.camAlt)); ctx.fillRect(0, 0, cssW, H); }
   if (zoom !== 1) { ctx.translate(zx, zy); ctx.scale(zoom, zoom); ctx.translate(-zx, -zy); }
@@ -21224,8 +21226,10 @@ function dskHand(c, rig, t) {
     c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.3; c.beginPath(); L.slice(0, -1).forEach(([x, y], i) => { const q = pts[i]; const px = lerp(x, q[0], 0.4), py = lerp(y, q[1], 0.4); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
   }
 }
+// halfW: the art's half-width in its bite once it has lunged in (art units, before `fit`), and halfW0 (when wider) as it
+// starts to lunge: the bite keeps all of it inside the screen's sides under the camera's punch-in (see drawWorm).
 const MONSTERS = [
-  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], biteDrop: 0.8, halfW: 262,
+  { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], biteDrop: 0.8, halfW: 261, halfW0: 272,
     // its ringed body: armoured segments shrinking away down the shaft in a slow S, a glass bristle tuft on each side
     // of each ring and molten light in the gaps; on the swallow a glowing lump slides down it ring by ring
     body(c, m) {
@@ -21357,7 +21361,7 @@ const MONSTERS = [
       mPuffs(c, 176, 80, t * 0.8 + 0.5, 0.6, [240, 220, 255], 3);
     },
   },
-  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, hazeK: 0.45, mouth: [0, 202, 86, 58], halfW: 236, fit: 0.88,
+  { id: 'bat', name: 'Geode vampire', label: 'geode vampire', haze: [230, 130, 255], v3: true, hazeK: 0.45, mouth: [0, 202, 86, 58], halfW: 221, fit: 0.88,
     limbArt: gvWing, ownHands: true,
     // the body under the head (seen as it swallows): wrapped in its folded wings like a cloak (finger bones running down
     // the magenta membrane to a scalloped hem that ends it cleanly, a thumb claw hooked over each shoulder), the lilac
@@ -21580,7 +21584,7 @@ const MONSTERS = [
       for (let k = 0; k < 6; k++) { const u = (t * (0.3 + 0.1 * gvH(k, 8)) + gvH(k, 9)) % 1, x = (gvH(k, 10) - 0.5) * 100 + Math.sin(t * 2 + k) * 6, y = 110 - u * 50 + 10; if (y < 8) continue; c.fillStyle = rgbaA(GV.glow, 0.7 * (1 - u)); c.beginPath(); c.arc(x, y, 2.2 * (1 - u) + 0.6, 0, TWO_PI); c.fill(); }
       c.restore();
     } },
-  { id: 'gorilla', name: 'Cinderback', label: 'cinderback', haze: [255, 130, 50], v3: true, hazeK: 0.45, mouth: [0, 278, 100, 70], fit: 0.9, halfW: 290,
+  { id: 'gorilla', name: 'Cinderback', label: 'cinderback', haze: [255, 130, 50], v3: true, hazeK: 0.45, mouth: [0, 278, 100, 70], fit: 0.9, halfW: 255, halfW0: 300,
     limbArt: cbLimb, ownHands: true, shoulderArt: true, biteLimbs: true,
     body(c, m) {
       // a hunched silverback seen from the front as it climbs: a great barrel chest under one cracked slab of obsidian
@@ -21802,7 +21806,7 @@ const MONSTERS = [
       c.restore();
     } },
 
-  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, hazeK: 0.45, mouth: [0, 100, 60, 70], breath: [0, 280, 40, 20], halfW: 252, fit: 0.9,
+  { id: 'mole', name: 'Auger mole', label: 'auger mole', haze: [255, 200, 90], v3: true, hazeK: 0.45, mouth: [0, 100, 60, 70], breath: [0, 280, 40, 20], halfW: 282, halfW0: 297, fit: 0.9,
     // A burrowing tyrant with a cream armoured mantle and a golden drill for a snout. The drill turns as it hunts, its
     // seam parts to show a glowing grinder maw, and on the bite it cracks down the middle and the halves swing back like
     // doors (two golden horns framing the maw); then it slams shut and grinds, sparks spraying from the seam.
@@ -21810,7 +21814,7 @@ const MONSTERS = [
     body(c, m) { moleBody(c, m); },
     head(c, m) { moleHead(c, m); },
   },
-  { id: 'golem', name: 'Geode King', label: 'geode king', haze: [255, 84, 210], v3: true, hazeK: 0.45, mouth: [0, 238, 96, 50], fit: 0.84, halfW: 280, shoulderArt: true, ownHands: true,
+  { id: 'golem', name: 'Geode King', label: 'geode king', haze: [255, 84, 210], v3: true, hazeK: 0.45, mouth: [0, 238, 96, 50], fit: 0.84, halfW: 204, halfW0: 236, shoulderArt: true, ownHands: true,
     body(c, m) {
       // a body built of great boulders stacked like a cairn: the chest boulder split open by the geode, a belly boulder
       // under it, a broad pelvis stone and two thigh boulders sinking into the dark, pink crystal light glowing in the
@@ -22010,29 +22014,29 @@ const MONSTERS = [
       for (let k = 0; k < 4; k++) { const p = (T * 0.4 + k * 0.27) % 1, x = [-150, -60, 70, 156][k]; c.fillStyle = `rgba(255,236,214,${0.5 * Math.sin(p * Math.PI)})`; c.beginPath(); c.arc(x + Math.sin(p * 6 + k) * 3, 100 + p * 70, 2, 0, TWO_PI); c.fill(); }
     } },
 
-  { id: 'kraken', name: 'Krakatoa', label: 'krakatoa', haze: [96, 236, 214], v3: true, hazeK: 0.45, mouth: [0, 224, 76, 56], fit: 0.88, halfW: 252, ownHands: true,
+  { id: 'kraken', name: 'Krakatoa', label: 'krakatoa', haze: [96, 236, 214], v3: true, hazeK: 0.45, mouth: [0, 224, 76, 56], fit: 0.88, halfW: 247, halfW0: 281, ownHands: true,
     // A turquoise kraken with a lava lamp for a mantle (see krHead): its oral flower peels open on the bite, folds shut
     // into a churning bud, and the pilot floats up into the lamp. Its wall tentacles are its own art (krLimb).
     limbArt: krLimb,
     body(c, m) { krBody(c, m); },
     head(c, m) { krHead(c, m); } },
-  { id: 'piranha', name: 'Razorgill', label: 'razorgill', haze: [255, 112, 70], v3: true, hazeK: 0.45, mouth: [0, 230, 110, 56], fit: 0.86, halfW: 250, ownHands: true,
+  { id: 'piranha', name: 'Razorgill', label: 'razorgill', haze: [255, 112, 70], v3: true, hazeK: 0.45, mouth: [0, 230, 110, 56], fit: 0.86, halfW: 246, halfW0: 269, ownHands: true,
     // A furnace piranha with a monstrous underbite and gills like a forge (see pzHead): its jaw drops like a drawbridge,
     // slams shut and grinds like shears; the gulp glows down its belly. Its pectoral fins are its own art (pzLimb).
     limbArt: pzLimb,
     body(c, m) { pzBody(c, m); },
     head(c, m) { pzHead(c, m); } },
   // ---------- the Bellows drake (slot 7): see the bd helpers above the MONSTERS list ----------
-  { id: 'dragon', name: 'Bellows drake', label: 'bellows drake', haze: [255, 150, 60], v3: true, hazeK: 0.5, mouth: [0, 210, 100, 56], fit: 0.9, halfW: 252,
+  { id: 'dragon', name: 'Bellows drake', label: 'bellows drake', haze: [255, 150, 60], v3: true, hazeK: 0.5, mouth: [0, 210, 100, 56], fit: 0.9, halfW: 258,
     limbArt: bdWing, ownHands: true, breath: [0, 166, 40, 16],
     body(c, m) { bdBody(c, m); },
     head(c, m) { bdHead(c, m); } },
   // ---------- the Amber rex (slot 8): see the ar helpers above the MONSTERS list ----------
-  { id: 'rex', name: 'Amber rex', label: 'amber rex', haze: [255, 175, 70], v3: true, hazeK: 0.5, mouth: [0, 214, 100, 56], fit: 0.9, halfW: 236,
+  { id: 'rex', name: 'Amber rex', label: 'amber rex', haze: [255, 175, 70], v3: true, hazeK: 0.5, mouth: [0, 214, 100, 56], fit: 0.9, halfW: 234,
     limbArt: arLeg, ownHands: true, breath: [0, 180, 40, 16],
     body(c, m) { arBody(c, m); },
     head(c, m) { arHead(c, m); } },
-  { id: 'flytrap', name: 'Gobblebloom', label: 'gobblebloom', haze: [200, 240, 80], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 214, 150, 60], biteDrop: 0.3, halfW: 272, fit: 0.82, breath: [0, 236, 70, 20],
+  { id: 'flytrap', name: 'Gobblebloom', label: 'gobblebloom', haze: [200, 240, 80], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 214, 150, 60], biteDrop: 0.3, halfW: 301, fit: 0.82, breath: [0, 236, 70, 20],
     // Gobblebloom: one giant volcano flytrap (see GOB and the gob* helpers above MONSTERS). Its vines climb the walls
     // and each ends in a little snapping trap (GRAB_STYLE.flytrap, grabHand 'snaptrap'); its bite is the trap's own:
     // wide open, a snap to a cage of crossed cilia with the pilot inside, the slow seal, then it digests.
@@ -22040,7 +22044,7 @@ const MONSTERS = [
     body(c, m) { gobBody(c, m); },
     head(c, m) { gobHead(c, m); },
   },
-  { id: 'blob', name: 'Gloopernaut', label: 'gloopernaut', haze: [255, 110, 210], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 250, 130, 60], biteDrop: 0.3, halfW: 262, fit: 0.85, breath: [0, 250, 80, 20],
+  { id: 'blob', name: 'Gloopernaut', label: 'gloopernaut', haze: [255, 110, 210], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 250, 130, 60], biteDrop: 0.3, halfW: 263, fit: 0.85, breath: [0, 250, 80, 20],
     // Gloopernaut: an alien jelly wearing its crashed saucer (see GLP and the glp* helpers above MONSTERS). Pseudopods
     // splat up the walls (GRAB_STYLE.blob, grabHand 'goohand'); its bite stretches its grin enormously, seals it with a
     // gloop and lets the pilot sink, visible, into its see-through body.
@@ -22048,7 +22052,7 @@ const MONSTERS = [
     body(c, m) { glpBody(c, m); },
     head(c, m) { glpHead(c, m); },
   },
-  { id: 'spider', name: 'Fanfang', label: 'fanfang', haze: [80, 170, 255], v3: true, hazeK: 0.5, mouth: [0, 214, 92, 62], fit: 0.88, halfW: 262, ownHands: true, biteDrop: 0.6,
+  { id: 'spider', name: 'Fanfang', label: 'fanfang', haze: [80, 170, 255], v3: true, hazeK: 0.5, mouth: [0, 214, 92, 62], fit: 0.88, halfW: 254, ownHands: true, biteDrop: 0.6,
     limbArt: fgLimb,
     // the peacock fan behind its body (hinged at its waist, flaring out round its head in a lunge and wide open on the
     // bite) and its six body legs, each planted on the wall below the wall legs
@@ -22168,7 +22172,7 @@ const MONSTERS = [
       fgForm(c, fgFuzz([[-10, 38], [10, 38], [14, 72], [0, 116], [-14, 72]], { amp: 3, tuft: 3, seed: 3 }), pkLG(c, 0, 40, 0, 128, FG.cream), { edge: FG.creamEdge, ew: 3, ea: 0.5 });
     },
   },
-  { id: 'shark', name: 'Anvilhead', label: 'anvilhead', haze: [255, 170, 60], v3: true, hazeK: 0.5, mouth: [0, 200, 94, 60], fit: 0.9, halfW: 262, ownHands: true, biteDrop: 0.55,
+  { id: 'shark', name: 'Anvilhead', label: 'anvilhead', haze: [255, 170, 60], v3: true, hazeK: 0.5, mouth: [0, 200, 94, 60], fit: 0.9, halfW: 244, halfW0: 268, ownHands: true, biteDrop: 0.55,
     limbArt: avLimb,
     // the torpedo body seen belly-on as it swims up the shaft: broad cobalt shoulders, a cream belly, the dorsal fin
     // peeking past its flank as it sways, small pelvic fins and the great crescent tail beating far below; molten magma
@@ -22291,21 +22295,21 @@ const MONSTERS = [
       for (const [x, y, k] of [[-238, 100, 1], [244, 96, 2], [-60, 200, 3], [150, 106, 4]]) avDrip(c, x, y, t, k);
     },
   },
-  { id: 'tiki', name: 'Gulpstack', label: 'gulpstack', haze: [70, 235, 210], v3: true, hazeK: 0.5, mouth: [0, 250, 112, 52], halfW: 250, biteDrop: 0.5,
+  { id: 'tiki', name: 'Gulpstack', label: 'gulpstack', haze: [70, 235, 210], v3: true, hazeK: 0.5, mouth: [0, 250, 112, 52], halfW: 233, halfW0: 248, biteDrop: 0.5,
     // a totem of hungry carved faces (see tkHead, tkBody, tkLimb): the top face's rope-lashed jaw drops open like a
     // nutcracker's, and the gulp passes down the stack face by face
     limbArt: tkLimb, ownHands: true,
     body(c, m) { tkBody(c, m); },
     head(c, m) { tkHead(c, m); },
   },
-  { id: 'spirit', name: 'Scorchwake', label: 'scorchwake', haze: [255, 120, 70], v3: true, hazeK: 0.5, mouth: [0, 268, 108, 54], halfW: 250, biteDrop: 0.5,
+  { id: 'spirit', name: 'Scorchwake', label: 'scorchwake', haze: [255, 120, 70], v3: true, hazeK: 0.5, mouth: [0, 268, 108, 54], halfW: 224, halfW0: 244, biteDrop: 0.5,
     // a comet of living magma (see spHead, spBody, spLimb): its fire streams down behind it, its grin is a furnace
     // vortex, and what it swallows ends up spinning in the magma heart inside its crust ribs
     limbArt: spLimb, ownHands: true,
     body(c, m) { spBody(c, m); },
     head(c, m) { spHead(c, m); },
   },
-  { id: 'toad', name: 'Cindercroak', label: 'cindercroak', haze: [255, 132, 64], v3: true, hazeK: 0.5, mouth: [0, 236, 150, 62], fit: 0.9, halfW: 290, dy: 16,
+  { id: 'toad', name: 'Cindercroak', label: 'cindercroak', haze: [255, 132, 64], v3: true, hazeK: 0.5, mouth: [0, 236, 150, 62], fit: 0.9, halfW: 298, halfW0: 336, dy: 16,
     limbArt: crkLimb, ownHands: true, biteLimbs: true,
     body(c, m) {
       // a squat jade toad sitting tight in the shaft (the pear of a sitting toad, never a column): a broad warty back
@@ -22536,7 +22540,7 @@ const MONSTERS = [
       if (whipTop) whip();
     } },
 
-  { id: 'giant', name: 'Grumbelly', label: 'grumbelly', haze: [150, 160, 255], v3: true, hazeK: 0.5, mouth: [0, 278, 112, 60], fit: 0.88, halfW: 300, dy: 0,
+  { id: 'giant', name: 'Grumbelly', label: 'grumbelly', haze: [150, 160, 255], v3: true, hazeK: 0.5, mouth: [0, 278, 112, 60], fit: 0.88, halfW: 295, halfW0: 333, dy: 0,
     limbArt: grbLimb, ownHands: true, biteLimbs: true,
     body(c, m) {
       // a hulking periwinkle torso: a mountain of trapezius behind his head, round shoulder caps the wall arms grow
@@ -22738,7 +22742,7 @@ const MONSTERS = [
       if (b >= 0) for (const d of [-1, 1]) grbCutlery(c, d, T, b);
     } },
 
-  { id: 'hornet', name: 'Queen Buzzsaw', label: 'queen buzzsaw', haze: [255, 176, 60], v3: true, hazeK: 0.5, mouth: [0, 230, 64, 44], halfW: 300, fit: 0.84, biteDrop: 0.42,
+  { id: 'hornet', name: 'Queen Buzzsaw', label: 'queen buzzsaw', haze: [255, 176, 60], v3: true, hazeK: 0.5, mouth: [0, 230, 64, 44], halfW: 286, fit: 0.84, biteDrop: 0.42,
     limbArt: hqLeg, ownHands: true,
     // her middle and hind legs clinging to the walls below (always far under the catch line)
     under(c, m) { hqUnderLegs(c, m); },
@@ -22747,7 +22751,7 @@ const MONSTERS = [
     // the honeycomb tiara, the ruby eyes, the saw-blade mandibles round the honey-lit mouth
     head(c, m) { hqHead(c, m); },
   },
-  { id: 'crab', name: 'Clackjaw', label: 'clackjaw', haze: [96, 150, 255], v3: true, hazeK: 0.5, mouth: [0, 228, 70, 46], halfW: 296, fit: 0.84, biteDrop: 0.4,
+  { id: 'crab', name: 'Clackjaw', label: 'clackjaw', haze: [96, 150, 255], v3: true, hazeK: 0.5, mouth: [0, 228, 70, 46], halfW: 291, fit: 0.84, biteDrop: 0.4,
     limbArt: kcArm, ownHands: true,
     // its walking legs gripping the walls far below (always under the catch line)
     under(c, m) { kcLegs(c, m); },
@@ -22756,7 +22760,7 @@ const MONSTERS = [
     // the domed shell with its sprouting coconut, the eyes on stalks, the coral doors over the mouth
     head(c, m) { kcHead(c, m); },
   },
-  { id: 'shadow', name: 'Duskmaw', label: 'duskmaw', haze: [118, 136, 255], v3: true, hazeK: 0.5, mouth: [0, 214, 96, 58], biteDrop: 0.5, halfW: 250, fit: 0.88,
+  { id: 'shadow', name: 'Duskmaw', label: 'duskmaw', haze: [118, 136, 255], v3: true, hazeK: 0.5, mouth: [0, 214, 96, 58], biteDrop: 0.5, halfW: 303, fit: 0.88,
     limbArt: dskLimb, ownHands: true,
     // The body (seen in the bite's pull-back): a great billowing chest of smoke puffs, rim-lit by the aurora, tapering
     // into a genie's curling smoke tail; a window of starry night glows in its chest (nebulae, a little constellation,
@@ -23723,7 +23727,7 @@ function grabRigs(fr, mon = monster(), t = G.t) {
   return [-1, 1].map(d => {
     const gb = G.grab && G.grab.side === d && G.state === 'play' ? G.grab.t : null;
     const pose = grabPose(gb, t, d, fr.top, st);
-    const rig = grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail, undefined, fr.sc || 1);
+    const rig = grabRig(st, d, wallAt, fr.kill, pose, t, fr.bodyX, fr.avail, fr.scr, fr.sc || 1);
     return { rig, pose, alpha, kill: fr.kill, top: fr.top };
   });
 }
@@ -23801,6 +23805,7 @@ const monster = () => MONSTERS[monsterIndex];
 // clamp, eyes flare) and lunge (swells, jaws gape, shudders up the shaft with speed streaks).
 const ZONE_RIM = [[255, 236, 150], [255, 170, 80], [160, 240, 255]];   // its outline colour in each zone
 const MON_SCALE = 0.64;
+const BITE_LEG_IN = 8;   // on the bite, how far (art units) its body legs' feet stay in from the screen's sides
 let mFlare = 0;                                                         // eye flare during a lunge crouch
 // The chase gap: from the pilot's lowest hitbox point down to the monster's catch line (0 = caught).
 function monsterGap() { return (pCaps.length ? pilotLow() : G.p.alt - 50) - G.worm.alt; }
@@ -23838,21 +23843,24 @@ function drawWorm() {
   if (realY > H - floorPx && !b) { drawSliver(mon, realY, prox, rim, cx, floorPx); return; }
   const crouch = W.crouch > 0 ? smooth(0, 0.25, CHASE.warn - W.crouch) : 0, surge = W.surge, breathe = Math.sin(G.t * 2.4);
   // its art's y = 0 sits exactly on the catch line (crouch and breathing squash it from the top down)
-  let y = realY, tx = cx;
+  let y = realY, tx = cx, biteL = ox, biteR = ox + playW;
   let k = s * MON_SCALE * (1 + 0.1 * surge - 0.04 * crouch + 0.012 * breathe), open = W.open;
   const mo = mon.mouth || [0, 150, 100, 50], fm = monForm(mon), fx = fm.sx || 1, fy = fm.sy || 1;
   if (b) {
     // the swallow: the whole head lunges and swells so its own mouth closes on the pilot; the jaws
     // stay wide for a beat, snap shut, then chew
-    const e = smooth(0, 0.16, b.t), kb = s * MON_SCALE * lerp(1, 1.18, e), px = sx(b.x), py = sy(b.alt), [mxA, myA] = mouthArt(mon);
+    // the screen's sides, where they sit before the camera punches in on the bite (draw zooms about the bite)
+    biteL = camZoom.x + (ox - camZoom.x) / camZoom.k; biteR = camZoom.x + (ox + playW - camZoom.x) / camZoom.k;
+    const e = smooth(0, 0.16, b.t), hw = mon.v3 ? lerp(mon.halfW0 || mon.halfW || 250, mon.halfW || 250, e) * (mon.fit || 1) * (1 + 0.04 * surge) : 0;   // (its art's half-width: halfW0 as it starts to lunge, halfW once it has)
+    const kb = Math.min(s * MON_SCALE * lerp(1, 1.18, e), hw ? (biteR - biteL) / (2 * hw) : Infinity), px = sx(b.x), py = sy(b.alt), [mxA, myA] = mouthArt(mon);   // (it swells only as far as its whole head still fits between them)
     tx = lerp(cx, px - mxA * kb, e); y = lerp(y, py - myA * kb, e); k = kb;
-    if (mon.v3) { const hw = (mon.halfW || 250) * (mon.fit || 1) * kb; tx = clamp(tx, ox + hw, ox + playW - hw); }   // (the whole head stays inside the screen's sides; the pilot flies to its mouth)
+    if (hw) tx = clamp(tx, biteL + hw * kb, biteR - hw * kb);   // (the whole head stays inside the screen's sides, zoomed in; the pilot flies to its mouth)
     // the jaws gape wide until +0.3 s, slam shut by +0.4 s, then it chews with its cheeks bulging
     open = b.t < 0.3 ? 1 : b.t < 0.4 ? 1 - smooth(0.3, 0.4, b.t) : 0.03;
     G.biteGeo = { mx: tx + mxA * k, my: y + myA * k, rx: mo[2] * k * fx * (fm.fit || 1), ry: mo[3] * k * fy * (fm.fit || 1), open };
   }
   // its wall limbs hang from its catch line (riding up on the head as it lunges to swallow)
-  G.biteFrame = b ? { kill: G.camAlt + (H - y) / s, bodyX: (tx - ox) / s, avail: Infinity, top: GRAB.reach, peek: false, sc: k / (s * MON_SCALE), hide: !!mon.biteLimbs } : null;   // (a monster that grabs its prey with its wall limbs draws them in its bite)
+  G.biteFrame = b ? { kill: G.camAlt + (H - y) / s, bodyX: (tx - ox) / s, avail: Infinity, top: GRAB.reach, peek: false, sc: k / (s * MON_SCALE), hide: !!mon.biteLimbs, scr: [(biteL - ox) / s + 4, (biteR - ox) / s - 4] } : null;   // (a monster that grabs its prey with its wall limbs draws them in its bite, kept inside the zoomed-in screen with room for the rims and glows round their capsules)
   const rigs = grabRigs(grabFrame());
   const T0 = ctx.getTransform();   // (the frame's screen transform, for its wall limbs' upper arms)
   G.biteInMouth = false;
@@ -23886,7 +23894,9 @@ function drawWorm() {
   ctx.scale(k * (1 + 0.04 * surge + 0.045 * chewP), k * (1 - 0.08 * crouch + 0.05 * surge + 0.012 * breathe - 0.05 * chewP));
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   mFlare = b ? 1 : crouch;
-  const [wl, wr] = walls(W.alt + 100), coilHalf = ((wr - wl) / 2) / ((k / s) * (1 + 0.04 * surge));   // (its body limbs reach the walls at any size)
+  const [wl, wr] = walls(W.alt + 100);
+  let coilHalf = ((wr - wl) / 2) / ((k / s) * (1 + 0.04 * surge));   // (its body limbs reach the walls at any size)
+  if (b) coilHalf = Math.min(coilHalf, Math.min(tx - biteL, biteR - tx) / (k * (1 + 0.04 * surge)) - BITE_LEG_IN);   // (on the bite the punch-in pushes the walls off the screen: they reach its sides instead)
   const rage = b ? 1 : Math.max(crouch, surge);
   drawMonsterForm(ctx, mon, { t: G.t, open, look: b ? 0 : clamp((G.p.x - WORLD_W / 2) / (WORLD_W / 2), -1, 1), rage, wide: b ? 1 - 0.6 * smooth(0.5, 1.2, b.t) : 0, gape: b ? 1 - smooth(0.3, 0.4, b.t) : 0, chew, chewP, chewT: b ? b.t : 0, bite: b ? b.t : -1, prey }, coilHalf, layer => midLimbs(layer, rigs, T0));
   mFlare = 0; mMouthHook = null; mBellyHook = null;
