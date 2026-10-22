@@ -270,8 +270,23 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .wallet .cn { width: 18px; height: 18px; }
 .wallet .cn::after { left: 4.5px; top: 4.5px; width: 2.5px; height: 2.5px; box-shadow: 5px 0 0 #2c1606, 2.5px 4.5px 0 #2c1606; }
 .wallet.bump { animation: bump .35s ease-out; }
-#menu .panel { position: relative; }
-#menuWallet { position: absolute; top: 12px; right: 14px; z-index: 1; }
+.missions { display: flex; flex-direction: column; gap: 3px; margin-top: -5px; }
+.mhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mhead .wallet { padding: 1px 9px 1px 4px; font-size: 15px; }
+.mhead .wallet .cn { width: 15px; height: 15px; }
+.mhead .wallet .cn::after { left: 3.5px; top: 3.5px; width: 2px; height: 2px; box-shadow: 4.5px 0 0 #2c1606, 2.2px 4px 0 #2c1606; }
+.mlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.mlist li { position: relative; display: flex; align-items: center; gap: 8px; min-height: 21px; padding: 1px 8px; border-radius: 9px; background: rgba(0,0,0,.26); overflow: hidden; font-size: 12.5px; font-weight: 800; color: var(--cream); font-variant-numeric: tabular-nums; }
+.mlist li::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: linear-gradient(90deg, rgba(124,192,74,.2), rgba(124,192,74,.38)); }
+.mlist li > * { position: relative; }
+.mlist .mt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mlist .mp { color: var(--muted); font-weight: 900; white-space: nowrap; }
+.mlist .mr { display: inline-flex; align-items: center; gap: 3px; color: #ffd25e; font-weight: 900; white-space: nowrap; }
+.mlist li.done { background: rgba(124,192,74,.26); }
+.mlist li.done .mp { color: #b6f07a; }
+.mlist li.streak { background: rgba(255,210,94,.16); }
+.mlist li.streak .mt { color: #ffd25e; }
+.btn.go.big small { font-size: 12.5px; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pickhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; }
 .pcard .lk { display: inline-block; position: relative; width: 7px; height: 6px; margin: 3px 3px 0 1px; border-radius: 1.5px; background: currentColor; }
 .pcard .lk::before { content: ''; position: absolute; left: 1px; bottom: 5px; width: 5px; height: 4px; border-radius: 3px 3px 0 0; box-shadow: inset 0 0 0 1.4px currentColor; }
@@ -283,6 +298,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .btn.buy .cn { width: 18px; height: 18px; }
 .btn.buy .cn::after { left: 4.5px; top: 4.5px; width: 2.5px; height: 2.5px; box-shadow: 5px 0 0 #2c1606, 2.5px 4.5px 0 #2c1606; }
 .btn.buy.short { background: linear-gradient(#5b4245, #3c2a2d); color: var(--muted); border-color: #2e1f22; box-shadow: 0 4px 0 #2a1b1e; font-size: 15px; gap: 4px; pointer-events: none; }
+@media (max-height: 860px) and (min-height: 701px) { .keyart { height: 200px; } }
 @media (prefers-reduced-motion: reduce) { .hint, #over:not([hidden]) .panel, .newbest.sting, .total b.bump { animation: none; } }
 </style>
 
@@ -302,10 +318,9 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 <div class="screen" id="menu">
   <div class="panel">
     <canvas class="keyart" id="keyArt" aria-hidden="true"></canvas>
-    <span class="wallet" id="menuWallet" aria-label="Coconuts in your wallet"></span>
     <div class="eyebrow" id="menuDate">Daily shaft</div>
     <h1 class="title sr-only">Coconut Rocket</h1>
-    <p class="lede">Hold to fly. Grab chilies to blast the monster below, and coconuts to spend. Don't get eaten.</p>
+    <div class="missions"><div class="mhead"><span class="label">Missions</span><span class="wallet" id="menuWallet" aria-label="Coconuts in your wallet"></span></div><ul class="mlist" id="menuMissions"></ul></div>
     <button class="btn go big" id="playDaily">Play</button>
     <div class="seg" role="group" aria-label="Controls">
       <button id="ctlOne" data-ctl="one" aria-pressed="true">One thumb</button>
@@ -383,6 +398,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
       <div class="total"><span>Final score</span><b id="overPoints">0 pts</b></div>
     </div>
     <p class="earned" id="overEarned"></p>
+    <ul class="mlist overm" id="overMissions" aria-label="Missions"></ul>
     <span class="newbest" id="overNew" hidden>New best today</span>
     <p class="tunednote" id="overTuned" hidden>Tuned settings are on, so this run doesn't count toward today's best. Reset Tune to defaults to compete.</p>
     <div class="stats">
@@ -2464,9 +2480,121 @@ function bankRun() {
 // The one run-end hook: called every time a run ends (its score card shows, or it is quit from pause), after the
 // coconuts are banked, with G (G.stats is final for this ending). A revived run ends again later with its stats
 // grown, so anything added here should work from the stats themselves (bests, totals since G.banked), not count calls.
-// `how` is 'over' or 'quit'. (Missions, streaks and adventure stages hook in here later.)
+// `how` is 'over' or 'quit'. (Missions and the daily streak hook in through metaRunEnd; adventure stages later.)
 function onRunEnd(G, how) {
   G.stats.ended = how;
+  metaRunEnd(G, how);
+}
+
+// ---------- the daily streak ----------
+// The first daily-shaft run of a day pays streak coconuts: 20 on day 1, +10 for each day in a row, capped at 100. Missing
+// a day starts again at day 1. Saved as 'cr-streak' = { last: the day key it last paid, days }.
+const dayKeyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const yesterdayKey = dayKeyOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+const STREAK = {
+  data: Object.assign({ last: '', days: 0 }, store.get('cr-streak', {})),
+  pay: d => Math.min(100, 20 + 10 * (d - 1)),
+  claimed() { return this.data.last === dayKey; },
+  // the streak day today's first daily run makes (or made)
+  today() { return this.claimed() ? this.data.days : this.data.last === yesterdayKey ? this.data.days + 1 : 1; },
+  claim() {
+    if (this.claimed()) return 0;
+    const d = this.today(), n = this.pay(d);
+    this.data = { last: dayKey, days: d }; store.set('cr-streak', this.data);
+    WALLET.add(n);
+    return n;
+  },
+};
+
+// ---------- missions ----------
+// Three active missions from a fixed pool (taken in order, never two of a kind at once), each paying coconuts once.
+// "In one run" missions count a single run's stats; a mission given out at the end of a run starts counting from the
+// next run. A completed mission is paid into the wallet and replaced. When the pool runs out it starts again with
+// targets 50% higher each time round. Saved as 'cr-missions' = { active: [{ i, c, best, since }], queue: [{ i, c }] }.
+// Event missions (kind.event) complete through missionEvent(name): Adventure calls missionEvent('adventureClear') when
+// a stage is cleared; adventure missions are only handed out once MISSIONS.adventure is true (Adventure mode is on).
+const MISSION_KINDS = {
+  coco:   { stat: st => st.coconuts, text: n => `Grab ${n} coconuts in one run` },
+  hits:   { stat: st => st.hits, text: n => `Hit the monster ${n} times in one run` },
+  metres: { stat: st => st.metres, text: n => `Climb ${n} m in one run` },
+  close:  { stat: st => st.closeCount, text: n => `Get ${n} close calls in one run` },
+  chili:  { stat: st => st.chilies, text: n => `Grab ${n} chilies in one run` },
+  daily:  { stat: (st, g) => g.isDaily ? 1 : 0, text: () => `Play today's daily shaft`, once: true },
+  adv:    { event: 'adventureClear', text: () => 'Clear an adventure stage', once: true },
+};
+// [kind, target, reward in coconuts]
+const MISSION_POOL = [
+  ['coco', 30, 30], ['hits', 8, 25], ['metres', 250, 30], ['daily', 1, 25], ['chili', 6, 30], ['close', 2, 40],
+  ['coco', 50, 50], ['adv', 1, 60], ['hits', 15, 50], ['metres', 400, 50], ['chili', 10, 50], ['close', 4, 60],
+  ['coco', 80, 80], ['daily', 1, 30], ['hits', 25, 80], ['metres', 600, 80], ['adv', 1, 80], ['chili', 14, 80],
+  ['close', 6, 100], ['coco', 120, 120], ['hits', 40, 120], ['metres', 900, 120], ['chili', 20, 120], ['close', 8, 150],
+  ['metres', 1200, 150],
+];
+const MISSIONS = {
+  adventure: false,   // (Adventure mode sets this true so 'adv' missions are handed out)
+  data: null,
+  load() {
+    const d = store.get('cr-missions', null);
+    const okEntry = m => m && MISSION_POOL[m.i] && m.c >= 0;
+    if (d && Array.isArray(d.active) && Array.isArray(d.queue) && d.active.every(okEntry) && d.queue.every(okEntry)) this.data = d;
+    else { this.data = { active: [], queue: MISSION_POOL.map((_, i) => ({ i, c: 0 })) }; while (this.data.active.length < 3) this.give(null); this.save(); }
+  },
+  save() { store.set('cr-missions', this.data); },
+  def(m) {
+    const [kind, n0, reward] = MISSION_POOL[m.i], k = MISSION_KINDS[kind], sc = 1 + 0.5 * m.c;
+    const n = kind === 'metres' ? Math.round(n0 * sc / 50) * 50 : k.once ? n0 : Math.round(n0 * sc);
+    return { kind, n, reward, text: k.text(n), k };
+  },
+  // hand out the next mission from the queue (skipping kinds already active, the kind just completed, and adventure
+  // ones while it is off)
+  give(since, just) {
+    const d = this.data, kinds = new Set(d.active.map(m => MISSION_POOL[m.i][0]));
+    if (just) kinds.add(just);
+    for (let round = 0; round < 3; round++) {
+      const j = d.queue.findIndex(q => { const kd = MISSION_POOL[q.i][0]; return !kinds.has(kd) && (kd !== 'adv' || this.adventure); });
+      if (j >= 0) { const [q] = d.queue.splice(j, 1); d.active.push({ i: q.i, c: q.c, best: 0, since }); return; }
+      const c = d.queue.reduce((a, q) => Math.max(a, q.c), d.active.reduce((a, m) => Math.max(a, m.c), 0)) + 1;
+      d.queue.push(...MISSION_POOL.map((_, i) => ({ i, c })));
+    }
+  },
+  complete(m, since) {
+    const df = this.def(m), d = this.data;
+    d.active.splice(d.active.indexOf(m), 1);
+    WALLET.add(df.reward);
+    this.give(since, df.kind);
+    return df;
+  },
+  // a run ended: count its stats toward the run missions (each run counts once: missions it hands out start next run)
+  runEnd(g) {
+    const done = [];
+    for (const m of [...this.data.active]) {
+      if (m.since && m.since === g.runTok) continue;
+      const df = this.def(m); if (!df.k.stat) continue;
+      const v = df.k.stat(g.stats, g); m.best = Math.max(m.best || 0, v);
+      if (v >= df.n) done.push(Object.assign(this.complete(m, g.runTok), { slot: m }));
+    }
+    this.save();
+    return done;
+  },
+  rows() { return this.data.active.map(m => { const df = this.def(m); return Object.assign(df, { best: Math.min(m.best || 0, df.n), m }); }); },
+};
+MISSIONS.load();
+// An event happened outside a run's stats (e.g. 'adventureClear'): completes and pays every active mission waiting for
+// it. Returns the completed missions ({ text, reward }) so the caller can show them.
+function missionEvent(name) {
+  const done = [];
+  for (const m of [...MISSIONS.data.active]) { const df = MISSIONS.def(m); if (df.k.event === name) done.push(MISSIONS.complete(m, null)); }
+  if (done.length) { MISSIONS.save(); refreshMeta(); }
+  return done;
+}
+// The meta side of a run's end (called from onRunEnd, maybe twice for a revived run): the daily streak and the
+// missions. G.meta keeps what this run paid, for the score card: { done: completed missions, missionPay, streakPay }.
+function metaRunEnd(g, how) {
+  syncStats();
+  g.runTok = g.runTok || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const meta = g.meta || (g.meta = { done: [], missionPay: 0, streakPay: 0, streakDays: 0 });
+  if (g.isDaily && !STREAK.claimed()) { meta.streakPay = STREAK.claim(); meta.streakDays = STREAK.data.days; }
+  for (const df of MISSIONS.runEnd(g)) { meta.done.push(df); meta.missionPay += df.reward; }
 }
 let sessionPracticeRuns = 0;
 function finishRun() {
@@ -2501,7 +2629,10 @@ function finishRun() {
     `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${n(G.closeCount * CLOSE_BONUS)}</b></li>` +
     (st.revived ? `<li class="comeback"><span>Comeback bonus +${st.comebackCoins} coconuts</span><b>+${n(st.comebackPts)}</b></li>` : '');
   // coconuts earned this run (picked up plus any comeback bonus), banked into the wallet
-  $('overEarned').innerHTML = `<i aria-hidden="true"></i><span>Coconuts earned<small>Wallet ${n(WALLET.get())} coconuts</small></span><b>+${n(earned)}</b>`;
+  // (plus what missions and the daily streak paid, each listed under it)
+  const meta = G.meta || { missionPay: 0, streakPay: 0 };
+  $('overEarned').innerHTML = `<i aria-hidden="true"></i><span>Coconuts earned<small>Wallet ${n(WALLET.get())} coconuts</small></span><b>+${n(earned + meta.missionPay + meta.streakPay)}</b>`;
+  $('overMissions').innerHTML = overMissionsHTML();
   $('overPoints').textContent = fmtPts(0);
   $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   // the height bar: this run against the best, with a marker at the best
@@ -27363,16 +27494,37 @@ tap($('openMonsters'), () => { buildMonsters(); show('monsterScreen'); fitCards(
 $('monsterDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 
-// ---------- meta UI: the wallet and the shop in the pilot picker ----------
+// ---------- meta UI: the wallet, missions, the daily streak, and the shop in the pilot picker ----------
 const coinHTML = '<b class="cn" aria-hidden="true"></b>';
 const fmtN = v => v.toLocaleString('en-GB');
 const perkNote = vhId => { const pk = perkOf(vhId); return pk ? ` · ${pk.text}` : ''; };
 // a locked card's tag: a lock and its price
 const lockTag = (kind, id) => `<b class="lk" aria-hidden="true"></b>${coinHTML}${fmtN(priceOf(kind, id))}`;
-// the wallet on the menu and in the picker
+// a mission as a list row: its text, its progress (also a fill behind the row) and its reward ('+' once paid)
+function missionLi(text, prog, frac, reward, cls = '') {
+  return `<li class="${cls}" style="--p:${Math.round(clamp(frac, 0, 1) * 100)}%"><span class="mt">${text}</span>${prog ? `<span class="mp">${prog}</span>` : ''}<span class="mr">${coinHTML}${cls ? '+' : ''}${reward}</span></li>`;
+}
+// the menu's wallet, missions (each with its best single-run progress) and the Play button's streak line; the picker's wallet
 function refreshMeta() {
   const w = coinHTML + fmtN(WALLET.get());
   $('menuWallet').innerHTML = w; $('pickWallet').innerHTML = w;
+  $('menuMissions').innerHTML = MISSIONS.rows().map(r => missionLi(r.text, r.k.stat && !r.k.once ? `${r.best}/${r.n}` : '', r.k.stat ? r.best / r.n : 0, r.reward)).join('');
+  const d = STREAK.today();
+  $('playDaily').innerHTML = STREAK.claimed()
+    ? `Play<small>Streak day ${d} · tomorrow +${STREAK.pay(d + 1)} coconuts</small>`
+    : `Play<small>${d > 1 ? `Streak day ${d}` : 'Daily streak'}: +${STREAK.pay(d)} coconuts today</small>`;
+}
+// the score card's missions: the ones this run completed (paid), the others with this run's progress, and the streak
+// coconuts if this was the day's first daily run
+function overMissionsHTML() {
+  const meta = G.meta || { done: [] }, rows = meta.done.map(df => missionLi(df.text, 'Done!', 1, df.reward, 'done'));
+  for (const r of MISSIONS.rows()) {
+    if (r.m.since && r.m.since === G.runTok) continue;   // handed out by this run: it counts from the next one
+    const v = r.k.stat ? Math.min(r.k.stat(G.stats, G), r.n) : 0;
+    rows.push(missionLi(r.text, r.k.stat && !r.k.once ? `${v}/${r.n}` : '', v / r.n, r.reward));
+  }
+  if (meta.streakPay) rows.push(missionLi(`Daily streak day ${meta.streakDays}`, '', 0, meta.streakPay, 'streak'));
+  return rows.join('');
 }
 // The shop: a tap on a locked card previews it (the preview canvas and the heading show it) and offers a Buy button,
 // or "Need N more" when the wallet is short. Buying pays, unlocks, selects it and saves.
@@ -27413,7 +27565,7 @@ function buyPeek() {
   toast(`Unlocked ${partOf(kind, id).name}!`); vibrate([15, 30, 15]);
 }
 $('buyBtn').addEventListener('click', buyPeek);
-if (/[?&]debug\b/.test(location.search)) window.CRMETA = { WALLET, UNLOCKS, PERKS, PRICE_TIERS, priceOf, perk, ensureOwned, refreshMeta, get peek() { return pickPeek; }, shownPair, pilot };
+if (/[?&]debug\b/.test(location.search)) window.CRMETA = { WALLET, UNLOCKS, MISSIONS, STREAK, PERKS, PRICE_TIERS, priceOf, perk, missionEvent, ensureOwned, refreshMeta, get peek() { return pickPeek; }, shownPair, pilot };
 
 // ---------- boot ----------
 refreshMenu();
