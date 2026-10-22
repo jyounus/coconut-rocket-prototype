@@ -6297,7 +6297,7 @@ const EXHAUST = {
   coin:    { add: true,  core: [255, 255, 230], mid: [255, 210, 70],  edge: [255, 150, 0], coins: true },
   steam:   { add: false, core: [255, 255, 255], mid: [236, 244, 252], edge: [205, 220, 236] },
   water:   { add: false, core: [235, 250, 255], mid: [140, 210, 255], edge: [60, 150, 220] },
-  ink:     { add: false, core: [150, 100, 190], mid: [86, 38, 118],   edge: [42, 16, 62] },
+  ink:     { add: false, core: [150, 100, 190], mid: [86, 38, 118],   edge: [42, 16, 62], dark: true },
   fizz:    { add: false, core: [255, 255, 255], mid: [250, 240, 222], edge: [214, 176, 128] },
   ketchup: { add: false, core: [255, 150, 130], mid: [232, 40, 26],   edge: [140, 10, 10] },
   spore:   { add: false, core: [250, 255, 225], mid: [215, 232, 140], edge: [140, 170, 60] },
@@ -13148,7 +13148,7 @@ const PILOTS = [
 
   { id: 'axolotl', name: 'Axel the axolotl', ride: 'Runaway hydrant', noInk: '#5a1e3a', exhaust: 'water', nozzles: [[0, 31.5]], bitePose: true, draw(c, st) { axDraw(c, st); } },
 
-  { id: 'mushroom', name: 'Cappy the toadstool', ride: 'Earthstar puffball', noInk: '#6a1c18', exhaust: 'glow', nozzles: [[0, 30]], bitePose: true, draw(c, st) { mshDraw(c, st); } },
+  { id: 'mushroom', name: 'Cappy the toadstool', ride: 'Earthstar puffball', noInk: '#6a1c18', exhaust: 'spore', nozzles: [[0, 30]], bitePose: true, draw(c, st) { mshDraw(c, st); } },
   { id: 'robot', name: 'Bolt the robot', ride: 'Twin-jet tin tub', noInk: '#3c2050', exhaust: 'fire', nozzles: [[-6.5, 28.5], [6.5, 28.5]], bitePose: true, draw(c, st) { rbtDraw(c, st); } },
 ];
 for (const pl of PILOTS) if (pl.noInk) {
@@ -13165,13 +13165,16 @@ function pilotState(t, vx, thrust) {
   const b = pmod(t, 3.6);
   return { t, vx, look: clamp(vx * 0.004, -1, 1), thrust, blink: b < 0.12 ? Math.max(0.1, Math.abs(b - 0.06) / 0.06) : 1 };
 }
-// Water and glow exhausts tint the nozzle glow and the thrust cone with their own colours (cool cyan and
-// white for water, the pilot's glow colour for glow); every other exhaust keeps the orange fire look.
-const tintedExhaust = exName => exName === 'water' || exName === 'glow';
+// Every exhaust except fire tints the nozzle glow and the thrust cone with its own core, mid and edge colours from
+// EXHAUST (the same colours as its particles: cyan for water, lime for glow, purple ink, white steam, cream fizz,
+// gold coins, yellow mustard, red ketchup, sage spores); fire keeps the orange fire look. Each nozzle uses its own
+// exhaust, so a pilot with mixed nozzles (Frankie's ketchup and mustard bottles) gets one colour per nozzle. The glow
+// is added (lighter), except for a dark exhaust (ink), whose glow is painted over so it still shows.
+const tintedExhaust = exName => exName !== 'fire';
 function drawNozzleGlow(c, pl) {
   for (const [x, y, exName = pl.exhaust] of pl.nozzles) {
     const ex = EXHAUST[exName], fl = (12 + Math.random() * 7) * (pl.nozzles.length > 1 ? 0.7 : 1), tint = tintedExhaust(exName);
-    c.save(); c.globalCompositeOperation = 'lighter';
+    c.save(); c.globalCompositeOperation = ex.dark ? 'source-over' : 'lighter';
     const g = c.createRadialGradient(x, y + 2, 1, x, y + 6, fl);
     g.addColorStop(0, tint ? rgbaA(ex.core, 1) : 'rgba(255,240,170,1)');
     g.addColorStop(0.4, ex.add || tint ? rgbaA(ex.mid, ex.add ? 0.9 : 0.85) : 'rgba(255,150,40,.85)');
@@ -13283,9 +13286,10 @@ function drawPilotHeat() {
   ctx.restore();
 }
 // The thrust flame: an additive, flickering cone of fire from every nozzle (orange edge, yellow body,
-// pale core), longer at speed and during a boost, sputtering short when the engine is hot. A water nozzle
-// shoots a cool cyan-and-white jet instead (painted over, not added, so it stays blue on bright magma) and a
-// glow nozzle burns in its own glow colour; the cone keeps the same shape, layers and flicker.
+// pale core), longer at speed and during a boost, sputtering short when the engine is hot. Every other exhaust
+// (tintedExhaust) shoots a jet in its own EXHAUST colours instead: additive ones (glow, coin, mustard) burn in them,
+// the rest (water, steam, ink, fizz, ketchup, spore) are painted over, not added, so they keep their colour on
+// bright magma. The cone keeps the same shape, layers and flicker.
 const FIRE_CONE = [[1, 1, [255, 60, 10], 0.75], [0.75, 0.62, [255, 130, 20], 0.55], [0.42, 0.32, [255, 215, 110], 0.6]];
 function coneLayers(exName) {
   if (!tintedExhaust(exName)) return FIRE_CONE;
