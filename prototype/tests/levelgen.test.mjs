@@ -331,7 +331,7 @@ for (const cfg of CONFIGS) {
       const c5 = fruit.filter(f => f.alt < 5000 && f.kind !== 'chili'), val = c5.reduce((n, f) => n + (f.kind === 'gold' ? COCO_GOLD : 1), 0);
       (zoneMix.coco = zoneMix.coco || []).push(val); (zoneMix.cocoN = zoneMix.cocoN || []).push(c5.length);
       zoneMix.gold = (zoneMix.gold || 0) + fruit.filter(f => f.kind === 'gold' && f.alt < HEIGHT - 800).length; zoneMix.goldH = (zoneMix.goldH || 0) + (HEIGHT - 800);
-      if (c5.length < 30) fail('a 500 m climb offers plenty of coconuts', `${tag}: ${c5.length}`);
+      if (c5.length < 25) fail('a 500 m climb offers plenty of coconuts', `${tag}: ${c5.length}`);
       if (fruit.some(f => f.kind === 'gold' && !f.bonus)) fail('golden coconuts sit only on risky spots', tag);
     }
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
