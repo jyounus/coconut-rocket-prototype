@@ -355,11 +355,14 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .advreward { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #ffd25e; }
 .advreward b { display: inline-flex; align-items: center; gap: 6px; font: 400 20px var(--font-display); letter-spacing: 0; color: #ffe7b8; text-transform: none; }
 .advreward b i { position: relative; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #c08a56 0, #7a4a22 48%, #3e220e 100%); }
-#advDone { padding-top: calc(env(safe-area-inset-top, 0px) + 26vh); background: linear-gradient(to bottom, rgba(18,11,16,0) 0, rgba(18,11,16,0) 24vh, rgba(18,11,16,.62) 40vh); }
-#advDone .panel { margin: auto auto 0; gap: 10px; padding: 16px 18px; }
+#advDone { padding-top: calc(env(safe-area-inset-top, 0px) + 12vh);   /* (the panel sits at the bottom: it only reaches this high with missions to list) */
+  background: linear-gradient(to bottom, rgba(18,11,16,0) 0, rgba(18,11,16,0) 24vh, rgba(18,11,16,.62) 40vh); }
+#advDone .panel { margin: auto auto 0; gap: 8px; padding: 14px 18px 16px; }
+#advDone .btn { min-height: 46px; } #advDone .btns { gap: 8px; }
+#advDone .mlist { margin-top: -2px; }
 #advDone:not([hidden]) .panel { animation: slideUp .5s cubic-bezier(.2, 1.3, .4, 1) both; }
 .advclear { font-size: clamp(38px, 11vw, 50px); }
-.advstars { display: flex; justify-content: center; gap: 10px; font-size: 56px; margin: -2px 0 2px; }
+.advstars { display: flex; justify-content: center; gap: 10px; font-size: 50px; margin: -4px 0 0; }
 .advstars .star { filter: drop-shadow(0 4px 0 rgba(122,60,8,.7)); }
 .advstars .star.pop { animation: starpop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
 @keyframes starpop { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: scale(1) rotate(0); } }
@@ -507,6 +510,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
       <div class="total"><span>Coconuts banked</span><b id="advDoneTotal">+0</b></div>
     </div>
     <p class="earned" id="advDoneWallet"></p>
+    <ul class="mlist overm" id="advDoneMissions" aria-label="Missions completed" hidden></ul>
     <div class="btns">
       <button class="btn go" id="advNext">Next stage</button>
       <div class="btnrow">
@@ -2728,7 +2732,7 @@ const STREAK = {
 // next run. A completed mission is paid into the wallet and replaced. When the pool runs out it starts again with
 // targets 50% higher each time round. Saved as 'cr-missions' = { active: [{ i, c, best, since }], queue: [{ i, c }] }.
 // Event missions (kind.event) complete through missionEvent(name): Adventure calls missionEvent('adventureClear') when
-// a stage is cleared; adventure missions are only handed out once MISSIONS.adventure is true (Adventure mode is on).
+// a stage is cleared; adventure missions are only handed out while MISSIONS.adventure is true (Adventure mode is on).
 const MISSION_KINDS = {
   coco:   { stat: st => st.coconuts, text: n => `Grab ${n} coconuts in one run` },
   hits:   { stat: st => st.hits, text: n => `Hit the monster ${n} times in one run` },
@@ -2747,7 +2751,7 @@ const MISSION_POOL = [
   ['metres', 1200, 150],
 ];
 const MISSIONS = {
-  adventure: false,   // (Adventure mode sets this true so 'adv' missions are handed out)
+  adventure: true,   // ('adv' missions are handed out: Adventure mode is on)
   data: null,
   load() {
     const d = store.get('cr-missions', null);
@@ -28047,8 +28051,13 @@ function advShowResults() {
   stats.stageReward = reward; stats.stars = starCount(got); stats.stage = i;
   advData.stars[i] = prev | got; advData.best[i] = Math.max(advData.best[i], stats.coconuts); advData.clears[i]++;
   advSaveNow();
+  // the run's end counts toward the missions (an earlier death on this run, before a revive, already paid what it
+  // completed and showed it on its score card), then the clear itself completes any 'clear a stage' mission
+  const doneBefore = G.meta ? G.meta.done.length : 0;
   onRunEnd(G, 'clear');
-  if (typeof missionEvent === 'function') missionEvent('adventureClear');
+  const meta = G.meta;
+  for (const df of missionEvent('adventureClear')) { meta.done.push(df); meta.missionPay += df.reward; }
+  const done = meta.done.slice(doneBefore), missionPay = done.reduce((n, df) => n + df.reward, 0);
   const fmt = v => v.toLocaleString('en-GB');
   $('advDoneWhere').textContent = `${ADVENTURE.name} · ${advStageLabel(i)}: ${st.name}`;
   $('advDoneTitle').textContent = st.boss ? 'World complete!' : 'Stage clear!';
@@ -28059,8 +28068,11 @@ function advShowResults() {
   $('advDoneBonus').innerHTML =
     `<li><span>Coconuts collected${stats.golden ? ` (${stats.golden} golden)` : ''}</span><b>+${fmt(stats.coconuts)}</b></li>` +
     (stats.revived ? `<li class="comeback"><span>Comeback bonus</span><b>+${fmt(stats.comebackCoins)}</b></li>` : '') +
-    `<li><span>${st.boss ? 'World reward' : 'Stage reward'}${first ? '' : ' (replay)'}</span><b>+${fmt(reward)}</b></li>`;
-  $('advDoneTotal').textContent = `+${fmt(earned + reward)}`;
+    `<li><span>${st.boss ? 'World reward' : 'Stage reward'}${first ? '' : ' (replay)'}</span><b>+${fmt(reward)}</b></li>` +
+    (done.length ? `<li><span>Missions done (${done.length})</span><b>+${fmt(missionPay)}</b></li>` : '');
+  $('advDoneTotal').textContent = `+${fmt(earned + reward + missionPay)}`;
+  $('advDoneMissions').innerHTML = done.map(df => missionLi(df.text, 'Done!', 1, df.reward, 'done')).join('');
+  $('advDoneMissions').hidden = !done.length;
   $('advDoneWallet').innerHTML = `<i aria-hidden="true"></i><span>Wallet<small>${advTotalStars()} of ${n * 3} stars in ${ADVENTURE.name}</small></span><b>${fmt(WALLET.get())}</b>`;
   $('advNext').hidden = i >= n - 1;
   $('advNext').textContent = i + 1 === n - 1 ? 'Fight the boss' : 'Next stage';
