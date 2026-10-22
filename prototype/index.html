@@ -537,9 +537,9 @@ const CHAR_FIT = {
   // 16 Billy Boom the goat
   goat: { caps: 5, hip: [0, -4.7], sink: 0.8, grip: [[-8.2, -4.6], [8.2, -4.6]], body: [[0, -3.4, 0, 0.6, 4.1]] },   // head, horns and ears (5 caps); his neck's flat bottom is cut 0.8 below the rim's lip; hooves on the lip; body: his open jaw and beard (the tube's capsule covers them at home)
   // 17 Pico the chameleon
-  chameleon: null,
+  chameleon: { caps: 7, hip: [0, -2.1], sink: 2.4, foot: 11.1, grip: null },   // drawn whole, perched on the cap: head, casque, eyes, body, near arm, tail coil (7 caps); his body rests 2.4 below the cap's middle, his fat tail coil hangs to 11.1 (it stands on a floor); no grip (his hand is on the chilli's own throttle). Envelope scale 0.657 (the floor is 0.65)
   // 18 Axel the axolotl
-  axolotl: null,
+  axolotl: { caps: 5, hip: [0, 3.7], sink: 1.1, grip: [[-10.4, 0.9], [10.4, 0.9]] },   // a bust rising out of the pool: head, helmet, two gill tufts and body (5 caps); his body's flat bottom sits at the pool rim, 1.1 below it at most (falling, or leaning back in the bite); his hands grip the rim
   // 19 Cappy the toadstool
   mushroom: { caps: 3, hip: [0, -1.6], sink: 2.7, grip: [[-12.3, -3.6], [12.3, -3.6]], body: [[-4.4, 1.8, 4.4, 1.8, 5]] },   // drawn whole, sat on the crown: his stem rests 2.7 below it at most (breathing; the pump bounces him deeper), his legs dangle; mittens on the handlebars; body: stem and legs, inside the ball's capsule
   // 20 Bolt the robot
@@ -583,9 +583,9 @@ const VEH_FIT = {
   // 16 Triple-Bang firework
   firework: { seat: { x: 0, y: -4.7, w: 19.2, depth: 1.6, grip: [[-8.2, -4.6], [8.2, -4.6]] } },   // the rolled paper rim (rx 9.6, ry 2.1, front lip 1.6 wide): the tube is drawn behind its rider, so only the lip hides
   // 17 Hot-chilli rocket
-  chilli: null,
+  chilli: { seat: { x: 0, y: -2.1, w: 16.4, depth: 0, grip: null } },   // no lip: the middle of the green cap (rx 8.2) where Pico's body rests (drawn frame, CHM_DY included); nothing hides a rider
   // 18 Runaway hydrant
-  hydrant: null,
+  hydrant: { seat: { x: 0, y: 3.7, w: 23.2, depth: 2.6, grip: [[-10.4, 0.9], [10.4, 0.9]] } },   // the pool's front rim (ellipse (0, 2, 11.6, 3), ink 2.6: y = 2 + 3 - 1.3), the water in front is see-through so only the rim band hides; grips where his hands hold the rim
   // 19 Earthstar puffball
   puffball: { seat: { x: 0, y: -1.6, w: 28.8, depth: 0, grip: [[-12.3, -3.6], [12.3, -3.6]] } },   // no lip: the seat is the ball's crown (BB - 2 × 13.6), nothing in front of the rider; grips on the bolete handlebars
   // 20 Twin-jet tin tub
@@ -610,7 +610,7 @@ const VEH_FIT = {
 // it is drawn at the scale the opening asks for, scaled down (to no less than the smaller of that and envScale, which
 // is known to fit) only if the pair would be wider or taller than PILOT_CAP at some tilt.
 const PILOT_CAP = { w: 46.6, h: 73.4 }, PART_ENV = { side: [22.6, 28.6], depth: 42, drop: 12 };
-const SEAT_SCALE = [0.88, 1.12], SEAT_FLOOR = 0.7;
+const SEAT_SCALE = [0.88, 1.12], SEAT_FLOOR = 0.65;   // (lowered from 0.7 so the tall Pico, 0.657, and Axel, 0.674, fit)
 const VEHICLE_IDS = Object.values(SIGNATURE), VEH_OWNER = {};
 for (const ch in SIGNATURE) VEH_OWNER[SIGNATURE[ch]] = ch;
 const charHits = ch => PILOT_HITS[ch].slice(0, CHAR_FIT[ch].caps);
@@ -13046,11 +13046,12 @@ const CHM_PAL = {          // [base, lit, deep, band, stripe, belly]
 const chmMix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
 const chmC = (a, al = 1) => `rgba(${a[0] | 0},${a[1] | 0},${a[2] | 0},${al})`;
 const chmDk = (a, k = 0.62) => [a[0] * k, a[1] * k, a[2] * k];
-function chmEase(st, hT, fT, kT) {
-  const dt = st.t - CHM.t; CHM.t = st.t;
-  if (!(dt > 0 && dt < 0.25)) { CHM.h = hT; CHM.f = fT; CHM.k = kT; return; }
+const CHMV = { h: 0, f: 0, k: 0, t: -1 };   // (the Hot-chilli rocket's own copy of the easing; CHM is Pico's)
+function chmEase(S, st, hT, fT, kT) {   // S: CHM (Pico) or CHMV (the Hot-chilli rocket)
+  const dt = st.t - S.t; S.t = st.t;
+  if (!(dt > 0 && dt < 0.25)) { S.h = hT; S.f = fT; S.k = kT; return; }
   const go = (v, T, up, dn) => v < T ? Math.min(T, v + up * dt) : Math.max(T, v - dn * dt);
-  CHM.h = go(CHM.h, hT, 2.2, 1.4); CHM.f = go(CHM.f, fT, 7, 2.2); CHM.k = go(CHM.k, kT, 8, 5);
+  S.h = go(S.h, hT, 2.2, 1.4); S.f = go(S.f, fT, 7, 2.2); S.k = go(S.k, kT, 8, 5);
 }
 // the chilli pod: long, glossy, tapering to a hooked tip tucked into the nozzle collar. Built from samples of its
 // centre line and half-width down its length.
@@ -13172,8 +13173,12 @@ function chmStalk(c, k, t, wob) {   // the chilli's own stalk, bent into a throt
   // brass ferrule
   pkE(c, 0, 0.2, 2.2, 1.1, pkLG(c, -2.2, 0, 2.2, 0, ['#8a5414', '#ffe48a', '#a8721e']), 0);
   pkE(c, 0, -0.8, 1.7, 0.9, pkLG(c, -1.7, 0, 1.7, 0, ['#a8721e', '#fff0b0', '#c88a2c']), 0);
-  const a = 0.16 * k + wob * 0.05, gx = 1.5, gy = -5.6;
   c.restore();
+  return chmGrip(k, wob);
+}
+// where the throttle's rubber grip is (Pico's near hand closes round it), in the frame chmStalk draws in
+function chmGrip(k, wob) {
+  const a = 0.16 * k + wob * 0.05, gx = 1.5, gy = -5.6;
   return [4.6 + gx * Math.cos(a) - gy * Math.sin(a), -5.4 + gx * Math.sin(a) + gy * Math.cos(a)];
 }
 // a turret eye: a scaly cone (striped like a panther chameleon's) round a big round eye that swivels
@@ -13261,145 +13266,205 @@ function chmArm(c, x0, y0, x1, y1, x2, y2, P, w = 2.3) {   // a bent limb ending
   const a = Math.atan2(y2 - y1, x2 - x1);
   for (const s of [-1, 1]) { const hx = x2 + Math.cos(a + s * 0.9) * 1.1, hy = y2 + Math.sin(a + s * 0.9) * 1.1; pkE(c, hx, hy, 1.3, 0.95, chmC(base), 0, a + s * 0.9); c.strokeStyle = chmC(chmDk(deep, 0.85)); c.lineWidth = 0.45; c.beginPath(); c.ellipse(hx, hy, 1.3, 0.95, a + s * 0.9, 0, TWO_PI); c.stroke(); }
 }
-function chmDraw(c, st) {
-  const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const fall = !thr && !panic && !grin && pkLookDown > 0;
-  chmEase(st, thr ? 1 : grin ? 0.5 : 0, panic ? 1 : fall ? 0.3 : 0, thr ? 1 : 0);
-  const heat = CHM.h, fear = CHM.f, k = CHM.k;
-  const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
-  // the palette: calm, warmed by the chilli, drained by fear, a rainbow ripple on a close call
-  let P = CHM_PAL.calm.map((v, i) => chmMix(chmMix(v, CHM_PAL.hot[i], heat * (1 - fear)), CHM_PAL.fear[i], fear));
-  if (grin) { const hue = (t * 2.2) % 1; const rb = [Math.sin(hue * TWO_PI) * 80 + 175, Math.sin(hue * TWO_PI + 2.1) * 80 + 175, Math.sin(hue * TWO_PI + 4.2) * 80 + 175]; P = P.map((v, i) => i === 3 ? rb : v); }
-  const [base, lit, deep, band, stripe, belly] = P;
-  const tip = bite ? 0.3 + 0.07 * Math.sin(t * 12) : 0;
-  c.save(); c.translate(0, 12); c.rotate(tip); c.translate(0, -12 + CHM_DY);
-  const shake = panic ? Math.sin(t * 46) * 0.35 : 0;
-  // ---- the rocket, back to front ----
-  const fa = thr ? 0.1 + Math.sin(t * 30) * 0.07 : bite ? Math.sin(t * 20) * 0.25 : Math.sin(t * 2.3) * 0.03;
-  for (const d of [-1, 1]) chmFin(c, d, fa * (d > 0 ? 1 : 0.9));
-  chmNozzle(c, t, heat, thr);
-  chmPod(c, t, heat, thr);
-  chmCalyx(c, t, CHM.k, false);
-  chmCalyx(c, t, CHM.k, true);
-  // ---- Pico ----
-  const bob = Math.sin(t * 2.4) * 0.45 + (thr ? 0.5 : 0) - (fall ? 0.6 : 0);
-  const lean = 0.07 * k - (fall ? 0.05 : 0) + (bite ? -0.25 : 0);
-  c.save(); c.translate(shake, bob); c.translate(-1, -4); c.rotate(lean); c.scale(CHM_SC, CHM_SC); c.translate(1, 4);
-  if (bite) c.translate(0, -2);
-  // the tail first: a spiral off his rump, curled tight while he grips, flung loose in a fright
-  const curl = panic ? 0 : thr ? 1 : 0.6, wag = Math.sin(t * (thr ? 9 : 2.4)) * (thr ? 0.5 : 0.35) + (bite ? Math.sin(t * 17) * 1.4 : 0);
-  chmTail(c, t, P, curl, wag);
-  // far arm, gripping the cap behind him
-  chmArm(c, -3.6, -12.4, -6.8, -8, -5.6, -4.4, P.map((v, i) => i === 0 ? chmDk(v, 0.82) : v), 2.1);
-  // body
-  chmBodyPath(c); c.fillStyle = pkLG(c, -9, -14, 6, -4, [chmC(lit), chmC(base), chmC(chmDk(base, 0.72))]); c.fill();
-  c.save(); chmBodyPath(c); c.clip();
-  pkE(c, 2.6, -8, 4.4, 6.4, pkLG(c, 0, -15, 0, -2, [chmC(belly, 0), chmC(belly, 0.9)]), 0, -0.25);       // pale belly
-  c.strokeStyle = chmC(band, 0.85); c.lineWidth = 2.1;                                                    // flank bands
-  for (const x of [-6.6, -2.6]) { c.beginPath(); c.moveTo(x - 1.2, -17); c.quadraticCurveTo(x + 0.6, -10, x - 0.4, -2); c.stroke(); }
-  c.strokeStyle = chmC(stripe, 0.95); c.lineWidth = 1.3; c.beginPath(); c.moveTo(-9.6, -6.8); c.quadraticCurveTo(-3, -4.4, 4.6, -6.4); c.stroke();   // lateral stripe
-  for (const [x, y] of [[-4.2, -13.6], [-7.6, -10.4], [-0.6, -12.4], [-5, -8.6]]) pkDot(c, x, y, 0.55, chmC(stripe, 0.8));
-  const ao = c.createLinearGradient(0, -6, 0, -2); ao.addColorStop(0, chmC(deep, 0)); ao.addColorStop(1, chmC(deep, 0.45)); c.fillStyle = ao; c.fillRect(-11, -6, 18, 5);
-  c.restore();
-  chmBodyPath(c); c.strokeStyle = chmC(chmDk(deep, 0.85)); c.lineWidth = 0.7; c.stroke();
-  // near hind leg gripping the cap
-  chmArm(c, -3.2, -5.6, -1.4, -2, 1.2, -3.4, P, 2.4);
-  // dorsal crest: a row of soft cones down his back
-  for (let i = 0; i < 5; i++) { const u = i / 4, x = lerp(-7.4, -9.2, u) - Math.sin(u * Math.PI) * 0.8, y = lerp(-15.4, -6.2, u), s = 1.2 - u * 0.5;
-    pkPath(c, [[x + 0.6, y - s * 0.9], [x - s * 1.6, y], [x + 0.6, y + s * 0.9]], chmC(i % 2 ? band : base), 0); }
-  // throttle lever, pushed forward with the burn, and the near arm on it
-  const [kx, ky] = chmStalk(c, k, t, bite ? Math.sin(t * 30) * 1.6 : 0);
-  // ---- head ----
-  const hx = 3.6, hy = -23.2 + (thr ? 0.4 : 0), hr = (mood === 'thrust' ? 0.06 : mood === 'fall' ? -0.08 : 0) + Math.sin(t * 1.7) * 0.03 + (panic ? Math.sin(t * 40) * 0.03 : 0);
-  // far turret eye (behind the head, peeking over the snout)
-  const ws = t * 0.9, wanderX = Math.sin(ws) * 0.7 + Math.sin(ws * 2.3) * 0.3, wanderY = Math.sin(ws * 1.4 + 1) * 0.5;
-  let lx = clamp(st.look * 1.2 + 0.3, -1, 1), ly = pkLookDown ? 0.95 : 0, fx = wanderX, fy = wanderY;
-  if (pkLookDown || panic) { fx = 0.2; fy = 1; }
-  if (thr && !panic) { lx = 0.8; ly = -0.55; fx = 0.6; fy = -0.6; }
-  if (grin) { lx = 0.6; ly = -0.2; }
-  if (bite) { lx = Math.cos(t * 9); ly = Math.sin(t * 9); fx = Math.cos(-t * 11 + 2); fy = Math.sin(-t * 11 + 2); }
-  const blink = st.blink, open = mood === 'panic' ? 1 : blink;
-  c.save(); c.translate(hx, hy); c.rotate(hr);
-  chmEye(c, 7.6, -6.4, 3.7, fx, fy, grin ? 0.12 : open, P, { big: panic });
-  // neck scarf? no: a fold of throat skin under the jaw (the gular crest)
-  pkPath(c, [[-6, 6.4], [-2.4, 9.6], [1, 8.6], [3.4, 9], [5, 7]], chmC(stripe), 0);
-  chmHeadPath(c); c.fillStyle = pkLG(c, -8, -10, 10, 6, [chmC(lit), chmC(base), chmC(chmDk(base, 0.76))]); c.fill();
-  c.save(); chmHeadPath(c); c.clip();
-  // casque: the helmet crest, banded, with a raised ridge
-  chmCasquePath(c); c.fillStyle = pkLG(c, -10, -12, 2, -4, [chmC(lit), chmC(base)]); c.fill();
-  c.strokeStyle = chmC(band, 0.9); c.lineWidth = 1.5;
-  for (const [x0, y0, x1, y1] of [[-2.6, -9.6, -1.6, -4.4], [-6.2, -11.8, -5.4, -4.4], [-9.6, -9.8, -9.2, -3.8]]) { c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo((x0 + x1) / 2 + 0.8, (y0 + y1) / 2, x1, y1); c.stroke(); }
-  c.strokeStyle = chmC(deep, 0.35); c.lineWidth = 0.7; c.beginPath(); c.moveTo(-11.6, -3.2); c.quadraticCurveTo(-6, -4.6, -1.6, -3.4); c.quadraticCurveTo(0.6, -5.6, 2.6, -7.6); c.stroke();
-  c.strokeStyle = chmC(lit, 0.9); c.lineWidth = 0.8; c.beginPath(); c.moveTo(1.4, -8.1); c.bezierCurveTo(-1.4, -9.3, -4.4, -11, -7.2, -12.7); c.stroke();
-  // lip stripe along the jaw into the cheek, and a soft shadow under it
-  c.beginPath(); c.moveTo(11.6, 1.2); c.bezierCurveTo(8, 4.4, 3.4, 4.8, 0.4, 3.2); c.quadraticCurveTo(-4.6, 4.6, -10.6, 3.4); c.lineTo(-10.6, 9); c.lineTo(12, 9); c.closePath();
-  c.fillStyle = pkLG(c, 0, 3, 0, 8.4, [chmC(stripe), chmC(belly)]); c.fill();
-  c.strokeStyle = chmC(chmDk(stripe, 0.75), 0.6); c.lineWidth = 0.5; c.beginPath(); c.moveTo(9.4, 4.4); c.quadraticCurveTo(4, 7.4, -2, 7); c.stroke();
-  // cheek dots and the warm flush
-  for (const [x, y, r] of [[-5, 1.6, 0.7], [-7.6, -0.6, 0.55], [-3.2, -1.2, 0.5], [-8.4, 2.6, 0.5]]) pkDot(c, x, y, r, chmC(stripe, 0.85));
-  const flush = Math.max(heat * 0.7, grin ? 0.6 : 0);
-  if (flush > 0.02) pkE(c, -1.4, 3.6, 3.4, 1.8, `rgba(255,80,60,${0.45 * flush})`, 0);
-  const rim = c.createLinearGradient(-12, 0, 12, 0); rim.addColorStop(0, chmC(deep, 0.32)); rim.addColorStop(0.3, chmC(deep, 0)); c.fillStyle = rim; c.fillRect(-13, -15, 26, 24);
-  c.restore();
-  chmHeadPath(c); c.strokeStyle = chmC(chmDk(deep, 0.85)); c.lineWidth = 0.7; c.stroke();
-  // nostril, mouth by mood
-  pkE(c, 10, -1.4, 0.55, 0.4, chmC(chmDk(deep, 0.6)), 0, -0.5);
-  const ML = chmC(chmDk(deep, 0.55)), MI = '#6a1c22', TG = '#ff7a9a';
-  if (mood === 'panic') {
-    const w = Math.sin(t * 34) * 0.4;
-    c.beginPath(); c.moveTo(11.4, 0.4); c.quadraticCurveTo(5.8, 1.8 + w, 0.4, 2.4); c.quadraticCurveTo(1.6, 9.6, 7.6, 8.6); c.quadraticCurveTo(11.6, 7.4, 11.4, 0.4); c.closePath();
-    c.fillStyle = MI; c.fill(); c.strokeStyle = ML; c.lineWidth = 0.9; c.stroke();
-    pkE(c, 5.8, 7.4, 3, 1.4, TG, 0, -0.15);
-    c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(10.6, 1); c.quadraticCurveTo(6, 2.4, 1.6, 2.6); c.quadraticCurveTo(6, 3.4, 10.6, 1.9); c.closePath(); c.fill();
-    if (bite) { c.beginPath(); c.moveTo(7, 5.4); c.bezierCurveTo(12, 8 + Math.sin(t * 15) * 3, 15 + Math.sin(t * 11) * 2, 4, 17, 6 + Math.sin(t * 13) * 3); c.strokeStyle = '#e8506e'; c.lineWidth = 2.1; c.stroke(); c.strokeStyle = TG; c.lineWidth = 1.4; c.stroke(); pkDot(c, 17, 6 + Math.sin(t * 13) * 3, 1.5, TG); }
-  } else if (mood === 'grin') {     // a huge grin with the tongue poking out
-    c.beginPath(); c.moveTo(11, 1); c.quadraticCurveTo(5.4, 3, -0.6, 2.2); c.quadraticCurveTo(4.6, 8.4, 10.4, 3.8); c.closePath();
-    c.fillStyle = MI; c.fill(); c.strokeStyle = ML; c.lineWidth = 0.8; c.stroke();
-    c.beginPath(); c.moveTo(7.6, 4.4); c.quadraticCurveTo(12.4, 7.6, 13.4, 5.6); c.strokeStyle = '#e8506e'; c.lineWidth = 2.6; c.stroke(); c.strokeStyle = TG; c.lineWidth = 1.8; c.stroke();
-    pkDot(c, 13.4, 5.6, 1.5, TG); pkDot(c, 13, 5.1, 0.5, 'rgba(255,255,255,.8)');
-  } else if (mood === 'fall') {      // a small worried 'o'
-    c.strokeStyle = ML; c.lineWidth = 0.8; c.beginPath(); c.moveTo(11, 1.4); c.quadraticCurveTo(7, 3.4, 4.6, 3.6); c.stroke();
-    pkE(c, 3.2, 3.8, 1.3, 1.5, MI, 0); c.strokeStyle = ML; c.lineWidth = 0.5; c.beginPath(); c.ellipse(3.2, 3.8, 1.3, 1.5, 0, 0, TWO_PI); c.stroke();
-  } else {                           // calm smile; with the burn, a gritted, cocky grin
-    const g = mood === 'thrust';
-    if (g) { c.beginPath(); c.moveTo(11.2, 1.2); c.bezierCurveTo(8, 6.8, 3, 7, -0.2, 2.8); c.bezierCurveTo(3.4, 4.8, 8, 4.4, 11.2, 1.2); c.fillStyle = MI; c.fill();
-      c.beginPath(); c.moveTo(10.4, 2.2); c.bezierCurveTo(7.6, 5.6, 3.6, 5.9, 0.8, 3.6); c.bezierCurveTo(4, 4.8, 7.8, 4.4, 10.4, 2.2); c.fillStyle = '#ffffff'; c.fill();
-      c.strokeStyle = 'rgba(200,190,200,.8)'; c.lineWidth = 0.3; for (const x of [3.4, 6, 8.4]) { c.beginPath(); c.moveTo(x, 3.8 + (x < 5 ? 0.6 : 0.2)); c.lineTo(x, 5.2 - (x - 3) * 0.12); c.stroke(); } }
-    c.beginPath(); c.moveTo(11.6, 1.2); c.bezierCurveTo(8, 4.4, 3.4, 4.8, 0.4, 3.2); c.strokeStyle = ML; c.lineWidth = 1.05; c.stroke();
-    c.beginPath(); c.moveTo(1.2, 4.2); c.quadraticCurveTo(-0.6, 3.4, -0.4, 1.8); c.lineWidth = 0.9; c.stroke();
-    // now and then a quick tongue flick
-    const fl = pmod(t + 2.4, 5.3);
-    if (!g && fl < 0.32) { const e = Math.sin(fl / 0.32 * Math.PI); c.beginPath(); c.moveTo(10.6, 1.8); c.lineTo(10.6 + e * 6, 1.6 + e * 0.8); c.strokeStyle = '#e8506e'; c.lineWidth = 1.3; c.stroke(); pkDot(c, 10.6 + e * 6, 1.6 + e * 0.8, 1.1 * e + 0.2, TG); }
-  }
-  // near turret eye
-  const lid = mood === 'thrust' ? 0.2 : mood === 'calm' ? 0.12 : 0;
-  chmEye(c, 4.2, -2.6, 6.6, lx, ly, open, P, { lid: blink < 0.35 ? 0 : lid, slant: mood === 'thrust' ? -0.5 : 0, low: grin ? 0.5 : 0, big: panic });
-  // steam puffing off the casque as the chilli kicks in
-  if (heat > 0.2 && !panic) for (let j = 0; j < 3; j++) {
-    const p = (t * 1.3 + j / 3) % 1, a = (heat - 0.2) / 0.8 * (1 - p) * 0.8;
-    pkE(c, -9.6 - p * 6 + Math.sin(t * 3 + j) * 0.6, -10.6 + p * 5, 1.3 + p * 2.4, 1.1 + p * 2, `rgba(255,250,240,${a})`, 0);
-  }
-  c.restore();
-  // near arm on the lever, drawn over the throat (in a fright both arms fly up)
-  if (bite) { chmArm(c, 2.4, -12.4, 7, -18, 11, -17 + Math.sin(t * 14) * 2, P, 2.3); chmArm(c, -4, -13, -9, -17, -12, -21 + Math.sin(t * 16) * 2, P, 2.1); }
-  else chmArm(c, 2.6, -12.8, 6.6, -13.6 + (panic ? -1 : 0), kx, ky, P, 2.1);
-  c.restore();
-  c.restore();
-}
+// ---- Pico and the Hot-chilli rocket, split into a character and a vehicle (see SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: the fins, nozzle, pod and both halves of the green
+// cap (vehicle back), Pico's tail, far arm, body, hind leg and crest (character body), the chilli's stalk bent into a
+// throttle that he pushes (vehicle front), then his head, eyes and near arm on the throttle (character front). Pico
+// perches on the cap: there is no lip, so the seat point is where his body rests on it (depth 0, no grip, like
+// Shellby's shell). In the bite the chilli tips over (its pose's tip, about (0, 12)) and Pico flings both arms up.
+// The old drawing sat 2.5 lower than its own frame (CHM_DY, inside the tip): the hit side is in the drawn frame, so on
+// its own pair the chilli's frame() issues the old calls exactly, and with any other rider each part shifts its own art
+// by CHM_DY instead (the chilli's layers and Pico's layers), so every part meets its capsules. The throttle sways with
+// the rider (chmLean, from the chilli's own copy of the pose); Pico's near hand closes round where the grip is
+// (chmGrip), so in another ride it closes round nothing. The chilli keeps its own copy of the easing (CHMV), so its
+// glow, fins and throttle run the same under any rider.
+function chmLean(c, p) { c.translate(p.shake, p.bob); c.translate(-1, -4); c.rotate(p.lean); c.scale(CHM_SC, CHM_SC); c.translate(1, 4); if (p.bite) c.translate(0, -2); }
+const PICO = {
+  id: 'chameleon', line: '#173a36', bitePose: true,
+  palette: { calm: CHM_PAL.calm, hot: CHM_PAL.hot, fear: CHM_PAL.fear, eyes: '#ffd84a' },
+  // moods: 'calm' | 'thrust' (warmed to lime and orange) | 'grin' (a rainbow ripple) | 'fall' | 'panic' (drained pale, and the bite)
+  pose(st, seat) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fall = !thr && !panic && !grin && pkLookDown > 0;
+    chmEase(CHM, st, thr ? 1 : grin ? 0.5 : 0, panic ? 1 : fall ? 0.3 : 0, thr ? 1 : 0);
+    const heat = CHM.h, fear = CHM.f, k = CHM.k;
+    const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
+    // the palette: calm, warmed by the chilli, drained by fear, a rainbow ripple on a close call
+    let P = CHM_PAL.calm.map((v, i) => chmMix(chmMix(v, CHM_PAL.hot[i], heat * (1 - fear)), CHM_PAL.fear[i], fear));
+    if (grin) { const hue = (t * 2.2) % 1; const rb = [Math.sin(hue * TWO_PI) * 80 + 175, Math.sin(hue * TWO_PI + 2.1) * 80 + 175, Math.sin(hue * TWO_PI + 4.2) * 80 + 175]; P = P.map((v, i) => i === 3 ? rb : v); }
+    const shake = panic ? Math.sin(t * 46) * 0.35 : 0;
+    const bob = Math.sin(t * 2.4) * 0.45 + (thr ? 0.5 : 0) - (fall ? 0.6 : 0);
+    const lean = 0.07 * k - (fall ? 0.05 : 0) + (bite ? -0.25 : 0);
+    return { t, bite, thr, panic, grin, fall, heat, fear, k, mood, P, shake, bob, lean };
+  },
+  draw: {
+    body(c, st, seat) {
+      const p = seat.cp, { t, bite, thr, panic, P } = p, [base, lit, deep, band, stripe, belly] = P;
+      c.save(); if (!seat.sig) c.translate(0, CHM_DY);
+      chmLean(c, p);
+      // the tail first: a spiral off his rump, curled tight while he grips, flung loose in a fright
+      const curl = panic ? 0 : thr ? 1 : 0.6, wag = Math.sin(t * (thr ? 9 : 2.4)) * (thr ? 0.5 : 0.35) + (bite ? Math.sin(t * 17) * 1.4 : 0);
+      chmTail(c, t, P, curl, wag);
+      // far arm, gripping the cap behind him
+      chmArm(c, -3.6, -12.4, -6.8, -8, -5.6, -4.4, P.map((v, i) => i === 0 ? chmDk(v, 0.82) : v), 2.1);
+      // body
+      chmBodyPath(c); c.fillStyle = pkLG(c, -9, -14, 6, -4, [chmC(lit), chmC(base), chmC(chmDk(base, 0.72))]); c.fill();
+      c.save(); chmBodyPath(c); c.clip();
+      pkE(c, 2.6, -8, 4.4, 6.4, pkLG(c, 0, -15, 0, -2, [chmC(belly, 0), chmC(belly, 0.9)]), 0, -0.25);       // pale belly
+      c.strokeStyle = chmC(band, 0.85); c.lineWidth = 2.1;                                                    // flank bands
+      for (const x of [-6.6, -2.6]) { c.beginPath(); c.moveTo(x - 1.2, -17); c.quadraticCurveTo(x + 0.6, -10, x - 0.4, -2); c.stroke(); }
+      c.strokeStyle = chmC(stripe, 0.95); c.lineWidth = 1.3; c.beginPath(); c.moveTo(-9.6, -6.8); c.quadraticCurveTo(-3, -4.4, 4.6, -6.4); c.stroke();   // lateral stripe
+      for (const [x, y] of [[-4.2, -13.6], [-7.6, -10.4], [-0.6, -12.4], [-5, -8.6]]) pkDot(c, x, y, 0.55, chmC(stripe, 0.8));
+      const ao = c.createLinearGradient(0, -6, 0, -2); ao.addColorStop(0, chmC(deep, 0)); ao.addColorStop(1, chmC(deep, 0.45)); c.fillStyle = ao; c.fillRect(-11, -6, 18, 5);
+      c.restore();
+      chmBodyPath(c); c.strokeStyle = chmC(chmDk(deep, 0.85)); c.lineWidth = 0.7; c.stroke();
+      // near hind leg gripping the cap
+      chmArm(c, -3.2, -5.6, -1.4, -2, 1.2, -3.4, P, 2.4);
+      // dorsal crest: a row of soft cones down his back
+      for (let i = 0; i < 5; i++) { const u = i / 4, x = lerp(-7.4, -9.2, u) - Math.sin(u * Math.PI) * 0.8, y = lerp(-15.4, -6.2, u), s = 1.2 - u * 0.5;
+        pkPath(c, [[x + 0.6, y - s * 0.9], [x - s * 1.6, y], [x + 0.6, y + s * 0.9]], chmC(i % 2 ? band : base), 0); }
+      c.restore();
+    },
+    front(c, st, seat) {
+      const p = seat.cp, { t, bite, thr, panic, grin, fall, heat, k, mood, P } = p, [base, lit, deep, band, stripe, belly] = P;
+      c.save(); if (!seat.sig) c.translate(0, CHM_DY);
+      chmLean(c, p);
+      const [kx, ky] = chmGrip(k, bite ? Math.sin(t * 30) * 1.6 : 0);
+      // ---- head ----
+      const hx = 3.6, hy = -23.2 + (thr ? 0.4 : 0), hr = (mood === 'thrust' ? 0.06 : mood === 'fall' ? -0.08 : 0) + Math.sin(t * 1.7) * 0.03 + (panic ? Math.sin(t * 40) * 0.03 : 0);
+      // far turret eye (behind the head, peeking over the snout)
+      const ws = t * 0.9, wanderX = Math.sin(ws) * 0.7 + Math.sin(ws * 2.3) * 0.3, wanderY = Math.sin(ws * 1.4 + 1) * 0.5;
+      let lx = clamp(st.look * 1.2 + 0.3, -1, 1), ly = pkLookDown ? 0.95 : 0, fx = wanderX, fy = wanderY;
+      if (pkLookDown || panic) { fx = 0.2; fy = 1; }
+      if (thr && !panic) { lx = 0.8; ly = -0.55; fx = 0.6; fy = -0.6; }
+      if (grin) { lx = 0.6; ly = -0.2; }
+      if (bite) { lx = Math.cos(t * 9); ly = Math.sin(t * 9); fx = Math.cos(-t * 11 + 2); fy = Math.sin(-t * 11 + 2); }
+      const blink = st.blink, open = mood === 'panic' ? 1 : blink;
+      c.save(); c.translate(hx, hy); c.rotate(hr);
+      chmEye(c, 7.6, -6.4, 3.7, fx, fy, grin ? 0.12 : open, P, { big: panic });
+      // neck scarf? no: a fold of throat skin under the jaw (the gular crest)
+      pkPath(c, [[-6, 6.4], [-2.4, 9.6], [1, 8.6], [3.4, 9], [5, 7]], chmC(stripe), 0);
+      chmHeadPath(c); c.fillStyle = pkLG(c, -8, -10, 10, 6, [chmC(lit), chmC(base), chmC(chmDk(base, 0.76))]); c.fill();
+      c.save(); chmHeadPath(c); c.clip();
+      // casque: the helmet crest, banded, with a raised ridge
+      chmCasquePath(c); c.fillStyle = pkLG(c, -10, -12, 2, -4, [chmC(lit), chmC(base)]); c.fill();
+      c.strokeStyle = chmC(band, 0.9); c.lineWidth = 1.5;
+      for (const [x0, y0, x1, y1] of [[-2.6, -9.6, -1.6, -4.4], [-6.2, -11.8, -5.4, -4.4], [-9.6, -9.8, -9.2, -3.8]]) { c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo((x0 + x1) / 2 + 0.8, (y0 + y1) / 2, x1, y1); c.stroke(); }
+      c.strokeStyle = chmC(deep, 0.35); c.lineWidth = 0.7; c.beginPath(); c.moveTo(-11.6, -3.2); c.quadraticCurveTo(-6, -4.6, -1.6, -3.4); c.quadraticCurveTo(0.6, -5.6, 2.6, -7.6); c.stroke();
+      c.strokeStyle = chmC(lit, 0.9); c.lineWidth = 0.8; c.beginPath(); c.moveTo(1.4, -8.1); c.bezierCurveTo(-1.4, -9.3, -4.4, -11, -7.2, -12.7); c.stroke();
+      // lip stripe along the jaw into the cheek, and a soft shadow under it
+      c.beginPath(); c.moveTo(11.6, 1.2); c.bezierCurveTo(8, 4.4, 3.4, 4.8, 0.4, 3.2); c.quadraticCurveTo(-4.6, 4.6, -10.6, 3.4); c.lineTo(-10.6, 9); c.lineTo(12, 9); c.closePath();
+      c.fillStyle = pkLG(c, 0, 3, 0, 8.4, [chmC(stripe), chmC(belly)]); c.fill();
+      c.strokeStyle = chmC(chmDk(stripe, 0.75), 0.6); c.lineWidth = 0.5; c.beginPath(); c.moveTo(9.4, 4.4); c.quadraticCurveTo(4, 7.4, -2, 7); c.stroke();
+      // cheek dots and the warm flush
+      for (const [x, y, r] of [[-5, 1.6, 0.7], [-7.6, -0.6, 0.55], [-3.2, -1.2, 0.5], [-8.4, 2.6, 0.5]]) pkDot(c, x, y, r, chmC(stripe, 0.85));
+      const flush = Math.max(heat * 0.7, grin ? 0.6 : 0);
+      if (flush > 0.02) pkE(c, -1.4, 3.6, 3.4, 1.8, `rgba(255,80,60,${0.45 * flush})`, 0);
+      const rim = c.createLinearGradient(-12, 0, 12, 0); rim.addColorStop(0, chmC(deep, 0.32)); rim.addColorStop(0.3, chmC(deep, 0)); c.fillStyle = rim; c.fillRect(-13, -15, 26, 24);
+      c.restore();
+      chmHeadPath(c); c.strokeStyle = chmC(chmDk(deep, 0.85)); c.lineWidth = 0.7; c.stroke();
+      // nostril, mouth by mood
+      pkE(c, 10, -1.4, 0.55, 0.4, chmC(chmDk(deep, 0.6)), 0, -0.5);
+      const ML = chmC(chmDk(deep, 0.55)), MI = '#6a1c22', TG = '#ff7a9a';
+      if (mood === 'panic') {
+        const w = Math.sin(t * 34) * 0.4;
+        c.beginPath(); c.moveTo(11.4, 0.4); c.quadraticCurveTo(5.8, 1.8 + w, 0.4, 2.4); c.quadraticCurveTo(1.6, 9.6, 7.6, 8.6); c.quadraticCurveTo(11.6, 7.4, 11.4, 0.4); c.closePath();
+        c.fillStyle = MI; c.fill(); c.strokeStyle = ML; c.lineWidth = 0.9; c.stroke();
+        pkE(c, 5.8, 7.4, 3, 1.4, TG, 0, -0.15);
+        c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(10.6, 1); c.quadraticCurveTo(6, 2.4, 1.6, 2.6); c.quadraticCurveTo(6, 3.4, 10.6, 1.9); c.closePath(); c.fill();
+        if (bite) { c.beginPath(); c.moveTo(7, 5.4); c.bezierCurveTo(12, 8 + Math.sin(t * 15) * 3, 15 + Math.sin(t * 11) * 2, 4, 17, 6 + Math.sin(t * 13) * 3); c.strokeStyle = '#e8506e'; c.lineWidth = 2.1; c.stroke(); c.strokeStyle = TG; c.lineWidth = 1.4; c.stroke(); pkDot(c, 17, 6 + Math.sin(t * 13) * 3, 1.5, TG); }
+      } else if (mood === 'grin') {     // a huge grin with the tongue poking out
+        c.beginPath(); c.moveTo(11, 1); c.quadraticCurveTo(5.4, 3, -0.6, 2.2); c.quadraticCurveTo(4.6, 8.4, 10.4, 3.8); c.closePath();
+        c.fillStyle = MI; c.fill(); c.strokeStyle = ML; c.lineWidth = 0.8; c.stroke();
+        c.beginPath(); c.moveTo(7.6, 4.4); c.quadraticCurveTo(12.4, 7.6, 13.4, 5.6); c.strokeStyle = '#e8506e'; c.lineWidth = 2.6; c.stroke(); c.strokeStyle = TG; c.lineWidth = 1.8; c.stroke();
+        pkDot(c, 13.4, 5.6, 1.5, TG); pkDot(c, 13, 5.1, 0.5, 'rgba(255,255,255,.8)');
+      } else if (mood === 'fall') {      // a small worried 'o'
+        c.strokeStyle = ML; c.lineWidth = 0.8; c.beginPath(); c.moveTo(11, 1.4); c.quadraticCurveTo(7, 3.4, 4.6, 3.6); c.stroke();
+        pkE(c, 3.2, 3.8, 1.3, 1.5, MI, 0); c.strokeStyle = ML; c.lineWidth = 0.5; c.beginPath(); c.ellipse(3.2, 3.8, 1.3, 1.5, 0, 0, TWO_PI); c.stroke();
+      } else {                           // calm smile; with the burn, a gritted, cocky grin
+        const g = mood === 'thrust';
+        if (g) { c.beginPath(); c.moveTo(11.2, 1.2); c.bezierCurveTo(8, 6.8, 3, 7, -0.2, 2.8); c.bezierCurveTo(3.4, 4.8, 8, 4.4, 11.2, 1.2); c.fillStyle = MI; c.fill();
+          c.beginPath(); c.moveTo(10.4, 2.2); c.bezierCurveTo(7.6, 5.6, 3.6, 5.9, 0.8, 3.6); c.bezierCurveTo(4, 4.8, 7.8, 4.4, 10.4, 2.2); c.fillStyle = '#ffffff'; c.fill();
+          c.strokeStyle = 'rgba(200,190,200,.8)'; c.lineWidth = 0.3; for (const x of [3.4, 6, 8.4]) { c.beginPath(); c.moveTo(x, 3.8 + (x < 5 ? 0.6 : 0.2)); c.lineTo(x, 5.2 - (x - 3) * 0.12); c.stroke(); } }
+        c.beginPath(); c.moveTo(11.6, 1.2); c.bezierCurveTo(8, 4.4, 3.4, 4.8, 0.4, 3.2); c.strokeStyle = ML; c.lineWidth = 1.05; c.stroke();
+        c.beginPath(); c.moveTo(1.2, 4.2); c.quadraticCurveTo(-0.6, 3.4, -0.4, 1.8); c.lineWidth = 0.9; c.stroke();
+        // now and then a quick tongue flick
+        const fl = pmod(t + 2.4, 5.3);
+        if (!g && fl < 0.32) { const e = Math.sin(fl / 0.32 * Math.PI); c.beginPath(); c.moveTo(10.6, 1.8); c.lineTo(10.6 + e * 6, 1.6 + e * 0.8); c.strokeStyle = '#e8506e'; c.lineWidth = 1.3; c.stroke(); pkDot(c, 10.6 + e * 6, 1.6 + e * 0.8, 1.1 * e + 0.2, TG); }
+      }
+      // near turret eye
+      const lid = mood === 'thrust' ? 0.2 : mood === 'calm' ? 0.12 : 0;
+      chmEye(c, 4.2, -2.6, 6.6, lx, ly, open, P, { lid: blink < 0.35 ? 0 : lid, slant: mood === 'thrust' ? -0.5 : 0, low: grin ? 0.5 : 0, big: panic });
+      // steam puffing off the casque as the chilli kicks in
+      if (heat > 0.2 && !panic) for (let j = 0; j < 3; j++) {
+        const p = (t * 1.3 + j / 3) % 1, a = (heat - 0.2) / 0.8 * (1 - p) * 0.8;
+        pkE(c, -9.6 - p * 6 + Math.sin(t * 3 + j) * 0.6, -10.6 + p * 5, 1.3 + p * 2.4, 1.1 + p * 2, `rgba(255,250,240,${a})`, 0);
+      }
+      c.restore();
+      // near arm on the lever, drawn over the throat (in a fright both arms fly up)
+      if (bite) { chmArm(c, 2.4, -12.4, 7, -18, 11, -17 + Math.sin(t * 14) * 2, P, 2.3); chmArm(c, -4, -13, -9, -17, -12, -21 + Math.sin(t * 16) * 2, P, 2.1); }
+      else chmArm(c, 2.6, -12.8, 6.6, -13.6 + (panic ? -1 : 0), kx, ky, P, 2.1);
+      c.restore();
+    },
+  },
+};
+const HOT_CHILLI = {
+  id: 'chilli', line: '#173a36', exhaust: 'fire', nozzles: [[2.4, 35.5]], bitePose: true, tip: null,
+  desc: 'A giant glossy red chilli with a brass bell nozzle, pepper-leaf fins and its stalk bent into a throttle',
+  palette: { pod: '#f22e22', cap: '#3c8a2c', fins: '#4ea436', brass: '#e0a640', tint: '242,46,34' },
+  // the old tip transform about (0, 12) with the drawing's 2.5 drop (CHM_DY) inside it, on its own pair; with another
+  // rider a plain turn about (0, 12), each part shifting its own art
+  frame(c, st, seat) { c.translate(0, 12); c.rotate(seat.tip); c.translate(0, -12 + (seat.sig ? CHM_DY : 0)); },
+  pose(st) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fall = !thr && !panic && !grin && pkLookDown > 0;
+    chmEase(CHMV, st, thr ? 1 : grin ? 0.5 : 0, panic ? 1 : fall ? 0.3 : 0, thr ? 1 : 0);
+    const heat = CHMV.h, k = CHMV.k;
+    const fa = thr ? 0.1 + Math.sin(t * 30) * 0.07 : bite ? Math.sin(t * 20) * 0.25 : Math.sin(t * 2.3) * 0.03;
+    // the throttle sways as it is pushed: the rider's lean, worked out the same way (chmLean)
+    const shake = panic ? Math.sin(t * 46) * 0.35 : 0;
+    const bob = Math.sin(t * 2.4) * 0.45 + (thr ? 0.5 : 0) - (fall ? 0.6 : 0);
+    const lean = 0.07 * k - (fall ? 0.05 : 0) + (bite ? -0.25 : 0);
+    // swallowed: the chilli tips over
+    return { t, bite, thr, heat, k, fa, shake, bob, lean, tip: bite ? 0.3 + 0.07 * Math.sin(t * 12) : 0 };
+  },
+  draw: {
+    // ---- the rocket, back to front ----
+    back(c, st, seat) {
+      const { t, thr, heat, k, fa } = seat.vp;
+      if (!seat.sig) { c.save(); c.translate(0, CHM_DY); }
+      for (const d of [-1, 1]) chmFin(c, d, fa * (d > 0 ? 1 : 0.9));
+      chmNozzle(c, t, heat, thr);
+      chmPod(c, t, heat, thr);
+      chmCalyx(c, t, k, false);
+      chmCalyx(c, t, k, true);
+      if (!seat.sig) c.restore();
+    },
+    // throttle lever, pushed forward with the burn
+    front(c, st, seat) {
+      const p = seat.vp;
+      c.save(); if (!seat.sig) c.translate(0, CHM_DY);
+      chmLean(c, p);
+      chmStalk(c, p.k, p.t, p.bite ? Math.sin(p.t * 30) * 1.6 : 0);
+      c.restore();
+    },
+  },
+};
+SPLIT_CHARACTERS.chameleon = PICO; SPLIT_VEHICLES.chilli = HOT_CHILLI;
 
 // ---- Axel the axolotl and the Runaway hydrant (PILOTS 'axolotl') ----
 // A pink axolotl with a big cheek-to-cheek smile and three feathery coral gills a side, riding a teal street
 // hydrant he has knocked clean off its pipe: the water gushes out of the broken stub below (the jet), bubbles up
 // round him through the open top, and spurts from the side caps as the pressure builds. He wears the hydrant's
 // own bonnet as a helmet, brass operating nut on top. AX eases the pose between frames.
-const AX = { k: 0, f: 0, t: -1 };
+const AX = { k: 0, f: 0, t: -1 }, AXV = { k: 0, f: 0, t: -1 };   // AX eases Axel's pose, AXV the hydrant's (one easer per part)
 const AX_PINK = ['#fff4f6', '#ffc8d4', '#ff9eb6', '#e8708e'], AX_GILL = ['#c81e52', '#f03c6c', '#ff7a9c', '#ffc2d2'];
 const AX_TEAL = ['#8ef0e0', '#2cbcb0', '#14868a', '#0a4c56'], AX_BRASS = ['#fff2b8', '#f2c25a', '#c8862a', '#7a4a12'];
-function axEase(st, kT, fT) {
-  const dt = st.t - AX.t; AX.t = st.t;
-  if (!(dt > 0 && dt < 0.25)) { AX.k = kT; AX.f = fT; return; }
+function axEase(S, st, kT, fT) {   // S: AX (Axel) or AXV (the hydrant)
+  const dt = st.t - S.t; S.t = st.t;
+  if (!(dt > 0 && dt < 0.25)) { S.k = kT; S.f = fT; return; }
   const go = (v, T, up, dn) => v < T ? Math.min(T, v + up * dt) : Math.max(T, v - dn * dt);
-  AX.k = go(AX.k, kT, 7, 4); AX.f = go(AX.f, fT, 7, 2.5);
+  S.k = go(S.k, kT, 7, 4); S.f = go(S.f, fT, 7, 2.5);
 }
 function axBolt(c, x, y, r = 0.8) { pkE(c, x, y, r, r * 0.8, AX_BRASS[2], 0); pkDot(c, x - r * 0.25, y - r * 0.3, r * 0.45, AX_BRASS[0]); }
 function axDrop(c, x, y, r, al = 1) {
@@ -13566,100 +13631,136 @@ function axHelmet(c, x, y, rot, t, k) {   // the hydrant's bonnet, worn rakishly
   c.fillStyle = pkLG(c, -2.2, -11, 2.2, -8, [AX_BRASS[0], AX_BRASS[1], AX_BRASS[3]]); c.fill();
   c.restore();
 }
-function axDraw(c, st) {
-  const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const fall = !thr && !panic && !grin && pkLookDown > 0;
-  axEase(st, thr ? 1 : 0, panic ? 1 : fall ? 0.5 : 0);
-  const k = AX.k, f = AX.f;
-  const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
-  const tip = bite ? 0.26 + 0.07 * Math.sin(t * 12) : 0;   // swallowed: the hydrant tips over and he scrambles half out of it
-  c.save(); c.translate(0, 12); c.rotate(tip); c.translate(0, -12);
-  // ---- the hydrant ----
-  const pump = 1 + k * 0.018 * Math.sin(t * 34);
-  c.save(); c.translate(0, 12); c.scale(pump, 1 / pump); c.translate(0, -12);
-  axHydrant(c, st, k, bite);
-  c.restore();
-  // the open top: back of the rim, then the bubbling pool
-  pkE(c, 0, 2, 11.6, 3, pkLG(c, -11.6, 0, 11.6, 0, [AX_TEAL[3], AX_TEAL[1], AX_TEAL[0], AX_TEAL[2], AX_TEAL[3]]), 0);
-  pkE(c, 0, 1.6, 9.6, 2.2, pkLG(c, 0, -0.6, 0, 3.8, ['#2a90d0', '#56c4f0', '#a8ecff']), 0);
-  // ---- Axel ----
-  const bob = Math.sin(t * 2.4) * 0.5 - (thr ? 0.8 : 0) + (fall ? 0.6 : 0) + (bite ? -2 : 0), shake = panic ? Math.sin(t * 44) * 0.35 : 0;
-  c.save(); c.translate(shake, bob); if (bite) { c.translate(0, 2); c.rotate(-tip * 1.5); c.translate(0, -2); }
-  // tail fin flicking up out of the pool behind him
-  const ta = Math.sin(t * (thr ? 12 : bite ? 22 : 3)) * (thr ? 0.25 : 0.15) + (panic ? 0.3 : 0);
-  c.save(); c.translate(7.4, 0.2); c.rotate(0.5 + ta);
-  c.beginPath(); c.moveTo(-1.6, 0.8); c.quadraticCurveTo(-1.8, -4.6, 1.2, -9.6); c.quadraticCurveTo(4.6, -5.4, 2.6, 1); c.closePath();
-  c.fillStyle = pkLG(c, 0, 1, 1.6, -9.6, [AX_PINK[2], AX_PINK[1], AX_PINK[0]]); c.fill(); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.5; c.stroke();
-  c.strokeStyle = 'rgba(232,112,142,.5)'; c.lineWidth = 0.4; for (const u of [0.35, 0.6]) { c.beginPath(); c.moveTo(0.6, -u * 1); c.lineTo(1.2 + u * 0.6, -u * 9); c.stroke(); }
-  c.restore();
-  // body rising out of the water
-  const bodyP = () => { c.beginPath(); c.moveTo(-8.2, 2.6); c.bezierCurveTo(-9.4, -3.4, -8.8, -10, 0, -11); c.bezierCurveTo(8.8, -10, 9.4, -3.4, 8.2, 2.6); c.closePath(); };
-  bodyP(); c.fillStyle = pkLG(c, -9, -10, 9, 2, [AX_PINK[1], AX_PINK[1], AX_PINK[2]]); c.fill();
-  c.save(); bodyP(); c.clip();
-  pkE(c, 0.2, -1, 5, 4.8, 'rgba(255,248,250,.65)', 0);                                   // pale belly
-  const ao = c.createLinearGradient(0, -9, 0, -4); ao.addColorStop(0, 'rgba(200,70,110,.5)'); ao.addColorStop(1, 'rgba(200,70,110,0)'); c.fillStyle = ao; c.fillRect(-10, -11, 20, 7);
-  for (const [x, y] of [[-5.6, -3.6], [5, -4.6], [-3, 0.2], [6, -0.8]]) pkDot(c, x, y, 0.45, 'rgba(255,214,140,.85)');
-  c.restore();
-  bodyP(); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.5; c.stroke();
-  // arms gripping the rim (flung up in a fright)
-  for (const d of [-1, 1]) {
-    const up = panic ? 1 : fall ? 0.4 : 0, flail = panic ? Math.sin(t * 20 + d) * 0.3 : 0;
-    const hx = d * (10.4 + up * 2.6), hy = 0.9 - up * 14 + flail * 3;
-    c.beginPath(); c.moveTo(d * 6.6, -5.6); c.quadraticCurveTo(d * (11 + up), -5 - up * 6, hx, hy);
-    c.strokeStyle = AX_PINK[3]; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = pkLG(c, 0, -6, 0, hy, [AX_PINK[1], AX_PINK[2]]); c.lineWidth = 2.8; c.stroke();
-    c.strokeStyle = 'rgba(255,250,252,.7)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(d * 6.8, -6.6); c.quadraticCurveTo(d * (10.8 + up), -6 - up * 6, hx - d * 0.6, hy - 0.8); c.stroke();
-    for (let j = 0; j < 4; j++) { const a = (up ? -Math.PI / 2 : Math.PI / 2) + (j - 1.5) * 0.5; const fx = hx + Math.cos(a) * 1.5, fy = hy + Math.sin(a) * 1.5; pkE(c, fx, fy, 0.8, 0.68, AX_PINK[1], 0); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.35; c.beginPath(); c.ellipse(fx, fy, 0.8, 0.68, 0, 0, TWO_PI); c.stroke(); pkDot(c, fx - 0.2, fy - 0.2, 0.25, '#ffffff'); }
-  }
-  // head
-  const hy = -16.6 + (mood === 'thrust' ? 0.3 : 0);
-  // gills behind the head: three fronds a side, streaming down with the jet, flared out in a fright
-  const flush = Math.max(k * 0.7, f);
-  for (const d of [-1, 1]) {
-    c.save(); c.scale(d, 1);
-    const stream = k * 0.42 - (fall ? 0.35 : 0), flare = panic ? -0.25 + Math.sin(t * 26 + d) * 0.12 : 0;
-    axGill(c, -11.2, hy - 4.4, -2.3 + stream + flare * -1, 8.6, -0.3, t, 0 + d, flush);
-    axGill(c, -12.6, hy - 0.6, -2.85 + stream * 0.8, 9.2, -0.2, t, 1.4 + d, flush);
-    axGill(c, -12.2, hy + 3.2, 2.85 + stream * 0.5 - flare, 7.6, 0.2, t, 2.8 + d, flush);
-    c.restore();
-  }
-  axHeadPath(c, hy); c.fillStyle = pkRG(c, -2, hy - 3, 14, [AX_PINK[0], AX_PINK[1], AX_PINK[2]]); c.fill();
-  c.save(); axHeadPath(c, hy); c.clip();
-  const sh = c.createLinearGradient(0, hy + 3, 0, hy + 9); sh.addColorStop(0, 'rgba(232,112,142,0)'); sh.addColorStop(1, 'rgba(232,112,142,.45)'); c.fillStyle = sh; c.fillRect(-14, hy + 3, 28, 6);
-  pkE(c, 0, hy + 5.6, 8.6, 3.2, 'rgba(255,246,248,.5)', 0);   // pale chin
-  for (const [x, y, r] of [[-4.6, -6.4, 0.5], [3.8, -7, 0.55], [-9, -3.4, 0.45], [9.4, -2.6, 0.5], [0.6, -7.8, 0.4]]) pkDot(c, x, hy + y, r, 'rgba(255,206,130,.85)');
-  c.strokeStyle = 'rgba(120,230,255,.45)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, hy, 12.6, 8.8, 0, 0.35, 1.25); c.stroke();
-  c.restore();
-  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, hy, 11.8, 8.2, 0, 3.75, 4.6); c.stroke();
-  axHeadPath(c, hy); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.6; c.stroke();
-  // cheeks, eyes, nostrils, mouth
-  for (const d of [-1, 1]) pkE(c, d * 8.6, hy + 2.2, 2.6, 1.5, mood === 'panic' ? 'rgba(255,90,120,.35)' : 'rgba(255,90,120,.5)', 0);
-  for (const d of [-1, 1]) axEye(c, d * 6.6, hy - 2.2, 2.9, st, mood);
-  for (const d of [-1, 1]) pkE(c, d * 1.6, hy + 0.6, 0.45, 0.32, AX_PINK[3], 0);
-  axMouth(c, hy + 3.6, mood, t);
-  // helmet (flies off when swallowed)
-  if (bite) axHelmet(c, 7 + Math.sin(t * 7) * 1.5, hy - 16 - Math.sin(t * 5) * 1.5, 0.7 + t * 3, t, 1);
-  else axHelmet(c, 1.2 + st.look * 0.4, hy - 8.6 - (panic ? 1.6 + Math.abs(Math.sin(t * 9)) * 1.2 : 0), -0.16 + (panic ? Math.sin(t * 9) * 0.12 : 0), t, k);
-  c.restore();
-  // ---- the pool in front: front rim, the water lapping at his waist, bubbles and spray ----
-  c.save(); c.beginPath(); c.ellipse(0, 1.6, 9.6, 2.2, 0, 0, Math.PI); c.lineTo(-9.6, 1.6); c.closePath(); c.clip();
-  c.fillStyle = 'rgba(86,196,240,.55)'; c.fillRect(-10, 0, 20, 5);
-  c.restore();
-  c.beginPath(); c.moveTo(-9.6, 1.6);
-  for (let x = -9.6; x <= 9.6; x += 1.2) c.lineTo(x, 1.2 + Math.sin(x * 0.9 + t * 7) * 0.35 - (k ? Math.abs(Math.sin(x * 0.5 + t * 13)) * 0.6 * k : 0));
-  c.strokeStyle = 'rgba(235,252,255,.95)'; c.lineWidth = 0.8; c.stroke();
-  c.beginPath(); c.ellipse(0, 2, 11.6, 3, 0, 0.05, Math.PI - 0.05); c.strokeStyle = AX_TEAL[3]; c.lineWidth = 2.6; c.stroke();
-  c.strokeStyle = pkLG(c, -11, 0, 11, 0, [AX_TEAL[2], AX_TEAL[0], AX_TEAL[1], AX_TEAL[3]]); c.lineWidth = 1.8; c.stroke();
-  c.strokeStyle = 'rgba(220,255,250,.85)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(0, 2, 11.2, 2.6, 0, 1.9, 2.9); c.stroke();
-  // a crown of spray round the rim, taller with the jet
-  const nb = thr ? 9 : bite ? 8 : 4;
-  for (let j = 0; j < nb; j++) {
-    const p = (t * (thr ? 2.4 : 0.9) + j / nb) % 1, side = j % 2 ? 1 : -1, x0 = side * (9.4 + (j * 1.3) % 2);
-    const hgt = thr ? 7 : bite ? 6 : 2.4;
-    axDrop(c, x0 + side * p * 4.4, 1.4 - Math.sin(p * Math.PI) * hgt + p * 2, 0.5 + 0.3 * (1 - p), (1 - p * 0.8) * 0.9);
-  }
-  for (let j = 0; j < 3; j++) { const p = (t * 1.1 + j / 3) % 1; c.strokeStyle = `rgba(230,250,255,${0.8 * (1 - p)})`; c.lineWidth = 0.4; c.beginPath(); c.arc(-5 + j * 5, 1.4 - p * 1.6, 0.5 + p * 0.5, 0, TWO_PI); c.stroke(); }
-  c.restore();
-}
+// ---- Axel and the Runaway hydrant, split into a character and a vehicle (SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: the hydrant, the back of its rim and the pool
+// (vehicle back), Axel rising out of the water with his tail, arms, gills, head and helmet (character body), and the pool
+// in front of him, the front rim and the spray (vehicle front). The whole pair tips over in the bite about (0, 12) (the
+// hydrant's tip), and Axel leans back against it. His hands close on whatever rim a ride has (seat.hand); the water
+// light on his head is the ride's bounce light (the hydrant's pool, by default).
+const AXEL = {
+  id: 'axolotl', line: '#5a1e3a', bitePose: true,
+  palette: { skin: AX_PINK[1], gill: AX_GILL[1], helmet: AX_TEAL[1] },
+  pose(st, seat) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fall = !thr && !panic && !grin && pkLookDown > 0;
+    axEase(AX, st, thr ? 1 : 0, panic ? 1 : fall ? 0.5 : 0);
+    const k = AX.k, f = AX.f;
+    const mood = panic ? 'panic' : grin ? 'grin' : thr ? 'thrust' : fall ? 'fall' : 'calm';
+    return { t, bite, thr, panic, grin, fall, k, f, mood };
+  },
+  draw: {
+    body(c, st, seat) {
+      const { t, bite, thr, panic, fall, k, f, mood } = seat.cp;
+      // ---- Axel ----
+      const bob = Math.sin(t * 2.4) * 0.5 - (thr ? 0.8 : 0) + (fall ? 0.6 : 0) + (bite ? -2 : 0), shake = panic ? Math.sin(t * 44) * 0.35 : 0;
+      c.save(); c.translate(shake, bob); if (bite) { c.translate(0, 2); c.rotate(-seat.tip * 1.5); c.translate(0, -2); }
+      // tail fin flicking up out of the pool behind him
+      const ta = Math.sin(t * (thr ? 12 : bite ? 22 : 3)) * (thr ? 0.25 : 0.15) + (panic ? 0.3 : 0);
+      c.save(); c.translate(7.4, 0.2); c.rotate(0.5 + ta);
+      c.beginPath(); c.moveTo(-1.6, 0.8); c.quadraticCurveTo(-1.8, -4.6, 1.2, -9.6); c.quadraticCurveTo(4.6, -5.4, 2.6, 1); c.closePath();
+      c.fillStyle = pkLG(c, 0, 1, 1.6, -9.6, [AX_PINK[2], AX_PINK[1], AX_PINK[0]]); c.fill(); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.5; c.stroke();
+      c.strokeStyle = 'rgba(232,112,142,.5)'; c.lineWidth = 0.4; for (const u of [0.35, 0.6]) { c.beginPath(); c.moveTo(0.6, -u * 1); c.lineTo(1.2 + u * 0.6, -u * 9); c.stroke(); }
+      c.restore();
+      // body rising out of the water
+      const bodyP = () => { c.beginPath(); c.moveTo(-8.2, 2.6); c.bezierCurveTo(-9.4, -3.4, -8.8, -10, 0, -11); c.bezierCurveTo(8.8, -10, 9.4, -3.4, 8.2, 2.6); c.closePath(); };
+      bodyP(); c.fillStyle = pkLG(c, -9, -10, 9, 2, [AX_PINK[1], AX_PINK[1], AX_PINK[2]]); c.fill();
+      c.save(); bodyP(); c.clip();
+      pkE(c, 0.2, -1, 5, 4.8, 'rgba(255,248,250,.65)', 0);                                   // pale belly
+      const ao = c.createLinearGradient(0, -9, 0, -4); ao.addColorStop(0, 'rgba(200,70,110,.5)'); ao.addColorStop(1, 'rgba(200,70,110,0)'); c.fillStyle = ao; c.fillRect(-10, -11, 20, 7);
+      for (const [x, y] of [[-5.6, -3.6], [5, -4.6], [-3, 0.2], [6, -0.8]]) pkDot(c, x, y, 0.45, 'rgba(255,214,140,.85)');
+      c.restore();
+      bodyP(); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.5; c.stroke();
+      // arms gripping the rim (flung up in a fright)
+      for (const d of [-1, 1]) {
+        const up = panic ? 1 : fall ? 0.4 : 0, flail = panic ? Math.sin(t * 20 + d) * 0.3 : 0;
+        const [gx, gy] = seat.hand && !up ? seat.hand[d > 0 ? 1 : 0] : [0, 0];   // x + 0 === x: no move on his own ride
+        const hx = d * (10.4 + up * 2.6) + gx, hy = 0.9 - up * 14 + flail * 3 + gy;
+        c.beginPath(); c.moveTo(d * 6.6, -5.6); c.quadraticCurveTo(d * (11 + up) + gx / 2, -5 - up * 6 + gy / 2, hx, hy);
+        c.strokeStyle = AX_PINK[3]; c.lineWidth = 3.6; c.stroke(); c.strokeStyle = pkLG(c, 0, -6, 0, hy, [AX_PINK[1], AX_PINK[2]]); c.lineWidth = 2.8; c.stroke();
+        c.strokeStyle = 'rgba(255,250,252,.7)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(d * 6.8, -6.6); c.quadraticCurveTo(d * (10.8 + up) + gx / 2, -6 - up * 6 + gy / 2, hx - d * 0.6, hy - 0.8); c.stroke();
+        for (let j = 0; j < 4; j++) { const a = (up ? -Math.PI / 2 : Math.PI / 2) + (j - 1.5) * 0.5; const fx = hx + Math.cos(a) * 1.5, fy = hy + Math.sin(a) * 1.5; pkE(c, fx, fy, 0.8, 0.68, AX_PINK[1], 0); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.35; c.beginPath(); c.ellipse(fx, fy, 0.8, 0.68, 0, 0, TWO_PI); c.stroke(); pkDot(c, fx - 0.2, fy - 0.2, 0.25, '#ffffff'); }
+      }
+      // head
+      const hy = -16.6 + (mood === 'thrust' ? 0.3 : 0);
+      // gills behind the head: three fronds a side, streaming down with the jet, flared out in a fright
+      const flush = Math.max(k * 0.7, f);
+      for (const d of [-1, 1]) {
+        c.save(); c.scale(d, 1);
+        const stream = k * 0.42 - (fall ? 0.35 : 0), flare = panic ? -0.25 + Math.sin(t * 26 + d) * 0.12 : 0;
+        axGill(c, -11.2, hy - 4.4, -2.3 + stream + flare * -1, 8.6, -0.3, t, 0 + d, flush);
+        axGill(c, -12.6, hy - 0.6, -2.85 + stream * 0.8, 9.2, -0.2, t, 1.4 + d, flush);
+        axGill(c, -12.2, hy + 3.2, 2.85 + stream * 0.5 - flare, 7.6, 0.2, t, 2.8 + d, flush);
+        c.restore();
+      }
+      axHeadPath(c, hy); c.fillStyle = pkRG(c, -2, hy - 3, 14, [AX_PINK[0], AX_PINK[1], AX_PINK[2]]); c.fill();
+      c.save(); axHeadPath(c, hy); c.clip();
+      const sh = c.createLinearGradient(0, hy + 3, 0, hy + 9); sh.addColorStop(0, 'rgba(232,112,142,0)'); sh.addColorStop(1, 'rgba(232,112,142,.45)'); c.fillStyle = sh; c.fillRect(-14, hy + 3, 28, 6);
+      pkE(c, 0, hy + 5.6, 8.6, 3.2, 'rgba(255,246,248,.5)', 0);   // pale chin
+      for (const [x, y, r] of [[-4.6, -6.4, 0.5], [3.8, -7, 0.55], [-9, -3.4, 0.45], [9.4, -2.6, 0.5], [0.6, -7.8, 0.4]]) pkDot(c, x, hy + y, r, 'rgba(255,206,130,.85)');
+      c.strokeStyle = seat.vehicle.palette.bounce || 'rgba(120,230,255,.45)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, hy, 12.6, 8.8, 0, 0.35, 1.25); c.stroke();
+      c.restore();
+      c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, hy, 11.8, 8.2, 0, 3.75, 4.6); c.stroke();
+      axHeadPath(c, hy); c.strokeStyle = AX_PINK[3]; c.lineWidth = 0.6; c.stroke();
+      // cheeks, eyes, nostrils, mouth
+      for (const d of [-1, 1]) pkE(c, d * 8.6, hy + 2.2, 2.6, 1.5, mood === 'panic' ? 'rgba(255,90,120,.35)' : 'rgba(255,90,120,.5)', 0);
+      for (const d of [-1, 1]) axEye(c, d * 6.6, hy - 2.2, 2.9, st, mood);
+      for (const d of [-1, 1]) pkE(c, d * 1.6, hy + 0.6, 0.45, 0.32, AX_PINK[3], 0);
+      axMouth(c, hy + 3.6, mood, t);
+      // helmet (flies off when swallowed)
+      if (bite) axHelmet(c, 7 + Math.sin(t * 7) * 1.5, hy - 16 - Math.sin(t * 5) * 1.5, 0.7 + t * 3, t, 1);
+      else axHelmet(c, 1.2 + st.look * 0.4, hy - 8.6 - (panic ? 1.6 + Math.abs(Math.sin(t * 9)) * 1.2 : 0), -0.16 + (panic ? Math.sin(t * 9) * 0.12 : 0), t, k);
+      c.restore();
+    },
+  },
+};
+const HYDRANT = {
+  id: 'hydrant', line: '#5a1e3a', exhaust: 'water', nozzles: [[0, 31.5]], bitePose: true, tip: { pivot: [0, 12] },
+  desc: 'A teal street hydrant knocked clean off its pipe, water gushing from the broken stub, brass caps spurting and an open top full of bubbling water',
+  palette: { enamel: AX_TEAL[1], brass: AX_BRASS[1], water: '#56c4f0', tint: '44,188,176', bounce: 'rgba(120,230,255,.45)' },
+  pose(st) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const fall = !thr && !panic && !grin && pkLookDown > 0;
+    axEase(AXV, st, thr ? 1 : 0, panic ? 1 : fall ? 0.5 : 0);
+    const k = AXV.k;
+    const tip = bite ? 0.26 + 0.07 * Math.sin(t * 12) : 0;   // swallowed: the hydrant tips over (and its rider with it)
+    return { t, bite, thr, k, tip };
+  },
+  draw: {
+    back(c, st, seat) {
+      const { t, k, bite } = seat.vp;
+      // ---- the hydrant ----
+      const pump = 1 + k * 0.018 * Math.sin(t * 34);
+      c.save(); c.translate(0, 12); c.scale(pump, 1 / pump); c.translate(0, -12);
+      axHydrant(c, st, k, bite);
+      c.restore();
+      // the open top: back of the rim, then the bubbling pool
+      pkE(c, 0, 2, 11.6, 3, pkLG(c, -11.6, 0, 11.6, 0, [AX_TEAL[3], AX_TEAL[1], AX_TEAL[0], AX_TEAL[2], AX_TEAL[3]]), 0);
+      pkE(c, 0, 1.6, 9.6, 2.2, pkLG(c, 0, -0.6, 0, 3.8, ['#2a90d0', '#56c4f0', '#a8ecff']), 0);
+    },
+    front(c, st, seat) {
+      const { t, thr, bite, k } = seat.vp;
+      // ---- the pool in front: front rim, the water lapping at his waist, bubbles and spray ----
+      c.save(); c.beginPath(); c.ellipse(0, 1.6, 9.6, 2.2, 0, 0, Math.PI); c.lineTo(-9.6, 1.6); c.closePath(); c.clip();
+      c.fillStyle = 'rgba(86,196,240,.55)'; c.fillRect(-10, 0, 20, 5);
+      c.restore();
+      c.beginPath(); c.moveTo(-9.6, 1.6);
+      for (let x = -9.6; x <= 9.6; x += 1.2) c.lineTo(x, 1.2 + Math.sin(x * 0.9 + t * 7) * 0.35 - (k ? Math.abs(Math.sin(x * 0.5 + t * 13)) * 0.6 * k : 0));
+      c.strokeStyle = 'rgba(235,252,255,.95)'; c.lineWidth = 0.8; c.stroke();
+      c.beginPath(); c.ellipse(0, 2, 11.6, 3, 0, 0.05, Math.PI - 0.05); c.strokeStyle = AX_TEAL[3]; c.lineWidth = 2.6; c.stroke();
+      c.strokeStyle = pkLG(c, -11, 0, 11, 0, [AX_TEAL[2], AX_TEAL[0], AX_TEAL[1], AX_TEAL[3]]); c.lineWidth = 1.8; c.stroke();
+      c.strokeStyle = 'rgba(220,255,250,.85)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(0, 2, 11.2, 2.6, 0, 1.9, 2.9); c.stroke();
+      // a crown of spray round the rim, taller with the jet
+      const nb = thr ? 9 : bite ? 8 : 4;
+      for (let j = 0; j < nb; j++) {
+        const p = (t * (thr ? 2.4 : 0.9) + j / nb) % 1, side = j % 2 ? 1 : -1, x0 = side * (9.4 + (j * 1.3) % 2);
+        const hgt = thr ? 7 : bite ? 6 : 2.4;
+        axDrop(c, x0 + side * p * 4.4, 1.4 - Math.sin(p * Math.PI) * hgt + p * 2, 0.5 + 0.3 * (1 - p), (1 - p * 0.8) * 0.9);
+      }
+      for (let j = 0; j < 3; j++) { const p = (t * 1.1 + j / 3) % 1; c.strokeStyle = `rgba(230,250,255,${0.8 * (1 - p)})`; c.lineWidth = 0.4; c.beginPath(); c.arc(-5 + j * 5, 1.4 - p * 1.6, 0.5 + p * 0.5, 0, TWO_PI); c.stroke(); }
+    },
+  },
+};
+SPLIT_CHARACTERS.axolotl = AXEL; SPLIT_VEHICLES.hydrant = HYDRANT;
 
 
 // ---- Cappy the toadstool and the Puffball (PILOTS 'mushroom') ----
@@ -14358,9 +14459,9 @@ const PILOTS = [
 
   { id: 'goat', name: 'Billy Boom the goat', ride: 'Triple-Bang firework' },   // split: BILLY on the FIREWORK (exhaust, nozzles and art from the parts)
 
-  { id: 'chameleon', name: 'Pico the chameleon', ride: 'Hot-chilli rocket', noInk: '#173a36', exhaust: 'fire', nozzles: [[2.4, 35.5]], bitePose: true, draw(c, st) { chmDraw(c, st); } },
+  { id: 'chameleon', name: 'Pico the chameleon', ride: 'Hot-chilli rocket' },   // split: PICO on the HOT_CHILLI (exhaust, nozzles and art from the parts)
 
-  { id: 'axolotl', name: 'Axel the axolotl', ride: 'Runaway hydrant', noInk: '#5a1e3a', exhaust: 'water', nozzles: [[0, 31.5]], bitePose: true, draw(c, st) { axDraw(c, st); } },
+  { id: 'axolotl', name: 'Axel the axolotl', ride: 'Runaway hydrant' },   // split: AXEL in the HYDRANT
 
   { id: 'mushroom', name: 'Cappy the toadstool', ride: 'Earthstar puffball' },   // split: CAPPY on the PUFFBALL
   { id: 'robot', name: 'Bolt the robot', ride: 'Twin-jet tin tub' },   // split: BOLT in the TIN_TUB

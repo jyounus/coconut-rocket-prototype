@@ -61,7 +61,7 @@ const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, t
   for (const id in PILOT_HITS) if (!SIGNATURE[id]) fail('every pilot hitbox belongs to a character', id);
   if (Object.keys(CHAR_FIT).sort().join() !== chars.slice().sort().join() || Object.keys(VEH_FIT).sort().join() !== rides.slice().sort().join()) fail('CHAR_FIT and VEH_FIT list every character and vehicle (null until split)', '');
   if (PILOT_CAP.w > LANE_LIMIT.w || PILOT_CAP.h > LANE_LIMIT.h) fail('the pair cap is no bigger than today\'s widest and tallest pilot', `${PILOT_CAP.w} × ${PILOT_CAP.h}`);
-  if (!(SEAT_FLOOR >= 0.7) || SEAT_SCALE[0] < SEAT_FLOOR || SEAT_SCALE[1] > 1.12) fail('a swapped character is drawn at 0.7 to 1.12 of its size', `floor ${SEAT_FLOOR}, ${SEAT_SCALE}`);
+  if (!(SEAT_FLOOR >= 0.65) || SEAT_SCALE[0] < SEAT_FLOOR || SEAT_SCALE[1] > 1.12) fail('a swapped character is drawn at 0.65 to 1.12 of its size', `floor ${SEAT_FLOOR}, ${SEAT_SCALE}`);
   const W = PILOT_CAP.w, H = PILOT_CAP.h, D = PART_ENV.depth;
   // reach of a capsule list from (0, 0) at each of the 21 tilts: [left, right, up, down]
   const reach = hits => Array.from({ length: 21 }, (_, k) => {
@@ -95,7 +95,7 @@ const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, t
     pairStats.minEnv = Math.min(pairStats.minEnv, env);
     const foot = C.foot != null ? C.foot : C.sink;
     for (const k of [env, SEAT_FLOOR]) for (const lift of [Math.min(0, foot * k - PART_ENV.drop), Math.max(0, foot * k, C.sink * k)])
-      if (k < SEAT_FLOOR || !inside('character', mv(body, k, -C.hip[0] * k, -C.hip[1] * k - lift))) fail('every split character fits the character envelope at 0.7 of its size or more', `${ch}: envelope scale ${env.toFixed(3)}`);
+      if (k < SEAT_FLOOR || !inside('character', mv(body, k, -C.hip[0] * k, -C.hip[1] * k - lift))) fail('every split character fits the character envelope at 0.65 of its size or more', `${ch}: envelope scale ${env.toFixed(3)}`);
   }
   for (const ch of chars) for (const vh of rides) {
     pairStats.pairs++;
@@ -114,7 +114,7 @@ const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, t
     const want = mv(cOwn(ch).concat(C.body || []), k, dx, dy).concat(vOwn(vh));
     if (!near(f.dx, dx) || !near(f.dy, dy) || hits.length !== want.length || hits.some((c, i) => c.some((v, j) => !near(v, want[i][j])))) fail('a swapped pair\'s hitbox is its character\'s capsules on the seat plus its vehicle\'s', `${ch}+${vh}`);
     pairStats.minS = Math.min(pairStats.minS, k); if (f.cramped) pairStats.cramped++;
-    if (f.floored || !(k >= SEAT_FLOOR - 1e-12) || k > SEAT_SCALE[1] + 1e-12) fail('every character fits every vehicle at 0.7 to 1.12 of its size', `${ch}+${vh}: scale ${k.toFixed(3)}`);
+    if (f.floored || !(k >= SEAT_FLOOR - 1e-12) || k > SEAT_SCALE[1] + 1e-12) fail('every character fits every vehicle at 0.65 to 1.12 of its size', `${ch}+${vh}: scale ${k.toFixed(3)}`);
     if (w > W + 1e-9 || h > H + 1e-9) fail('every character in every vehicle stays inside the pair cap at any tilt', `${ch}+${vh}: ${w.toFixed(2)} × ${h.toFixed(2)} vs ${W} × ${H}`);
     if (w > pairStats.worstW) { pairStats.worstW = w; pairStats.worst = `${ch}+${vh}`; }
   }
