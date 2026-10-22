@@ -36,7 +36,8 @@ body {
 }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
-/* HUD: one line, no panel. Big metres top-centre, the crystal count small under it, pause at the right. */
+/* HUD: one line, no panel. Big metres top-centre, the run's coconut count small under it, pause at the right
+   (the chili ammo row is drawn on the canvas, top left). */
 .hud {
   position: fixed; inset: 0 0 auto; z-index: 5; transition: opacity .18s;
   display: flex; align-items: flex-start; justify-content: center;
@@ -51,9 +52,16 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   -webkit-text-stroke: 1.5px var(--ink);
 }
 .hud .meters small { font-size: 20px; margin-left: 2px; }
-.crys { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; font: 400 23px var(--font-display); color: #c8f2ff; -webkit-text-stroke: 1.2px var(--ink); text-shadow: 0 2px 0 var(--ink); font-variant-numeric: tabular-nums; transition: transform .08s; }
-.crys i { width: 15px; height: 21px; clip-path: polygon(50% 0, 100% 35%, 80% 100%, 20% 100%, 0 35%); background: linear-gradient(135deg, #f0fdff, #7fd8ff 50%, #2a7ad8); }
-.crys.bump { transform: scale(1.3); }
+.coco { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; font: 400 23px var(--font-display); color: #ffe7b8; text-shadow: 0 2px 0 rgba(40,18,6,.85), 0 0 8px rgba(0,0,0,.45); font-variant-numeric: tabular-nums; transition: transform .08s; }
+/* a coconut drawn in CSS: brown husk gradient, three eyes, a soft highlight (no outline) */
+.coco i, .earned i { position: relative; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #c08a56 0, #7a4a22 48%, #3e220e 100%); box-shadow: 0 2px 0 rgba(30,14,4,.6); }
+.coco i::after, .earned i::after { content: ''; position: absolute; left: 5px; top: 5px; width: 3px; height: 3px; border-radius: 50%; background: #2c1606; box-shadow: 6px 0 0 #2c1606, 3px 4px 0 #2c1606; }
+.coco.bump { transform: scale(1.3); }
+.earned { display: flex; align-items: center; gap: 8px; margin: 0; padding: 5px 12px; border-radius: 14px; background: rgba(255,210,94,.12); }
+.earned span { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; font-size: 11px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #ffd25e; white-space: nowrap; }
+.earned b { font: 400 24px var(--font-display); color: #ffe7b8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.earned small { font-size: 11.5px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.bonus li.comeback, .bonus li.comeback b { color: #ffd25e; }
 .hud .iconbtn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 8px); right: max(16px, env(safe-area-inset-right, 0px)); }
 .hud .iconbtn.faded { opacity: .45; }
 .hudmid { transition: opacity .15s; } .hudmid.faded { opacity: .3; }
@@ -79,7 +87,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 .hint span { display: block; font: 800 14px var(--font-body); color: var(--muted); -webkit-text-stroke: 0; text-shadow: 0 1px 0 var(--ink); margin-top: 6px; }
-.hint .hint2 { color: #9ae8ff; margin-top: 4px; }
+.hint .hint2 { color: #ffb27a; margin-top: 4px; }
 @keyframes bob { 50% { transform: translateY(-6px); } }
 
 /* Screens */
@@ -155,6 +163,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 #over .panel { margin: auto auto 0; gap: 9px; padding: 15px 18px 16px; }   /* auto top margin: sits at the bottom, still scrolls if taller */
 #over .bignum { font-size: 44px; } #over .bignum small { font-size: 26px; }
 #over .scorebox { gap: 3px; padding: 9px 12px; }
+#over .bonus { gap: 1px; }
 #over .stat { padding: 7px 10px; } #over .stat b { font-size: 22px; }
 #over .btn { min-height: 46px; } #over .btns { gap: 8px; }
 #over .cause { font-size: 16px; }
@@ -261,12 +270,12 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 <div class="hud" id="hud" hidden>
   <div class="hudmid" id="hudHeight">
     <div class="meters" id="meters">0<small>m</small></div>
-    <span class="crys" id="fruitChip" aria-label="Ice crystals"><i></i><b id="fruitCount">0</b></span>
+    <span class="coco" id="cocoChip" aria-label="Coconuts this run"><i></i><b id="cocoCount">0</b></span>
   </div>
   <button class="iconbtn" id="pauseBtn" aria-label="Pause">II</button>
 </div>
 
-<div class="hint" id="hint" hidden>Hold to launch<span id="hintSub">Drag your thumb to steer</span><span class="hint2">Grab ice crystals to keep your engine cool</span></div>
+<div class="hint" id="hint" hidden>Hold to launch<span id="hintSub">Drag your thumb to steer</span><span class="hint2">Grab chilies: your exhaust blasts the monster</span></div>
 
 <!-- Menu -->
 <div class="screen" id="menu">
@@ -274,7 +283,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <canvas class="keyart" id="keyArt" aria-hidden="true"></canvas>
     <div class="eyebrow" id="menuDate">Daily shaft</div>
     <h1 class="title sr-only">Coconut Rocket</h1>
-    <p class="lede">Hold to fly. Grab ice crystals to keep your engine cool. Don't get eaten.</p>
+    <p class="lede">Hold to fly. Grab chilies to blast the monster below, and coconuts to spend. Don't get eaten.</p>
     <button class="btn go big" id="playDaily">Play</button>
     <div class="seg" role="group" aria-label="Controls">
       <button id="ctlOne" data-ctl="one" aria-pressed="true">One thumb</button>
@@ -351,6 +360,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
       <ul class="bonus" id="overBonus"></ul>
       <div class="total"><span>Final score</span><b id="overPoints">0 pts</b></div>
     </div>
+    <p class="earned" id="overEarned"></p>
     <span class="newbest" id="overNew" hidden>New best today</span>
     <p class="tunednote" id="overTuned" hidden>Tuned settings are on, so this run doesn't count toward today's best. Reset Tune to defaults to compete.</p>
     <div class="stats">
@@ -359,7 +369,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="btns">
       <button class="btn go" id="againBtn">Run again</button>
-      <button class="btn" id="adBtn">Watch ad: keep flying</button>
+      <button class="btn" id="adBtn">Keep flying + bonus coconuts</button>
       <div class="btnrow">
         <button class="btn alt" id="shareBtn">Share score</button>
         <button class="btn alt" id="menuBtn">Menu</button>
@@ -374,7 +384,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="eyebrow">Rewarded video</div>
     <div class="adbox"><div><b id="adCount">3</b><span class="note">A rewarded video ad plays here in the real game.</span></div></div>
     <div class="bar"><i id="adBar"></i></div>
-    <p class="note" id="adNote">Continue your run from right where you were. The monster gets pushed back and the obstacles around you are cleared.</p>
+    <p class="note" id="adNote">Keep flying from right where you were, with a full tank of chilies and a comeback bonus.</p>
   </div>
 </div>
 
@@ -385,7 +395,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     <div class="tune" id="tuneRows"></div>
     <label class="check" for="showHitboxes"><input type="checkbox" id="showHitboxes"> Show hitboxes</label>
     <p class="tunestatus" id="tuneStatus"></p>
-    <p class="note">Changes apply straight away and are saved on this phone. The engine heats while you thrust; ice crystals cool it fast (letting go cools it too). Too hot and it sputters for a second.</p>
+    <p class="note">Changes apply straight away and are saved on this phone. Your exhaust fires chilies down at the monster on its own; run out and it gets hungry, so keep grabbing chilies.</p>
     <div class="btnrow">
       <button class="btn alt" id="tuneReset">Reset</button>
       <button class="btn go" id="tuneDone">Done</button>
@@ -418,18 +428,17 @@ const store = {
 /* LEVELGEN:BEGIN */
 const WORLD_W = 400;           // world units across the shaft
 const UNITS_PER_M = 10;
-// heatTime: seconds of holding before the engine runs fully hot (it only weakens, it never cuts out);
-// coolTime: seconds to cool fully; boost: strength of the kick for pressing again once it has cooled.
+// boost: strength of the kick for pressing again after a short release (it recharges over BOOST_CD seconds).
 // wormBase / wormRamp / chase: the monster's base speed, how much it gains per unit climbed (up to
 // +60), and the gap between the pilot's lowest point and its catch line it rubber-bands toward (see CHASE).
-const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 285, wormRamp: 0.005, chase: 175, density: 1, intro: 300, camPos: 25, heatTime: 3.5, coolTime: 2.0, boost: 1 };
+const DEFAULTS = { gravity: 1150, thrust: 2000, maxUp: 440, lag: 0.45, wormBase: 285, wormRamp: 0.005, chase: 175, density: 1, intro: 300, camPos: 25, boost: 1 };
 
 // Pilot hitboxes, fitted to each drawing (art units: y points down, drawn at PILOT_SCALE in the world).
 // Each entry is a capsule [x0, y0, x1, y1, r] (a circle when both ends match). They cover the body and the
 // vehicle, never the flame; thin trim (tails, antennae, whiskers, wing tips) is left out. The hitbox turns
 // with the drawn tilt (capped at PILOT_TILT radians either way).
 const PILOT_SCALE = 1.5, PILOT_TILT = 0.31;
-// The generator keeps sizing its lanes and crystal clearances for pilots drawn at LANE_SCALE (a little bigger than
+// The generator keeps sizing its lanes and pickup clearances for pilots drawn at LANE_SCALE (a little bigger than
 // they are), so every lane has spare room around the real hitboxes.
 const LANE_SCALE = 1.8;
 const PILOT_HITS = {
@@ -794,8 +803,6 @@ const TUNE = [
   ['density', 'Obstacle density', 0.3, 2.2, 0.05, v => v.toFixed(2) + '×'],
   ['intro', 'Easy start', 0, 600, 10, v => v + ' m'],
   ['camPos', 'Rocket screen height', 12, 60, 1, v => v + '% up'],
-  ['heatTime', 'Engine heats up over (thrusting)', 1, 8, 0.1, v => v.toFixed(1) + ' s'],
-  ['coolTime', 'Engine cools over (let go)', 1, 12, 0.5, v => v.toFixed(1) + ' s'],
   ['boost', 'Re-press kick', 0, 2, 0.05, v => Math.round(v * 100) + '%'],
 ];
 
@@ -863,9 +870,13 @@ resize();
 // ---------- world shape & level layout ----------
 let G = null;
 /* LEVELGEN:BEGIN */
-// An ice crystal's pickup radius: its drawn shards (at CRYSTAL_ART scale, ink included) fit inside this circle, and a
-// pilot capsule touching it picks it up (the same circle shows in the hitbox overlay).
-const CRYSTAL_R = 19, CRYSTAL_ART = 1.8;
+// Pickup and shot radii (world units). A pickup's solid art stays inside its circle (additive glows may spill out), a
+// pilot capsule touching the circle picks it up, and the hitbox overlay draws exactly these circles. SHOT_R is a chili
+// shot's hit circle. PICK_R is the largest pickup circle: the generator keeps every pickup this far plus the pilot's
+// half-width plus 15 from any hazard (RULES.pickup.clear), whichever kind it is.
+const CHILI_R = 18, COCO_R = 15, GOLD_R = 18, SHOT_R = 8;
+const PICK_R = Math.max(CHILI_R, COCO_R, GOLD_R);
+const pickR = f => f.kind === 'chili' ? CHILI_R : f.kind === 'gold' ? GOLD_R : COCO_R;
 // Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m, and the widest
 // pilot hitbox at full tilt is about 70 across (pilotMaxSize). Every hazard must pass these before
 // it is placed, so a layout can be hard but never impossible. Everything is measured in height, never time,
@@ -941,27 +952,59 @@ const RULES = {
   beatEvery: 1000,             // and between them a scripted beat (a gauntlet, a formation) about every 100 m
   signature: { types: ['pend', 'crusher', 'lavafall'], len: 2200, boost: 2.2 },   // each zone's own hazard dominates its opening
   arenaWidth: 360,             // the breather arena opens the shaft to this width
-  // Ice crystals (the collectibles, still called fruit in the code): sparse, so heat matters. Each one cools the
-  // engine by `cool`; a risky one off the main line (beside a hazard, out on an arc, through a bat's path) cools
-  // `bonus` more. Wherever the shaft goes `gap` without one, one is placed near the centre line, so following
-  // the crystals while feathering the thrust always keeps the engine out of overheat (see the test). Every
-  // crystal keeps `clear` from every hazard's hitbox (the widest pilot's half-width plus 15 plus the crystal's own
-  // pickup radius `r`), so following them with normal steering lag never clips a pod or a spike.
-  crystal: { gap: 680, cool: 0.26, bonus: 0.12, r: CRYSTAL_R, clear: Math.ceil(laneSize().w / 2 + 15 + CRYSTAL_R) },
-  fruitStep: 38,               // height between fruit in an arc
-  fruitMargin: 24,             // fruit keep at least this far from the walls
-  fruitChance: 0.12,           // share of hazards that get a risky crystal beside their safe lane
-  fruitHug: Math.ceil(laneSize().w / 2 + 15 + CRYSTAL_R),   // racing-line crystals sit exactly the clearance from a hazard's reach
-  // Release beats: after a chunk's tension steps, a fruit arc sweeps across an empty stretch of shaft.
-  arc: { gap: 70, n: 3, every: 3, step: 60, pause: 30 },   // every third release beat carries a short ice-crystal arc
+  // Pickups (still called fruit in the code), two kinds sharing one placement machinery:
+  // - chilies (kind 'chili') are blaster ammo, the survival resource. They are the guaranteed main line: wherever the
+  //   shaft goes `chili.gap` without a chili, one is placed as near the centre line as the clearance allows, so
+  //   following the chilies always out-supplies steady auto-fire (see AMMO and the test).
+  // - coconuts (kind 'coco', worth 1) are the currency: arcs on the release beats, short trails in the clear
+  //   stretches between hazards, weaves through calm chambers and breather arenas, and risky racing-line spots
+  //   beside hazards; some risky spots hold a golden coconut instead (kind 'gold', worth COCO_GOLD).
+  // Every pickup keeps `pickup.clear` from every hazard's hitbox (the widest pilot's half-width plus 15 plus the
+  // largest pickup radius), so following them with normal steering lag never clips a pod or a spike.
+  pickup: { r: PICK_R, clear: Math.ceil(laneSize().w / 2 + 15 + PICK_R) },
+  chili: { gap: 470 },
+  fruitStep: 38,               // height between coconuts in a trail
+  fruitMargin: 24,             // pickups keep at least this far from the walls
+  fruitChance: 0.75,           // share of hazards that get a risky coconut beside their safe lane
+  goldChance: 0.5,             // share of those risky spots (never arcs or trails) that hold a golden coconut
+  fruitHug: Math.ceil(laneSize().w / 2 + 15 + PICK_R),   // racing-line coconuts sit exactly the clearance from a hazard's reach
+  // Release beats: after a chunk's tension steps, a coconut arc of n[0]..n[1] sweeps across an empty stretch of shaft.
+  arc: { gap: 44, n: [5, 7], every: 2, step: 30, pause: 30 },   // every second release beat carries an arc
                                // (the others are just a short `pause`)
-  chamberFruitStep: 320,       // calm chambers' fruit weave is sparse too
+  // Coconut trails in the clear stretch between two hazards: `chance` of the gaps at least `min` tall get n[0]..n[1]
+  // coconuts in a gentle diagonal, `pad` clear of both hazards' bands.
+  trail: { chance: 0.6, min: 110, n: [3, 5], pad: 24 },
+  chamberFruitStep: 70,        // calm chambers' coconut weave
   // Corridors: interlocking stretches where two or three hazard types combine at close spacing. They grow
   // more likely deeper into each zone (corridorRamp, by share of the zone climbed) and are always followed
   // by a long breather (corridorBreather × the normal one).
   corridorRamp: [0.9, 4],
   corridorBreather: 1.9,
 };
+
+// ---------- the run economy: chili ammo, coconuts, monster hits, the ad comeback ----------
+// AMMO: the rocket's exhaust auto-fires a flaming chili shot straight DOWN every `rate` s while it has ammo and the
+// monster's catch line is within `range` below the pilot. A shot flies at `speed` (world units / s), costs 1 ammo, and
+// a hit knocks the monster `push` units back down, stops its climb for `stun` s and cancels a surge it is winding up
+// or running. A chili gives `per` ammo, up to `max`; a run starts with `start`. Out of ammo the monster gets hungry:
+// hunger builds over `starve` s (and drains over `sate` s once you have ammo again), pulling its leash down to
+// -`lunge` (past the pilot) and lifting its speed cap by `hungerCap`, so it reaches you within a few seconds unless
+// you grab a chili. `low`: the ammo warning shows at or below this.
+const AMMO = { start: 6, max: 10, per: 3, rate: 0.55, range: 330, speed: 1100, push: 150, stun: 0.35, starve: 10, sate: 1.5, lunge: 170, hungerCap: 220, low: 2 };
+const COCO_BONUS = 25;      // points per coconut (a golden one counts as COCO_GOLD coconuts)
+const COCO_GOLD = 10;       // a golden coconut's worth
+const HIT_BONUS = 10;       // points per chili shot that hits the monster
+const CLOSE_BONUS = 50;     // points per close call
+const PTS_PER_M = 10;       // points per metre climbed
+// The ad revive is a reward: full score kept, ammo refilled, a `shield` s grace when you launch again, plus a
+// comeback bonus of `share` of the run's coconuts so far (at least `min`) and `pts` points.
+const COMEBACK = { share: 0.5, min: 10, pts: 500, shield: 2.4 };
+// Vehicle perks hook in here later (start ammo, max ammo, fire rate, knockback, coconut value, magnet radius, revive
+// shield): every tunable that a perk may change is read through perk(name, base). For now it returns base.
+// Names: 'startAmmo', 'maxAmmo', 'fireRate' (seconds between shots), 'push', 'cocoValue', 'magnet', 'reviveShield'.
+function perk(name, base) { return base; }
+// The hungry monster's leash: [target gap, speed cap above base] for hunger 0..1 (see chaseSpeed; shared with the test).
+function hungerLeash(target, cap, hunger) { return [lerp(target, -AMMO.lunge, hunger), cap + AMMO.hungerCap * hunger]; }
 const FIRE_HUB = 34;               // drawn hub radius (its hitbox is the hub, the bar flame and the tip)
 const WALL_HAZARDS = new Set(['geyser', 'pend', 'spike', 'lavafall']);
 const HEAVY = new Set(['geyser', 'firebar', 'pend', 'crusher', 'gate']);
@@ -1138,7 +1181,7 @@ function batPos(h, t) {
   return [h.cx + h.amp * Math.sin(ph), h.base + 14 * Math.sin(ph * 2.1)];
 }
 
-// ---------- hazard shapes shared by collision, the crystal clearance and the test ----------
+// ---------- hazard shapes shared by collision, the pickup clearance and the test ----------
 function ptSeg(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? clamp(((px - ax) * dx + (py - ay) * dy) / L, 0, 1) : 0;
   return Math.hypot(px - ax - dx * t, py - ay - dy * t);
@@ -1185,9 +1228,9 @@ function staticShapes(h, S = []) {
   }
   return S;
 }
-// Everywhere a hazard's hitbox can ever reach, for keeping crystals clear of it: the static shapes, a pod's whole
+// Everywhere a hazard's hitbox can ever reach, for keeping pickups clear of it: the static shapes, a pod's whole
 // swing, a crusher fully closed, a spider's whole bob and a fire wheel's whole sweep. (Bats and gates are timing
-// hazards and boulders fall through: their crystals are placed by timing, not distance.)
+// hazards and boulders fall through: their pickups are placed by timing, not distance.)
 function dangerShapes(h) {
   const S = staticShapes(h);
   if (h.type === 'pend') {
@@ -1441,11 +1484,11 @@ function createLevel(seed, opts) {
     return null;
   }
 
-  // Risky crystals: one beside a hazard, on the racing line exactly RULES.fruitHug (the crystal clearance) from
+  // Risky coconuts: one beside a hazard, on the racing line exactly RULES.fruitHug (the pickup clearance) from
   // its reach at its most dangerous height; or out beside a fire wheel's sweep, through a bat's path, or just
-  // above a gate's meeting point. They are off the main line, so they cool a little extra (RULES.crystal.bonus).
+  // above a gate's meeting point. They are off the main line, so some (RULES.goldChance) are golden.
   function trail(h, out) {
-    const hug = RULES.fruitHug, add = (x, a) => out.push({ x, alt: a, bonus: true });
+    const hug = RULES.fruitHug, kind = hash2(placed, seed + 77) < RULES.goldChance ? 'gold' : 'coco', add = (x, a) => out.push({ x, alt: a, bonus: true, kind });
     if (h.type === 'firebar') { const [L, R] = opening(h.lo, h.hi), side = h.cx - L > R - h.cx ? -1 : 1; add(h.cx + side * (h.len + h.br * 1.08 + hug), h.alt); return; }
     if (h.type === 'boulder') return;
     if (h.type === 'gate') { add(h.mid, h.hi + 40); return; }
@@ -1461,6 +1504,18 @@ function createLevel(seed, opts) {
     else line = (lane[0] + lane[1]) / 2;
     const mid = clamp(line, Math.min(lane[0] + hug, (lane[0] + lane[1]) / 2), Math.max(lane[1] - hug, (lane[0] + lane[1]) / 2));
     add(mid, h.type === 'pend' ? h.aAlt - h.len * 0.75 : h.type === 'spider' ? h.aAlt - h.mid : h.type === 'lavafall' ? (h.lo + h.alt) / 2 : h.type === 'hang' ? h.aAlt - h.len * 0.6 : h.alt);
+  }
+
+  // A short coconut trail through the clear stretch between two neighbouring hazards (prev below, h above): a gentle
+  // diagonal near the lane's middle, kept RULES.trail.pad clear of both bands (decided by hash, never by rng(), so
+  // the hazard layout never depends on it).
+  function gapTrail(prev, h) {
+    const T = RULES.trail, lo = (prev.type === 'pend' ? prev.aAlt : prev.hi) + T.pad, hi = h.lo - T.pad;
+    if (prev.type === 'boulder' || h.type === 'boulder' || hi - lo < T.min - 2 * T.pad || hash2(placed, seed + 61) >= T.chance) return;
+    const n = Math.min(T.n[0] + Math.floor(hash2(placed, seed + 62) * (T.n[1] - T.n[0] + 1)), 1 + Math.floor((hi - lo) / 26));
+    const stepA = Math.min(RULES.fruitStep, (hi - lo) / Math.max(1, n - 1)), a0 = (lo + hi) / 2 - stepA * (n - 1) / 2;
+    const [l, r] = walls(a0), slant = (hash2(placed, seed + 63) - 0.5) * 2, x0 = (l + r) / 2 + slant * (r - l) * 0.18;
+    for (let k = 0; k < n; k++) pendFruit.push({ x: x0 + (k - (n - 1) / 2) * slant * 14, alt: a0 + k * stepA, trail: true, kind: 'coco' });
   }
 
   // Which hazard types the easy start allows at height a (null: everything).
@@ -1535,7 +1590,7 @@ function createLevel(seed, opts) {
     if (!fruitOut) return;
     for (let a = ch.a0 + 120, k = 0; a < ch.a1 - 80; a += RULES.chamberFruitStep, k++) {
       const [l, r] = walls(a), M = RULES.fruitMargin + 10;
-      pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 1.9 + 0.6) * ((r - l) / 2 - M), l + M, r - M), alt: a });
+      pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M), l + M, r - M), alt: a, kind: 'coco' });
     }
   }
 
@@ -1579,16 +1634,21 @@ function createLevel(seed, opts) {
       if (!fruitOut) return;
       for (let a = z - RULES.landmarkClear + 60, k = 0; a < z - 60; a += RULES.chamberFruitStep, k++) {
         const [l, r] = walls(a), M = RULES.fruitMargin + 14;
-        pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 1.9 + 0.6) * ((r - l) / 2 - M), l + M, r - M), alt: a, arena: true });
+        pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M), l + M, r - M), alt: a, arena: true, kind: 'coco' });
       }
     });
   }
-  // Crystals wait in pendFruit until their stretch is settled (below the floor, where no more hazards can land).
-  // Then each one slides sideways just enough to keep RULES.crystal.clear from every hazard's hitbox reach
-  // (dangerShapes), or is dropped if it can't, and any climb longer than RULES.crystal.gap without one gets a
-  // crystal as near the centre line as that clearance allows.
+  // Pickups wait in pendFruit until their stretch is settled (below the floor, where no more hazards can land).
+  // Then each one slides sideways just enough to keep RULES.pickup.clear from every hazard's hitbox reach
+  // (dangerShapes), or is dropped if it can't, and any climb longer than RULES.chili.gap without a chili gets a
+  // chili as near the centre line as that clearance allows (and off any coconut).
   let settled = 0;
   const pendFruit = [];
+  // the launch stretch (hazard-free) carries a gentle coconut weave, so the first seconds teach "grab these"
+  for (let a = 220, k = 0; a < RULES.clearStart - 40; a += RULES.chamberFruitStep, k++) {
+    const [l, r] = walls(a), M = RULES.fruitMargin + 30;
+    pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.5 + (seed & 1 ? 0.6 : 3.7)) * ((r - l) / 2 - M) * 0.7, l + M, r - M), alt: a, kind: 'coco' });
+  }
   function clearance(x, a, out) {
     let d = Infinity;
     for (let i = out.length - 1; i >= 0; i--) {
@@ -1599,26 +1659,35 @@ function createLevel(seed, opts) {
     }
     return d;
   }
-  // the nearest x to `x` at height a that keeps the clearance (inside the walls' fruit margin), or null
-  function crystalSpot(x, a, out) {
-    const [l, r] = walls(a), M = RULES.fruitMargin, C = RULES.crystal.clear;
-    for (let d = 0; d <= r - l; d += 4) for (const xx of d ? [x - d, x + d] : [x]) if (xx >= l + M && xx <= r - M && clearance(xx, a, out) >= C) return xx;
+  // the nearest x to `x` at height a that keeps the clearance (inside the walls' fruit margin), or null; with
+  // `avoid` (settled pickups) it also keeps off them
+  function pickupSpot(x, a, out, avoid) {
+    const [l, r] = walls(a), M = RULES.fruitMargin, C = RULES.pickup.clear, D = 2 * PICK_R + 8;
+    const near = avoid && avoid.filter(f => Math.abs(f.alt - a) < D);
+    for (let d = 0; d <= r - l; d += 4) for (const xx of d ? [x - d, x + d] : [x]) {
+      if (xx < l + M || xx > r - M || clearance(xx, a, out) < C) continue;
+      if (near && near.some(f => Math.hypot(f.x - xx, f.alt - a) < D)) continue;
+      return xx;
+    }
     return null;
   }
-  function settleCrystals(out, fruitOut, upTo) {
+  function settlePickups(out, fruitOut, upTo) {
     pendFruit.sort((p, q) => p.alt - q.alt);
     while (pendFruit.length && pendFruit[0].alt < upTo) {
-      const f = pendFruit.shift(), x = crystalSpot(f.x, f.alt, out);
+      const f = pendFruit.shift(), x = pickupSpot(f.x, f.alt, out);
       if (x != null) fruitOut.push({ ...f, x });
     }
-    const G = RULES.crystal.gap, alts = fruitOut.filter(f => f.alt > settled - G).map(f => f.alt).sort((x, y) => x - y);
+    // the chili line: only chilies count toward the gap
+    const G = RULES.chili.gap, recent = fruitOut.filter(f => f.alt > settled - G - 200), alts = recent.filter(f => f.kind === 'chili').map(f => f.alt).sort((x, y) => x - y);
     let prev = settled ? (alts.filter(a => a <= settled).pop() ?? settled - G + 40) : 58;
     for (const a of [...alts.filter(a => a > prev), upTo]) {
       while (a - prev > G) {
         let c = prev + G - 30, x = null;
-        for (; c > prev + 30; c -= 8) { const [l, r] = walls(c); if ((x = crystalSpot((l + r) / 2, c, out)) != null) break; }
+        for (; c > prev + 30; c -= 8) { const [l, r] = walls(c); if ((x = pickupSpot((l + r) / 2, c, out, recent)) != null) break; }
+        if (x == null) for (c = prev + G - 30; c > prev + 30; c -= 8) { const [l, r] = walls(c); if ((x = pickupSpot((l + r) / 2, c, out)) != null) break; }   // (crowded by coconuts: sit beside them)
         if (x == null) { c = prev + G - 30; const [l, r] = walls(c); x = (l + r) / 2; }   // (never happens: hazards leave wide lanes)
-        fruitOut.push({ x, alt: c, fill: true }); prev = c;
+        const f = { x, alt: c, fill: true, kind: 'chili' };
+        fruitOut.push(f); recent.push(f); prev = c;
       }
       prev = Math.max(prev, a);
     }
@@ -1636,16 +1705,17 @@ function createLevel(seed, opts) {
     }
     let [type, ...vars] = queue[0];
     const prev = recent[recent.length - 1];
-    if (type === 'arc') {               // a release beat: an empty stretch with a fruit arc across it
+    if (type === 'arc') {               // a release beat: an empty stretch with a coconut arc across it
       queue.shift(); retries = 0;
-      const a0 = floor + pending + RULES.arc.gap, a1 = a0 + RULES.arc.step * (RULES.arc.n - 1);
+      const n = RULES.arc.n[0] + Math.floor(hash2(arcsSeen, seed + 53) * (RULES.arc.n[1] - RULES.arc.n[0] + 1));
+      const a0 = floor + pending + RULES.arc.gap, a1 = a0 + RULES.arc.step * (n - 1);
       const full = arcsSeen++ % RULES.arc.every === 0;     // (decided without looking at fruit, so the layout never depends on it)
       if (full && fruitOut && !chamberNear(a0 - 10, a1 + 10)) {
-        // a short sweep from one wall across to the other: the outer ones are off the main line
+        // a sweep from one wall across to the other: the outer ones are off the main line
         const dir = rng() < 0.5 ? 1 : -1;
-        for (let k = 0; k < RULES.arc.n; k++) {
-          const a = a0 + k * RULES.arc.step, [l, r] = walls(a), M = RULES.fruitMargin + 8, u = Math.cos(Math.PI * k / (RULES.arc.n - 1));
-          pendFruit.push({ x: clamp((l + r) / 2 + dir * u * ((r - l) / 2 - M), l + M, r - M), alt: a, arc: true, bonus: Math.abs(u) > 0.5 });
+        for (let k = 0; k < n; k++) {
+          const a = a0 + k * RULES.arc.step, [l, r] = walls(a), M = RULES.fruitMargin + 8, u = Math.cos(Math.PI * k / (n - 1));
+          pendFruit.push({ x: clamp((l + r) / 2 + dir * u * ((r - l) / 2 - M), l + M, r - M), alt: a, arc: true, bonus: Math.abs(u) > 0.5, kind: 'coco' });
         }
       } else rng();
       floor = full ? a1 : floor + pending + RULES.arc.pause; pending = 0;
@@ -1717,6 +1787,7 @@ function createLevel(seed, opts) {
     if (h.type === 'spike') spikesPlaced++;
     if (markNext) { marks.push({ alt: h.lo, ...markNext }); markNext = null; }
     if (fruitOut && hash2(placed, seed + 41) < RULES.fruitChance) trail(h, pendFruit);
+    if (fruitOut && prev) gapTrail(prev, h);
     placed++;
     floor = h.hi; pending = 0;
   }
@@ -1725,9 +1796,9 @@ function createLevel(seed, opts) {
     seed, intro, walls, difficulty, safeLane, marks, chambers, segAt, allowed, chunkMarks,
     fill(upTo, out, fruitOut) {
       // (the floor itself must pass upTo, not just floor + pending: a long skip past a chamber can leave it far
-      // behind, and crystals only settle below floor - 400, so they would pop in on screen)
+      // behind, and pickups only settle below floor - 400, so they would pop in on screen)
       while (floor + pending < upTo || floor - 400 < upTo) step(out, fruitOut);
-      if (fruitOut && floor - 400 > settled) settleCrystals(out, fruitOut, floor - 400);
+      if (fruitOut && floor - 400 > settled) settlePickups(out, fruitOut, floor - 400);
     },
   };
 }
@@ -2163,24 +2234,33 @@ function zoneIndex(a) { return a < RULES.zones[0] ? 0 : a < RULES.zones[1] ? 1 :
 function zoneName(a) { return ZONE_NAMES[zoneIndex(a)]; }
 
 // ---------- run ----------
+// Per-run stats: coconuts (their value: a golden one counts COCO_GOLD), golden (how many golden ones), chilies
+// (picked up), shots, hits (on the monster), closeCount (close calls), metres (best height), revived, and the comeback
+// bonus (comebackCoins / comebackPts) when an ad revive paid one. G.closeCount stays the live counter for close calls.
+function newStats() { return { coconuts: 0, golden: 0, chilies: 0, shots: 0, hits: 0, closeCount: 0, metres: 0, revived: false, comebackCoins: 0, comebackPts: 0 }; }
 function newRun(isDaily) {
   const seed = isDaily ? dailySeed : (Math.random() * 4294967296) >>> 0;
   G = {
     seed, isDaily, t: 0,
     state: 'ready', reviving: false,
     p: { x: 200, alt: 58, vx: 0, vy: 0, r: 17, targetX: 200, invuln: 0, tilt: 0, stretch: 0, squash: 0, nearT: 0 },
-    heat: { v: 0, over: 0, offFor: 1, boostT: 0, wasOn: false, readyT: 0 },
-    worm: { alt: -460, open: 0, crouch: 0, surge: 0, snap: 0, nextLunge: 4 },
+    eng: { offFor: 1, boostT: 0, wasOn: false, readyT: 0, cd: 0 },
+    worm: { alt: -460, open: 0, crouch: 0, surge: 0, snap: 0, nextLunge: 4, stun: 0, hitT: 0, kb: 0 },
+    // chili blaster: ammo, the shots in flight and their impact bursts, the reload clock, and the monster's hunger
+    ammo: perk('startAmmo', AMMO.start), ammoMax: perk('maxAmmo', AMMO.max), shots: [], impacts: [], fireT: 0, hunger: 0, shotNoz: 0, ammoBump: 0, dryT: 0,
+    // the run's stats (the score card, the wallet and later missions read these; see onRunEnd)
+    stats: newStats(),
     zoom: 1,
     camAlt: 0, maxAlt: 58,
     level: createLevel(seed, cfg), hazards: [], fruit: [],
     particles: [], pops: [], streaks: [], banners: [], banner: null,
-    fruitCount: 0, closeCount: 0, lastHundred: 0, zone: 0,
+    closeCount: 0, lastHundred: 0, zone: 0,
     hitStop: 0, flash: 0, flashCol: [255, 255, 255], burst: null, slow: 0, knock: null, bite: null, punch: 0, deathAlt: 58, deathX: 200,
     calm: 0, markIdx: 0, surgeWarn: 0, grinT: 0, rubbleT: 0,
-    reviveUsed: false, counted: false, shake: 0, cause: '', deadTimer: 0, ringTimer: 0,
+    reviveUsed: false, counted: false, banked: 0, shake: 0, cause: '', deadTimer: 0, ringTimer: 0,
     planks: null, lastPopT: -9, readyFlash: 0, camFloat: 0, spec: {},
   };
+  G.stats.revived = false;
   // the pilot stands on the launch planks: its lowest hitbox point rests on them
   G.p.alt = G.maxAlt = G.deathAlt = 40 - pilotExtent(pilot().id, 0)[2] + 1;
   refreshPilotCaps();
@@ -2333,16 +2413,39 @@ function causeColour(cause) {
   return DANGER_RGB;
 }
 
-// Score is in points: 10 per metre climbed, plus bonus points for fruit and close calls.
-const PTS_PER_M = 10, FRUIT_BONUS = 25, CLOSE_BONUS = 50;
+// Score is in points: PTS_PER_M per metre climbed, COCO_BONUS per coconut, HIT_BONUS per monster hit, CLOSE_BONUS per
+// close call, plus the comeback bonus after an ad revive (the revive never takes anything away).
 const fmtPts = n => n.toLocaleString('en-GB') + ' pts';
-// The ad revive costs half the run's score: at the revive half of everything banked so far (height and bonuses) is
-// taken off (G.halved), then the run carries on and everything earned after it adds normally.
-const rawScore = () => Math.floor(G.maxAlt / UNITS_PER_M) * PTS_PER_M + G.fruitCount * FRUIT_BONUS + G.closeCount * CLOSE_BONUS;
-const runScore = () => rawScore() - (G.halved || 0);
+function syncStats() { const st = G.stats; st.metres = Math.floor(G.maxAlt / UNITS_PER_M); st.closeCount = G.closeCount; return st; }
+const runScore = () => { const st = syncStats(); return st.metres * PTS_PER_M + st.coconuts * COCO_BONUS + st.hits * HIT_BONUS + st.closeCount * CLOSE_BONUS + st.comebackPts; };
+// coconuts this run puts in the wallet: the ones picked up plus the comeback bonus
+const runCoconuts = () => G.stats.coconuts + G.stats.comebackCoins;
+
+// The wallet: coconuts banked across runs (localStorage 'cr-wallet' = { coconuts }). The shop spends from it later.
+const WALLET = {
+  data: Object.assign({ coconuts: 0 }, store.get('cr-wallet', {})),
+  get() { return this.data.coconuts | 0; },
+  add(n) { n = Math.floor(n) || 0; if (n) { this.data.coconuts = Math.max(0, this.get() + n); store.set('cr-wallet', this.data); } return this.get(); },
+};
+// Banks whatever this run has earned since it last banked (so a run that ends, is revived and ends again banks each
+// coconut once). Called when the score card shows and when quitting from pause.
+function bankRun() {
+  if (!G || !G.stats) return 0;
+  const due = runCoconuts() - G.banked;
+  if (due > 0) { WALLET.add(due); G.banked += due; }
+  return due;
+}
+// The one run-end hook: called every time a run ends (its score card shows, or it is quit from pause), after the
+// coconuts are banked, with G (G.stats is final for this ending). A revived run ends again later with its stats
+// grown, so anything added here should work from the stats themselves (bests, totals since G.banked), not count calls.
+// `how` is 'over' or 'quit'. (Missions, streaks and adventure stages hook in here later.)
+function onRunEnd(G, how) {
+  G.stats.ended = how;
+}
 let sessionPracticeRuns = 0;
 function finishRun() {
   const m = Math.floor(G.maxAlt / UNITS_PER_M), score = runScore(), counts = isDefaultTune();
+  const earned = runCoconuts(); bankRun(); onRunEnd(G, 'over');
   let isNew = false;
   // a revived run is still one run: it only counts the first time it ends
   const first = !G.counted; G.counted = true;
@@ -2363,13 +2466,16 @@ function finishRun() {
   }
   $('overDate').textContent = G.isDaily ? `Daily shaft ${shaftNo} · ${dayLabel}` : 'Practice shaft · random layout';
   $('overMeters').innerHTML = `${m}<small>m</small>`;
-  // (after an ad revive the lines show what the run did without per-line points, so they never have to add up
-  // to a final score that kept half its total at the revive)
-  $('overBonus').innerHTML = G.halved ?
-    `<li><span>Height</span><b>${m} m</b></li><li><span>Ice crystals</span><b>${G.fruitCount}</b></li><li><span>Close calls</span><b>${G.closeCount}</b></li>` :
-    `<li><span>Height ${m} m × ${PTS_PER_M}</span><b>${(m * PTS_PER_M).toLocaleString('en-GB')}</b></li>` +
-    `<li><span>Ice crystals ${G.fruitCount} × ${FRUIT_BONUS}</span><b>+${(G.fruitCount * FRUIT_BONUS).toLocaleString('en-GB')}</b></li>` +
-    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${(G.closeCount * CLOSE_BONUS).toLocaleString('en-GB')}</b></li>`;
+  // every line adds up to the final score (the revive never takes anything away; its comeback bonus is its own line)
+  const st = G.stats, n = v => v.toLocaleString('en-GB');
+  $('overBonus').innerHTML =
+    `<li><span>Height ${m} m × ${PTS_PER_M}</span><b>${n(m * PTS_PER_M)}</b></li>` +
+    `<li><span>Coconuts ${st.coconuts} × ${COCO_BONUS}${st.golden ? ` (${st.golden} golden)` : ''}</span><b>+${n(st.coconuts * COCO_BONUS)}</b></li>` +
+    `<li><span>Monster hits ${st.hits} × ${HIT_BONUS}</span><b>+${n(st.hits * HIT_BONUS)}</b></li>` +
+    `<li><span>Close calls ${G.closeCount} × ${CLOSE_BONUS}</span><b>+${n(G.closeCount * CLOSE_BONUS)}</b></li>` +
+    (st.revived ? `<li class="comeback"><span>Comeback bonus +${st.comebackCoins} coconuts</span><b>+${n(st.comebackPts)}</b></li>` : '');
+  // coconuts earned this run (picked up plus any comeback bonus), banked into the wallet
+  $('overEarned').innerHTML = `<i aria-hidden="true"></i><span>Coconuts earned<small>Wallet ${n(WALLET.get())} coconuts</small></span><b>+${n(earned)}</b>`;
   $('overPoints').textContent = fmtPts(0);
   $('overCause').textContent = G.cause === 'worm' ? `The ${monster().label} caught you` : CAUSES[G.cause] || 'Run over';
   // the height bar: this run against the best, with a marker at the best
@@ -2388,7 +2494,7 @@ function finishRun() {
     $('overRunsLabel').textContent = 'Practice runs'; $('overRuns').textContent = `${sessionPracticeRuns} this visit`;
   }
   $('adBtn').hidden = G.reviveUsed;
-  if (!G.reviveUsed) $('adBtn').innerHTML = 'Watch ad: keep flying<small>Continue your run</small>';
+  if (!G.reviveUsed) $('adBtn').innerHTML = `Keep flying + bonus coconuts<small>Watch an ad: +${comebackCoins()} coconuts, +${n(COMEBACK.pts)} pts, full chilies</small>`;
   $('shareBtn').hidden = !G.isDaily;
   show('over');
   for (const el of document.querySelectorAll('#over .stat b, #over .total b, #over .bonus li span')) fitText(el, 11);
@@ -2410,19 +2516,24 @@ function countUp(score, isNew) {
   };
   countRaf = requestAnimationFrame(tick);
 }
+// The comeback bonus an ad revive pays now: a share of the run's coconuts so far, at least COMEBACK.min.
+const comebackCoins = () => Math.max(COMEBACK.min, Math.floor(G.stats.coconuts * COMEBACK.share));
 function revive() {
-  const p = G.p;
+  const p = G.p, st = G.stats;
   G.reviveUsed = true;
-  // the price of the revive: half of everything banked so far (rounded in the player's favour)
-  G.halved = (G.halved || 0) + Math.floor(runScore() / 2);
+  // the reward: the full score is kept, plus the comeback bonus (coconuts and points), a full tank of chilies, and a
+  // shield when you launch again
+  st.revived = true; st.comebackCoins = comebackCoins(); st.comebackPts = COMEBACK.pts;
+  G.ammo = G.ammoMax; G.hunger = 0; G.fireT = 0.4; G.shots.length = 0; G.impacts.length = 0; G.dryT = 0;
   G.pops.length = 0; G.banner = null; G.banners.length = 0;
   p.alt = G.deathAlt;                               // back to exactly where the run ended
   const [L, R] = walls(p.alt);
   p.x = p.targetX = (L + R) / 2; p.vx = 0; p.vy = 0; p.tilt = 0; p.rot = 0; refreshPilotCaps();
   p.invuln = 0;                                     // the grace period starts when you launch again, so no strobing while you wait
   G.knock = null; G.killer = null; G.bite = null; G.burst = null; G.punch = 0; G.flash = 0; G.hitStop = 0; G.slow = 0; G.shake = 0;
-  G.worm.alt = Math.min(G.worm.alt, p.alt - 650); G.worm.snap = 0; G.worm.crouch = 0; G.worm.surge = 0; G.worm.beat = 0; G.worm.nextLunge = 6;
-  Object.assign(G.heat, { v: 0, over: 0, offFor: 1, boostT: 0, wasOn: false });
+  G.worm.alt = Math.min(G.worm.alt, p.alt - 650); G.worm.snap = 0; G.worm.crouch = 0; G.worm.surge = 0; G.worm.beat = 0; G.worm.nextLunge = 6; G.worm.stun = 0; G.worm.kb = 0;
+  Object.assign(G.eng, { offFor: 1, boostT: 0, wasOn: false, cd: 0 });
+  G.comebackPop = true;                             // the bonus pops up when you launch again
   G.camAlt = p.alt - viewH * cfg.camPos / 100;
   G.hazards = G.hazards.filter(h => Math.abs((h.type === 'boulder' ? h.cur : h.alt) - p.alt) > 340 || (h.type === 'boulder' && h.state === 'idle' && h.alt > p.alt + 340));
   G.state = 'ready'; G.reviving = true;
@@ -2439,23 +2550,22 @@ function revive() {
 // or dropping lets it close in. Surge beats pull the target in to `surgeTo` for `beatLen` seconds.
 // While a gate is just above you it eases off (you may have to wait), and during a zone reveal it
 // holds back.
-// The gap breathes: clean play (no overheat, no scrape with the monster) builds `calm` over calmTime
+// The gap breathes: clean play (ammo in the tank, no scrape with the monster) builds `calm` over calmTime
 // seconds, which lets the leash open out to `open` units, so the head drops off the screen and only its
 // sliver shows. Then, at the next chunk boundary, it surges: a 0.9 s warning you can't miss (it crouches,
-// the bottom edge flashes, chevrons pulse), a lunge that pulls the gap in to surgeTo, and calm resets.
-// While the engine sputters from an overheat (and for OVERHEAT.grace after) it can close in to its normal leash
-// but never nearer, so an overheat near it is a scare, never a death by itself (and never a way to shake it off).
-// Overheat: about a second of weak, sputtering thrust (a third), then the engine is back, still hot.
-// It recovers at `after` heat (a full second of thrust before it could overheat again), and the monster stays
-// held back for `grace` seconds after the sputter while you climb away, so an overheat never kills by itself.
-const OVERHEAT = { time: 1.0, thrust: 0.33, after: 0.55, grace: 0.8 };
+// the bottom edge flashes, chevrons pulse), a lunge that pulls the gap in to surgeTo, and calm resets. A chili
+// shot that hits it during the warning or the lunge cancels the surge.
+// Out of ammo it gets hungry (AMMO, hungerLeash): its leash is pulled in past you and its speed cap lifts, so it
+// reaches you within a few seconds unless you grab a chili.
 // Surges outrun full thrust for a moment: during the beat it climbs at surgeV × your top climb speed plus
 // surgeK × (gap − surgeTo), up to surgeMax × top speed, so even flat out it closes to about 100 units; you have to
 // keep climbing hard (and dodge) until it lets go. Only ever telegraphed (warn), never near a gate (it cancels if
-// one comes up), never while you wait for a gate, never on a hot engine, and never in a zone reveal or a revive.
+// one comes up), never while you wait for a gate, never on an empty tank, and never in a zone reveal or a revive.
+/* LEVELGEN:BEGIN */
 const CHASE = { k: 1.35, cap: 140, floor: 0.42, surgeTo: 150, beatLen: 1.2, every: [8, 12], gateEase: 0.45,
   open: 330, calmTime: 7, warn: 0.9, minCalm: 0.55, fallback: 22, gateGap: 170,
-  surgeV: 1.15, surgeK: 1.6, surgeMax: 1.7, surgeHeat: 0.4 };
+  surgeV: 1.15, surgeK: 1.6, surgeMax: 1.7 };
+/* LEVELGEN:END */
 function gateAhead(reach = RULES.gate.room + 120) {
   const a = G.p.alt;
   return G.hazards.some(h => TIMED.has(h.type) && h.lo < a + reach && h.hi > a - 120);
@@ -2466,12 +2576,14 @@ function chaseSpeed(gap, dt) {
   let target = lerp(Math.max(cfg.chase, 330), cfg.chase, smooth(cfg.intro * 10, cfg.intro * 18, G.p.alt));
   target = lerp(target, Math.max(target, CHASE.open), smooth(0, 1, G.calm || 0));     // the gap opens after clean play
   if (G.worm.beat > 0) target = Math.min(target, CHASE.surgeTo);
-  let v = base + clamp((gap - target) * CHASE.k, -base, CHASE.cap);
+  // out of ammo it gets hungry: the leash pulls in past you and its speed cap lifts (see AMMO)
+  let cap = CHASE.cap;
+  if (G.hunger > 0) [target, cap] = hungerLeash(target, cap, G.hunger);
+  let v = base + clamp((gap - target) * CHASE.k, -base, cap);
   if (G.worm.beat > 0) v = Math.max(v, Math.min(cfg.maxUp * CHASE.surgeMax, cfg.maxUp * CHASE.surgeV + CHASE.surgeK * (gap - CHASE.surgeTo)));
   let floor = base * CHASE.floor;
-  // overheated (and for a moment after): it can still close in to its normal leash, but never nearer, so a
-  // sputter is a scare, never a death by itself, and never a way to shake it off either
-  if (G.heat.over > 0 || G.heat.grace > 0) { const cap = Math.max(-80, G.p.vy) + Math.max(0, gap - target) * CHASE.k; v = Math.min(v, cap); floor = Math.min(floor, cap); }
+  // stunned by a chili hit: its climb stops for a moment (it only drifts back down a little)
+  if (G.worm.stun > 0) { v = Math.min(v, -40); floor = Math.min(floor, -40); }
   // a gate just above: it only creeps up on you while you wait it out (no faster than you climb)
   // and it can never close in on a pilot waiting below a gate: it holds at least gateGap back
   // (it even backs off if you sink toward it while you wait)
@@ -2485,6 +2597,7 @@ function chaseSpeed(gap, dt) {
 // the landmark and the new zone come into view. The level keeps that stretch clear of hazards
 // (RULES.landmarkAfter) and the monster holds back, so it is pure show.
 const REVEAL = 1.5;
+const BOOST_CD = 0.9;                // seconds before the re-press kick is ready again
 let drawPad = 0;                     // extra world units to draw past the screen edges while zoomed out
 const camZoom = { x: 0, k: 1 };      // this frame's camera zoom (see draw): the screen x it zooms about, and its scale
 
@@ -2527,7 +2640,10 @@ function update(rawDt) {
   p.targetX = clamp(p.targetX, tLo, tHi);
 
   if (G.state === 'ready') {
-    if (thrust) { if (G.reviving) p.invuln = 2.4; G.state = 'play'; G.thrust = true; hideHint(); p.squash = 1; if (G.launchT == null) G.launchT = G.t; }
+    if (thrust) {
+      if (G.reviving) p.invuln = G.comebackPop ? perk('reviveShield', COMEBACK.shield) : 2.4;
+      if (G.comebackPop) { G.comebackPop = false; chainEvent(`Comeback! +${G.stats.comebackCoins} coconuts`, '#ffe14a', 2); addPop(`+${G.stats.comebackCoins}`, p.x, p.alt + 60, { col: '#ffe14a', big: true, sub: 'comeback bonus' }); }
+      G.state = 'play'; G.thrust = true; hideHint(); p.squash = 1; if (G.launchT == null) G.launchT = G.t; }
     else {
       if (G.reviving) p.alt += Math.sin(G.t * 3) * 0.3;
       steer(dt); poseRot(dt); refreshPilotCaps();
@@ -2538,56 +2654,34 @@ function update(rawDt) {
   }
 
   if (G.state === 'play') {
-    // Engine heat: thrusting heats the engine steadily (full after cfg.heatTime seconds of thrust) and it
-    // weakens a little as it runs hot. Letting go cools it only slowly (cfg.coolTime): ice crystals are the
-    // real way to stay cool, each one taking RULES.crystal.cool off. At full heat it overheats: never a
-    // cut-out, but about a second of weak, sputtering thrust (a third) with smoke and a warning, so you sink
-    // and feel it, yet still steer, fly and recover (a crystal ends it at once). Pressing again after a short
-    // release, while the engine is cool, still gives a small kick.
-    const ht = G.heat, wants = G.thrust;
-    const on = wants;
-    if (on && !ht.wasOn && ht.offFor >= 0.15 && ht.v < 0.65 && ht.over <= 0 && cfg.boost > 0) {
-      const k = cfg.boost * (1 - ht.v);
-      p.vy = Math.max(p.vy, 0) + 240 * k; ht.boostT = 0.45; p.squash = Math.max(p.squash, 0.6 + 0.4 * Math.min(1, k));
+    // The engine always runs at full strength (thrust is never weakened). Pressing again after a short release
+    // gives a small kick, which recharges over BOOST_CD seconds (a flash at the nozzle shows it is ready).
+    const en = G.eng, on = G.thrust;
+    if (on && !en.wasOn && en.offFor >= 0.15 && en.cd <= 0 && cfg.boost > 0) {
+      const k = cfg.boost;
+      p.vy = Math.max(p.vy, 0) + 240 * k; en.boostT = 0.45; en.cd = BOOST_CD; p.squash = Math.max(p.squash, 0.6 + 0.4 * Math.min(1, k));
       G.zoomKick = Math.max(G.zoomKick || 0, 0.6 * Math.min(1, k));
       for (let i = 0; i < 10; i++) { const a = Math.PI * (0.15 + 0.7 * i / 9); puff(p.x, p.alt - 20, -Math.cos(a) * 160, -Math.sin(a) * 120, 0.35, 2, 'spark'); }
       puff(p.x, p.alt - 22, 0, -60, 0.45, 10, 'ring');
       puff(p.x, p.alt - 8, 0, 0, 0.38, 14, 'shock');
     }
-    if (on) { ht.v += dt / cfg.heatTime; ht.offFor = 0; }
-    else { ht.v -= dt / cfg.coolTime; ht.offFor += dt; }
-    ht.v = clamp(ht.v, 0, 1);
-    if (ht.v >= 1 && ht.over <= 0) {
-      ht.over = OVERHEAT.time; G.shake = Math.max(G.shake, 5); vibrate([30, 40, 30]);
-      chainEvent('Overheat! grab a crystal', '#ff7a3a', 1.3);
-      for (let i = 0; i < 10; i++) puff(p.x + (Math.random() - .5) * 20, p.alt - 20, (Math.random() - .5) * 90, -30 - Math.random() * 60, 0.9, 6 + Math.random() * 4, 'smoke');
-    }
-    if (ht.over > 0) {
-      ht.over -= dt;
-      if (ht.over <= 0) { ht.v = OVERHEAT.after; ht.grace = OVERHEAT.grace; }   // it recovers, still warm: keep collecting
-      // sputter: coughs of smoke and stray sparks from the nozzle
-      if (Math.random() < dt * 16) puff(p.x + (Math.random() - .5) * 10, p.alt - 26, (Math.random() - .5) * 60, -90, 0.6, 4 + Math.random() * 4, 'smoke');
-      if (Math.random() < dt * 8) puff(p.x, p.alt - 26, (Math.random() - .5) * 120, -60, 0.3, 1.6, 'spark');
-    }
-    const ready = !on && ht.offFor >= 0.15 && ht.v < 0.65 && ht.over <= 0 && cfg.boost > 0;
-    if (ready && ht.readyT <= 0) G.readyFlash = 1;          // the kick just became available: flash the nozzle
-    ht.readyT = ready ? ht.readyT + dt : 0;
+    if (on) en.offFor = 0; else en.offFor += dt;
+    en.cd = Math.max(0, en.cd - dt);
+    const ready = !on && en.offFor >= 0.15 && en.cd <= 0 && cfg.boost > 0;
+    if (ready && en.readyT <= 0) G.readyFlash = 1;          // the kick just became available: flash the nozzle
+    en.readyT = ready ? en.readyT + dt : 0;
     G.readyFlash = Math.max(0, G.readyFlash - dt * 3.2);
-    ht.boostT = Math.max(0, ht.boostT - dt); ht.grace = Math.max(0, (ht.grace || 0) - dt);
-    ht.wasOn = on;
-    G.thrust = on;
-    G.sputter = wants && ht.over > 0;
-    G.frost = Math.max(0, (G.frost || 0) - dt * 1.8);
+    en.boostT = Math.max(0, en.boostT - dt);
+    en.wasOn = on;
     G.chainT = Math.max(0, (G.chainT || 0) - dt); G.chainPop = Math.max(0, (G.chainPop || 0) - dt * 4);
     if (G.chainEv) G.chainEv.t += rawDt;
 
-    // vertical: thrust (weaker when hot) against gravity, with a little headroom during a boost
-    const eff = ht.over > 0 ? OVERHEAT.thrust : 1 - 0.2 * smooth(0.6, 1, ht.v);
+    // vertical: full thrust against gravity, with a little headroom during a boost
     // the hang: for HANG.time after letting go gravity is HANG.k as strong, so a short release floats a moment
     // before the drop (and the fall is capped at FALL_CAP, so a mistake is recoverable)
-    const grav = cfg.gravity * (!on && ht.offFor < HANG.time ? HANG.k : 1);
-    p.vy += ((on ? cfg.thrust * eff : 0) - grav) * dt;
-    p.vy = clamp(p.vy, FALL_CAP, cfg.maxUp * (1 + 0.22 * ht.boostT / 0.45));
+    const grav = cfg.gravity * (!on && en.offFor < HANG.time ? HANG.k : 1);
+    p.vy += ((on ? cfg.thrust : 0) - grav) * dt;
+    p.vy = clamp(p.vy, FALL_CAP, cfg.maxUp * (1 + 0.22 * en.boostT / 0.45));
     p.alt += p.vy * dt;
     // the starting planks crack and fall away just after launch: they are not a floor to rest on
     if (!G.planks && (p.alt > 140 || G.t - G.launchT > 0.6)) breakPlanks();
@@ -2688,12 +2782,17 @@ function update(rawDt) {
       }
     }
 
-    // ice crystals: touching one (anywhere on the pilot's hitbox against its pickup circle, CRYSTAL_R) cools the engine
+    // pickups: touching one (anywhere on the pilot's hitbox against its pickup circle, pickR) collects it; a coconut
+    // magnet perk (radius 0 for now) pulls coconuts in first
+    const mag = perk('magnet', 0);
     for (let i = G.fruit.length - 1; i >= 0; i--) {
       const f = G.fruit[i];
-      if (Math.abs(f.alt - p.alt) > 90 || G.state !== 'play') continue;
-      if (pCaps.some(c => ptSeg(f.x, f.alt, c.x0, c.a0, c.x1, c.a1) < c.r + CRYSTAL_R)) { G.fruit.splice(i, 1); pickCrystal(f); }
+      if (Math.abs(f.alt - p.alt) > 90 + mag || G.state !== 'play') continue;
+      if (mag > 0 && f.kind !== 'chili') { const dx = p.x - f.x, da = p.alt - f.alt, d = Math.hypot(dx, da); if (d < mag && d > 1) { const k = Math.min(1, dt * 6); f.x += dx * k; f.alt += da * k; } }
+      if (pCaps.some(c => ptSeg(f.x, f.alt, c.x0, c.a0, c.x1, c.a1) < c.r + pickR(f))) { G.fruit.splice(i, 1); pickUp(f); }
     }
+
+    updateBlaster(dt);
   }
 
   if (G.state === 'dead' && G.knock && G.knock.frozen) {
@@ -2734,10 +2833,10 @@ function update(rawDt) {
   if (G.state === 'play') {
     // calm builds while you fly clean and drains when it gets close or you overheat
     const gapNow = monsterGap();
-    if (G.heat.over > 0 || gapNow < 140) G.calm = Math.max(0, (G.calm || 0) - dt * 0.6);
+    if (G.ammo <= 0 || gapNow < 140) G.calm = Math.max(0, (G.calm || 0) - dt * 0.6);
     else if (W.beat <= 0 && W.crouch <= 0) G.calm = Math.min(1, (G.calm || 0) + dt / CHASE.calmTime);
-    // never on top of a hot engine, a gate, a zone reveal, a revive or the resume countdown
-    const fair = !gateAhead(800) && !(G.reveal > 0) && G.p.invuln <= 0 && G.p.alt > 1500 && G.heat.v < CHASE.surgeHeat && G.heat.over <= 0;
+    // never on an empty tank (you couldn't shoot it off), near a gate, in a zone reveal, a revive or the resume countdown
+    const fair = !gateAhead(800) && !(G.reveal > 0) && G.p.invuln <= 0 && G.p.alt > 1500 && G.ammo > 0 && G.worm.stun <= 0;
     if (W.beat > 0 && gateAhead()) W.beat = 0;          // a gate came up: the surge lets go at once
     const marks = G.level.chunkMarks;
     while (G.markIdx < marks.length && marks[G.markIdx].alt < G.p.alt) {
@@ -2759,7 +2858,8 @@ function update(rawDt) {
     ? (G.knock && G.knock.eaten ? G.worm.snap : 1)
     : G.worm.snap > 0 ? Math.abs(Math.cos(G.worm.snap * Math.PI)) : Math.max(chew, G.worm.surge, G.worm.crouch > 0 ? 0.15 : 0);
   G.worm.open = clamp(G.worm.open, 0, 1);
-  G.fruitBump = Math.max(0, (G.fruitBump || 0) - dt * 5);
+  G.fruitBump = Math.max(0, (G.fruitBump || 0) - dt * 5); G.ammoBump = Math.max(0, (G.ammoBump || 0) - dt * 4);
+  updateShots(dt);
   updatePlanks(dt);
   updateHazards(dt);
   updateCamera(dt);
@@ -2769,32 +2869,91 @@ function update(rawDt) {
   for (let i = G.fruit.length - 1; i >= 0; i--) if (G.fruit[i].alt < G.camAlt - 300) G.fruit.splice(i, 1);
 }
 
-// Grabbing an ice crystal: the engine cools (and an overheat ends), a frosty burst and a hiss of steam from
-// the nozzle, a frost flash on the heat gauge, and a rising chain count for quick pickups.
-function pickCrystal(f) {
-  const p = G.p, ht = G.heat;
-  G.fruitCount++; G.fruitBump = 1; G.frost = 1;
-  // a risky crystal off the main line (beside a hazard, out on an arc, through a bat's path) cools a little extra
-  const cool = RULES.crystal.cool + (f.bonus ? RULES.crystal.bonus : 0);
-  ht.v = Math.max(0, ht.v - cool);
-  if (ht.over > 0) { ht.over = 0; ht.v = Math.min(ht.v, OVERHEAT.after - cool); chainEvent('Cooled!', '#9ae8ff'); }
-  else if (f.bonus) chainEvent('Risky! extra cool', '#9ae8ff');
-  // the chain: crystals grabbed within a few seconds of each other (they are sparse now)
-  G.chain = G.chainT > 0 ? (G.chain || 0) + 1 : 1; G.chainT = 4;
-  if (G.chain >= 2) G.hitStop = Math.max(G.hitStop, 0.03 + 0.012 * Math.min(G.chain, 5));   // a brief hit-pause that grows with the chain
-  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; puff(f.x, f.alt, Math.cos(a) * (150 + 40 * (k % 2)), Math.sin(a) * (150 + 40 * (k % 2)), 0.4, 2, 'frost'); }
-  for (let k = 0; k < 5; k++) puff(f.x + (Math.random() - .5) * 24, f.alt + (Math.random() - .5) * 24, (Math.random() - .5) * 50, 40 + Math.random() * 50, 0.6 + Math.random() * 0.3, 3 + Math.random() * 3, 'sparkle');
-  puff(f.x, f.alt, 0, 30, 0.45, 10, 'star');
-  // the hiss: puffs of steam where the cold meets the hot engine
-  for (const [lx, ly] of pilot().nozzles) { const [nx, na] = nozzleAt(lx, ly); for (let k = 0; k < 4; k++) puff(nx + (Math.random() - .5) * 14, na + 4, (Math.random() - .5) * 80, 30 + Math.random() * 60, 0.7, 6 + Math.random() * 5, 'steam'); }
+// Grabbing a pickup. A chili refills AMMO.per ammo (up to the tank) with a hot burst; a coconut adds to the run's count
+// (a golden one COCO_GOLD) with a sparkle and a number pop, and quick pickups build a chain count.
+function pickUp(f) {
+  const p = G.p, st = G.stats;
+  if (f.kind === 'chili') {
+    const before = G.ammo;
+    G.ammo = Math.min(G.ammoMax, G.ammo + AMMO.per); st.chilies++; G.ammoBump = 1;
+    if (before <= 0) chainEvent('Chilies! blast it', '#ffb238');
+    else if (G.ammo === before) chainEvent('Tank full', '#ffb238', 0.8);
+    for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; puff(f.x, f.alt, Math.cos(a) * (140 + 40 * (k % 2)), Math.sin(a) * (140 + 40 * (k % 2)), 0.4, 2.2, k % 3 ? 'spark' : 'flame'); }
+    puff(f.x, f.alt, 0, 30, 0.45, 10, 'star');
+    if (G.ammo > before) addPop(`+${G.ammo - before}`, f.x, f.alt + 10, { col: '#ff7a3a', small: true, sub: 'chilies' });
+    vibrate(10);
+    return;
+  }
+  const gold = f.kind === 'gold', worth = perk('cocoValue', gold ? COCO_GOLD : 1);
+  st.coconuts += worth; if (gold) st.golden++;
+  G.fruitBump = 1;
+  // the chain: pickups grabbed within a couple of seconds of each other
+  G.chain = G.chainT > 0 ? (G.chain || 0) + 1 : 1; G.chainT = 2;
+  if (gold) { G.hitStop = Math.max(G.hitStop, 0.06); chainEvent('Golden coconut! +' + worth, '#ffe14a', 1.4); G.flash = Math.max(G.flash, 0.25); G.flashCol = [255, 220, 90]; }
+  for (let k = 0; k < (gold ? 14 : 6); k++) { const a = k / (gold ? 14 : 6) * 6.283; puff(f.x, f.alt, Math.cos(a) * (gold ? 170 : 110), Math.sin(a) * (gold ? 170 : 110), 0.35, gold ? 2.4 : 1.6, 'sparkle'); }
+  if (gold) puff(f.x, f.alt, 0, 30, 0.5, 14, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: gold ? '#ffe14a' : '#fff1d6', small: !gold, big: gold });
   G.chainPop = 1;
-  vibrate(8);
+  vibrate(gold ? 20 : 6);
+}
+
+// ---------- the chili blaster ----------
+// While there is ammo and the monster's catch line is within AMMO.range below, the exhaust fires a flaming chili shot
+// straight down every AMMO.rate s (alternating nozzles). Each shot is a projectile (SHOT_R circle) falling at
+// AMMO.speed; reaching the catch line it hits: the monster is knocked AMMO.push down, stunned for AMMO.stun s, and any
+// surge it is winding up or running is cancelled. Out of ammo, hunger builds over AMMO.starve s (see chaseSpeed).
+function updateBlaster(dt) {
+  const p = G.p, gap = monsterGap();
+  G.fireT = Math.max(0, G.fireT - dt);
+  if (G.ammo > 0 && G.fireT <= 0 && gap < AMMO.range && gap > 0 && !(G.reveal > 0)) {
+    const noz = pilot().nozzles, [lx, ly] = noz[G.shotNoz++ % noz.length], [nx, na] = nozzleAt(lx, ly);
+    G.shots.push({ x: nx, alt: na - SHOT_R, vy: Math.min(0, p.vy) - perk('shotSpeed', AMMO.speed), age: 0 });
+    G.ammo--; G.stats.shots++; G.fireT = perk('fireRate', AMMO.rate);
+    puff(nx, na - 4, (Math.random() - 0.5) * 40, -120, 0.25, 7, 'flame');
+    if (G.ammo === 0) { G.dryT = 1.6; chainEvent('Out of chilies!', '#ff5a3a', 1.6); vibrate([20, 30, 20]); }
+    else if (G.ammo <= AMMO.low) chainEvent(G.ammo === 1 ? 'Last chili!' : 'Chilies low', '#ff9a3a', 0.9);
+  }
+  // hunger: builds while the tank is empty, drains once it has ammo again
+  if (G.ammo <= 0) G.hunger = Math.min(1, G.hunger + dt / AMMO.starve);
+  else G.hunger = Math.max(0, G.hunger - dt / AMMO.sate);
+  G.dryT = Math.max(0, G.dryT - dt);
+  G.worm.stun = Math.max(0, G.worm.stun - dt); G.worm.hitT = Math.max(0, G.worm.hitT - dt * 3);
+  // the knockback slides it down fast (most of it in about 0.15 s) instead of teleporting
+  if (G.worm.kb > 0) { const d = Math.min(G.worm.kb, G.worm.kb * dt * 14 + 20 * dt); G.worm.alt -= d; G.worm.kb -= d; }
+}
+// shots fly and hit (they keep flying while you are dead, so a last shot can still land); impact bursts age
+function updateShots(dt) {
+  const W = G.worm;
+  for (let i = G.shots.length - 1; i >= 0; i--) {
+    const q = G.shots[i];
+    q.age += dt; q.alt += q.vy * dt;
+    if (q.alt - SHOT_R <= W.alt) {
+      G.shots.splice(i, 1);
+      if (G.state === 'dead' && G.knock && G.knock.eaten) continue;
+      shotHit(q);
+    } else if (q.alt < G.camAlt - 200) G.shots.splice(i, 1);
+  }
+  for (let i = G.impacts.length - 1; i >= 0; i--) if ((G.impacts[i].t += dt) > 0.45) G.impacts.splice(i, 1);
+}
+function shotHit(q) {
+  const W = G.worm, st = G.stats;
+  G.impacts.push({ x: q.x, alt: W.alt + 6, t: 0 });
+  if (G.state !== 'play') return;
+  st.hits++;
+  const at = W.alt;
+  W.kb = (W.kb || 0) + perk('push', AMMO.push); W.stun = AMMO.stun; W.hitT = 1; W.snap = 0;   // (knocked back over a few frames, see updateBlaster)
+  G.shake = Math.max(G.shake, 3);
+  for (let k = 0; k < 8; k++) { const a = Math.PI * (0.1 + 0.8 * k / 7); puff(q.x, at + 8, Math.cos(a) * 160, Math.sin(a) * 140, 0.4, 2.2, k % 2 ? 'spark' : 'flame'); }
+  addPop(`+${HIT_BONUS}`, q.x, at + 50, { col: '#ffb238', small: true });
+  // a hit during a surge's warning or lunge calls it off
+  if (W.crouch > 0 || W.beat > 0 || W.surge > 0.2) { W.crouch = 0; W.beat = 0; W.surge = 0; G.surgeWarn = 0; chainEvent('Surge blocked!', '#ffe14a'); }
+  vibrate(5);
 }
 // The drawn tilt: lean into the steering (up to about 18 degrees), plus a wobble when falling or panicking
 // and a little pop on a close call, capped so the hitbox turns exactly with the drawing.
 function poseRot(dt) {
   const p = G.p, playing = G.state === 'play', gap = monsterGap();
-  const panic = playing && (p.vy < -320 || gap < 120 || G.sputter);
+  const panic = playing && (p.vy < -320 || gap < 120 || (G.ammo <= 0 && gap < 260));
   const falling = playing && !panic && p.vy < -140, nm = p.nearT > 0 ? Math.sin((1 - p.nearT / 0.5) * Math.PI) : 0;
   let rot = p.tilt;
   if (falling) rot += Math.sin(G.t * 9) * 0.07;
@@ -2871,7 +3030,7 @@ function boulderActive() {
 // set of capsules (pilotCaps), and both the game and the hitbox overlay use exactly these.
 // Shapes: { k: 'c', x, a, r } circle, { k: 's', x0, a0, x1, a1, r } capsule, { k: 'b', x0, x1, a0, a1 } box.
 // For the close-call test every pair's touching distance is grown to NEAR_K × (sum of radii) + NEAR_ADD,
-// so threading a crystal racing line past a hazard's reach counts as a close call.
+// so threading a coconut racing line past a hazard's reach counts as a close call.
 const NEAR_K = 1.5, NEAR_ADD = 6;
 let nearMode = false;
 
@@ -3178,13 +3337,14 @@ function draw() {
   drawShimmer();
   drawPlanks();
   drawBestLine();
-  drawFruit();
+  drawPickups();
   drawHazards();
   drawParticles(false);
   if (G.state !== 'dead') drawPlayer(); else if (!G.bite) drawKnock();
   drawParticles(true);
   drawDangerUnder();
   drawWorm();
+  drawShots();
   if (G.state === 'dead' && G.bite) drawKnock();      // swallowed into the monster's own mouth
   drawForeground();
   drawSpeedLines();
@@ -3991,7 +4151,7 @@ function drawBestLine() {
   ctx.restore();
 }
 
-// Borderless art helpers shared by the crushers, gates, hanging hazards, boulders and ice crystals. Colours are
+// Borderless art helpers shared by the crushers, gates, hanging hazards, boulders and the retired ice crystals. Colours are
 // [r, g, b] arrays. Nothing is outlined in black: form comes from facets, gradients, occlusion and highlights, and an
 // edge that needs definition gets a darker shade of the shape's own colour (h3Dk).
 function h3Mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
@@ -4006,10 +4166,152 @@ function h3Glow(x, y, r, col, a) {   // an additive soft light
   ctx.restore();
 }
 
+// ---------- pickup and shot art ----------
+// The art contract (final drawings swap in here with the same names and signatures): the caller translates to the
+// item's screen centre and scales by the world→screen scale s, so every function draws in world units about (0, 0).
+// Solid parts stay inside the item's circle (CHILI_R, COCO_R / GOLD_R, SHOT_R); additive glows may spill past it.
+// Borderless: form comes from gradients, shading and darker same-hue edges, never an outline.
+//   drawChiliArt(c, t, ph)             a chili pickup, inside CHILI_R
+//   drawCoconutArt(c, t, ph, golden)   a coconut pickup (golden: the rare golden one), inside COCO_R / GOLD_R
+//   drawChiliShot(c, t, age)           a flaming chili shot travelling straight DOWN, centred on its SHOT_R circle
+//   drawShotImpact(c, t, prog)         the impact burst where a shot hits the monster, prog 0..1
+// (These are simple placeholders.)
+function artGlow(c, x, y, r, col, a) {
+  if (a < 0.01) return;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgbaA(col, a)); g.addColorStop(0.5, rgbaA(col, a * 0.35)); g.addColorStop(1, rgbaA(col, 0));
+  c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); c.restore();
+}
+// a chili pod: a glossy curved red body (tip down and to the right), a green cap and a curled stem
+function chiliPod(c, len, w) {
+  const L = len / 2;
+  c.beginPath();
+  c.moveTo(-w * 0.9, -L * 0.62);
+  c.bezierCurveTo(-w * 1.2, -L * 0.1, -w * 0.5, L * 0.55, w * 0.55, L);
+  c.bezierCurveTo(w * 0.4, L * 0.45, w * 1.25, -L * 0.05, w * 0.95, -L * 0.62);
+  c.bezierCurveTo(w * 0.5, -L * 0.82, -w * 0.5, -L * 0.82, -w * 0.9, -L * 0.62);
+  c.closePath();
+}
+function drawChiliArt(c, t, ph) {
+  c.save();
+  c.rotate(-0.42 + 0.08 * Math.sin(t * 2.6 + ph));
+  artGlow(c, 0, 0, 26, [255, 110, 40], 0.32 + 0.1 * Math.sin(t * 4 + ph));
+  const len = 28, w = 6.2, L = len / 2;
+  chiliPod(c, len, w);
+  const g = c.createLinearGradient(-w * 1.2, 0, w * 1.3, 0);
+  g.addColorStop(0, '#ff8a5a'); g.addColorStop(0.35, '#f2361c'); g.addColorStop(0.8, '#b8140c'); g.addColorStop(1, '#7e0a06');
+  c.fillStyle = g; c.fill();
+  // shading toward the tip and a glossy streak
+  c.save(); chiliPod(c, len, w); c.clip();
+  const sh = c.createLinearGradient(0, -L, 0, L); sh.addColorStop(0, 'rgba(120,8,4,0)'); sh.addColorStop(1, 'rgba(110,6,2,.45)');
+  c.fillStyle = sh; c.fillRect(-w * 2, -L, w * 4, len);
+  c.restore();
+  c.strokeStyle = 'rgba(255,236,220,.85)'; c.lineWidth = 1.5; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-w * 0.45, -L * 0.45); c.quadraticCurveTo(-w * 0.75, L * 0.05, -w * 0.15, L * 0.45); c.stroke();
+  // the cap: a green star-ish calyx and a curled stem
+  c.fillStyle = '#3f9a2a';
+  c.beginPath(); c.ellipse(0, -L * 0.66, w * 1.05, w * 0.42, 0, 0, 6.283); c.fill();
+  c.fillStyle = '#6cc63e';
+  c.beginPath(); c.ellipse(-w * 0.2, -L * 0.72, w * 0.7, w * 0.24, 0, 0, 6.283); c.fill();
+  c.strokeStyle = '#2f7a1e'; c.lineWidth = 2.2;
+  c.beginPath(); c.moveTo(0, -L * 0.72); c.quadraticCurveTo(1, -L * 1.0, 4.5, -L * 1.06); c.stroke();
+  c.restore();
+}
+function drawCoconutArt(c, t, ph, golden) {
+  const r = golden ? 13.5 : 11.5;
+  c.save();
+  c.rotate(0.15 * Math.sin(t * 1.8 + ph));
+  if (golden) artGlow(c, 0, 0, 30, [255, 214, 80], 0.42 + 0.14 * Math.sin(t * 5 + ph));
+  else artGlow(c, 0, 0, 20, [255, 236, 200], 0.1);
+  const g = c.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+  if (golden) { g.addColorStop(0, '#fff7c0'); g.addColorStop(0.45, '#ffcf3a'); g.addColorStop(0.85, '#d98c12'); g.addColorStop(1, '#a8620a'); }
+  else { g.addColorStop(0, '#b98250'); g.addColorStop(0.5, '#7a4a22'); g.addColorStop(0.9, '#4e2c12'); g.addColorStop(1, '#3e220e'); }
+  c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, 6.283); c.fill();
+  // husk fibres (a darker shade of its own colour)
+  c.strokeStyle = golden ? 'rgba(170,96,8,.55)' : 'rgba(46,24,8,.5)'; c.lineWidth = 0.9; c.lineCap = 'round';
+  for (let k = 0; k < 9; k++) {
+    const a = k * 0.7 + 0.4, rr = r * (0.45 + 0.4 * ((k * 37) % 10) / 10);
+    c.beginPath(); c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); c.lineTo(Math.cos(a + 0.35) * (rr + 2.5), Math.sin(a + 0.35) * (rr + 2.5)); c.stroke();
+  }
+  // its three eyes
+  c.fillStyle = golden ? '#a05a08' : '#2c1606';
+  for (const [ex, ey] of [[-3.2, -4.6], [3.2, -4.6], [0, -1.2]]) { c.beginPath(); c.ellipse(ex * r / 11.5, ey * r / 11.5, 1.7, 1.4, 0, 0, 6.283); c.fill(); }
+  // a soft highlight
+  c.fillStyle = golden ? 'rgba(255,255,235,.75)' : 'rgba(255,230,200,.35)';
+  c.beginPath(); c.ellipse(-r * 0.42, -r * 0.48, r * 0.28, r * 0.16, -0.6, 0, 6.283); c.fill();
+  if (golden) {   // a twinkle
+    const tw = Math.max(0, Math.sin(t * 4 + ph * 3));
+    if (tw > 0.4) {
+      const a = (tw - 0.4) / 0.6, rr = 6 * a + 1;
+      c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(255,252,220,${a})`;
+      c.beginPath(); for (let k = 0; k < 8; k++) { const an = k / 8 * 6.283 + t, q = k % 2 ? rr * 0.25 : rr; c.lineTo(r * 0.35 + Math.cos(an) * q, -r * 0.45 + Math.sin(an) * q); } c.closePath(); c.fill();
+      c.restore();
+    }
+  }
+  c.restore();
+}
+function drawChiliShot(c, t, age) {
+  c.save();
+  // the flame trail streaming up behind it (additive, may spill past SHOT_R)
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const fl = 0.85 + 0.15 * Math.sin(t * 60 + age * 40), tl = 46 * fl * Math.min(1, age * 10 + 0.35);
+  const g = c.createLinearGradient(0, -2, 0, -2 - tl);
+  g.addColorStop(0, 'rgba(255,230,120,.95)'); g.addColorStop(0.4, 'rgba(255,120,30,.6)'); g.addColorStop(1, 'rgba(255,60,10,0)');
+  c.fillStyle = g; c.beginPath(); c.moveTo(-6, -2); c.quadraticCurveTo(-5, -2 - tl * 0.6, 0, -2 - tl); c.quadraticCurveTo(5, -2 - tl * 0.6, 6, -2); c.closePath(); c.fill();
+  c.restore();
+  artGlow(c, 0, 0, 22, [255, 120, 40], 0.65);
+  // the chili, tip down, inside SHOT_R
+  c.rotate(Math.PI * 0.08 * Math.sin(t * 30 + age * 20));
+  c.beginPath(); c.moveTo(-4.4, -5.5); c.bezierCurveTo(-4.8, 0, -2, 4.5, 0, 7.2); c.bezierCurveTo(2, 4.5, 4.8, 0, 4.4, -5.5); c.bezierCurveTo(2, -6.8, -2, -6.8, -4.4, -5.5); c.closePath();
+  const b = c.createLinearGradient(-4.5, 0, 4.5, 0); b.addColorStop(0, '#ff9a5a'); b.addColorStop(0.45, '#f2361c'); b.addColorStop(1, '#8e0c06');
+  c.fillStyle = b; c.fill();
+  c.fillStyle = 'rgba(255,240,220,.8)'; c.beginPath(); c.ellipse(-1.8, -1.5, 0.9, 2.6, 0.1, 0, 6.283); c.fill();
+  c.fillStyle = '#4fae2e'; c.beginPath(); c.ellipse(0, -5.8, 3.6, 1.4, 0, 0, 6.283); c.fill();
+  c.restore();
+}
+function drawShotImpact(c, t, prog) {
+  const e = 1 - (1 - prog) ** 2, a = 1 - prog;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  artGlow(c, 0, 0, 18 + 30 * e, [255, 150, 50], 0.8 * a);
+  c.strokeStyle = `rgba(255,220,120,${0.9 * a})`; c.lineWidth = 3 * a + 0.5;
+  c.beginPath(); c.ellipse(0, 0, 8 + 34 * e, 4 + 14 * e, 0, 0, 6.283); c.stroke();
+  c.strokeStyle = `rgba(255,140,40,${a})`; c.lineWidth = 2; c.lineCap = 'round';
+  for (let k = 0; k < 7; k++) {
+    const an = Math.PI * (1.08 + 0.84 * k / 6), r0 = 6 + 18 * e, r1 = r0 + 10 * a;
+    c.beginPath(); c.moveTo(Math.cos(an) * r0, Math.sin(an) * r0); c.lineTo(Math.cos(an) * r1, Math.sin(an) * r1); c.stroke();
+  }
+  c.restore();
+}
+
+// Every pickup, drawn by its art at its pickup circle (a gentle bob that stays inside the circle).
+function drawPickups() {
+  for (const f of G.fruit) {
+    const y = sy(f.alt);
+    if (y < -60 || y > H + 60) continue;
+    const ph = f.alt * 0.05 + f.x * 0.01, bob = Math.sin(G.t * 3.5 + ph) * 0.8;
+    ctx.save(); ctx.translate(sx(f.x), y - bob * s); ctx.scale(s, s);
+    if (f.kind === 'chili') drawChiliArt(ctx, G.t, ph);
+    else drawCoconutArt(ctx, G.t, ph, f.kind === 'gold');
+    ctx.restore();
+  }
+}
+// chili shots in flight and their impact bursts on the monster
+function drawShots() {
+  for (const q of G.shots) {
+    const y = sy(q.alt); if (y < -40 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(q.x), y); ctx.scale(s, s); drawChiliShot(ctx, G.t, q.age); ctx.restore();
+  }
+  for (const im of G.impacts) {
+    ctx.save(); ctx.translate(sx(im.x), sy(im.alt)); ctx.scale(s, s); drawShotImpact(ctx, G.t, clamp(im.t / 0.45, 0, 1)); ctx.restore();
+  }
+}
+
+// Retired: the ice-crystal pickup (engine heat is gone). Its art is kept for the asset library, unused in play.
 // Ice crystals that line the safe lanes: a cluster of three faceted ice prisms on a little drift of frost, lit from
 // inside, with a cold halo, frost motes and a twinkle on the tallest tip, so they read as cold and cooling against the
 // warm volcano (and as pickups, never as the dark, red-tipped hazards). The halo grows in the hotter zones. Drawn at
 // CRYSTAL_ART scale centred on the pickup circle: every shard, the frost and the bob stay inside CRYSTAL_R.
+const CRYSTAL_R = 19, CRYSTAL_ART = 1.8;
 const CRYSTAL_SHARDS = [   // [base x, base y, lean (rad), height, half-width]: the two short side prisms, then the tall one
   [-3.1, 5.0, -0.5, 10.2, 2.6], [3.3, 5.2, 0.52, 9.2, 2.45], [0, 6.0, 0, 15.2, 3.75],
 ];
@@ -4039,7 +4341,7 @@ function drawCrystalShard(bx, by, lean, hgt, w, k) {
   ctx.fillStyle = rgb(ICE[4], 0.35); h3Poly([[w * 0.55, -0.4], [w, -0.4], [w, 0], [0, w * 0.55], [0, w * 0.2]]); ctx.fill();   // occlusion at its root
   ctx.restore();
 }
-function drawFruit() {
+function drawIceCrystals() {
   const midA = G.camAlt + viewH / 2, [t1, t2] = zoneT(midA), heatGlow = 0.45 + 0.25 * t1 + 0.4 * t2;
   for (const f of G.fruit) {
     const y = sy(f.alt);
@@ -4313,7 +4615,7 @@ function drawBanner() {
   }
   ctx.restore();
 }
-// The zone title card: a slim banner just under the HUD (never over the metres or the crystal count), in for
+// The zone title card: a slim banner just under the HUD (never over the metres or the coconut count), in for
 // 0.25 s, held to about 1.2 s, then faded out; the shaft above a zone change is kept clear, so it never hides a hazard.
 const CARD_LIFE = 1.6;
 function drawZoneCard() {
@@ -14895,22 +15197,21 @@ function drawPlayer() {
   if (G.thrust) drawNozzleGlow(ctx, pl);
   ctx.restore();
   drawBoostReady();
-  drawPilotHeat();
+  drawPilotAmmo();
 }
-// Heat beside the pilot, where your eyes are: a small upright bar on the roomier side, fading in once the engine
-// is warm (so it is not clutter when cool), green → amber → red, blinking through an overheat.
-function drawPilotHeat() {
-  if (G.state !== 'play') return;
-  const ht = G.heat, p = G.p, over = ht.over > 0, a = over ? 1 : smooth(0.18, 0.4, ht.v) * (0.6 + 0.4 * smooth(0.5, 0.8, ht.v));
-  if (a <= 0.01) return;
-  const [L, R] = walls(p.alt), [x0, x1] = pilotExtent(pilot().id, 0), side = p.x - L > R - p.x ? -1 : 1;
-  const x = sx(p.x + (side > 0 ? x1 + 10 : x0 - 10)), y = sy(p.alt), hgt = 40, w = 8;
-  const col = over ? (Math.sin(G.t * 30) > 0 ? [255, 58, 42] : [255, 225, 74]) : heatColour(ht.v), f = over ? 1 : ht.v;
-  ctx.save(); ctx.globalAlpha = a;
-  pkRect(ctx, x - w / 2, y - hgt / 2, w, hgt, 4, 'rgba(20,12,10,.75)', 2.6);
-  ctx.fillStyle = rgb(col); ctx.beginPath(); ctx.roundRect(x - w / 2 + 2, y + hgt / 2 - 2 - (hgt - 4) * f, w - 4, (hgt - 4) * f, 2); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,241,214,.85)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.roundRect(x - w / 2 - 1.5, y - hgt / 2 - 1.5, w + 3, hgt + 3, 5); ctx.stroke();
-  ctx.save(); ctx.translate(x, y - hgt / 2 - 9); drawFlameIcon(6, rgb(col), Math.sin(G.t * 20)); ctx.restore();
+// Ammo beside the pilot, where your eyes are, only when it runs low: a chili and the count on the roomier side, and
+// "EMPTY" flashing red once the tank is dry (the monster is coming).
+function drawPilotAmmo() {
+  if (G.state !== 'play' || G.ammo > AMMO.low) return;
+  const p = G.p, [L, R] = walls(p.alt), [x0, x1] = pilotExtent(pilot().id, 0), side = p.x - L > R - p.x ? -1 : 1;
+  const x = sx(p.x + (side > 0 ? x1 + 16 : x0 - 16)), y = sy(p.alt), empty = G.ammo <= 0, blink = Math.sin(G.t * 14) > 0;
+  ctx.save();
+  if (empty) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ellGlow(x, y, 26, 26, [[0, `rgba(255,40,30,${blink ? 0.55 : 0.25})`], [1, 'rgba(255,40,30,0)']]); ctx.restore(); }
+  ctx.globalAlpha = empty && !blink ? 0.45 : 1;
+  ctx.save(); ctx.translate(x, y - 4); ctx.scale(0.55, 0.55); drawChiliArt(ctx, G.t, 0); ctx.restore();
+  ctx.font = '400 15px "Lilita One", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(20,10,8,.55)'; ctx.fillText(empty ? 'EMPTY' : String(G.ammo), x + 1, y + 9);
+  ctx.fillStyle = empty ? '#ff5a3a' : '#ffb238'; ctx.fillText(empty ? 'EMPTY' : String(G.ammo), x, y + 8);
   ctx.restore();
 }
 // The thrust flame: an additive, flickering cone of fire from every nozzle (orange edge, yellow body,
@@ -14925,9 +15226,9 @@ function coneLayers(exName) {
   return [[1, 1, ex.edge, 0.75], [0.75, 0.62, ex.mid, 0.55], [0.42, 0.32, ex.core, 0.6]];
 }
 function drawThrustFlame(pl, rot, kx, ky) {
-  const p = G.p, ht = G.heat;
-  if (!G.thrust && !(G.sputter && Math.random() < 0.3)) return;
-  const k = clamp(p.vy / cfg.maxUp, 0, 1.2), boost = ht.boostT / 0.45, hot = smooth(0.6, 1, ht.v);
+  const p = G.p;
+  if (!G.thrust) return;
+  const k = clamp(p.vy / cfg.maxUp, 0, 1.2), boost = G.eng.boostT / 0.45, hot = 0;
   ctx.save(); ctx.translate(sx(p.x), sy(p.alt)); ctx.rotate(rot); ctx.scale(s * PILOT_SCALE * kx, s * PILOT_SCALE * ky);
   const n = pl.nozzles.length, wk = n > 1 ? 0.7 : 1;
   for (const [x, y, exName = pl.exhaust] of pl.nozzles) {
@@ -14948,7 +15249,7 @@ function drawThrustFlame(pl, rot, kx, ky) {
 // Firelight: the flame lights the nearby wall rock (clipped to the walls, so it reads as light on stone).
 function drawThrustLight() {
   if (G.state !== 'play' || !G.thrust) return;
-  const p = G.p, x = sx(p.x), y = sy(p.alt - 22), R = (150 + 40 * (G.heat.boostT / 0.45)) * s;
+  const p = G.p, x = sx(p.x), y = sy(p.alt - 22), R = (150 + 40 * (G.eng.boostT / 0.45)) * s;
   ctx.save();
   ctx.beginPath();
   for (const side of [0, 1]) {
@@ -14978,7 +15279,7 @@ function drawPilotBacklight(p) {
 // then a steady pilot light there for as long as it stays ready.
 function drawBoostReady() {
   if (G.state !== 'play' || cfg.boost <= 0) return;
-  const ht = G.heat, pl = pilot();
+  const ht = G.eng, pl = pilot();
   if (ht.readyT <= 0 && G.readyFlash <= 0) return;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (const [lx, ly] of pl.nozzles) {
@@ -15001,61 +15302,30 @@ function drawBoostReady() {
   }
   ctx.restore();
 }
-// Engine heat: an arc beside the pilot with a flame icon in it. The arc fills along a green → amber →
-// red ramp as you hold, the icon burns hotter with it, a tick marks the boost threshold, and the gauge
-// pops and pulses gold when the boost is ready. It blinks red with HOT! while the engine is cut out.
-function heatColour(v) {
-  const stops = [[0, [127, 224, 90]], [0.55, [255, 210, 60]], [0.8, [255, 140, 40]], [1, [255, 58, 42]]];
-  for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], t = (v - a) / (b - a); return ca.map((c, k) => lerp(c, cb[k], t) | 0); }
-  return stops[stops.length - 1][1];
-}
-function drawFlameIcon(r, col, flick) {
-  ctx.beginPath(); ctx.moveTo(0, r);
-  ctx.bezierCurveTo(-r * 0.95, r * 0.9, -r * 0.8, -r * 0.1, -r * 0.1, -r * (1.05 + 0.1 * flick));
-  ctx.bezierCurveTo(r * 0.05, -r * 0.4, r * 0.55, -r * 0.5, r * 0.45, -r * 0.05);
-  ctx.bezierCurveTo(r * 0.95, r * 0.25, r * 0.8, r * 0.9, 0, r); ctx.closePath();
-  ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, r * 0.85); ctx.bezierCurveTo(-r * 0.45, r * 0.7, -r * 0.35, r * 0.1, 0, -r * 0.25); ctx.bezierCurveTo(r * 0.35, r * 0.15, r * 0.4, r * 0.7, 0, r * 0.85);
-  ctx.fillStyle = 'rgba(255,250,210,.9)'; ctx.fill();
-}
-function drawHeatGauge(x, y) {
-  const ht = G.heat, over = ht.over > 0, frost = G.frost || 0;
-  const hot = ht.v > 0.75 && !over, r = 22 * (1 + 0.18 * frost) * (hot ? 1 + 0.05 * Math.sin(G.t * 14) : 1);
-  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-  ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round';
-  ctx.fillStyle = 'rgba(20,12,10,.72)'; ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, 6.283); ctx.fill();
-  // a bright cream bezel and a light track, so the dial reads on the darkest cave
-  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, r + 7, 0, 6.283); ctx.stroke();
-  ctx.strokeStyle = '#fff1d6'; ctx.lineWidth = 2.4; ctx.stroke();
-  ctx.strokeStyle = INK; ctx.lineWidth = 11; ctx.beginPath(); ctx.arc(0, 0, r, a0, a1); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,241,214,.22)'; ctx.lineWidth = 6; ctx.stroke();
-  const col = over ? (Math.sin(G.t * 30) > 0 ? [255, 58, 42] : [255, 225, 74]) : heatColour(ht.v);
-  const fill = over ? 1 : Math.max(0.02, ht.v), segs = Math.max(1, Math.ceil(fill * 20));
-  ctx.lineWidth = 7; ctx.lineCap = 'butt';
-  for (let i = 0; i < segs; i++) {
-    const u0 = fill * i / segs, u1 = fill * (i + 1) / segs;
-    ctx.strokeStyle = rgb(over ? col : heatColour(u1));
-    ctx.beginPath(); ctx.arc(0, 0, r, a0 + (a1 - a0) * u0, a0 + (a1 - a0) * u1 + 0.02); ctx.stroke();
+// The ammo row: one chili pip per shot the tank holds, lit for each one loaded, ghosted for the empty slots. Low,
+// the loaded pips pulse; empty, the row flashes red (and the pilot shows EMPTY). Returns the row's width.
+function drawAmmoRow(x, y) {
+  const n = G.ammoMax, gapX = 11, low = G.ammo <= AMMO.low, empty = G.ammo <= 0, bump = G.ammoBump || 0;
+  ctx.save();
+  if (empty || G.dryT > 0) {
+    const f = Math.sin(G.t * 12) > 0 ? 0.6 : 0.25;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ellGlow(x + n * gapX / 2, y, n * gapX / 2 + 16, 18, [[0, `rgba(255,40,30,${f})`], [1, 'rgba(255,40,30,0)']]); ctx.restore();
   }
-  // the flame icon burns hotter as it heats; a snowflake flashes over it when a crystal cools it
-  ctx.save(); ctx.scale(0.95 + 0.4 * ht.v, 0.95 + 0.4 * ht.v); drawFlameIcon(8, rgb(over ? col : heatColour(Math.max(0.15, ht.v))), Math.sin(G.t * 20)); ctx.restore();
-  if (frost > 0) {
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r * 1.9); g.addColorStop(0, `rgba(170,235,255,${0.8 * frost})`); g.addColorStop(1, 'rgba(90,180,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.9, 0, 6.283); ctx.fill();
-    ctx.strokeStyle = `rgba(235,250,255,${frost})`; ctx.lineWidth = 2.4;
-    for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + (1 - frost); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 13, Math.sin(a) * 13); ctx.moveTo(Math.cos(a) * 8 + Math.cos(a + 0.8) * 4, Math.sin(a) * 8 + Math.sin(a + 0.8) * 4); ctx.lineTo(Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(Math.cos(a) * 8 + Math.cos(a - 0.8) * 4, Math.sin(a) * 8 + Math.sin(a - 0.8) * 4); ctx.stroke(); }
-    ctx.globalCompositeOperation = 'source-over';
-  }
-  if (over || hot) {
-    const txt = over ? 'OVERHEAT' : 'HOT';
-    ctx.font = `400 ${over ? 12 : 11}px "Lilita One", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.strokeText(txt, 0, r + 15); ctx.fillStyle = over ? '#ff7a3a' : '#ffe14a'; ctx.fillText(txt, 0, r + 15);
+  for (let i = 0; i < n; i++) {
+    const on = i < G.ammo, px = x + i * gapX + 5;
+    ctx.save(); ctx.translate(px, y);
+    const sc = 0.42 * (on && low ? 1 + 0.12 * Math.max(0, Math.sin(G.t * 10 - i)) : 1) * (on && i >= G.ammo - AMMO.per ? 1 + 0.35 * bump : 1);
+    ctx.scale(sc, sc);
+    if (!on) ctx.globalAlpha = empty ? (Math.sin(G.t * 12) > 0 ? 0.55 : 0.3) : 0.22;
+    drawChiliArt(ctx, on ? G.t : 0, i * 1.7);
+    ctx.restore();
   }
   ctx.restore();
+  return n * gapX + 6;
 }
-// The run's one status cluster, top left under the safe area and well off the pilot: the engine heat ring, the
-// crystal chain count beside it, and a single event line under that (Close!, Overheat!, Cooled!, every 100 m)
+// The run's one status cluster, top left under the safe area and well off the pilot: the chili ammo row, the coconut
+// chain count under it, and a single event line under that (Close!, Out of chilies!, Surge blocked!, every 100 m)
 // that pops in and fades. It fades out of the way while a hazard passes behind it.
 function chainEvent(text, col, life = 1.1) { if (G) G.chainEv = { text, col, t: 0, life }; }
 function drawStatus() {
@@ -15063,11 +15333,11 @@ function drawStatus() {
   const x0 = Math.max(16, ox) + 6, cx = x0 + 28, cy = safeTop + 36;
   const behind = hazardBehind([x0 - 6, cy - 34, x0 + 150, cy + 40]);
   ctx.save(); ctx.globalAlpha = behind ? 0.3 : 1;
-  drawHeatGauge(cx, cy);
+  const rowW = drawAmmoRow(x0, cy - 10);
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   if ((G.chain || 0) > 1 && G.chainT > 0) {
     const pop = 1 + 0.35 * (G.chainPop || 0), fade = Math.min(1, G.chainT / 0.6);
-    ctx.save(); ctx.globalAlpha *= fade; ctx.translate(cx + 36, cy - 6); ctx.scale(pop, pop);
+    ctx.save(); ctx.globalAlpha *= fade; ctx.translate(x0 + 8, cy + 18); ctx.scale(pop, pop);
     ctx.font = '400 22px "Lilita One", sans-serif'; ctx.strokeStyle = INK; ctx.lineWidth = 5;
     ctx.strokeText(`×${G.chain}`, 0, 0); ctx.fillStyle = '#bff2ff'; ctx.fillText(`×${G.chain}`, 0, 0);
     ctx.font = '900 10px Nunito, sans-serif'; ctx.lineWidth = 3; ctx.strokeText('CHAIN', 1, 15); ctx.fillStyle = '#fff1d6'; ctx.fillText('CHAIN', 1, 15);
@@ -25931,7 +26201,7 @@ function drawWorm() {
   ctx.rotate(b ? 0 : Math.sin(G.t * 1.3) * 0.025 * (1 - crouch));
   ctx.scale(k * (1 + 0.04 * surge + 0.045 * chewP), k * (1 - 0.08 * crouch + 0.05 * surge + 0.012 * breathe - 0.05 * chewP));
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  mFlare = b ? 1 : crouch;
+  mFlare = b ? 1 : Math.max(crouch, 0.7 * (G.hunger || 0));   // (its eyes flare as it gets hungry, too)
   const [wl, wr] = walls(W.alt + 100);
   let coilHalf = ((wr - wl) / 2) / ((k / s) * (1 + 0.04 * surge));   // (its body limbs reach the walls at any size)
   if (b) coilHalf = Math.min(coilHalf, Math.min(tx - biteL, biteR - tx) / (k * (1 + 0.04 * surge)) - BITE_LEG_IN);   // (on the bite the punch-in pushes the walls off the screen: they reach its sides instead)
@@ -25948,6 +26218,11 @@ function drawWorm() {
   }
   drawGrabWorld(rigs, 'front');
   ctx.globalCompositeOperation = 'lighter';
+  if (W.hitT > 0 && !b) {   // a chili hit: a hot flash across its head
+    const f = W.hitT, hg = ctx.createRadialGradient(tx, y + 60 * k, 4, tx, y + 60 * k, 260 * k);
+    hg.addColorStop(0, `rgba(255,240,200,${0.55 * f})`); hg.addColorStop(0.5, `rgba(255,140,50,${0.25 * f})`); hg.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = hg; ctx.fillRect(tx - 260 * k, y - 200 * k, 520 * k, 520 * k);
+  }
   if (crouch > 0 || b) {   // eyes flare: a hot flash across its face while it crouches to lunge (and as it bites)
     const f = b ? 1 - smooth(0.2, 0.6, b.t) : crouch;
     const fg = ctx.createRadialGradient(tx, y + 110 * k, 4, tx, y + 110 * k, 230 * k);
@@ -26169,9 +26444,13 @@ function drawHitboxes() {
   ctx.lineWidth = 2; ctx.strokeStyle = red; ctx.fillStyle = redFill;
   ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 3;
   for (const h of G.hazards) for (const q of hazardShapes(h)) shape(q);
-  // ice crystals: their pickup circles, in ice blue
-  ctx.save(); ctx.strokeStyle = 'rgba(140,220,255,.95)'; ctx.fillStyle = 'rgba(140,220,255,.15)';
-  for (const f of G.fruit) if (sy(f.alt) > -40 && sy(f.alt) < H + 40) shape({ k: 'c', x: f.x, a: f.alt, r: CRYSTAL_R });
+  // pickups: their pickup circles exactly (chilies orange, coconuts ice blue, golden coconuts gold), and the chili
+  // shots' hit circles (yellow)
+  ctx.save();
+  const PK = { chili: ['rgba(255,150,60,.95)', 'rgba(255,150,60,.15)'], coco: ['rgba(140,220,255,.95)', 'rgba(140,220,255,.15)'], gold: ['rgba(255,220,70,.95)', 'rgba(255,220,70,.15)'] };
+  for (const f of G.fruit) if (sy(f.alt) > -40 && sy(f.alt) < H + 40) { [ctx.strokeStyle, ctx.fillStyle] = PK[f.kind] || PK.coco; shape({ k: 'c', x: f.x, a: f.alt, r: pickR(f) }); }
+  ctx.strokeStyle = 'rgba(255,255,90,.95)'; ctx.fillStyle = 'rgba(255,255,90,.2)';
+  for (const q of G.shots) shape({ k: 'c', x: q.x, a: q.alt, r: SHOT_R });
   ctx.restore();
   // shaft walls: no pilot capsule may cross these lines
   ctx.setLineDash([6, 5]);
@@ -26289,9 +26568,9 @@ let lastShownM = -1;
 function updateHud() {
   const m = Math.floor(G.maxAlt / UNITS_PER_M);
   if (m !== lastShownM) { $('meters').innerHTML = `${m}<small>m</small>`; lastShownM = m; }
-  const fc = String(G.fruitCount);
-  if ($('fruitCount').textContent !== fc) $('fruitCount').textContent = fc;
-  $('fruitChip').classList.toggle('bump', (G.fruitBump || 0) > 0.3);
+  const fc = String(G.stats.coconuts);
+  if ($('cocoCount').textContent !== fc) $('cocoCount').textContent = fc;
+  $('cocoChip').classList.toggle('bump', (G.fruitBump || 0) > 0.3);
   // the pause button fades while a hazard passes behind it (and a warning arrow points at it, see drawHudWarn)
   const hb = hudBoxes();
   $('pauseBtn').classList.toggle('faded', hazardBehind(hb.right));
@@ -26393,7 +26672,6 @@ function beginResume() {
   const W = G.worm;
   W.alt = Math.min(W.alt, G.p.alt - RESUME_LEASH); W.crouch = 0; W.surge = 0; W.beat = 0; W.nextLunge = Math.max(W.nextLunge, 6);
   G.p.vy = Math.max(0, G.p.vy);
-  Object.assign(G.heat, { over: 0, v: Math.min(G.heat.v, 0.5) });
 }
 function fitMenu() { fitText($('menuBest'), 13); fitText($('menuSeed'), 13); fitPickName($('pilotName')); fitPickName($('monsterName')); }
 // a pilot's or monster's name on its menu button: up to two lines, shrunk when a word is too long for the button or the
@@ -26434,8 +26712,10 @@ tap($('playDaily'), () => start(true));
 tap($('playPractice'), () => start(false));
 $('againBtn').addEventListener('click', () => start(G ? G.isDaily : true));
 function toMenu() { paused = false; refreshMenu(); newRun(true); $('hint').hidden = true; show('menu'); }
+// quitting a run from pause still banks its coconuts (and counts as its end)
+function quitRun() { if (G && G.state !== 'dead' && G.launchT != null) { bankRun(); onRunEnd(G, 'quit'); } toMenu(); }
 $('menuBtn').addEventListener('click', toMenu);
-$('quitBtn').addEventListener('click', toMenu);
+$('quitBtn').addEventListener('click', quitRun);
 $('resumeBtn').addEventListener('click', togglePause);
 $('pauseBtn').addEventListener('click', togglePause);
 document.addEventListener('visibilitychange', () => { if (document.hidden && G && (G.state === 'play') && currentScreen === null) togglePause(); });
@@ -26443,7 +26723,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 $('adBtn').addEventListener('click', () => {
   if (!G || G.reviveUsed) return;
   const nm = monster().label;
-  $('adNote').textContent = `Continue your run from right where you were. The ${nm} gets pushed back and the obstacles around you are cleared. Your run keeps half its score so far.`;
+  $('adNote').textContent = `Keep flying from right where you were: your score stays, the ${nm} gets pushed back, the obstacles around you are cleared, and you get a full tank of chilies plus a comeback bonus of ${comebackCoins()} coconuts and ${COMEBACK.pts} points.`;
   show('ad');
   const t0 = performance.now(), dur = 3000;
   const tick = () => {
@@ -26457,7 +26737,7 @@ $('adBtn').addEventListener('click', () => {
 
 $('shareBtn').addEventListener('click', async () => {
   const m = Math.floor(G.maxAlt / UNITS_PER_M);
-  const text = `Coconut Rocket ${shaftNo} · ${dayLabel}\nI scored ${fmtPts(runScore())} (climbed ${m} m, ${G.fruitCount} ice crystals, ${G.closeCount} close calls) before ${G.cause === 'worm' ? `the ${monster().label} got me` : 'I wiped out'}. Best today: ${fmtPts(daily.bestPts)}.${isDefaultTune() ? '' : ' (tuned settings)'}`;
+  const text = `Coconut Rocket ${shaftNo} · ${dayLabel}\nI scored ${fmtPts(runScore())} (climbed ${m} m, ${G.stats.coconuts} coconuts, ${G.stats.hits} monster hits, ${G.closeCount} close calls) before ${G.cause === 'worm' ? `the ${monster().label} got me` : 'I wiped out'}. Best today: ${fmtPts(daily.bestPts)}.${isDefaultTune() ? '' : ' (tuned settings)'}`;
   try { await navigator.clipboard.writeText(text); toast('Score copied. Paste it anywhere to share.'); }
   catch { toast(text.replace('\n', ' · ')); }
 });
@@ -26770,5 +27050,7 @@ setControl(settings.control); // tilt still needs a tap on its button to ask for
 // draw a live attract-mode shaft behind the menu
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
+// play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; } };
 })();
 </script>

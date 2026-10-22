@@ -8,12 +8,12 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR };')();
 
 // The widest and tallest pilot hitbox at any tilt (every character in every vehicle it can ride, world units): every
 // lane is sized from these.
 const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
-const FRUIT_PAD = RULES.crystal.r + 2;       // a crystal's pickup radius (its drawn size) plus a little
+const FRUIT_PAD = RULES.pickup.r + 2;       // the largest pickup radius (chili, coconut or golden coconut) plus a little
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -163,20 +163,34 @@ const pairStats = { pairs: 0, flyable: 0, swaps: 0, minS: Infinity, widest: 0, t
   if (sl(a, null, [1, 0, 0]).join() !== '3.5,-12.25' || sl(0, [1, 14], [1, 0, 0]).join() !== '3.5,-12.25' || sl(a, [1, 14], [1, 0, 0]).join() !== own.join()) fail('seatLocal turns a point back about the ride\'s tip pivot', '');
 }
 for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => t !== 'arc')).size < 2) fail('beats mix hazard types', sp.name);
-// crystals: a pilot that follows the crystals and feathers its thrust just enough to hold a steady climb (thrust on
-// gravity / thrust of the time) at the monster's top base speed heats less over the longest crystal gap than one
-// crystal cools (10% margin), so following the crystals always stays out of overheat while the engine runs at
-// full strength (below 0.6 heat); holding full thrust flat out between crystals heats well past one crystal's
-// cooling, so heat matters; and the gap is well short of the climb that overheats a cold engine
-const CLEAR = PILOT_W / 2 + 15 + RULES.crystal.r;   // a crystal's clearance from every hazard hitbox (pilot half-width, 15, its own pickup radius)
+// chili ammo: a pilot that follows the chili line (the guaranteed gap-fill chilies) at the monster's top base speed
+// picks up at least 1.15× the ammo that steady auto-fire (one shot every AMMO.rate s, the monster always in range at
+// its leash) spends, so following the chilies never runs dry. Out of ammo the monster gets hungry (the game's own chase
+// model: CHASE plus hungerLeash): from its normal leash it reaches a pilot climbing at that speed only after more than
+// twice the longest climb without a chili, so running dry right after a chili still leaves time to reach the next one;
+// and the hunger is real: even flat out at top speed it catches you within 12 s.
+const CLEAR = PILOT_W / 2 + 15 + RULES.pickup.r;   // a pickup's clearance from every hazard hitbox (pilot half-width, 15, the largest pickup radius)
+const ammoStats = {};
 {
-  const D = DEFAULTS, duty = D.gravity / D.thrust, v = D.wormBase + 60;
-  const perSec = duty / D.heatTime - (1 - duty) / D.coolTime, heatPerGap = RULES.crystal.gap / v * perSec;
-  if (heatPerGap * 1.1 > RULES.crystal.cool) fail('following the crystals while feathering stays out of overheat', `${heatPerGap.toFixed(3)} per gap vs ${RULES.crystal.cool}`);
-  const flatOut = RULES.crystal.gap / D.maxUp / D.heatTime;
-  if (flatOut < RULES.crystal.cool * 1.6) fail('holding full thrust between crystals runs the engine hot', `${flatOut.toFixed(2)} vs ${RULES.crystal.cool}`);
-  if (RULES.crystal.gap > 0.8 * D.maxUp * D.heatTime) fail('the crystal gap is well inside the overheat climb', '');
-  if (RULES.crystal.clear < CLEAR || RULES.fruitHug < CLEAR) fail('crystals keep the widest pilot half-width plus 15 plus their radius from hazards', `${RULES.crystal.clear} vs ${CLEAR.toFixed(1)}`);
+  const D = DEFAULTS, v = D.wormBase + 60, gap = RULES.chili.gap;
+  const supply = AMMO.per * v / gap, spend = 1 / AMMO.rate;
+  ammoStats.ratio = supply / spend;
+  if (supply < spend * 1.15) fail('following the chilies out-supplies steady auto-fire by 15%', `${supply.toFixed(2)} vs ${spend.toFixed(2)} ammo/s`);
+  const caught = pv => {
+    let g = D.chase, h = 0, t = 0; const dt = 1 / 240, base = D.wormBase + 60;
+    while (g > 0 && t < 30) {
+      h = Math.min(1, h + dt / AMMO.starve);
+      const [tg, cap] = hungerLeash(D.chase, CHASE.cap, h), mv = Math.max(base * CHASE.floor, base + Math.max(-base, Math.min(cap, (g - tg) * CHASE.k)));
+      g += (pv - mv) * dt; t += dt;
+    }
+    return t;
+  };
+  ammoStats.caught = caught(v); ammoStats.caughtFlat = caught(D.maxUp); ammoStats.climb = gap / v;
+  if (ammoStats.climb * 2 > ammoStats.caught) fail('the longest climb without a chili is well inside the time from empty to caught', `${ammoStats.climb.toFixed(2)} s vs ${ammoStats.caught.toFixed(2)} s`);
+  if (ammoStats.caughtFlat > 12) fail('out of ammo the monster catches even a flat-out pilot', `${ammoStats.caughtFlat.toFixed(1)} s`);
+  if (AMMO.start > AMMO.max || AMMO.per < 1 || AMMO.range <= D.chase) fail('ammo numbers are sane (start <= max, the leash is in range)', '');
+  if (RULES.pickup.clear < CLEAR || RULES.fruitHug < CLEAR) fail('pickups keep the widest pilot half-width plus 15 plus their radius from hazards', `${RULES.pickup.clear} vs ${CLEAR.toFixed(1)}`);
+  if (Math.max(CHILI_R, COCO_R, GOLD_R) !== PICK_R || RULES.pickup.r !== PICK_R) fail('the pickup clearance uses the largest pickup radius', '');
 }
 // gates: the open window is longer than climbing through the whole gate (both slabs' thickness plus the tallest
 // pilot, from a standstill a little below it, after a reaction time), and the room left below a gate holds the
@@ -309,7 +323,17 @@ for (const cfg of CONFIGS) {
       if (per < 2.0) fail('hazards stay dense after 300 m', `${tag}: ${per.toFixed(2)} per 100 m`);
     }
     if (k < 100 && cfg.density === 1 && cfg.intro === 300) { zoneMix.intro = zoneMix.intro || new Set(); zoneMix.intro.add(hz.slice(0, 3).map(h => `${h.type}${h.side}:${Math.round(h.lo / 60)}`).join(' ')); }
-    if (fruit.length < HEIGHT / RULES.crystal.gap) fail('shaft has crystals to collect', `${tag}: only ${fruit.length}`);
+    if (fruit.filter(f => f.kind === 'chili').length < HEIGHT / RULES.chili.gap) fail('shaft has a chili line', `${tag}: only ${fruit.filter(f => f.kind === 'chili').length}`);
+    for (const f of fruit) if (!['chili', 'coco', 'gold'].includes(f.kind)) { fail('every pickup is a chili, a coconut or a golden coconut', `${tag}: ${f.kind}`); break; }
+    for (const f of fruit) if (f.kind === 'chili' && !f.fill) { fail('only the guaranteed line holds chilies', tag); break; }
+    // coconuts are plentiful (counted over the first 500 m after the launch, value with golden ones at COCO_GOLD)
+    if (cfg.density === 1) {
+      const c5 = fruit.filter(f => f.alt < 5000 && f.kind !== 'chili'), val = c5.reduce((n, f) => n + (f.kind === 'gold' ? COCO_GOLD : 1), 0);
+      (zoneMix.coco = zoneMix.coco || []).push(val); (zoneMix.cocoN = zoneMix.cocoN || []).push(c5.length);
+      zoneMix.gold = (zoneMix.gold || 0) + fruit.filter(f => f.kind === 'gold' && f.alt < HEIGHT - 800).length; zoneMix.goldH = (zoneMix.goldH || 0) + (HEIGHT - 800);
+      if (c5.length < 30) fail('a 500 m climb offers plenty of coconuts', `${tag}: ${c5.length}`);
+      if (fruit.some(f => f.kind === 'gold' && !f.bonus)) fail('golden coconuts sit only on risky spots', tag);
+    }
     for (const t of new Set(hz.map(h => h.type))) seen.set(t, (seen.get(t) || 0) + 1);
 
     // no monotonous runs: after the thorns-only opening, never more than RULES.maxRun of a type in a row
@@ -332,14 +356,16 @@ for (const cfg of CONFIGS) {
 
     // release beats: fruit arcs sweep across empty stretches, never through a hazard's band
     const arcs = fruit.filter(f => f.arc);
-    if (arcs.length < RULES.arc.n && cfg.density >= 0.5) fail('shafts have fruit-arc release beats', `${tag}: ${arcs.length} arc fruit`);
+    if (arcs.length < RULES.arc.n[0] && cfg.density >= 0.5) fail('shafts have coconut-arc release beats', `${tag}: ${arcs.length} arc coconuts`);
     for (const f of arcs) for (const h of hz) {
       const top = h.type === 'pend' ? h.aAlt : h.hi, lo = h.type === 'boulder' ? h.alt - 40 : h.lo;
       if (f.alt > lo - 10 && f.alt < top + 10) { fail('fruit arcs stay clear of hazards', `${tag} at ${(f.alt / 10).toFixed(0)} m: ${h.type}`); break; }
     }
-    // racing lines: fruit beside a wall hazard threads close to its reach (RULES.fruitHug), not the lane's middle
+    // racing lines: coconuts beside a wall hazard thread close to its reach (RULES.fruitHug), not the lane's middle
+    // (the chili line is the main line, so it is left out)
     let near = 0, beside = 0;
     for (const f of fruit) for (const h of hz) {
+      if (f.kind === 'chili') break;
       if ((h.type !== 'spike' && h.type !== 'geyser') || f.alt < h.lo || f.alt > h.hi) continue;
       beside++;
       if (Math.abs(f.x - (h.base + h.side * (h.len + RULES.fruitHug))) < 8) near++;
@@ -434,11 +460,11 @@ for (const cfg of CONFIGS) {
       }
     }
 
-    // crystals keep CLEAR from every hazard hitbox they could meet: the static hitboxes (the game's own shapes),
+    // pickups (chilies and coconuts alike) keep CLEAR from every hazard hitbox they could meet: the static hitboxes (the game's own shapes),
     // a pod's whole swing, a crusher fully closed, a spider's whole bob (its body and legs) and a fire wheel's whole
     // sweep, measured here independently; and never within 40 of a spike or geyser tip at about the same height
     for (const f of fruit) {
-      const fw = `${tag} crystal at ${(f.alt / 10).toFixed(0)} m`;
+      const fw = `${tag} ${f.kind} at ${(f.alt / 10).toFixed(0)} m`;
       for (const h of hz) {
         const top = h.type === 'pend' ? h.aAlt : h.hi;
         if (f.alt < h.lo - 200 || f.alt > top + 200) continue;
@@ -447,7 +473,7 @@ for (const cfg of CONFIGS) {
         const box = (x0, x1, a0, a1) => { const dx = Math.max(x0 - f.x, 0, f.x - x1), da = Math.max(a0 - f.alt, 0, f.alt - a1); d = Math.min(d, dx || da ? Math.hypot(dx, da) : -1); };
         if (h.type === 'spike' || h.type === 'geyser' || h.type === 'lavafall') {
           for (const q of staticShapes(h)) q.k === 'b' ? box(q.x0, q.x1, q.a0, q.a1) : seg(q.x0, q.a0, q.x1, q.a1, q.r);
-          if (h.type !== 'lavafall' && Math.abs(f.alt - h.alt) < 30 && Math.abs(f.x - (h.base + h.side * h.len)) < 40) fail('crystals never sit by a hazard tip', `${fw}: ${h.type}`);
+          if (h.type !== 'lavafall' && Math.abs(f.alt - h.alt) < 30 && Math.abs(f.x - (h.base + h.side * h.len)) < 40) fail('pickups never sit by a hazard tip', `${fw}: ${h.type}`);
         } else if (h.type === 'pend') {
           for (let i = 0; i <= 48; i++) { const th = h.side * (0.23 + 1.1 * i / 48); seg(h.ax + h.len * Math.sin(th), h.aAlt - h.len * Math.cos(th), h.ax + h.len * Math.sin(th), h.aAlt - h.len * Math.cos(th), h.hr); }
         } else if (h.type === 'crusher') {
@@ -457,18 +483,21 @@ for (const cfg of CONFIGS) {
           seg(h.x, a0 - 8 * k, h.x, a1 + 9 * k, 12 * k); box(h.x - 24.6 * k, h.x + 24.6 * k, a0 - 10.7 * k, a1 + 14.1 * k);   // legs: 24.6 out, 14.1 up, 10.7 down
         } else if (h.type === 'firebar') seg(h.cx, h.alt, h.cx, h.alt, h.len + h.br * 1.08);
         else if (h.type === 'hang') box(h.x - h.hw - RULES.hang.sway, h.x + h.hw + RULES.hang.sway, h.lo, h.aAlt);
-        if (d < CLEAR - 0.5) { fail('crystals keep clear of hazard hitboxes', `${fw}: ${h.type} ${d.toFixed(0)} < ${CLEAR.toFixed(0)}`); break; }
+        if (d < CLEAR - 0.5) { fail('pickups keep clear of hazard hitboxes', `${fw}: ${h.type} ${d.toFixed(0)} < ${CLEAR.toFixed(0)}`); break; }
       }
     }
 
-    // ice crystals keep the engine cool: along the shaft there is never a longer climb than RULES.crystal.gap
-    // without one, and that climb at full thrust heats the engine less than one crystal cools it (with a 25%
-    // margin) and is well short of the climb that would overheat it from cold
+    // the chili line: along the shaft there is never a longer climb than RULES.chili.gap without a chili (the ammo
+    // fairness above is computed from that gap)
     {
-      const alts = fruit.map(f => f.alt).sort((x, y) => x - y);
+      const alts = fruit.filter(f => f.kind === 'chili').map(f => f.alt).sort((x, y) => x - y);
       let prev = 58, worst = 0;
       for (const a of alts) { if (a > HEIGHT - 800) break; worst = Math.max(worst, a - prev); prev = a; }
-      if (worst > RULES.crystal.gap + 1) fail('a crystal comes at least every RULES.crystal.gap', `${tag}: ${worst.toFixed(0)} units`);
+      if (worst > RULES.chili.gap + 1) fail('a chili comes at least every RULES.chili.gap', `${tag}: ${worst.toFixed(0)} units`);
+      // and a chili rarely sits on top of a coconut (both would be grabbed as one blob)
+      let over = 0, nch = 0;
+      for (const f of fruit) if (f.kind === 'chili') { nch++; if (fruit.some(q => q !== f && Math.hypot(q.x - f.x, q.alt - f.alt) < pickR(q) + CHILI_R)) over++; }
+      if (over > nch * 0.05) fail('chilies keep off the coconuts', `${tag}: ${over} of ${nch}`);
     }
     // authored stretches: pinches go right down to the minimum width, chambers open wide, and a calm
     // chamber (no hazards at all, not even a falling rock) comes at least every few stretches
@@ -805,8 +834,9 @@ if (!zoneMix.intro || zoneMix.intro.size < 60) fail('the opening varies between 
 if ((seen.get('lavafall*') || 0) < checked * 0.55) fail('lavafalls show up in most shafts', `${seen.get('lavafall*') || 0} of ${checked}`);
 if ((zoneMix.corridors || 0) < checked * 0.55) fail('corridor stretches show up in most shafts', `${zoneMix.corridors || 0} of ${checked}`);
 
-// Crystals never pop in on screen: filled the way the game does (a little at a time as the camera climbs, up to
-// the screen top + 900), every crystal must already exist while it is still well above the top of a tall phone screen.
+// Pickups (chilies and coconuts) never pop in on screen: filled the way the game does (a little at a time as the camera
+// climbs, up to the screen top + 900), every pickup must already exist while it is still well above the top of a tall
+// phone screen.
 let popChecked = 0;
 for (let sd = 0; sd < 150; sd++) {
   const VIEW = 1100, lv = createLevel(sd * 104729 + 7, DEFAULTS), hz = [], fr = [];
@@ -814,10 +844,24 @@ for (let sd = 0; sd < 150; sd++) {
   let seenF = fr.length;
   for (let cam = 10; cam < 25000; cam += 10) {
     lv.fill(cam + VIEW + 900, hz, fr);
-    for (; seenF < fr.length; seenF++, popChecked++) if (fr[seenF].alt < cam + VIEW + 100) fail('crystals appear above the screen, never pop in on it', `seed ${sd}: crystal at ${fr[seenF].alt | 0} appeared with the screen top at ${cam + VIEW}`);
+    for (; seenF < fr.length; seenF++, popChecked++) if (fr[seenF].alt < cam + VIEW + 100) fail('pickups appear above the screen, never pop in on it', `seed ${sd}: ${fr[seenF].kind} at ${fr[seenF].alt | 0} appeared with the screen top at ${cam + VIEW}`);
   }
 }
-if (popChecked < 1000) fail('crystal pop-in is checked', `${popChecked}`);
+if (popChecked < 1000) fail('pickup pop-in is checked', `${popChecked}`);
+// every kind shows up, and filling the shaft a little at a time gives exactly the one-shot layout (the daily shaft is
+// the same on every phone, whatever its screen height)
+{
+  const a = createLevel(4242, DEFAULTS), b = createLevel(4242, DEFAULTS), ha = [], fa = [], hb = [], fb = [];
+  for (let cam = 0; cam < 20000; cam += 37) a.fill(cam + 1700, ha, fa);
+  b.fill(20000 + 1700, hb, fb);
+  const cut = f => f.alt < 19000, key = f => `${f.kind}:${f.x.toFixed(2)}:${f.alt.toFixed(2)}`;
+  if (fa.filter(cut).map(key).sort().join() !== fb.filter(cut).map(key).sort().join()) fail('pickups do not depend on how the shaft is filled', '');
+  if (!fa.some(f => f.kind === 'chili') || !fa.some(f => f.kind === 'coco') || !fa.some(f => f.kind === 'gold')) fail('every pickup kind shows up', '');
+}
+if (zoneMix.gold && zoneMix.goldH) {
+  zoneMix.per150 = zoneMix.gold / (zoneMix.goldH / 1500);
+  if (zoneMix.per150 < 0.6 || zoneMix.per150 > 1.6) fail('about one golden coconut per 150 m', `${zoneMix.per150.toFixed(2)} per 150 m`);
+}
 
 if (failures.size) {
   console.log(`FAILED: ${failures.size} rule(s) broken across ${checked} shafts`);
@@ -826,5 +870,9 @@ if (failures.size) {
 }
 const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
+{
+  const cv = zoneMix.coco || [0], cn = zoneMix.cocoN || [0], avg = a => (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1);
+  console.log(`PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo steady fire spends; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
+}
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
