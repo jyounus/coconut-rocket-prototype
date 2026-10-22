@@ -1810,7 +1810,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
   for (let i = 1; i < up.length; i++) caps.push([up[i - 1][0], up[i - 1][1], up[i][0], up[i][1], Math.max(up[i - 1][2], up[i][2])]);
   for (let i = 1; i < fore.length; i++) caps.push([fore[i - 1][0], fore[i - 1][1], fore[i][0], fore[i][1], Math.max(fore[i - 1][2], fore[i][2])]);
   for (const h of hand) caps.push(h.slice(0, 5));
-  return { root: up[0], up, fore, hand, caps, d, type: ty, tipY, jointed, sc, wind: pose.wind, squeeze: Math.abs(rx0 - rootX) };
+  return { root: up[0], up, fore, hand, caps, d, type: ty, tipY, jointed, sc, wind: pose.wind, squeeze: Math.abs(rx0 - rootX), scr };
 }
 /* LEVELGEN:END */
 const walls = a => G.level.walls(a);
@@ -17435,11 +17435,14 @@ function gobVine(c, ch, d, fromRoot) {
   });
 }
 // two drooping leaves on the up chain (always well under the catch line)
-function gobVineLeaves(c, up, d, t) {
+function gobVineLeaves(c, up, d, t, scr) {
   for (const [f, s] of [[0.38, 1], [0.66, -1]]) {
     const i = Math.round(f * (up.length - 1)), [x, y, r] = up[i];
     if (y < 46) continue;
-    const ang = (d > 0 ? 0.9 : Math.PI - 0.9) + s * 0.5 * d + 0.08 * Math.sin(t * 1.7 + i);
+    let ang = (d > 0 ? 0.9 : Math.PI - 0.9) + s * 0.5 * d + 0.08 * Math.sin(t * 1.7 + i);
+    // a leaf that would poke past the screen's side droops further down instead (scr: the screen's x range)
+    const room = scr ? (d > 0 ? scr[1] - x : x - scr[0]) - 3 : Infinity;
+    for (let k = 0; k < 12 && Math.abs(Math.cos(ang)) * 46 + Math.abs(Math.sin(ang)) * 16 > room; k++) ang += (Math.PI / 2 - ang) * 0.25;
     gobLeaf(c, x, y + r * 0.3, ang, 44, 13, ['#2e6a12', '#5aa82a', '#9ad83a', '#ffd23a', '#ff7a1a'], { curl: 0.15, side: d, ser: 2.6 });
   }
 }
@@ -17481,7 +17484,7 @@ function gobTrapHand(c, rig, t) {
   }
 }
 function gobLimb(c, rig, layer, t) {
-  if (layer === 'mid') { gobVineLeaves(c, rig.up, rig.d, t); gobVine(c, rig.up, rig.d, true); return; }
+  if (layer === 'mid') { gobVineLeaves(c, rig.up, rig.d, t, rig.scr); gobVine(c, rig.up, rig.d, true); return; }
   if (layer !== 'front') return;
   gobVine(c, armChain(rig), rig.d, false);
   gobTrapHand(c, rig, t);
