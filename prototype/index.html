@@ -1451,6 +1451,7 @@ const GRAB_TOTAL = GRAB.wind + GRAB.strike + GRAB.hold + GRAB.back;
 //   vine     a stem zigzagging up the wall to a tendril curl
 //   goo      a lumpy pseudopod that splats on the rock
 //   flame    a licking tongue of fire;  smoke  a wisp of smoke with claws
+//   lava     a molten arm rising from the shoulder in one smooth arc and curling up the wall
 // Radii: rr at the root, rm mid-way out, r0 at the bend, r1 at the wrist. rx: the root's offset from the body's centre
 // line; ry: how far below the bend it sits; rest: where the tip idles (always under the catch line); wig: a wave.
 const GRAB_STYLE = {
@@ -1467,8 +1468,8 @@ const GRAB_STYLE = {
   blob:    { type: 'goo',      hand: 'goohand',   rr: 26, rm: 18, r0: 14, r1: 10, rx: 108, ry: 40, rest: -56, wig: 6, lean: 14 },   // Gloopernaut: a lumpy jelly pseudopod oozing up the wall to a sucker-fingered hand
   spider:  { type: 'leg',      hand: 'scopula',   rr: 17, rm: 13, r0: 10.5, r1: 7.5, rx: 92, ry: 48, rest: -12, bendY: 20 },   // Fanfang: a thick furry front leg, its knee at the wall, a sticky scopula foot and hooked claws
   shark:   { type: 'fin',      hand: 'finslap',   rr: 25, rm: 20, r0: 15, r1: 9,  rx: 116, ry: 50, rest: -38 },   // Anvilhead: a thick cobalt pectoral fin, its blade slapped flat up the wall and its tip curled over the edge
-  tiki:    { type: 'arm',      hand: 'carved',    rr: 20, rm: 15, r0: 15, r1: 12, rx: 98,  ry: 74, rest: -22 },
-  spirit:  { type: 'flame',    hand: 'wisp',      rr: 24, rm: 18, r0: 14, r1: 8,  rx: 100, ry: 76, rest: -24, wig: 4 },
+  tiki:    { type: 'arm',      hand: 'tikihand',  rr: 24, rm: 20, r0: 16, r1: 13, rx: 122, ry: 112, rest: -22 },   // Gulpstack: chunky carved wooden arms from its yoke's ends, carved fingers curled over the wall's edge
+  spirit:  { type: 'lava',     hand: 'magmaclaw', rr: 26, rm: 20, r0: 15, r1: 11, rx: 120, ry: 108, rest: -24, wig: 3 },   // Scorchwake: molten arms rising from its crust pauldrons in one arc and curling up the wall to crust-taloned claws
   toad:    { type: 'pad',      hand: 'pad',       rr: 18, rm: 11, r0: 9,  r1: 7,  rx: 116, ry: 56, rest: -30 },
   giant:   { type: 'arm',      hand: 'fist',      rr: 25, rm: 19, r0: 18, r1: 13, rx: 102, ry: 76, rest: -26 },
   hornet:  { type: 'leg',      hand: 'barb',      rr: 11, rm: 7,  r0: 6,  r1: 4,  rx: 84,  ry: 80, rest: -12, bendY: 22 },
@@ -1518,11 +1519,15 @@ function grabHand(kind, grip, t, wind = 0) {
       break;
     }
       break;
-    case 'carved':    // the tiki's carved hand: four straight notched fingers and a square thumb
-      s(12, 0, 12, 10, 12);
-      for (let k = 0; k < 4; k++) { const u = 4 + k * 5.8; s(u, 12, u - g * 2, 25 - Math.abs(k - 1.5) * 1.5, 4.3, 'n'); }
-      s(21, 2, 21.5, 8, 4);
+    case 'tikihand': {   // Gulpstack's carved hand gripping the wall's edge: a blocky palm, four thick carved fingers stacked
+      // up the wall, each bent at a knuckle and curled over the edge into the rock (deeper as it grips; they open as it
+      // strikes), and a square thumb braced on the shaft side
+      const f = clamp(Math.max(g, wind * 0.5), 0, 1);
+      s(12, 0, 12, 12, 13.2, 'palm');
+      for (let k = 0; k < 4; k++) { const v = 6 + k * 7.2, ku = 4.4 + Math.abs(k - 1.5) * 0.5; s(11.5, v, ku, v + 2.4, 5.6, 'fing'); s(ku, v + 2.4, -1.2 - f * 1.4, v - 1.6 - 2 * f, 4.5, 'tip'); }
+      s(20, 6, 21, 18, 6, 'thumb'); s(21, 18, 19, 24, 5, 'thumbtip');
       break;
+    }
     case 'rexfoot': {   // the Amber rex's fossil foot on the rock: a knobbly ankle, three toe bones splayed up the wall, each
       // ending in a big hooked talon curling into the stone (deeper as it grips; the toes spread and the talons lift on
       // the wind-up), a dewclaw braced behind
@@ -1575,9 +1580,13 @@ function grabHand(kind, grip, t, wind = 0) {
     case 'splat':     // a gooey drip spreading flat on the rock
       s(10, 0, 10, 9, 12, 'g'); s(4, 10, 2, 19, 4.5, 'g'); s(15, 12, 18, 19, 3.5, 'g'); s(2, 19, 0, 23, 2.5, 'g'); s(10, 14, 10, 24, 3, 'g');
       break;
-    case 'wisp': {    // flame fingers licking up the rock
-      s(10, 0, 11, 7, 10, 'f');
-      for (let k = 0; k < 4; k++) { const u = 2 + k * 6.3, fl = 2.6 * Math.sin(t * 14 + k * 2); s(u + 1, 8, u - 1, 18 + fl * 0.5, 3.4, 'f'); s(u - 1, 18 + fl * 0.5, u - 4 + fl * 0.4, 30 + fl - Math.abs(k - 1.5) * 1.5, 2, 'f'); }
+    case 'magmaclaw': {   // Scorchwake's molten hand gripping the wall's edge: a glowing palm, three thick fingers stacked up
+      // the wall, each curled over the edge and ending in a hooked crust talon dug into the rock (deeper as it grips),
+      // and a stubby taloned thumb on the shaft side
+      const f = clamp(Math.max(g, wind * 0.6), 0, 1);
+      s(11, 0, 11, 10, 12.5, 'palm');
+      for (let k = 0; k < 3; k++) { const v = 7 + k * 9.5, ku = 4.5 + Math.abs(k - 1) * 0.8; s(10.5, v, ku, v + 3, 5.6, 'fing'); s(ku, v + 3, 0.2 - f, v + 0.5 - 2 * f, 4.6, 'fing'); s(0.2 - f, v + 0.5 - 2 * f, -3 - 1.5 * f, v - 4.5 - 2 * f, 3.4, 'talon'); }
+      s(19, 4, 22, 14, 5.4, 'thumb'); s(22, 14, 21.5, 20.5, 3.6, 'talon');
       break;
     }
     case 'parahook':  // the Scissorjaw's parapod tip: two more ring segments, then a big gold hooked claw (its mandibles'
@@ -1710,6 +1719,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
     if (ty === 'tentacle') w = (st.wig || 0) * Math.sin(u * 5.2 - t * 3.2 + d) * Math.sin(Math.PI * u) * climb;   // an S-wave slapping up the rock
     else if (ty === 'vine') w = (st.wig || 0) * Math.sin(y * 0.12 + t * 1.5 + d) * (1 - smooth(0.75, 1, u));                                   // zigzagging round the knobs of rock
     else if (ty === 'goo') { r *= 1 + 0.16 * Math.sin(y * 0.21 + t * 2.2 + d); w = (st.wig || 0) * Math.sin(y * 0.07 + t * 2) * (1 - smooth(0.75, 1, u)); }   // lumpy and dripping
+    else if (ty === 'lava') w = (st.wig || 0) * Math.sin(y * 0.09 + t * 2.4 + d) * Math.sin(Math.PI * u);   // a slow heave up the rock
     else if (ty === 'flame' || ty === 'smoke') w = (st.wig || 0) * Math.sin(y * 0.13 + t * (ty === 'flame' ? 9 : 2.6) + d) * Math.sin(Math.PI * u);
     else if (ty === 'coil') { r *= 1 - 0.1 * Math.abs(Math.sin(i * 1.3)); w = (st.wig || 0) * Math.sin(i * 0.9 + t * 2.4 + d) * (1 - smooth(0.75, 1, u)); }   // body rings pressed to the rock
     else if (ty === 'leg') w = 7 * smooth(0.25, 0.55, u) * (1 - smooth(0.55, 0.95, u)) * climb;                   // the shin's joint kinks out
@@ -1748,6 +1758,7 @@ function grabRig(st, d, wallAt, kill, pose, t, bodyX, depth = Infinity, scr = [0
   else if (ty === 'talon') { P1 = [lerp(rootX, b[0], 0.3), lerp(rootY, b[1], 0.4)]; P2 = [lerp(rootX, b[0], 0.7), b[1] + 4]; }   // a thigh bone out to the back-bent knee
   else if (ty === 'fin' || ty === 'paw' || ty === 'pad') { P1 = [lerp(rootX, b[0], 0.35), rootY + 6]; P2 = [lerp(rootX, b[0], 0.6), b[1] + 2]; }   // short and low
   else if (jointed) { P1 = [lerp(rootX, b[0], 0.15), lerp(rootY, b[1], 0.55)]; P2 = [lerp(rootX, b[0], 0.45), b[1] + 1]; }      // rises, then runs out to the elbow
+  else if (ty === 'lava') { P1 = [lerp(rootX, b[0], 0.3), lerp(rootY, b[1], 0.7)]; P2 = [lerp(rootX, b[0], 0.88) + sway, b[1] + 30]; }   // rises from the shoulder in one arc and curls up into the wall
   else { P1 = [lerp(rootX, b[0], 0.5) + sway, rootY + 10]; P2 = [lerp(rootX, b[0], 0.95), rootY + 2]; }                           // sweeps out low and curls up
   // a jointed limb arrives at its bend turned well away from the way the fore chain climbs (an elbow or a knee that
   // really bends, even where the wall leans), always from below and from the shaft's side
@@ -18445,6 +18456,935 @@ function avLimb(c, rig, P, layer, t) {
   // a drop of magma dripping off the fin where it grips
   const w0 = H0[0]; avDrip(c, w0[0] - d * w0[4] * 0.2, w0[1] + w0[4] * 0.8, t, d + 3, 0.8);
 }
+// ---------- borderless monster art (Gulpstack, slot 13, and Scorchwake, slot 14) ----------
+// These two monsters are drawn with no ink at all: form comes from shading. A shape is filled, then (clipped inside
+// its own outline, so its silhouette is exactly its path) gets a band of a darker shade of its own hue round its
+// inside edge where it needs one (edge), a lit band along its top (rim), a warm bounce or a soft occlusion along its
+// bottom (under / ao). Nothing is ever outlined in black.
+// o: { edge css, ew width, rim css, rw, under css, uw, ao css, aw }
+function blShape(c, path, fill, o = {}) {
+  path(c); c.fillStyle = fill; c.fill();
+  if (!(o.edge || o.rim || o.under || o.ao)) return;
+  c.save(); path(c); c.clip();
+  if (o.ao) { const d = o.aw || 12; c.translate(0, -d); path(c); c.strokeStyle = o.ao; c.lineWidth = d * 2; c.stroke(); c.translate(0, d); }
+  if (o.under) { const d = o.uw || 8; c.translate(0, -d); path(c); c.strokeStyle = o.under; c.lineWidth = d * 1.6; c.stroke(); c.translate(0, d); }
+  if (o.rim) { const d = o.rw || 5; c.translate(0, d); path(c); c.strokeStyle = o.rim; c.lineWidth = d * 1.4; c.stroke(); c.translate(0, -d); }
+  if (o.edge) { path(c); c.strokeStyle = o.edge; c.lineWidth = (o.ew || 3) * 2; c.stroke(); }
+  c.restore();
+}
+// a filled ellipse / polygon, no stroke
+function blE(c, x, y, rx, ry, fill, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); c.fillStyle = fill; c.fill(); }
+function blP(c, pts, fill) { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); c.fillStyle = fill; c.fill(); }
+// a smooth open stroke through points
+function blLine(c, pts, col, w) { c.beginPath(); mCurveTo(c, pts); c.strokeStyle = col; c.lineWidth = w; c.stroke(); }
+// a radial gradient with explicit stops [[o, css]...]
+function blRG(c, x, y, r0, x1, y1, r1, stops) { const g = c.createRadialGradient(x, y, r0, x1, y1, r1); for (const [o, col] of stops) g.addColorStop(o, col); return g; }
+// a soft glow or shadow of any colour (an oval that fades out, never a straight edge)
+function blSoft(c, x, y, rx, ry, col, a, add = false) {
+  if (!(rx > 0 && ry > 0) || a <= 0) return;
+  c.save(); if (add) c.globalCompositeOperation = 'lighter'; c.translate(x, y); c.scale(1, ry / rx);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, rgbaA(col, a)); g.addColorStop(1, rgbaA(col, 0));
+  c.fillStyle = g; c.fillRect(-rx, -rx, rx * 2, rx * 2); c.restore();
+}
+// the points of a chain offset toward its lit side by k of each radius (for rounded tones inside a limb's capsules)
+function blLitChain(ch, d, k) { const n = litSide(ch, d); return ch.map(([x, y, r], i) => [x + n[i][0] * r * k, y + n[i][1] * r * k, r]); }
+// a limb's capsules filled as a rounded log: the outline (exactly the capsules) in its darkest tone, then lighter tones
+// shifted toward the light, each kept inside the capsule. tones: [edge, shadow, body, lit, shine]
+function blLimbTones(c, chains, d, tones) {
+  for (const ch of chains) capStroke(c, ch, tones[0], r => 2 * r);
+  for (const ch of chains) capStroke(c, ch, tones[1], r => 2 * r - 3.2);
+  for (const ch of chains) if (ch.length > 1) {
+    capStroke(c, blLitChain(ch, d, 0.16), tones[2], r => 2 * r * 0.8);
+    capStroke(c, blLitChain(ch, d, 0.38), tones[3], r => 2 * r * 0.46);
+    capStroke(c, blLitChain(ch, d, 0.56), tones[4], r => Math.max(1.2, 2 * r * 0.14));
+  }
+}
+// a hand part [x0, y0, x1, y1, r] as a chain
+const blPart = p => [[p[0], p[1], p[4]], [p[2], p[3] + (p[2] === p[0] && p[3] === p[1] ? 0.01 : 0), p[4]]];
+// The grab now on side d (or null): { t (seconds in), wind (0..1 the wind-up), live, slam (0..1 just after the strike) }
+function blGrab(d) {
+  if (typeof G === 'undefined' || !G || !G.grab || G.state !== 'play' || G.grab.side !== d) return null;
+  const t = G.grab.t, q = t - GRAB.wind - GRAB.strike * 0.7;
+  return { t, wind: t < GRAB.wind ? t / GRAB.wind : 0, live: t >= GRAB.wind, slam: q > 0 && q < 0.45 ? q / 0.45 : -1 };
+}
+// ---------- Gulpstack (monster slot 13, id 'tiki') ----------
+// A towering totem of hungry carved faces climbing the shaft. Its head is a huge honey-koa tiki god: a sunburst crown
+// of carved plume feathers (coral-tipped behind, turquoise-tipped in front) fanned round its brow, a hibiscus tucked
+// behind one ear disc, mother-of-pearl eyes with turquoise mana burning in their sockets under a heavy gull-wing brow,
+// a broad flat nose, carved spirals on its cheeks and a thick coral grin set with inlaid shark teeth, its tongue
+// lolling out. Its lower jaw is a separate carved block lashed on with rope at the jowls: it drops open like a
+// nutcracker's (the ropes pull taut). Below the head a carved outrigger yoke carries its wooden arms, and under that
+// more faces stack down the shaft in a swaying S, raffia skirts flaring at every collar, each face with its own mood.
+// The bite: the jaw drops wide, slams, grinds the pilot side to side (eyes squeezed happy, wood chips flying), then the
+// gulp travels down the stack and each face in turn pops its eyes and gapes as the lump passes; the last one burps a
+// puff of mana smoke. Borderless: no ink anywhere, form from shading, edges in darker shades of the wood's own hue.
+// Art units: y = 0 is the catch line (the crown's top plume tips sit just under it), |x| <= 248.
+const TK = {
+  wood: ['#ffdca0', '#f2b062', '#d8883c', '#aa5c24', '#703416', '#481c0a'],   // highlight → deepest
+  teal: ['#d6fff6', '#5cf2dc', '#1ebdb2', '#0d7676', '#074a4c'],
+  coral: ['#ffd4bc', '#ff8c64', '#ee5438', '#ac2c1e', '#6c1810'],
+  shell: ['#fff6ee', '#ffc6d6', '#d4bcff', '#9cecdc', '#ffe8b4'],
+  rope: ['#fff2cc', '#e2bc74', '#9a6e34'],
+  raffia: ['#fff0b0', '#e8c060', '#a87c2c'],
+  hole: ['#4a1a0a', '#2c0e06'],            // the dark inside of the carved mouth (warm, never black)
+  mana: [80, 255, 215],
+  groove: 'rgba(84,32,10,.72)', lip: 'rgba(255,232,180,.42)',
+};
+const tkLipY = x => 202 - 16 * (x / 124) ** 2;   // the line where its lips meet (shut), corner to corner (x in ±124)
+const tkLip = (dy = 0, dx = 0, x0 = -124, x1 = 124, n = 12) => { const P = []; for (let i = 0; i <= n; i++) { const x = lerp(x0, x1, i / n); P.push([x + dx, tkLipY(x) + dy]); } return P; };
+function tkBlink(t, seed = 0) { const P = 3.6 + seed * 1.3, ph = pmod(t + seed * 2.3, P); return ph < 0.2 ? Math.sin(ph / 0.2 * Math.PI) : 0; }
+// a carved groove: a dark cut with the lit lip of its lower wall just under it
+function tkGroove(c, pts, w = 3, lit = true, col = TK.groove) {
+  blLine(c, pts, col, w);
+  if (lit) { c.save(); c.translate(0, w * 0.7); blLine(c, pts, TK.lip, w * 0.45); c.restore(); }
+}
+// wood grain: soft wavy lines running down a box (drawn inside a clip)
+function tkGrain(c, x0, y0, x1, y1, n, seed, a = 0.16) {
+  c.strokeStyle = `rgba(120,52,18,${a})`; c.lineWidth = 2; c.beginPath();
+  for (let i = 0; i < n; i++) { const x = lerp(x0, x1, (i + 0.5) / n) + (hash2(i, seed) - 0.5) * 12; c.moveTo(x, y0); for (let y = y0 + 14; y <= y1; y += 14) c.lineTo(x + Math.sin(y * 0.028 + i * 1.9 + seed) * 6, y); }
+  c.stroke();
+}
+// a carved spiral boss: a groove winding in, painted turquoise in the cut
+function tkSpiral(c, x, y, r, d = 1, paint = TK.teal[2], turns = 2.2) {
+  const P = []; for (let a = 0; a <= turns * TWO_PI; a += 0.25) { const rr = r * (1 - a / (turns * TWO_PI) * 0.85); P.push([x + d * Math.cos(a) * rr, y + Math.sin(a) * rr]); }
+  c.lineCap = 'round'; blLine(c, P, TK.groove, r * 0.28); blLine(c, P, paint, r * 0.15);
+  c.save(); c.translate(0.8, 1.4); blLine(c, P, 'rgba(255,236,190,.3)', r * 0.06); c.restore();
+}
+// one shark tooth (base p0 → p1, tip), cream enamel shaded on its far side, a glint down its near edge; no ink
+function tkTooth(c, p0, p1, tip, dir) {
+  const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
+  const path = c2 => { c2.beginPath(); c2.moveTo(p0[0], p0[1]); c2.quadraticCurveTo(lerp(p0[0], tip[0], 0.55) - (p1[0] - p0[0]) * 0.08, lerp(p0[1], tip[1], 0.5), tip[0], tip[1]); c2.quadraticCurveTo(lerp(p1[0], tip[0], 0.55) + (p1[0] - p0[0]) * 0.04, lerp(p1[1], tip[1], 0.5), p1[0], p1[1]); c2.closePath(); };
+  blShape(c, path, pkLG(c, p0[0], my, p1[0], my, ['#fffef8', '#fff6e2', '#ead2a6']), { edge: 'rgba(170,120,70,.55)', ew: 1.2 });
+  c.strokeStyle = 'rgba(160,110,60,.45)'; c.lineWidth = 1; c.beginPath();   // its serrated edge
+  for (const f of [0.3, 0.5, 0.7]) { const ex = lerp(p1[0], tip[0], f), ey = lerp(p1[1], tip[1], f); c.moveTo(ex, ey); c.lineTo(ex - (p1[0] - p0[0]) * 0.1, ey - dir * 1.5); }
+  c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(lerp(p0[0], mx, 0.4), my + dir * 2); c.lineTo(lerp(p0[0], tip[0], 0.6), lerp(p0[1], tip[1], 0.6)); c.stroke();
+}
+// a row of teeth along a lip polyline (dir +1 hanging down, -1 rising up); fangs at the given indexes
+function tkTeeth(c, lip, n, L, dir, fangs = [], gap = 0.1) {
+  for (let k = 0; k < n; k++) {
+    const p0 = mAt(lip, (k + gap) / n), p1 = mAt(lip, (k + 1 - gap) / n), pm = mAt(lip, (k + 0.5) / n);
+    const len = L * (fangs.includes(k) ? 1.6 : 1) * (1 - 0.35 * Math.abs((k + 0.5) / n - 0.5));
+    tkTooth(c, p0, p1, [pm[0] - pm[0] * 0.05, pm[1] + dir * len], dir);
+  }
+}
+// ---- the crown ----
+// one carved plume pointing along +x from its base: wood darkening to its root, a painted tip behind a carved groove,
+// a stripe of the other paint, a spine and two V notches down each edge; lit from above (flip: on the left side)
+function tkPlume(c, L, W, paint, stripe, flip) {
+  c.save(); if (flip) c.scale(1, -1);
+  const path = c2 => { c2.beginPath(); c2.moveTo(0, -W * 0.45); c2.quadraticCurveTo(L * 0.45, -W * 0.8, L, 0); c2.quadraticCurveTo(L * 0.45, W * 0.8, 0, W * 0.45); c2.quadraticCurveTo(-W * 0.3, 0, 0, -W * 0.45); c2.closePath(); };
+  path(c); c.fillStyle = pkLG(c, 0, 0, L, 0, [TK.wood[5], TK.wood[4], TK.wood[3], TK.wood[2]]); c.fill();
+  c.save(); path(c); c.clip();
+  c.fillStyle = pkLG(c, L * 0.6, 0, L, 0, [paint[2], paint[1], paint[0]]); c.beginPath(); c.moveTo(L * 0.62, -W); c.quadraticCurveTo(L * 0.56, 0, L * 0.62, W); c.lineTo(L * 1.2, W); c.lineTo(L * 1.2, -W); c.closePath(); c.fill();
+  c.fillStyle = stripe[2]; c.beginPath(); c.moveTo(L * 0.44, -W); c.quadraticCurveTo(L * 0.39, 0, L * 0.44, W); c.lineTo(L * 0.5, W); c.quadraticCurveTo(L * 0.45, 0, L * 0.5, -W); c.closePath(); c.fill();
+  // roundness: lit along its top, shaded along its bottom, a soft dark root
+  c.fillStyle = pkLG(c, 0, -W * 0.6, 0, W * 0.6, ['rgba(255,240,200,.45)', 'rgba(255,240,200,0)', 'rgba(60,20,6,0)', 'rgba(60,20,6,.5)']); c.fillRect(-W, -W, L * 1.3, W * 2);
+  c.strokeStyle = TK.groove; c.lineWidth = 2.4; c.beginPath(); c.moveTo(L * 0.08, 0); c.lineTo(L * 0.88, 0); c.stroke();
+  c.strokeStyle = 'rgba(255,236,190,.35)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(L * 0.1, -2); c.lineTo(L * 0.86, -2); c.stroke();
+  c.strokeStyle = 'rgba(70,24,8,.55)'; c.lineWidth = 2; c.beginPath(); c.moveTo(L * 0.62, -W); c.quadraticCurveTo(L * 0.56, 0, L * 0.62, W); c.stroke();
+  for (const u of [0.24, 0.36]) for (const s2 of [-1, 1]) { const x = L * u, y = s2 * W * 0.62; blP(c, [[x - 5, y + s2 * 6], [x, y - s2 * 4], [x + 5, y + s2 * 6]], 'rgba(70,24,8,.7)'); }
+  c.restore();
+  c.restore();
+}
+function tkCrown(c, t, flare, front) {
+  // the plumes fan round the head's brow; their tips sit on an oval whose top touches the catch line
+  const n = 13, sp = 2.1 + 0.08 * flare, ek = 1;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), th = (u - 0.5) * 2 * sp + 0.025 * Math.sin(t * 2.2 + i * 1.3);
+    const bx = Math.sin(th) * 100, by = 156 - Math.cos(th) * 80;
+    const tx = Math.sin(th) * 248 * ek, ty = Math.max(4, 156 - Math.cos(th) * 152 * ek);
+    const L = Math.hypot(tx - bx, ty - by), a = Math.atan2(ty - by, tx - bx);
+    c.save(); c.translate(bx, by); c.rotate(a);
+    tkPlume(c, L, 50 + 8 * Math.cos(th), i % 2 ? TK.teal : TK.coral, i % 2 ? TK.coral : TK.teal, Math.cos(a) < 0);
+    c.restore();
+  }
+}
+// a hibiscus tucked behind an ear disc
+function tkHibiscus(c, x, y, r, rot, t) {
+  c.save(); c.translate(x, y); c.rotate(rot + 0.04 * Math.sin(t * 1.7));
+  for (let k = 0; k < 5; k++) {
+    const a = k / 5 * TWO_PI - Math.PI / 2;
+    c.save(); c.rotate(a);
+    blShape(c, mASm([[0, 0], [r * 0.5, -r * 0.42], [r * 1.02, -r * 0.36], [r * 1.12, 0], [r * 1.02, r * 0.36], [r * 0.5, r * 0.42]]), pkLG(c, 0, 0, r * 1.1, 0, ['#c41850', '#ff4a86', '#ff8ab4', '#ffc4da']), { edge: 'rgba(170,20,70,.5)', ew: 1.5 });
+    c.strokeStyle = 'rgba(160,10,60,.45)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(r * 0.2, 0); c.lineTo(r * 0.9, 0); c.moveTo(r * 0.3, 0); c.lineTo(r * 0.8, -r * 0.22); c.moveTo(r * 0.3, 0); c.lineTo(r * 0.8, r * 0.22); c.stroke();
+    c.restore();
+  }
+  blE(c, 0, 0, r * 0.3, r * 0.3, blRG(c, 0, 0, 0, 0, 0, r * 0.3, [[0, '#ffe08a'], [1, '#c41850']]));
+  c.strokeStyle = '#ffe680'; c.lineWidth = 2.4; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(r * 0.4, -r * 0.3, r * 0.75, -r * 0.62); c.stroke();
+  for (let k = 0; k < 4; k++) blE(c, r * 0.75 + Math.cos(k * 1.6) * 3, -r * 0.62 + Math.sin(k * 1.6) * 3, 2.2, 2.2, '#ffcc30');
+  c.restore();
+}
+// an ear disc: a carved wooden plug with a mother-of-pearl ring and a mana-lit centre
+function tkEar(c, d, t) {
+  const x = d * 196, y = 128;
+  blSoft(c, x - d * 6, y + 10, 40, 30, [60, 20, 6], 0.4);
+  blShape(c, mAEl(x, y, 32, 34), blRG(c, x - 10, y - 12, 2, x, y, 36, [[0, TK.wood[1]], [0.5, TK.wood[2]], [1, TK.wood[4]]]), { edge: 'rgba(90,34,12,.6)', ew: 3, under: 'rgba(255,140,60,.35)', uw: 5 });
+  c.save(); c.beginPath(); c.arc(x, y, 22, 0, TWO_PI); c.arc(x, y, 12, 0, TWO_PI, true); c.clip();
+  const g = c.createConicGradient(t * 0.4, x, y); [TK.shell[0], TK.shell[2], TK.shell[3], TK.shell[1], TK.shell[4], TK.shell[0]].forEach((col, i, A) => g.addColorStop(i / (A.length - 1), col));
+  c.fillStyle = g; c.fillRect(x - 24, y - 24, 48, 48);
+  blSoft(c, x + 6, y + 10, 26, 20, [120, 70, 60], 0.35);
+  c.restore();
+  blE(c, x, y, 12, 12, blRG(c, x, y - 3, 1, x, y, 12, [[0, TK.teal[1]], [0.6, TK.teal[3]], [1, TK.teal[4]]]));
+  mAGlow(c, x, y, 26, TK.mana, 0.25 + 0.1 * Math.sin(t * 2.6 + d));
+  blE(c, x - 5, y - 9, 6, 3, 'rgba(255,255,255,.7)', -0.4);
+}
+// ---- the face ----
+function tkEye(c, d, m, shut, wide, rage) {
+  const x = d * 80, y = 134, R = 39 * (1 + 0.16 * wide), Ri = R * 0.64, t = m.t, look = clamp(m.look || 0, -1, 1);
+  // the carved socket: a deep hollow round the inlay
+  blSoft(c, x, y + 4, R + 18, R + 15, [50, 14, 4], 0.85);
+  blSoft(c, x, y, R + 34, R + 30, TK.mana, 0.1 + 0.08 * mFlare, true);   // the mana's light spilling onto the wood
+  blE(c, x, y + 1.5, R + 4, R + 4, '#4a1a08');   // the carved lip of the socket round the inlay
+  // the mother-of-pearl ring: an iridescent sweep, darker toward its lower edge, a glint top-left
+  const ring = c2 => { c2.beginPath(); c2.arc(x, y, R, 0, TWO_PI); c2.arc(x, y, Ri, 0, TWO_PI, true); };
+  c.save(); ring(c); c.clip();
+  const g = c.createConicGradient(-0.6 + d * 0.3, x, y); [TK.shell[0], TK.shell[1], TK.shell[2], TK.shell[3], TK.shell[4], TK.shell[1], TK.shell[0]].forEach((col, i, A) => g.addColorStop(i / (A.length - 1), col));
+  c.fillStyle = g; c.fillRect(x - R, y - R, R * 2, R * 2);
+  c.fillStyle = blRG(c, x - R * 0.35, y - R * 0.4, R * 0.2, x, y, R * 1.15, [[0, 'rgba(255,255,255,0)'], [0.55, 'rgba(150,90,90,0)'], [1, 'rgba(110,50,60,.7)']]); c.fillRect(x - R, y - R, R * 2, R * 2);
+  c.strokeStyle = 'rgba(120,60,40,.35)'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, Ri + 1.5, 0, TWO_PI); c.stroke();   // the inlay's inner bevel
+  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, R - 6, Math.PI * 1.08, Math.PI * 1.42); c.stroke();
+  c.restore();
+  // the socket inside: dark carved wood, and the mana burning in it (it looks toward the pilot)
+  blE(c, x, y, Ri, Ri, blRG(c, x, y + Ri * 0.3, 1, x, y, Ri, [[0, '#3e140a'], [0.8, '#2a0c05'], [1, '#4a1c0c']]));
+  const ix = x + look * Ri * 0.32, iy = y - Ri * 0.06, ir = Ri * (0.66 - 0.28 * wide) * (1 + 0.08 * rage);
+  mAGlow(c, ix, iy, Ri * (1.1 + 0.3 * mFlare), TK.mana, 0.5 + 0.3 * mFlare);
+  blE(c, ix, iy, ir, ir, blRG(c, ix - ir * 0.2, iy - ir * 0.3, 1, ix, iy, ir, [[0, TK.teal[0]], [0.35, TK.teal[1]], [0.8, TK.teal[2]], [1, TK.teal[3]]]));
+  blE(c, ix, iy + ir * 0.05, ir * 0.36, ir * 0.42, TK.teal[4]);
+  blE(c, ix - ir * 0.36, iy - ir * 0.4, ir * 0.24, ir * 0.18, 'rgba(255,255,255,.95)', -0.4);
+  blE(c, ix + ir * 0.3, iy + ir * 0.34, ir * 0.1, ir * 0.1, 'rgba(255,255,255,.7)');
+  // the lid: a carved wooden lid dropping over the inlay (a blink, or the happy squint as it chews)
+  if (shut > 0.02) {
+    c.save(); c.beginPath(); c.arc(x, y, R + 0.5, 0, TWO_PI); c.clip();
+    const ly = y - R + 2 * R * shut, lid = c2 => { c2.beginPath(); c2.moveTo(x - R - 2, y - R - 4); c2.lineTo(x + R + 2, y - R - 4); c2.lineTo(x + R + 2, ly - R * 0.25); c2.quadraticCurveTo(x, ly + R * 0.3, x - R - 2, ly - R * 0.25); c2.closePath(); };
+    blShape(c, lid, pkLG(c, x, y - R, x, ly, [TK.wood[3], TK.wood[2], TK.wood[1]]), { edge: 'rgba(90,34,12,.55)', ew: 2.5 });
+    c.save(); c.translate(0, -3); c.beginPath(); c.moveTo(x - R, ly - R * 0.25); c.quadraticCurveTo(x, ly + R * 0.3, x + R, ly - R * 0.25); c.strokeStyle = 'rgba(255,236,190,.6)'; c.lineWidth = 2.4; c.stroke(); c.restore();
+    c.restore();
+  }
+}
+// the brow: a heavy gull-wing ridge over both eyes, dipping into an angry V at the middle (it lifts as the eyes widen)
+function tkBrow(c, rage, wide, t) {
+  const V = 10 + 8 * rage - 16 * wide, up = -14 * wide;
+  const mid = [[0, 110 + V + up * 0.4], [38, 102 + V * 0.7 + up], [84, 92 + V * 0.2 + up], [134, 96 + up * 0.8], [176, 114 + up * 0.4]], th = [12, 15, 16, 15, 11];
+  const top = mid.map(([x, y], i) => [x, y - th[i]]), bot = mid.map(([x, y], i) => [x, y + th[i]]);
+  const pts = [...top.slice().reverse().map(([x, y]) => [-x, y]), ...top.slice(1), [186, 114 + up * 0.4], ...bot.slice().reverse().slice(0, -1), ...bot.map(([x, y]) => [-x, y]), [-186, 114 + up * 0.4]];
+  const path = mASm(pts);
+  // its shadow falls across the tops of the eyes
+  c.save(); c.translate(0, 9); path(c); c.fillStyle = 'rgba(62,20,6,.35)'; c.fill(); c.restore();
+  blShape(c, path, pkLG(c, 0, 78 + up, 0, 130 + V, [TK.wood[1], TK.wood[2], TK.wood[3], TK.wood[4]]), { edge: 'rgba(110,44,14,.5)', ew: 3, rim: 'rgba(255,240,206,.6)', rw: 3, ao: 'rgba(80,28,8,.35)', aw: 5 });
+  // a turquoise stripe painted in a groove along it, and chip-carved notches along its top edge
+  c.save(); path(c); c.clip(); c.lineCap = 'round';
+  const line = [...mid.slice().reverse().map(([x, y]) => [-x, y + 2]), ...mid.slice(1).map(([x, y]) => [x, y + 2])];
+  blLine(c, line, TK.groove, 7); blLine(c, line, TK.teal[2], 4.5); c.save(); c.translate(0, -1.5); blLine(c, line, 'rgba(214,255,246,.5)', 1.4); c.restore();
+  for (const d of [-1, 1]) for (let k = 0; k < 5; k++) { const p = mAt(top, (k + 0.5) / 5); const x = d * p[0], y = p[1] + 4; blP(c, [[x - 4, y - 3], [x, y + 3], [x + 4, y - 3]], 'rgba(80,28,8,.55)'); }
+  c.restore();
+}
+function tkNose(c, t) {
+  const fl = 1 + 0.06 * Math.sin(t * 2.4);
+  const half = [[0, 96], [14, 100], [19, 122], [28, 148], [46 * fl, 162], [52 * fl, 176], [42 * fl, 188], [20, 186], [8, 190], [0, 190]];
+  const path = mBlob(half, true);
+  blSoft(c, 0, 186, 70, 18, [62, 20, 6], 0.45);
+  blShape(c, path, blRG(c, -8, 120, 4, 0, 150, 70, [[0, TK.wood[0]], [0.4, TK.wood[1]], [0.8, TK.wood[2]], [1, TK.wood[3]]]), { edge: 'rgba(120,48,16,.45)', ew: 3, under: 'rgba(70,24,8,.35)', uw: 4 });
+  for (const d of [-1, 1]) {
+    tkGroove(c, [[d * 28, 152], [d * 50 * fl, 160], [d * 58 * fl, 176], [d * 46 * fl, 190]], 2.6);   // the nostril wing's crease
+    blE(c, d * 25, 177, 10.5 * fl, 6.5, blRG(c, d * 25, 179, 1, d * 25, 177, 11, [[0, '#2a0c05'], [0.7, '#4a180a'], [1, 'rgba(90,34,12,.6)']]), d * 0.35);
+    mAGlow(c, d * 25, 178, 14, TK.mana, 0.12 + 0.12 * Math.sin(t * 2.4));
+  }
+  blE(c, -4, 128, 4, 22, 'rgba(255,246,220,.45)', 0.08);   // the bridge's shine
+}
+// the lower jaw (drawn shifted by its drop jd and grind jx): a carved block hanging from rope lashings at the jowls,
+// a coral lower lip, shark teeth rising from it, a carved beard down its chin
+function tkJaw(c, jd, jx, t) {
+  c.save(); c.translate(jx, jd);
+  const L = tkLip(0, 0, -124, 124, 12);
+  const path = c2 => { c2.beginPath(); c2.moveTo(L[0][0], L[0][1]); L.forEach(([x, y]) => c2.lineTo(x, y)); c2.bezierCurveTo(138, 194, 152, 214, 150, 238); c2.bezierCurveTo(148, 270, 120, 300, 70, 312); c2.quadraticCurveTo(0, 326, -70, 312); c2.bezierCurveTo(-120, 300, -148, 270, -150, 238); c2.bezierCurveTo(-152, 214, -138, 194, L[0][0], L[0][1]); c2.closePath(); };
+  blSoft(c, 0, 318, 150, 26, [40, 12, 4], 0.45);
+  blShape(c, path, blRG(c, -40, 214, 10, 0, 250, 170, [[0, TK.wood[1]], [0.45, TK.wood[2]], [0.8, TK.wood[3]], [1, TK.wood[4]]]), { edge: 'rgba(110,44,14,.55)', ew: 4, under: 'rgba(255,140,60,.45)', uw: 7, rim: 'rgba(160,255,232,.4)', rw: 3 });
+  c.save(); path(c); c.clip();
+  tkGrain(c, -150, 210, 150, 330, 9, 21, 0.14);
+  // the carved beard: chevrons stacked down the chin, a turquoise band along its bottom
+  for (let k = 0; k < 3; k++) { const y = 252 + k * 16; for (const d of [-1, 1]) tkGroove(c, [[0, y + 10], [d * 34, y], [d * 70, y + 6]], 3); }
+  blLine(c, [[-118, 286], [-60, 304], [0, 308], [60, 304], [118, 286]], TK.groove, 9); blLine(c, [[-118, 286], [-60, 304], [0, 308], [60, 304], [118, 286]], TK.teal[2], 6);
+  c.save(); c.translate(0, -2); blLine(c, [[-110, 286], [-60, 302], [0, 306], [60, 302], [110, 286]], 'rgba(214,255,246,.45)', 1.6); c.restore();
+  // the lower lip: a thick coral roll along its top edge
+  const LL = tkLip(9, 0, -128, 128, 12);
+  c.lineCap = 'round'; blLine(c, LL, TK.coral[3], 22); blLine(c, tkLip(7, 0, -126, 126), TK.coral[2], 16); blLine(c, tkLip(4, 0, -118, 118), TK.coral[1], 6); blLine(c, tkLip(2, 0, -100, 100), 'rgba(255,230,214,.55)', 2);
+  blLine(c, tkLip(21, 0, -126, 126), 'rgba(80,20,8,.45)', 3);
+  c.restore();
+  // the rope holes at its corners
+  for (const d of [-1, 1]) { blE(c, d * 138, 220, 6, 6, '#3a1408'); blE(c, d * 138, 221.5, 4, 3, '#200a04'); }
+  tkTeeth(c, tkLip(-1, 0, -112, 112), 8, 15, -1, [1, 6]);
+  c.restore();
+}
+// the rope lashings that hold the jaw on: from a hole in each jowl to its corner, slack when shut, taut when it drops
+function tkRopes(c, jd, jx) {
+  c.lineCap = 'round';
+  for (const d of [-1, 1]) for (const k of [0, 1]) {
+    const x0 = d * (150 + k * 6), y0 = 214 + k * 8, x1 = d * 138 + jx, y1 = 220 + jd, sag = Math.max(0, 26 - jd * 0.4) * (k ? 0.8 : 1);
+    const p = [[x0, y0], [lerp(x0, x1, 0.5) + d * (sag * 0.7 + 4), lerp(y0, y1, 0.5) + sag * 0.3], [x1, y1]];
+    blLine(c, p, TK.rope[2], 6); blLine(c, p, TK.rope[1], 4);
+    c.strokeStyle = 'rgba(120,80,30,.6)'; c.lineWidth = 1.2; c.beginPath();
+    for (let i = 1; i < 6; i++) { const q = mAt(p, i / 6); c.moveTo(q[0] - 2, q[1] - 2); c.lineTo(q[0] + 2, q[1] + 2); }
+    c.stroke();
+    blE(c, x0, y0, 5, 5, '#3a1408');
+  }
+}
+function tkHead(c, m) {
+  const t = m.t, bt = m.bite, rage = mRage, op = clamp(m.open, 0, 1);
+  if (bt >= 0) c.scale(1 - 0.06 * smooth(0, 0.12, bt), 1);
+  const ct = mChewT(m), ce = mChewE(ct), J = mJ(m, 0.3);
+  const wide = bt >= 0 ? (m.wide || 0) * (1 - ce * 0.9) + (bt > 0.45 && bt < 0.75 ? 0 : 0) : 0;
+  // the jaw: drops with the chase gape (more in a rage), flies wide on the bite, then grinds side to side as it chews
+  let jd = bt >= 0 ? 112 * J / 1.3 : 30 + 44 * op + 12 * rage, jx = 0;
+  if (ct >= 0) { jd = ce * 16 * (0.5 + 0.5 * Math.sin(ct * 15)); jx = ce * 10 * Math.sin(ct * 7.5); }
+  if (bt < 0) jd += 3 * Math.sin(t * 5.2);
+  const flare = Math.max(rage, bt >= 0 ? 1 - smooth(0.6, 1.4, bt) : 0);
+  // 1. the crown behind everything, the hibiscus and the ear discs
+  tkCrown(c, t, flare, false);
+  blSoft(c, 0, 150, 236, 136, [40, 12, 4], 0.45);   // the head's shadow on the plumes behind it
+  for (const d of [-1, 1]) tkEar(c, d, t);
+  // 2. the mouth: a dark hollow in the wood with mana burning deep inside it, the pilot (on the bite), the jaw
+  const U = tkLip(-8, 0, -126, 126), Lj = tkLip(jd, jx, -126, 126);
+  const cav = c2 => { c2.beginPath(); c2.moveTo(U[0][0], U[0][1]); U.forEach(([x, y]) => c2.lineTo(x, y)); c2.quadraticCurveTo(146 + jx * 0.5, 194 + jd * 0.5, Lj[Lj.length - 1][0], Lj[Lj.length - 1][1]); for (let i = Lj.length - 1; i >= 0; i--) c2.lineTo(Lj[i][0], Lj[i][1]); c2.quadraticCurveTo(-146 + jx * 0.5, 194 + jd * 0.5, U[0][0], U[0][1]); c2.closePath(); };
+  if (jd > 2) {
+    const cy = 202 + jd * 0.55;
+    cav(c); c.fillStyle = blRG(c, 0, cy, 4, 0, cy, 120 + jd * 0.5, [[0, '#6a2a12'], [0.4, TK.hole[0]], [1, TK.hole[1]]]); c.fill();
+    c.save(); cav(c); c.clip();
+    // carved rings of the hollow receding inward, and the turquoise mana flickering in its depth
+    for (const [f, a] of [[1, 0.5], [0.72, 0.4], [0.46, 0.3]]) { c.strokeStyle = `rgba(20,6,2,${a})`; c.lineWidth = 6 * f + 2; c.beginPath(); c.ellipse(jx * 0.4, cy, 112 * f, (jd * 0.62 + 8) * f, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = `rgba(255,190,130,${a * 0.25})`; c.lineWidth = 1.6; c.beginPath(); c.ellipse(jx * 0.4, cy - 3, 112 * f, (jd * 0.62 + 8) * f, 0, 3.4, 6.0); c.stroke(); }
+    const fl = 0.55 + 0.25 * Math.sin(t * 7) + 0.2 * Math.sin(t * 11.3);
+    mAGlow(c, jx * 0.4, cy + jd * 0.1, 60 + jd * 0.5, TK.mana, (0.3 + 0.25 * op + 0.2 * rage) * fl);
+    for (let k = 0; k < 3; k++) { const fx = (k - 1) * 26 + jx * 0.4, fh = (18 + jd * 0.22) * (0.8 + 0.3 * Math.sin(t * 9 + k * 2)), fy = cy + jd * 0.25; c.save(); c.globalCompositeOperation = 'lighter'; blP(c, [[fx - 9, fy], [fx - 4, fy - fh * 0.6], [fx + Math.sin(t * 8 + k) * 3, fy - fh], [fx + 5, fy - fh * 0.5], [fx + 9, fy]], rgbaA(TK.mana, 0.35)); c.restore(); }
+    c.restore();
+    mInMouth(c, cav);
+  }
+  tkJaw(c, jd, jx, t);
+  // the tongue lolls out over the lower lip and wags (it whips back in on the bite)
+  const tg = bt >= 0 ? 1 - smooth(0, 0.07, bt) : 1;
+  if (tg > 0.02) {
+    const L = (52 + jd * 0.9) * tg, w = 25, ty0 = 196, wag = 0.13 * Math.sin(t * 3.1) + 0.05 * Math.sin(t * 7.3);
+    c.save(); c.translate(jx, ty0); c.rotate(wag);
+    const tp = mASm([[-w, -6], [w, -6], [w + 6, L * 0.45], [w * 0.8, L * 0.86], [0, L + 4], [-w * 0.8, L * 0.86], [-w - 6, L * 0.45]]);
+    blSoft(c, 4, L * 0.7, w + 12, L * 0.45, [60, 10, 4], 0.35);
+    blShape(c, tp, blRG(c, -8, L * 0.4, 4, 0, L * 0.5, L * 0.7 + 20, [[0, '#ffa0a0'], [0.45, TK.coral[1]], [0.85, TK.coral[2]], [1, TK.coral[3]]]), { edge: 'rgba(150,30,24,.55)', ew: 3, rim: 'rgba(255,220,210,.5)', rw: 3 });
+    blLine(c, [[0, 8], [1, L * 0.5], [0, L * 0.82]], 'rgba(140,26,22,.55)', 3);
+    blE(c, -10, L * 0.42, 5, L * 0.16, 'rgba(255,240,236,.55)', 0.1);
+    c.restore();
+  }
+  // 3. the head block: honey koa with a soft key light from the upper left, a warm lava bounce under it, a turquoise
+  // mana rim down its right edge; grain, a knot, a crack
+  const half = [[0, 48], [70, 46], [130, 50], [164, 62], [176, 84], [184, 126], [190, 164], [184, 204], [168, 236], [148, 254], [130, 244], [124, 220], [120, 198], [80, 197], [40, 202], [0, 205]];
+  const head = mBlob(half, true);
+  blSoft(c, 0, 250, 190, 30, [40, 12, 4], 0.4);
+  blShape(c, head, blRG(c, -50, 64, 16, -10, 120, 270, [[0, TK.wood[0]], [0.28, TK.wood[1]], [0.55, TK.wood[2]], [0.82, TK.wood[3]], [1, TK.wood[4]]]), { edge: 'rgba(90,34,10,.55)', ew: 6, under: 'rgba(255,140,60,.45)', uw: 9 });
+  c.save(); head(c); c.clip();
+  c.save(); c.translate(-7, -3); head(c); c.strokeStyle = pkLG(c, 0, 60, 0, 250, ['rgba(140,255,230,0)', 'rgba(140,255,230,.4)']); c.lineWidth = 7; c.stroke(); c.restore();   // the mana rim (lower right edge)
+  c.save(); c.translate(6, 7); head(c); c.strokeStyle = pkLG(c, -150, 40, 120, 160, ['rgba(255,246,222,.5)', 'rgba(255,246,222,.15)', 'rgba(255,246,222,0)']); c.lineWidth = 7; c.stroke(); c.restore();   // the key light's rim (top, left)
+  c.fillStyle = pkLG(c, -196, 0, 196, 0, ['rgba(60,18,4,.42)', 'rgba(60,18,4,0)', 'rgba(255,240,210,.14)', 'rgba(60,18,4,0)', 'rgba(60,18,4,.5)']); c.fillRect(-200, 30, 400, 240);
+  tkGrain(c, -196, 30, 196, 260, 15, 7);
+  c.strokeStyle = 'rgba(120,52,18,.3)'; c.lineWidth = 2; for (const r of [5, 10, 15]) { c.beginPath(); c.ellipse(136, 70, r * 1.4, r, 0.3, 0, TWO_PI); c.stroke(); }
+  tkGroove(c, [[-176, 64], [-160, 78], [-166, 92], [-152, 108]], 2.2);   // an old split in the wood
+  // the forehead band: two carved grooves following the head's crown, a row of painted chip-carved triangles
+  const fy = x => 56 + 10 * (x / 160) ** 2;
+  tkGroove(c, Array.from({ length: 9 }, (_, i) => { const x = lerp(-164, 164, i / 8); return [x, fy(x)]; }), 3);
+  tkGroove(c, Array.from({ length: 9 }, (_, i) => { const x = lerp(-170, 170, i / 8); return [x, fy(x) + 23]; }), 3);
+  for (let k = 0; k < 10; k++) { if (k === 4 || k === 5) continue; const x0 = lerp(-156, 156, k / 10), x1 = lerp(-156, 156, (k + 1) / 10), y0 = fy((x0 + x1) / 2) + 5; blP(c, [[x0 + 2, y0], [x1 - 2, y0], [(x0 + x1) / 2, y0 + 14]], k % 2 ? TK.coral[2] : TK.teal[2]); blP(c, [[x0 + 4, y0 + 1], [(x0 + x1) / 2 - 2, y0 + 1], [(x0 + x1) / 2, y0 + 7]], 'rgba(255,255,255,.28)'); }
+  // varnish: soft glossy highlights where the polished wood catches the light
+  for (const [x, y, rx, ry, r] of [[-120, 92, 26, 6, -0.5], [-150, 150, 8, 22, 0.1], [128, 82, 14, 4, 0.5], [-96, 196, 18, 5, -0.2]]) blE(c, x, y, rx, ry, 'rgba(255,250,232,.32)', r);
+  // cheek spirals and smile creases
+  for (const d of [-1, 1]) { tkSpiral(c, d * 152, 178, 19, d); tkGroove(c, [[d * 60, 166], [d * 96, 176], [d * 118, 192], [d * 126, 210]], 3); }
+  c.restore();
+  // the forehead boss: a mother-of-pearl disc with a mana spiral in it
+  { const x = 0, y = 67; blSoft(c, x, y + 4, 22, 18, [62, 20, 6], 0.45); blShape(c, mAEl(x, y, 17, 17), pkLG(c, -12, y - 12, 12, y + 12, [TK.shell[0], TK.shell[2], TK.shell[3], TK.shell[1]]), { edge: 'rgba(150,100,90,.5)', ew: 2 }); tkSpiral(c, x, y, 11, 1, TK.teal[2], 1.8); mAGlow(c, x, y, 24, TK.mana, 0.2 + 0.15 * mFlare); }
+  tkHibiscus(c, -150, 66, 26, -0.5, t);
+  // 4. the upper lip: a thick coral roll; shark teeth hang from under it
+  c.save(); head(c); c.clip(); c.lineCap = 'round';
+  blLine(c, tkLip(-7, 0, -130, 130), TK.coral[3], 24); blLine(c, tkLip(-9, 0, -128, 128), TK.coral[2], 18); blLine(c, tkLip(-13, 0, -118, 118), TK.coral[1], 7); blLine(c, tkLip(-16, 0, -100, 100), 'rgba(255,232,216,.6)', 2.2);
+  blLine(c, tkLip(-20, 0, -128, 128), 'rgba(80,20,8,.5)', 3);
+  c.restore();
+  const tl = 17 + 6 * op + 6 * (bt >= 0 ? 1 - ce : 0);
+  tkTeeth(c, tkLip(1, 0, -116, 116), 9, tl, 1, [1, 7]);
+  tkRopes(c, jd, jx);
+  // 5. the nose, the eyes, the brow over them
+  tkNose(c, t);
+  const chomp = bt >= 0 ? smooth(0.34, 0.4, bt) * (1 - smooth(0.5, 0.58, bt)) : 0, gulp = bt >= 0 ? smooth(0.5, 0.6, bt) * (1 - smooth(0.8, 1.1, bt)) : 0;
+  const shut = bt >= 0 ? Math.max(0.78 * chomp, 0.22 * ce * (1 - gulp)) : tkBlink(t);
+  const em = ct > 0 ? { t, look: Math.sin(ct * 9) * 0.9 * (1 - gulp) } : m;
+  for (const d of [-1, 1]) tkEye(c, d, em, shut, Math.max(wide * (1 - chomp), gulp), rage);
+  tkBrow(c, rage + chomp, Math.max(wide * (1 - chomp), gulp), t);
+  if (bt > 0.38) mCrumbs(c, jx, 250 + jd, bt - 0.38, 0, 7);
+  if (ct > 0) for (let k = 0; k < 6; k++) {   // wood chips and sawdust flying from the grinding jaw
+    const p = (ct * 1.6 + k / 6) % 1, d = k % 2 ? 1 : -1, x = d * (120 + p * 60), y = 230 + p * p * 90 - p * 30;
+    c.save(); c.globalAlpha = (1 - p) * ce; c.translate(x, y); c.rotate(k + p * 7 * d); blP(c, [[-5, -2], [5, -3], [4, 2], [-4, 3]], k % 3 ? TK.wood[1] : TK.wood[3]); c.restore();
+  }
+}
+// ---- the body: an outrigger yoke and a swaying stack of carved faces ----
+function tkFringe(c, pts, len, t, seed, n = 18) {
+  // raffia strands hanging from a curve, swaying, straw-light in front and darker behind
+  c.lineCap = 'round';
+  for (const pass of [0, 1]) for (let i = 0; i < n; i++) {
+    const u = (i + (pass ? 0.5 : 0)) / n, p = mAt(pts, u), L = len * (0.75 + 0.35 * hash2(i, seed + pass)), sw = Math.sin(t * 2 + i * 0.7 + seed) * 5;
+    c.strokeStyle = pass ? TK.raffia[1] : TK.raffia[2]; c.lineWidth = pass ? 3 : 3.6;
+    c.beginPath(); c.moveTo(p[0], p[1]); c.quadraticCurveTo(p[0] + sw * 0.4, p[1] + L * 0.5, p[0] + sw, p[1] + L); c.stroke();
+    if (pass) { c.strokeStyle = 'rgba(255,248,210,.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(p[0] - 0.8, p[1] + 2); c.quadraticCurveTo(p[0] + sw * 0.4 - 0.8, p[1] + L * 0.5, p[0] + sw - 0.6, p[1] + L * 0.8); c.stroke(); }
+  }
+}
+// one face of the stack, centred on (0, 0) in its own frame: w half-width, h height; mood; pop (0..1) the gulp passing
+function tkStackFace(c, w, h, mood, pop, t, i) {
+  const tone = 0.12 + i * 0.16, W = [mixHex(TK.wood[0], TK.wood[2], tone), mixHex(TK.wood[1], TK.wood[3], tone), mixHex(TK.wood[2], TK.wood[4], tone), mixHex(TK.wood[3], TK.wood[5], tone), mixHex(TK.wood[4], TK.wood[5], tone)];
+  const paint = i % 2 ? TK.coral : TK.teal, other = i % 2 ? TK.teal : TK.coral;
+  // carved ear knobs on its sides
+  for (const d of [-1, 1]) { const ex = d * w * 0.98, ey = -h * 0.02; blShape(c, mAEl(ex, ey, w * 0.16, h * 0.24), blRG(c, ex - d * 4, ey - 6, 2, ex, ey, h * 0.26, [[0, W[1]], [0.6, W[2]], [1, W[4]]]), { edge: W[4], ew: 2 }); tkSpiral(c, ex, ey, h * 0.13, d, paint[2], 1.6); }
+  const path = mBlob([[0, -h / 2], [w * 0.8, -h / 2 + 3], [w * 1.0, -h * 0.14], [w * 0.96, h * 0.2], [w * 0.7, h * 0.46], [0, h / 2 + 2]], true);
+  blShape(c, path, blRG(c, -w * 0.3, -h * 0.25, 4, 0, h * 0.05, w * 1.2, [[0, W[0]], [0.4, W[1]], [0.78, W[2]], [1, W[3]]]), { edge: W[4], ew: 5, under: 'rgba(255,140,60,.4)', uw: 7 });
+  c.save(); path(c); c.clip();
+  c.save(); c.translate(-5, -2); path(c); c.strokeStyle = pkLG(c, 0, -h / 2, 0, h / 2, ['rgba(140,255,230,0)', 'rgba(140,255,230,.3)']); c.lineWidth = 6; c.stroke(); c.restore();
+  c.fillStyle = pkLG(c, -w, 0, w, 0, ['rgba(60,18,4,.45)', 'rgba(60,18,4,0)', 'rgba(255,240,210,.12)', 'rgba(60,18,4,0)', 'rgba(60,18,4,.5)']); c.fillRect(-w - 4, -h / 2 - 4, w * 2 + 8, h + 8);
+  tkGrain(c, -w, -h / 2, w, h / 2, 7, 30 + i, 0.14);
+  // painted cheek triangles under each eye
+  for (const d of [-1, 1]) for (let k = 0; k < 2; k++) { const x = d * w * (0.3 + k * 0.17), y = h * 0.1; blP(c, [[x - 6, y], [x + 6, y], [x, y + 11]], k ? other[2] : paint[2]); }
+  c.restore();
+  // the brow: a raised gull-wing ridge with a painted groove (angry, lifted or drooping by mood; it shoots up as the lump passes)
+  const ang = (mood === 'grump' ? 0.28 : mood === 'sleepy' ? -0.12 : mood === 'howl' ? -0.18 : 0.12) * (1 - pop) - 0.2 * pop, bY = -h * 0.2 - 7 * pop;
+  const bm = [[0, bY + ang * w * 0.25], [w * 0.36, bY - ang * w * 0.12], [w * 0.74, bY + 2]], bt2 = h * 0.075;
+  const bp = mASm([...bm.slice().reverse().map(([x, y]) => [-x, y - bt2]), ...bm.slice(1).map(([x, y]) => [x, y - bt2]), [w * 0.8, bY + 2], ...bm.slice().reverse().map(([x, y]) => [x, y + bt2]), ...bm.slice(1).map(([x, y]) => [-x, y + bt2]), [-w * 0.8, bY + 2]]);
+  c.save(); c.translate(0, 5); bp(c); c.fillStyle = 'rgba(50,14,4,.3)'; c.fill(); c.restore();
+  blShape(c, bp, pkLG(c, 0, bY - bt2, 0, bY + bt2, [W[1], W[2], W[3]]), { rim: 'rgba(255,240,206,.45)', rw: 2 });
+  blLine(c, [...bm.slice().reverse().map(([x, y]) => [-x, y]), ...bm.slice(1)], paint[2], 3);
+  // the eyes: small pearl rings with mana pupils (they pop wide as the lump goes by)
+  const er = h * 0.14 * (1 + 0.4 * pop), lid = mood === 'sleepy' ? 0.55 * (1 - pop) : mood === 'grump' ? 0.3 * (1 - pop) : 0;
+  for (const d of [-1, 1]) {
+    const x = d * w * 0.38, y = -h * 0.04;
+    blSoft(c, x, y + 2, er * 1.6, er * 1.4, [50, 14, 4], 0.6);
+    blE(c, x, y, er + 2.5, er + 2.5, '#4a1a08');
+    blE(c, x, y, er, er, pkLG(c, x - er, y - er, x + er, y + er, [TK.shell[0], TK.shell[1], TK.shell[2], TK.shell[3]]));
+    blE(c, x, y, er * 0.62, er * 0.62, '#2c0e06');
+    mAGlow(c, x, y, er * 1.1, TK.mana, 0.4 + 0.3 * pop);
+    blE(c, x, y, er * 0.38 * (1 - 0.3 * pop), er * 0.38 * (1 - 0.3 * pop), TK.teal[1]);
+    blE(c, x - er * 0.3, y - er * 0.3, er * 0.16, er * 0.12, 'rgba(255,255,255,.9)');
+    if (lid > 0) { c.save(); c.beginPath(); c.arc(x, y, er + 0.5, 0, TWO_PI); c.clip(); blE(c, x, y - er * 2.1 + er * 2 * lid, er * 1.5, er * 1.15, W[2]); blE(c, x, y - er * 2.1 + er * 2 * lid + er * 1.05, er * 1.2, 1.4, 'rgba(255,236,190,.5)'); c.restore(); }
+  }
+  // the nose
+  blShape(c, mBlob([[0, -h * 0.1], [w * 0.08, -h * 0.05], [w * 0.2, h * 0.16], [w * 0.15, h * 0.25], [0, h * 0.24]], true), pkLG(c, 0, -h * 0.1, 0, h * 0.25, [W[0], W[1], W[2]]), { under: 'rgba(60,20,6,.4)', uw: 3, edge: 'rgba(100,40,12,.35)', ew: 1.5 });
+  for (const d of [-1, 1]) blE(c, d * w * 0.1, h * 0.21, w * 0.05, h * 0.03, '#3a1408');
+  // the mouth, by mood (every one gapes into an O as the lump passes)
+  const my = h * 0.37, O = pop;
+  c.lineCap = 'round';
+  if (O > 0.05 || mood === 'howl') {
+    const oo = Math.max(O, mood === 'howl' ? 0.5 : 0), rx = w * (0.16 + 0.1 * oo), ry = h * (0.06 + 0.12 * oo);
+    blE(c, 0, my, rx + 6, ry + 6, TK.coral[3]); blE(c, 0, my - 1, rx + 4, ry + 4, TK.coral[2]); blE(c, 0, my, rx, ry, blRG(c, 0, my, 1, 0, my, rx, [[0, '#6a2a12'], [1, TK.hole[1]]]));
+    mAGlow(c, 0, my + ry * 0.3, rx, TK.mana, 0.2 + 0.3 * oo);
+    blE(c, -rx * 0.3, my - ry - 4, rx * 0.4, 1.8, 'rgba(255,230,214,.6)');
+  } else if (mood === 'grump') {
+    const lip = [[-w * 0.38, my + 7], [-w * 0.16, my - 4], [w * 0.16, my - 4], [w * 0.38, my + 7]];
+    blLine(c, lip, TK.coral[3], 13); blLine(c, lip, TK.coral[2], 8); blLine(c, lip.map(([x, y]) => [x * 0.9, y - 2]), 'rgba(255,220,200,.5)', 1.6);
+    for (let k = 0; k < 4; k++) { const x = (k - 1.5) * w * 0.12; tkTooth(c, [x - 5, my - 1], [x + 5, my - 1], [x, my + 10], 1); }
+  } else if (mood === 'sleepy') {
+    blLine(c, [[-w * 0.24, my], [0, my + 3], [w * 0.24, my]], TK.coral[3], 10); blLine(c, [[-w * 0.22, my], [0, my + 2], [w * 0.22, my]], TK.coral[2], 6);
+    blShape(c, mASm([[w * 0.04, my], [w * 0.2, my], [w * 0.2, my + 13], [w * 0.12, my + 17], [w * 0.04, my + 13]]), TK.coral[1], { edge: 'rgba(150,30,24,.45)', ew: 1.5 });
+  } else {   // grin
+    const up = tkLip(0, 0, -124, 124, 8).map(([x, y]) => [x * w * 0.0034, my - 6 + (y - 186) * 0.5]);
+    blLine(c, up, TK.coral[3], 13); blLine(c, up, TK.coral[2], 8);
+    tkTeeth(c, up.map(([x, y]) => [x, y + 3]), 5, 7, 1, [], 0.12);
+  }
+}
+function tkBody(c, m) {
+  const t = m.t, bt = m.bite;
+  if (bt >= 0) c.scale(1 - 0.1 * smooth(0, 0.12, bt), 1);   // (it draws in tight as it lunges, so it stays on screen in the bite's zoom)
+  const gy = bt >= 0.48 ? lerp(330, 840, smooth(0.48, 1.4, bt)) : -999;   // the swallowed lump sliding down the stack
+  const F = [[384, 118, 150, 'grump'], [498, 102, 126, 'howl'], [598, 90, 106, 'sleepy'], [684, 80, 88, 'grin'], [758, 70, 72, 'grump']];
+  const pos = F.map(([y], i) => ({ x: Math.sin(t * 1.3 - i * 0.85) * (5 + 8 * i), r: Math.cos(t * 1.3 - i * 0.85) * 0.03 * (1 + i * 0.6) }));
+  // a dark, rounded spine behind the stack so the waists between faces never show the shaft through
+  c.save(); c.beginPath(); c.moveTo(pos[0].x - 100, 340); F.forEach(([y, h, w], i) => c.lineTo(pos[i].x - w * 0.62, y)); c.lineTo(pos[4].x - 40, 820); c.lineTo(pos[4].x + 40, 820); for (let i = F.length - 1; i >= 0; i--) c.lineTo(pos[i].x + F[i][2] * 0.62, F[i][0]); c.lineTo(pos[0].x + 100, 340); c.closePath();
+  c.fillStyle = pkLG(c, 0, 340, 0, 820, [TK.wood[4], TK.wood[5], '#3a1608']); c.fill(); c.restore();
+  for (let i = F.length - 1; i >= 0; i--) {
+    const [y, h, w, mood] = F[i], pop = Math.exp(-(((gy - y) / (h * 0.62)) ** 2)), sw = 1 + 0.16 * pop;
+    c.save(); c.translate(pos[i].x, y); c.rotate(pos[i].r); c.scale(sw, sw);
+    blSoft(c, 0, h * 0.56, w * 0.95, 16, [30, 8, 2], 0.5);
+    tkStackFace(c, w, h, mood, pop, t, i);
+    // the collar above it: a carved ring with a turquoise band, a raffia skirt flaring out over the face's shoulders
+    const cw = w * 0.92, cy = -h / 2 + 2;
+    const ring = mASm([[-cw, cy - 8], [0, cy - 13], [cw, cy - 8], [cw + 4, cy + 3], [0, cy + 9], [-cw - 4, cy + 3]]);
+    blShape(c, ring, pkLG(c, 0, cy - 12, 0, cy + 9, [TK.wood[2], TK.wood[4], TK.wood[5]]), { rim: 'rgba(255,240,200,.5)', rw: 3 });
+    blLine(c, [[-cw * 0.9, cy - 2], [0, cy + 2], [cw * 0.9, cy - 2]], TK.teal[2], 4);
+    for (const d of [-1, 1]) tkFringe(c, [[d * cw * 0.5, cy + 4], [d * (cw + 6), cy + 2]], 22 + w * 0.12, t, i * 3 + d, 7);
+    if (i === 4 && bt > 1.25) mPuffs(c, 0, h * 0.36, bt * 1.2, 1 - smooth(2.2, 3, bt), TK.mana, 4);   // the last face burps mana smoke
+    c.restore();
+  }
+  // the yoke: a carved outrigger beam across the shoulders, ends curled up into spirals (the arms grow from them)
+  const half = [[0, 262], [100, 256], [176, 238], [224, 212], [250, 222], [244, 256], [202, 290], [120, 320], [0, 334]];
+  const yoke = mBlob(half, true);
+  blSoft(c, 0, 336, 210, 26, [30, 8, 2], 0.5);
+  blShape(c, yoke, pkLG(c, 0, 214, 0, 334, [TK.wood[1], TK.wood[2], TK.wood[3], TK.wood[4]]), { edge: 'rgba(100,40,14,.55)', ew: 4, rim: 'rgba(255,244,214,.6)', rw: 4, under: 'rgba(255,140,60,.45)', uw: 7 });
+  c.save(); yoke(c); c.clip();
+  c.save(); c.translate(-7, 0); yoke(c); c.strokeStyle = 'rgba(140,255,230,.45)'; c.lineWidth = 8; c.stroke(); c.restore();
+  tkGrain(c, -250, 210, 250, 340, 18, 44, 0.12);
+  const by = x => 286 - 40 * (Math.abs(x) / 240) ** 1.6;
+  tkGroove(c, Array.from({ length: 11 }, (_, i) => { const x = lerp(-230, 230, i / 10); return [x, by(x) - 12]; }), 3);
+  tkGroove(c, Array.from({ length: 11 }, (_, i) => { const x = lerp(-230, 230, i / 10); return [x, by(x) + 14]; }), 3);
+  for (let k = 0; k < 14; k++) { const x0 = lerp(-210, 210, k / 14), x1 = lerp(-210, 210, (k + 1) / 14), xm = (x0 + x1) / 2, y0 = by(xm) - 8; blP(c, [[x0 + 2, y0], [x1 - 2, y0], [xm, y0 + 17]], k % 2 ? TK.teal[2] : TK.coral[2]); }
+  c.restore();
+  for (const d of [-1, 1]) tkSpiral(c, d * 226, 236, 16, d);
+  tkFringe(c, [[-200, 292], [-120, 322], [0, 332], [120, 322], [200, 292]], 30, t, 77, 26);
+}
+// ---- the arms: carved wooden limbs from the yoke's ends, rope-lashed at the shoulder and wrist ----
+// Drawn from the rig's own capsules (the hitbox overlay is exact): the log's outline in the wood's deepest shade, round
+// tones inside, carved rings with painted bands, a carved elbow knob, chevrons up the forearm; the hand is four carved
+// fingers curled over the wall's edge and a thumb, coral nails, a mana eye carved in the back of the hand. On the
+// wind-up every groove fills with turquoise light, pulsing faster as the strike comes; when it slams, chips fly.
+const TK_TONES = [TK.wood[5], TK.wood[4], TK.wood[3], TK.wood[2], TK.wood[0]];
+function tkRings(c, ch, step, d, w, t, i0 = 1) {
+  chainEvery(ch, step).forEach(([x, y, r, a], i) => {
+    if (i < i0) return;
+    const nx = -Math.sin(a), ny = Math.cos(a), ux = Math.cos(a), uy = Math.sin(a), hw = r - 3.5;
+    const across = (o, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(x + ux * o + nx * hw, y + uy * o + ny * hw); c.quadraticCurveTo(x + ux * (o + r * 0.28), y + uy * (o + r * 0.28), x + ux * o - nx * hw, y + uy * o - ny * hw); c.stroke(); };
+    if (i % 3 === 0) { across(0, TK.groove, 9); across(0, TK.teal[2], 5.5); across(-1.5, 'rgba(214,255,246,.45)', 1.4); if (w > 0) { c.save(); c.globalCompositeOperation = 'lighter'; across(0, rgbaA(TK.mana, 0.6 * w), 7); c.restore(); } }
+    else { across(0, TK.groove, 2.8); across(2.2, TK.lip, 1.4); if (w > 0) { c.save(); c.globalCompositeOperation = 'lighter'; across(0, rgbaA(TK.mana, 0.75 * w), 3); c.restore(); } }
+  });
+}
+function tkLash(c, ch, at, n, r0) {   // a rope lashing: n wraps round a chain near point index `at`
+  const p = ch[Math.min(ch.length - 1, at)], q = ch[Math.min(ch.length - 1, at + 1)] || p, a = Math.atan2(q[1] - p[1], q[0] - p[0]), nx = -Math.sin(a), ny = Math.cos(a), ux = Math.cos(a), uy = Math.sin(a), hw = (r0 ?? p[2]) - 3;
+  for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 5.2; for (const [col, lw] of [[TK.rope[2], 5.2], [TK.rope[1], 3.4]]) { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(p[0] + ux * o + nx * hw, p[1] + uy * o + ny * hw); c.quadraticCurveTo(p[0] + ux * (o + 3) , p[1] + uy * (o + 3), p[0] + ux * o - nx * hw, p[1] + uy * o - ny * hw); c.stroke(); } }
+}
+function tkLimb(c, rig, P, layer, t) {
+  if (layer !== 'mid' && layer !== 'front') return;
+  const d = rig.d, ch = layer === 'mid' ? rig.up : armChain(rig), w = rig.wind, pulse = w > 0 ? 0.6 + 0.4 * Math.sin(t * (18 + 26 * w)) : 0;
+  if (layer === 'mid') blSoft(c, rig.up[0][0], rig.up[0][1] + 8, rig.up[0][2] * 1.8, rig.up[0][2] * 1.2, [30, 8, 2], 0.5);
+  blLimbTones(c, [ch], d, TK_TONES);
+  c.save(); cbCapPath(c, [ch], [], 1.6); c.clip();
+  grabAlong(c, ch, d, -0.62, 'rgba(255,140,60,.35)', 3);   // the lava's warm bounce along its underside
+  tkGrainChain(c, ch, d);
+  tkRings(c, ch, 15, d, w * pulse, t, layer === 'mid' ? 2 : 1);
+  if (layer === 'front') {   // chevrons carved up the forearm, painted in their cuts
+    const f = rig.fore; chainEvery(f, 22).forEach(([x, y, r, a], i) => { if (!i) return; const ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux, hw = r - 5; const P2 = [[x + nx * hw - ux * 5, y + ny * hw - uy * 5], [x + ux * 5, y + uy * 5], [x - nx * hw - ux * 5, y - ny * hw - uy * 5]]; blLine(c, P2, TK.groove, 5); blLine(c, P2, i % 2 ? TK.coral[2] : TK.teal[2], 2.6); if (w > 0) { c.save(); c.globalCompositeOperation = 'lighter'; blLine(c, P2, rgbaA(TK.mana, 0.7 * w * pulse), 4); c.restore(); } });
+  }
+  if (layer === 'mid') limbRootShadeWarm(c, rig.up);
+  c.restore();
+  if (layer === 'mid') tkLash(c, rig.up, 2, 3);
+  else {
+    // the elbow: a carved knob with a spiral, lit on top
+    const e = rig.fore[0], er = e[2] * 1.06;
+    blShape(c, mAEl(e[0], e[1], er, er), blRG(c, e[0] - d * er * 0.35, e[1] - er * 0.4, 2, e[0], e[1], er * 1.1, [[0, TK.wood[0]], [0.4, TK.wood[2]], [0.85, TK.wood[3]], [1, TK.wood[4]]]), { edge: TK.wood[5], ew: 1.8 });
+    tkSpiral(c, e[0], e[1], er * 0.55, -d, TK.teal[2], 1.6);
+    if (w > 0) mAGlow(c, e[0], e[1], er * 1.6, TK.mana, 0.5 * w * pulse);
+    tkLash(c, rig.fore, rig.fore.length - 2, 2);
+    tkHand(c, rig, t, w * pulse);
+  }
+}
+function limbRootShadeWarm(c, up) { const n = Math.max(2, Math.round(up.length * 0.35)); for (let i = 1; i < n; i++) capStroke(c, [up[i - 1], up[i]], `rgba(40,12,4,${(0.5 * (1 - i / n)).toFixed(3)})`, r => 2 * r - 3); }
+function tkGrainChain(c, ch, d) { for (const k of [-0.3, 0.1, 0.45]) grabAlong(c, ch, d, k, 'rgba(120,52,18,.18)', 1.6); }
+function tkHand(c, rig, t, glow) {
+  const H = rig.hand, d = rig.d, parts = H.map(blPart);
+  // all its parts merge as one carved wood mass: the outline (exactly its capsules) in the deepest shade, then rounded tones
+  blLimbTones(c, parts, d, TK_TONES);
+  c.save(); cbCapPath(c, [], H, 1.4); c.clip();
+  for (const p of H) if (p[5] === 'fing' || p[5] === 'thumb') { const [x0, y0, x1, y1, r] = p, a = Math.atan2(y1 - y0, x1 - x0), nx = -Math.sin(a), ny = Math.cos(a), x = lerp(x0, x1, 0.82), y = lerp(y0, y1, 0.82); c.strokeStyle = TK.groove; c.lineWidth = 2.2; c.beginPath(); c.moveTo(x + nx * r, y + ny * r); c.quadraticCurveTo(x + Math.cos(a) * 2.5, y + Math.sin(a) * 2.5, x - nx * r, y - ny * r); c.stroke(); c.strokeStyle = TK.lip; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x + nx * r + Math.cos(a) * 2, y + ny * r + Math.sin(a) * 2); c.lineTo(x - nx * r + Math.cos(a) * 2, y - ny * r + Math.sin(a) * 2); c.stroke(); }   // a carved crease across each finger at its knuckle
+  // the mana eye carved in the back of the hand
+  const pm = H[0], ex = pm[0], ey = (pm[1] + pm[3]) / 2 - 2, er = pm[4] * 0.55;
+  blE(c, ex, ey, er + 3, er * 0.7 + 3, TK.groove); blE(c, ex, ey, er, er * 0.7, pkLG(c, ex - er, ey, ex + er, ey, [TK.shell[0], TK.shell[2], TK.shell[3]])); blE(c, ex, ey, er * 0.4, er * 0.4, TK.teal[2]); blE(c, ex - 1.5, ey - 1.5, 1.6, 1.6, '#fff');
+  c.restore();
+  if (glow > 0) { c.save(); c.globalCompositeOperation = 'lighter'; capStroke(c, [[ex, ey, er], [ex, ey + 0.01, er]], rgbaA(TK.mana, 0.6 * glow), r => r * 3); c.restore(); }
+  // coral-painted nails on the fingertips that curl into the rock, and the thumb's
+  for (const p of H) if (p[5] === 'tip' || p[5] === 'thumbtip') {
+    const [x0, y0, x1, y1, r] = p, a = Math.atan2(y1 - y0, x1 - x0), nx = x1 - Math.cos(a) * r * 0.25, ny = y1 - Math.sin(a) * r * 0.25;
+    blE(c, nx, ny, r * 0.62, r * 0.5, pkLG(c, nx, ny - r, nx, ny + r, [TK.coral[1], TK.coral[2], TK.coral[3]]), a);
+    blE(c, nx - r * 0.15, ny - r * 0.2, r * 0.22, r * 0.14, 'rgba(255,240,230,.7)', a);
+  }
+  // the slam: chips and dust bursting off the wall where it lands
+  const gs = blGrab(d);
+  if (gs && gs.slam >= 0) {
+    const p = gs.slam, palm = H[0];
+    for (let k = 0; k < 6; k++) { const a2 = -Math.PI / 2 + (k - 2.5) * 0.45, rr = 6 + 26 * p * (0.6 + 0.4 * hash2(k, 5)); blE(c, palm[0] + d * (18 + Math.abs(Math.cos(a2)) * rr * 0.4), palm[1] - 26 + Math.sin(a2) * rr * 0.8, 4 + 7 * p, 4 + 7 * p, `rgba(255,236,200,${0.45 * (1 - p)})`); }
+    for (let k = 0; k < 5; k++) { const px = palm[0] - d * (4 + 12 * p * hash2(k, 8)), py = palm[1] - 14 + (k - 2) * 7 + 70 * p * p, r = 2.5 + k % 2 * 1.5; c.save(); c.globalAlpha = 1 - p; c.translate(px, py); c.rotate(k + p * 5); blP(c, [[-r, -r * 0.6], [r, -r * 0.8], [r * 0.6, r], [-r * 0.7, r * 0.6]], k % 2 ? TK.wood[2] : TK.wood[4]); c.restore(); }
+  }
+}
+// ---------- Scorchwake (monster slot 14, id 'spirit') ----------
+// A comet of living magma surging up the shaft. Its head is molten rock with a crown of fire licking up from its brow,
+// flames flaring out round its temples, and two great up-swept horns of cooled crust. White-hot slit eyes blaze out of
+// soot-dark sockets under one heavy, cracked crust brow; crust plates ride on its cheekbones; its huge grin is a
+// furnace whose inside is a white-hot vortex pulling sparks in, ringed with jagged pumice teeth behind dark crust lips,
+// and a beard of flame pours from its chin. Below the head, crust pauldrons carry its molten arms, and its body is a
+// long translucent comet tail of fire streaming down the shaft (it is rushing up), a cage of cooled-crust ribs holding
+// its magma heart. The bite: the vortex spins up and the jaws fly wide, slam and chomp (cheeks puffing, sparks spitting);
+// a glowing lump slides down its throat into the heart, which flares white and roars with the pilot spinning inside it;
+// then it burps a smoke ring. Borderless: no ink, form from shading; edges are darker shades of each part's own hue.
+// Art units: y = 0 is the catch line (nothing above it), |x| <= 250.
+const SP = {
+  fire: ['#fff7d6', '#ffe07a', '#ffae30', '#ff6a1e', '#e2321e', '#a8123a', '#740a36'],   // white-hot → deep outer flame
+  skin: ['#ffcf6e', '#ff9c36', '#f06224', '#c8301f', '#8c1230', '#560a28'],              // its molten face, hottest → edge
+  crust: ['#b47c72', '#7c4448', '#4e2430', '#311420', '#1e0a14'],                         // cooled crust, lit → deepest
+  tooth: ['#fff8ec', '#f2dcc2', '#c9a68a'],
+  glow: [255, 170, 60], hot: [255, 236, 170], ember: [255, 120, 40],
+};
+const spLipY = x => 224 - 30 * (x / 120) ** 2;
+const spLip = (dy = 0, dx = 0, x0 = -120, x1 = 120, n = 12) => { const P = []; for (let i = 0; i <= n; i++) { const x = lerp(x0, x1, i / n); P.push([x + dx, spLipY(x) + dy]); } return P; };
+function spBlink(t) { const ph = pmod(t + 1.1, 4.1); return ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) : 0; }
+// One tongue of flame from its root (x, y) along angle ang: a bulb at the root tapering along a licking, curling spine
+// to a point. Nested inside it, shorter tongues hug the root: a deep outer flame, then red, orange, gold and a
+// white-hot core, so it burns brightest at its base. Points never rise above y = minY (the catch line).
+// o: { sway, curl, minY, cols [indexes into SP.fire, outer → core], alpha, glow }
+function spFlame(c, x, y, ang, L, W, t, seed, o = {}) {
+  const N = 12, sw = o.sway ?? 0.32, curl = o.curl ?? 0, minY = o.minY ?? 2, cols = o.cols || [4, 3, 2, 1, 0];
+  const LAY = [[1, 1], [0.74, 0.74], [0.52, 0.5], [0.34, 0.3], [0.18, 0.16]];
+  const flick = 1 + 0.1 * Math.sin(t * 8.3 + seed * 3.1) + 0.07 * Math.sin(t * 15.7 + seed * 1.7);
+  if (o.alpha != null) { c.save(); c.globalAlpha *= o.alpha; }
+  if (o.glow) { const gx = x + Math.cos(ang) * L * 0.25, gy = y + Math.sin(ang) * L * 0.25, gr = Math.min(W * 1.1, gy - minY); c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, gx, gy, gr * 1.2, gr, SP.glow, o.glow); c.restore(); }   // (its glow never reaches above the catch line)
+  cols.forEach((ci, li) => {
+    const [wk, lk] = LAY[Math.min(li, LAY.length - 1)], Lk = L * lk * flick, A = [], B = [];
+    let px = x, py = y;
+    for (let i = 0; i <= N; i++) {
+      const u = i / N, a = ang + curl * u + sw * Math.sin(u * 3.1 - t * 6.4 - seed) * u;
+      if (i) { px += Math.cos(a) * Lk / N; py += Math.sin(a) * Lk / N; }
+      const prof = Math.pow(1 - u, 1.05) * (0.72 + 0.28 * Math.sin(Math.min(1, u / 0.22) * Math.PI / 2)) * (1 + 0.1 * Math.sin(u * 8 + t * 9 + seed));
+      const hw = W * wk * 0.5 * prof, nx = -Math.sin(a), ny = Math.cos(a);
+      A.push([px + nx * hw, Math.max(minY, py + ny * hw)]); B.push([px - nx * hw, Math.max(minY, py - ny * hw)]);
+    }
+    const r0 = W * wk * 0.36;
+    const path = c2 => {
+      const P = [...A.slice(0, N), A[N], ...B.slice(0, N).reverse()];
+      c2.beginPath(); c2.moveTo(P[0][0], P[0][1]);
+      for (let i = 1; i < P.length - 1; i++) { const q = [(P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2]; c2.quadraticCurveTo(P[i][0], P[i][1], q[0], q[1]); }
+      c2.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
+      c2.quadraticCurveTo(x - Math.cos(ang) * r0 * 1.4, y - Math.sin(ang) * r0 * 1.4, P[0][0], P[0][1]);   // the rounded root
+      c2.closePath();
+    };
+    path(c);
+    const col = SP.fire[ci], next = SP.fire[Math.max(0, ci - 1)];
+    c.fillStyle = pkLG(c, x, y, x + Math.cos(ang + curl * 0.5) * Lk, y + Math.sin(ang + curl * 0.5) * Lk, li ? [next, col, rgbaA(hexRGB(col), 0.85)] : [rgbaA(hexRGB(col), 0.95), rgbaA(hexRGB(col), 0.88), rgbaA(hexRGB(col), 0.55)]);
+    c.fill();
+  });
+  if (o.alpha != null) c.restore();
+}
+// a jagged pumice tooth (base p0 → p1, tip), shaded, an ember glow at its tip in the heat; no ink
+function spTooth(c, p0, p1, tip, dir, hot = 0) {
+  const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2, kx = (p1[0] - p0[0]);
+  const pts = [p0, [lerp(p0[0], tip[0], 0.45) - kx * 0.08, lerp(p0[1], tip[1], 0.45)], [lerp(p0[0], tip[0], 0.6) + kx * 0.04, lerp(p0[1], tip[1], 0.62)], tip, [lerp(p1[0], tip[0], 0.5) + kx * 0.06, lerp(p1[1], tip[1], 0.5)], p1];
+  blShape(c, c2 => { c2.beginPath(); pts.forEach(([x, y], i) => i ? c2.lineTo(x, y) : c2.moveTo(x, y)); c2.closePath(); }, pkLG(c, p0[0], my, p1[0], my, [SP.tooth[0], SP.tooth[1], SP.tooth[2]]), { edge: 'rgba(150,90,60,.5)', ew: 1.2 });
+  if (hot > 0) { c.save(); c.globalCompositeOperation = 'lighter'; blP(c, [[lerp(p0[0], tip[0], 0.7), lerp(p0[1], tip[1], 0.7)], tip, [lerp(p1[0], tip[0], 0.7), lerp(p1[1], tip[1], 0.7)]], rgbaA(SP.ember, 0.6 * hot)); c.restore(); }
+  c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(lerp(p0[0], mx, 0.5), my + dir * 2); c.lineTo(lerp(p0[0], tip[0], 0.55), lerp(p0[1], tip[1], 0.55)); c.stroke();
+}
+function spTeeth(c, lip, n, L, dir, fangs = [], hot = 0) {
+  for (let k = 0; k < n; k++) {
+    const p0 = mAt(lip, (k + 0.1) / n), p1 = mAt(lip, (k + 0.9) / n), pm = mAt(lip, (k + 0.5) / n);
+    const len = L * (fangs.includes(k) ? 1.8 : 0.8 + 0.25 * hash2(k, 7)) * (1 - 0.3 * Math.abs((k + 0.5) / n - 0.5));
+    spTooth(c, p0, p1, [pm[0] * 0.96, pm[1] + dir * len], dir, hot);
+  }
+}
+// a glowing crack (a seam of lava in crust): a hot core line inside a soft glow
+function spCrack(c, pts, w = 3, a = 1) {
+  c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; c.lineJoin = 'round';
+  blLine(c, pts, rgbaA(SP.ember, 0.3 * a), w * 3); blLine(c, pts, rgbaA(SP.glow, 0.85 * a), w); blLine(c, pts, rgbaA(SP.hot, 0.8 * a), w * 0.4);
+  c.restore();
+}
+// a plate of cooled crust: dark warm rock lit on top, a hot orange under-rim from the magma below it
+function spCrust(c, path, x0, y0, x1, y1, o = {}) {
+  blShape(c, path, pkLG(c, x0, y0, x1, y1, [SP.crust[1], SP.crust[2], SP.crust[3]]), { edge: SP.crust[4], ew: o.ew ?? 3, rim: o.rim ?? 'rgba(214,160,150,.5)', rw: 3, under: o.under ?? 'rgba(255,130,50,.75)', uw: o.uw ?? 5 });
+}
+// molten flow lines creeping down over the skin (inside a clip), slow bright streaks and a few bubbles popping
+function spLava(c, x0, y0, x1, y1, t, seed) {
+  c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+  for (let i = 0; i < 7; i++) {
+    const x = lerp(x0, x1, (i + 0.5) / 7) + (hash2(i, seed) - 0.5) * 20, ph = (t * 0.22 + hash2(i, seed + 1)) % 1, y = lerp(y0 - 40, y1, ph), L = 40 + 30 * hash2(i, seed + 2);
+    c.strokeStyle = `rgba(255,214,120,${0.2 * Math.sin(ph * Math.PI)})`; c.lineWidth = 6; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.sin(i + t) * 8, y + L * 0.5, x + Math.sin(i * 2) * 6, y + L); c.stroke();
+  }
+  for (let i = 0; i < 5; i++) { const ph = (t * 0.6 + hash2(i, seed + 5)) % 1, x = lerp(x0, x1, hash2(i, seed + 6)) * 0.8, y = lerp(y0, y1, hash2(i, seed + 7)), r = 2 + 4 * ph; c.strokeStyle = `rgba(255,236,170,${0.5 * (1 - ph)})`; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.stroke(); }
+  c.restore();
+}
+// ---- the fire, the horns and the face ----
+// the fire behind its head: flames flaring out round its crown, temples and cheeks (only their tongues show past it)
+function spBackFire(c, t, flare) {
+  for (const d of [-1, 1]) {
+    spFlame(c, d * 92, 100, -Math.PI / 2 + d * 0.62, 78 * (1 + 0.1 * flare), 60, t, 10 + d, { sway: 0.38, curl: d * 0.15, minY: 3, cols: [5, 4, 3, 1, 0] });
+    spFlame(c, d * 138, 118, -Math.PI / 2 + d * 1.0, 92 * (1 + 0.1 * flare), 62, t, 20 + d, { sway: 0.34, curl: -d * 0.3, minY: 3, cols: [5, 4, 3, 1, 0] });
+    spFlame(c, d * 170, 178, d > 0 ? 0.22 : Math.PI - 0.22, 64, 54, t, 24 + d, { sway: 0.3, curl: d * 0.4 });
+    spFlame(c, d * 164, 236, Math.PI / 2 - d * 0.75, 78, 50, t, 28 + d, { sway: 0.3, curl: d * 0.25 });
+  }
+}
+// the eruption: a mass of fire bursting up from the crater in its crown (in front of the crust, its roots in the crater)
+function spEruption(c, t, flare) {
+  const F = [[-58, 90, -0.75, 50, 42, 5], [58, 90, 0.75, 50, 42, 6], [-30, 82, -0.36, 62, 56, 7], [30, 82, 0.36, 62, 56, 8], [0, 80, 0.04, 74, 76, 9]];
+  for (const [x, y, lean, L, W, sd] of F) spFlame(c, x, y, -Math.PI / 2 + lean + 0.06 * Math.sin(t * 1.7 + sd), Math.min(y - 5, L * (1 + 0.1 * flare)), W, t, sd, { sway: 0.42, minY: 3, glow: 0.25 });
+}
+// a horn of cooled crust sweeping out from the temple and curving up, ridged, an ember glowing at its tip
+function spHorn(c, d, t, rage) {
+  const P = [[d * 112, 108], [d * 168, 94], [d * 210, 66], [d * 228, 34], [d * 222, 9]], W = [28, 24, 18, 11, 2.5];
+  const A = [], B = [];
+  for (let i = 0; i < P.length; i++) { const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty), nx = -ty / l, ny = tx / l; A.push([P[i][0] + nx * W[i], P[i][1] + ny * W[i]]); B.push([P[i][0] - nx * W[i], P[i][1] - ny * W[i]]); }
+  const path = mASm([...A, [P[4][0] - d * 2, Math.max(3, P[4][1] - 4)], ...B.reverse()]);
+  blSoft(c, d * 130, 122, 40, 18, [40, 2, 12], 0.5);
+  blShape(c, path, pkLG(c, d * 112, 116, d * 228, 10, [SP.crust[3], SP.crust[2], SP.crust[1], SP.crust[2]]), { edge: SP.crust[4], ew: 3, rim: 'rgba(224,176,166,.6)', rw: 4, under: 'rgba(255,120,40,.85)', uw: 7 });
+  c.save(); path(c); c.clip(); c.lineCap = 'round';
+  for (let k = 1; k < 7; k++) { const p = mAt(P, k / 7.2), a = p[2] + Math.PI / 2, w = 32 * (1 - k / 8); c.strokeStyle = 'rgba(20,6,12,.5)'; c.lineWidth = 3; c.beginPath(); c.moveTo(p[0] - Math.cos(a) * w, p[1] - Math.sin(a) * w); c.quadraticCurveTo(p[0] + Math.cos(p[2]) * 6, p[1] + Math.sin(p[2]) * 6, p[0] + Math.cos(a) * w, p[1] + Math.sin(a) * w); c.stroke(); }
+  c.restore();
+  spCrack(c, [[d * 126, 108], [d * 152, 98], [d * 174, 100], [d * 198, 80]], 2.4, 0.6 + 0.3 * Math.sin(t * 2.3 + d) + 0.3 * rage);
+  mAGlow(c, d * 223, 17, 15, SP.ember, 0.5 + 0.25 * Math.sin(t * 3 + d));
+}
+function spEye(c, d, m, shut, wide, rage) {
+  const x = d * 64, y = 168, look = clamp(m.look || 0, -1, 1), rx = 36 * (1 + 0.1 * wide), ry = (17 + 16 * wide) * (1 - 0.08 * rage), tilt = d * 0.3 * (1 - wide);
+  blSoft(c, x, y + 2, rx + 24, ry + 22, [36, 2, 10], 0.9);   // a soot-dark socket, so the white-hot eye blazes out of it
+  const eye = c2 => { c2.beginPath(); c2.ellipse(x, y, rx, ry, tilt, 0, TWO_PI); };
+  c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, x, y, rx * 1.7, ry * 2.2, SP.glow, 0.3 + 0.35 * mFlare); c.restore();
+  blShape(c, eye, blRG(c, x, y - ry * 0.25, 2, x, y, rx, [[0, '#fffef6'], [0.5, SP.fire[0]], [0.82, SP.fire[1]], [1, SP.fire[2]]]), { edge: 'rgba(255,120,30,.85)', ew: 3 });
+  c.save(); eye(c); c.clip();
+  const px = x + look * rx * 0.36, py = y + ry * 0.08, pr = 1 + 0.12 * mFlare;
+  blE(c, px, py, (9 + 4 * wide) * pr, (17 - 4 * wide) * pr, 'rgba(255,110,30,.6)', tilt * 0.3);
+  blE(c, px, py, (4.2 + 3 * wide) * pr, (14 - 6 * wide) * pr, blRG(c, px, py, 0.5, px, py, 14, [[0, '#4a0414'], [0.7, '#7a0c1c'], [1, '#b0241c']]), tilt * 0.3);
+  blE(c, px - 6, py - 7, 3.6, 2.8, 'rgba(255,255,255,.95)');
+  if (shut > 0.02) { const ly = y - ry * 1.3 + ry * 2.6 * shut; blShape(c, c2 => { c2.beginPath(); c2.moveTo(x - rx - 4, y - ry - 8); c2.lineTo(x + rx + 4, y - ry - 8); c2.lineTo(x + rx + 4, ly - 6); c2.quadraticCurveTo(x, ly + 12, x - rx - 4, ly - 6); c2.closePath(); }, pkLG(c, x, y - ry, x, ly, [SP.skin[3], SP.skin[2]]), { under: 'rgba(255,220,140,.6)', uw: 3 }); }
+  c.restore();
+}
+// the cranium: plates of cooled crust riding on the molten top of its head, magma glowing in the seams between them;
+// the lowest plates form one heavy brow over the eyes (slanting into an angry V), and a crater in its crown wells with
+// white-hot lava that spills down the seams and drips off the brow
+function spCranium(c, head, rage, wide, t) {
+  const V = 14 + 8 * rage - 20 * wide, up = -18 * wide, B = (x, y) => [x, y + up * (1 - Math.abs(x) / 260) + (Math.abs(x) < 40 ? V * (1 - Math.abs(x) / 40) : 0)];
+  const browLine = [[0, 158], [26, 150], [58, 144], [94, 144], [126, 152], [154, 166], [178, 174], [204, 176]].map(([x, y]) => B(x, y));
+  const area = mASm([[-214, -10], [214, -10], ...browLine.slice().reverse(), ...browLine.slice(1).map(([x, y]) => [-x, y])]);
+  c.save(); head(c); c.clip();
+  c.save(); c.translate(0, 9); area(c); c.fillStyle = 'rgba(40,2,12,.45)'; c.fill(); c.restore();   // the brow's shadow on the face below
+  // the molten bed the plates float on (it glows through every seam)
+  area(c); c.fillStyle = blRG(c, 0, 80, 4, 0, 110, 200, [[0, SP.fire[1]], [0.18, SP.fire[2]], [0.45, SP.fire[3]], [1, SP.fire[4]]]); c.fill();
+  c.save(); area(c); c.clip();
+  const pulse = 0.85 + 0.15 * Math.sin(t * 2.6) + 0.2 * rage;
+  c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, 0, 110, 200, 70, SP.glow, 0.25 * pulse); c.restore();
+  const plate = (P, seed) => {
+    const cx0 = P.reduce((a, p) => a + p[0], 0) / P.length, cy0 = P.reduce((a, p) => a + p[1], 0) / P.length; P = P.map(([x, y]) => [cx0 + (x - cx0) * 1.07, cy0 + (y - cy0) * 1.07]);
+    const path = mASm(P); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of P) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    blShape(c, path, pkLG(c, x0, y0, x1 * 0.3 + x0 * 0.7, y1, [SP.crust[0], SP.crust[1], SP.crust[2], SP.crust[3]]), { edge: SP.crust[4], ew: 2.4, rim: 'rgba(230,184,172,.5)', rw: 3, under: `rgba(255,${150 + 40 * pulse | 0},60,.85)`, uw: 5 });
+    c.save(); path(c); c.clip(); c.strokeStyle = 'rgba(20,4,10,.35)'; c.lineWidth = 1.6; c.beginPath(); for (let k = 0; k < 3; k++) { const u = hash2(k, seed), x = lerp(x0, x1, u); c.moveTo(x, y0 + 6); c.quadraticCurveTo(x + 6, (y0 + y1) / 2, x - 4 + 8 * hash2(k, seed + 1), y1 - 6); } c.stroke(); c.restore();
+  };
+  for (const d of [-1, 1]) {
+    const M = P => P.map(([x, y]) => [d * x, y]);
+    plate(M([[52, 62], [108, 60], [150, 86], [138, 108], [94, 106], [58, 94]]), 3 + d);   // crown
+    plate(M([[150, 94], [176, 128], [190, 172], [166, 170], [144, 142], [140, 112]]), 5 + d);   // temple
+    plate(M([[10, 120], [54, 102], [92, 112], [134, 118], B(160, 148), B(156, 172), B(124, 158), B(90, 152), B(56, 152), B(26, 160), B(5, 168)]), 7 + d);   // brow (the two halves meet in a V between the eyes)
+  }
+  plate([[-36, 100], [36, 100], [30, 112], [0, 118], [-30, 112]], 11);   // the forehead under the crater
+  // the crater: a raised rough lip round a well of white-hot lava, spilling down the seams
+  blShape(c, mAEl(0, 80, 60, 22), pkLG(c, 0, 60, 0, 102, [SP.crust[0], SP.crust[1], SP.crust[3]]), { edge: SP.crust[4], ew: 2 });
+  blE(c, 0, 82, 46, 13, blRG(c, 0, 82, 2, 0, 82, 46, [[0, '#fffbe6'], [0.4, SP.fire[1]], [0.8, SP.fire[3]], [1, SP.fire[5]]]));
+  for (const [x, ph] of [[-46, 0], [44, 0.45], [0, 0.8]]) { const f = (t * 0.45 + ph) % 1, P = [[x * 0.8, 96], [x, 104], [x * 1.25, 130]]; const q = mAt(P, f); blE(c, q[0], q[1], 3.2, 3.8, `rgba(255,250,220,${0.85 * Math.sin(f * Math.PI)})`); }
+  c.restore();
+  c.restore();
+  // drips of lava falling from the brow's seams onto its face
+  for (const [x, ph] of [[-30, 0], [30, 0.5]]) { const f = (t * 0.7 + ph) % 1, y = B(x, 156)[1] + f * f * 36; blE(c, x, y, 3.4 * (1 - f * 0.4), 5 * (1 - f * 0.2), `rgba(255,${210 - 60 * f | 0},80,${1 - f})`); }
+}
+// the lower jaw (shifted by its drop jd and sway jx): a molten chin, hot under the lip and cooling to crimson below, a
+// rim of dark crust along its underside, lava cracks branching over it, pumice teeth rising from a dark crust lip, and
+// a goatee of flame pouring from its chin
+function spJaw(c, jd, jx, t, heat, rage) {
+  c.save(); c.translate(jx, jd);
+  const L = spLip(0, 0, -120, 120, 12);
+  const path = c2 => { c2.beginPath(); c2.moveTo(L[0][0], L[0][1]); L.forEach(([x, y]) => c2.lineTo(x, y)); c2.bezierCurveTo(134, 200, 140, 226, 134, 252); c2.bezierCurveTo(126, 282, 92, 304, 48, 310); c2.quadraticCurveTo(0, 318, -48, 310); c2.bezierCurveTo(-92, 304, -126, 282, -134, 252); c2.bezierCurveTo(-140, 226, -134, 200, L[0][0], L[0][1]); c2.closePath(); };
+  blSoft(c, 0, 312, 130, 24, [50, 4, 16], 0.5);
+  blShape(c, path, blRG(c, 0, 214, 6, 0, 230, 150, [[0, SP.skin[0]], [0.3, SP.skin[1]], [0.6, SP.skin[2]], [0.85, SP.skin[3]], [1, SP.skin[4]]]), { edge: 'rgba(110,10,36,.65)', ew: 5 });
+  c.save(); path(c); c.clip();
+  c.fillStyle = pkLG(c, -140, 0, 140, 0, ['rgba(90,6,30,.6)', 'rgba(90,6,30,0)', 'rgba(255,230,160,.12)', 'rgba(90,6,30,0)', 'rgba(90,6,30,.6)']); c.fillRect(-150, 190, 300, 140);
+  spLava(c, -140, 208, 140, 320, t, 3);
+  // the cooled crust along its underside: a dark rim, lit along its top edge, cracked with light
+  const rim = c2 => { c2.beginPath(); c2.moveTo(-150, 268); c2.bezierCurveTo(-90, 292, -40, 300, 0, 298); c2.bezierCurveTo(40, 300, 90, 292, 150, 268); c2.lineTo(150, 340); c2.lineTo(-150, 340); c2.closePath(); };
+  blShape(c, rim, pkLG(c, 0, 270, 0, 320, [SP.crust[1], SP.crust[2], SP.crust[3]]), { rim: 'rgba(230,184,172,.4)', rw: 2.5 });
+  for (const P of [[[-96, 286], [-70, 298], [-52, 312]], [[-20, 298], [-6, 310], [-12, 320]], [[30, 298], [44, 308], [40, 320]], [[84, 288], [96, 304]]]) spCrack(c, P, 1.8, 0.6 + 0.3 * heat);
+  // lava cracks branching over the chin
+  for (const d of [-1, 1]) { spCrack(c, [[d * 22, 246], [d * 46, 258], [d * 58, 276], [d * 84, 282]], 1.6, 0.45 + 0.3 * heat); spCrack(c, [[d * 46, 258], [d * 52, 242]], 1.2, 0.4); }
+  c.lineCap = 'round'; blLine(c, spLip(9, 0, -124, 124), SP.crust[3], 20); blLine(c, spLip(6, 0, -120, 120), SP.crust[2], 12); blLine(c, spLip(2, 0, -106, 106), 'rgba(255,150,70,.6)', 2.4);
+  c.restore();
+  spTeeth(c, spLip(0, 0, -100, 100), 7, 15, -1, [1, 5], heat * 0.5);
+  // the goatee of flame pouring down from its chin
+  for (const [x, a, L2, W2, sd] of [[-34, 0.32, 54, 38, 31], [34, -0.32, 54, 38, 32], [0, 0, 78, 50, 33]]) spFlame(c, x, 300, Math.PI / 2 + a, L2, W2, t, sd, { sway: 0.45, cols: [4, 3, 2, 1, 0] });
+  c.restore();
+}
+function spHead(c, m) {
+  const t = m.t, bt = m.bite, rage = mRage, op = clamp(m.open, 0, 1);
+  if (bt >= 0) c.scale(1 - 0.06 * smooth(0, 0.12, bt), 1);
+  const ct = mChewT(m), ce = mChewE(ct), J = mJ(m, 0.35);
+  const chomp = bt >= 0 ? smooth(0.34, 0.4, bt) * (1 - smooth(0.5, 0.6, bt)) : 0, gulp = bt >= 0 ? smooth(0.55, 0.65, bt) * (1 - smooth(0.9, 1.2, bt)) : 0;
+  const wide = bt >= 0 ? Math.max((m.wide || 0) * (1 - chomp) * (1 - ce * 0.8), gulp) : 0;
+  let jd = bt >= 0 ? 116 * J / 1.3 : 38 + 46 * op + 12 * rage, jx = 0;
+  if (ct >= 0) { jd = ce * 18 * Math.max(0, Math.sin(ct * 14)); jx = ce * 4 * Math.sin(ct * 7); }
+  if (bt < 0) jd += 3 * Math.sin(t * 4.4);
+  const flare = Math.max(rage, bt >= 0 ? 1 - smooth(0.6, 1.6, bt) : 0), heat = 0.6 + 0.25 * Math.sin(t * 3.1) + 0.4 * rage;
+  const puff = ce * (0.5 + 0.5 * Math.sin(ct * 14 + 1.5));   // its cheeks puff with each chomp
+  // 1. the fire flaring behind it
+  spBackFire(c, t, flare);
+  // 2. the furnace mouth: a white-hot vortex pulling sparks in, the pilot (on the bite), molten strands, the jaw
+  const U = spLip(-8, 0, -122, 122), Lj = spLip(jd, jx, -122, 122);
+  const cav = c2 => { c2.beginPath(); c2.moveTo(U[0][0], U[0][1]); U.forEach(([x, y]) => c2.lineTo(x, y)); c2.quadraticCurveTo(142 + jx * 0.5, 204 + jd * 0.5, Lj[Lj.length - 1][0], Lj[Lj.length - 1][1]); for (let i = Lj.length - 1; i >= 0; i--) c2.lineTo(Lj[i][0], Lj[i][1]); c2.quadraticCurveTo(-142 + jx * 0.5, 204 + jd * 0.5, U[0][0], U[0][1]); c2.closePath(); };
+  if (jd > 2) {
+    const cx = jx * 0.5, cy = 218 + jd * 0.55, spin = t * (2.2 + 2.5 * flare) + (bt >= 0 ? bt * 9 : 0), sq = 0.3 + jd * 0.004;
+    cav(c); c.fillStyle = blRG(c, cx, cy, 2, cx, cy, 116 + jd * 0.4, [[0, '#fffdf0'], [0.14, SP.fire[1]], [0.36, SP.fire[2]], [0.62, SP.fire[4]], [0.86, SP.fire[5]], [1, '#3e0418']]); c.fill();
+    c.save(); cav(c); c.clip();
+    // the vortex: spiral arms of deep fire winding into the white-hot throat, each with a bright leading edge
+    c.lineCap = 'round';
+    for (let k = 0; k < 5; k++) {
+      c.beginPath(); for (let i = 0; i <= 30; i++) { const u = i / 30, a = spin + k * TWO_PI / 5 + u * 3.6, r = 10 + u * 140; const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r * sq; i ? c.lineTo(px, py) : c.moveTo(px, py); }
+      c.strokeStyle = 'rgba(140,10,40,.5)'; c.lineWidth = 12; c.stroke(); c.save(); c.translate(0, -2); c.strokeStyle = 'rgba(255,200,90,.45)'; c.lineWidth = 3; c.stroke(); c.restore();
+    }
+    for (let k = 0; k < 16; k++) { const p = (t * (0.6 + 0.9 * flare) + hash2(k, 3)) % 1, a = hash2(k, 4) * TWO_PI - p * 3.4 + spin * 0.4, r = (1 - p) * 130; const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r * sq; blE(c, px, py, 2.2 + 2.4 * (1 - p), 2.2 + 2.4 * (1 - p), `rgba(255,250,210,${0.9 * Math.sin(p * Math.PI)})`); }
+    mAGlow(c, cx, cy, 34 + jd * 0.35, SP.hot, 0.55 + 0.2 * heat);
+    c.restore();
+    mInMouth(c, cav);
+    if (jd > 16 && jd < 96) for (const d of [-1, 1]) {   // a strand of molten rock stretching between the jaws at each corner
+      const x = d * 100 + jx * 0.5, y0 = spLipY(x) - 2, y1 = spLipY(x) + jd, th = Math.max(1.2, 5.5 - jd * 0.05), mid = (y0 + y1) / 2 + 4;
+      c.fillStyle = pkLG(c, 0, y0, 0, y1, [SP.fire[2], SP.fire[1], SP.fire[2]]);
+      c.beginPath(); c.moveTo(x - 7, y0); c.quadraticCurveTo(x - th + d * 5, mid, x - 6 + d * 3, y1); c.lineTo(x + 6 + d * 3, y1); c.quadraticCurveTo(x + th + d * 5, mid, x + 7, y0); c.closePath(); c.fill();
+      blE(c, x + d * 4, mid + 4, th * 0.9 + 1, th * 1.2 + 1.5, SP.fire[1]);
+    }
+  }
+  spJaw(c, jd, jx, t, heat, rage);
+  // 3. the head: molten rock, hottest round its eyes and grin, crimson toward its edges, turning away at its sides
+  const half = [[0, 66], [58, 64], [110, 72], [148, 98], [174, 138], [186 + 4 * puff, 182], [182 + 10 * puff, 224], [164 + 10 * puff, 256], [144, 274], [128, 262], [122, 238], [118, 214], [78, 214], [38, 220], [0, 223]];
+  const head = mBlob(half, true);
+  blSoft(c, 0, 270, 180, 30, [60, 6, 20], 0.45);
+  blShape(c, head, blRG(c, 0, 196, 10, 0, 176, 190, [[0, SP.skin[0]], [0.32, SP.skin[1]], [0.6, SP.skin[2]], [0.84, SP.skin[3]], [1, SP.skin[4]]]), { edge: 'rgba(100,8,36,.7)', ew: 6 });
+  c.save(); head(c); c.clip();
+  c.fillStyle = pkLG(c, -190, 0, 190, 0, ['rgba(90,6,30,.5)', 'rgba(90,6,30,0)', 'rgba(255,230,160,.1)', 'rgba(90,6,30,0)', 'rgba(90,6,30,.55)']); c.fillRect(-200, 60, 400, 220);
+  spLava(c, -170, 160, 170, 270, t, 11);
+  // its features sculpted in the molten rock: cheekbones lit, creases from the nose to the mouth's corners
+  for (const d of [-1, 1]) {
+    blE(c, d * 92, 198, 34, 12, 'rgba(255,230,150,.22)', d * 0.3);
+    c.lineCap = 'round'; blLine(c, [[d * 34, 196], [d * 66, 204], [d * 100, 214], [d * 122, 232]], 'rgba(120,10,30,.5)', 5); blLine(c, [[d * 36, 200], [d * 68, 208], [d * 100, 218]], 'rgba(255,220,150,.3)', 2);
+    const cp = mASm([[d * 122, 196], [d * 150, 184], [d * 178, 190], [d * 188 + d * 6 * puff, 214], [d * 178 + d * 8 * puff, 240], [d * 164, 232], [d * 156, 210], [d * 138, 200]]);
+    spCrust(c, cp, d * 130, 182, d * 170, 246, { ew: 2.5 });
+    spCrack(c, [[d * 140, 194], [d * 160, 198], [d * 172, 214], [d * 178, 228]], 2, 0.6 + 0.3 * Math.sin(t * 2 + d));
+    blSoft(c, d * 118, 214, 28, 18, [60, 6, 20], 0.55);   // soot in the mouth's corners
+  }
+  // the upper lip: a dark crust rim along the grin
+  c.lineCap = 'round'; blLine(c, spLip(-6, 0, -126, 126), SP.crust[3], 22); blLine(c, spLip(-9, 0, -122, 122), SP.crust[2], 13); blLine(c, spLip(-14, 0, -110, 110), 'rgba(214,160,150,.45)', 2);
+  c.restore();
+  const tl = 18 + 6 * op + 6 * (bt >= 0 ? 1 - ce : 0);
+  spTeeth(c, spLip(0, 0, -106, 106), 8, tl, 1, [1, 6], heat * 0.4);
+  // the nose: a ridge down from the brow to two flared slits, a curl of smoke from each
+  blE(c, -3, 186, 7, 18, 'rgba(255,240,190,.3)'); blSoft(c, 0, 208, 30, 10, [120, 10, 30], 0.45);
+  for (const d of [-1, 1]) { blE(c, d * 15, 204, 8.5, 4.2, '#5a0618', d * 0.5); blE(c, d * 15, 203, 5.5, 1.8, 'rgba(255,190,90,.6)', d * 0.5); }
+  mPuffs(c, -16, 198, t * 0.7, 0.3, [120, 70, 70], 2); mPuffs(c, 16, 198, t * 0.7 + 0.5, 0.3, [120, 70, 70], 2);
+  // 4. the eyes, the crust cranium and brow over them, the horns, the eruption from its crown
+  const shut = bt >= 0 ? 0.85 * chomp : spBlink(t);
+  for (const d of [-1, 1]) spEye(c, d, ct > 0 ? { look: Math.sin(ct * 8) * 0.8 } : m, shut, wide, rage + chomp);
+  spCranium(c, head, rage + chomp, wide, t);
+  for (const d of [-1, 1]) blSoft(c, d * 64, 156, 50, 18, SP.glow, 0.18 + 0.2 * mFlare, true);   // the eyes' light on the brow's underside
+  for (const d of [-1, 1]) spHorn(c, d, t, rage);
+  spEruption(c, t, flare);
+  // sparks spat from the grin as it chomps; the burp: a smoke ring
+  if (bt > 0.36) mCrumbs(c, jx, 264 + jd, bt - 0.36, 0, 6);
+  if (ct > 0) for (let k = 0; k < 10; k++) { const p = (ct * 1.8 + k / 10) % 1, d = k % 2 ? 1 : -1, x = d * (112 + p * 70), y = 226 + p * p * 80 - p * 40; blE(c, x, y, 3 * (1 - p) + 1, 3 * (1 - p) + 1, `rgba(255,${200 + 50 * (1 - p) | 0},120,${(1 - p) * ce})`); }
+  if (bt > 1.22) { const p = smooth(1.22, 2.0, bt); if (p < 1) { c.strokeStyle = `rgba(110,70,80,${0.6 * (1 - p)})`; c.lineWidth = 10 * (1 - p) + 2; c.beginPath(); c.ellipse(0, 238 - p * 120, 20 + p * 70, 8 + p * 26, 0, 0, TWO_PI); c.stroke(); } }
+}
+// a band along a curve (tapering from w0 to w1, rounded ends), as a path function
+function spBand(P, w0, w1) {
+  const A = [], B = [], n = P.length - 1;
+  for (let i = 0; i <= n; i++) { const a = P[Math.max(0, i - 1)], b = P[Math.min(n, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1, w = lerp(w0, w1, i / n) / 2; A.push([P[i][0] - ty / l * w, P[i][1] + tx / l * w]); B.push([P[i][0] + ty / l * w, P[i][1] - tx / l * w]); }
+  return c2 => { c2.beginPath(); c2.moveTo(A[0][0], A[0][1]); for (let i = 1; i <= n; i++) c2.lineTo(A[i][0], A[i][1]); const e = P[n]; c2.quadraticCurveTo(e[0] + (P[n][0] - P[n - 1][0]) * 1.2, e[1] + (P[n][1] - P[n - 1][1]) * 1.2, B[n][0], B[n][1]); for (let i = n - 1; i >= 0; i--) c2.lineTo(B[i][0], B[i][1]); c2.closePath(); };
+}
+// ---- the body: crust pauldrons, a translucent comet tail of fire, a cage of crust ribs round a magma heart ----
+function spBody(c, m) {
+  const t = m.t, bt = m.bite;
+  if (bt >= 0) c.scale(1 - 0.1 * smooth(0, 0.12, bt), 1);   // (it draws in tight as it lunges, so it stays on screen in the bite's zoom)
+  const gy = bt >= 0.55 ? lerp(300, 430, smooth(0.55, 1.05, bt)) : null, roar = bt >= 0 ? smooth(1.0, 1.15, bt) * (1 - smooth(2.2, 3.2, bt)) : 0;
+  const cx = y => Math.sin(y * 0.011 - t * 1.9) * 26 * smooth(300, 760, y), half = y => 210 * Math.pow(Math.max(0, 1 - (y - 250) / 610), 0.9) + 14;
+  // its flanks lick out into tongues of flame all down the tail, streaming down and out (behind the tail's body)
+  for (let i = 0; i < 12; i++) {
+    const d = i % 2 ? 1 : -1, k = i >> 1, y = 300 + k * 78 + 16 * hash2(i, 61), w = half(y) * 0.8, L = (104 - k * 12) * (0.85 + 0.3 * hash2(i, 62));
+    spFlame(c, cx(y) + d * w, y, Math.PI / 2 - d * (0.5 - k * 0.04), L, 64 - k * 6, t, 70 + i * 1.3, { sway: 0.45, curl: d * 0.3, cols: [5, 4, 3, 2] });
+  }
+  // the comet tail: layered fire from the shoulders down, swaying, its edge rippling, fading out at its end
+  const tail = (k, col, a) => {
+    const A = [], B = [];
+    for (let y = 250; y <= 860; y += 18) { const w = half(y) * k * (1 + 0.07 * Math.sin(y * 0.06 + t * 7) + 0.04 * Math.sin(y * 0.15 - t * 11)); A.push([cx(y) + w, y]); B.push([cx(y) - w, y]); }
+    const P = [...A, [cx(900), 900], ...B.reverse()];
+    c.save(); c.globalAlpha *= a; mASm(P)(c); c.fillStyle = col; c.fill(); c.restore();
+  };
+  tail(1.0, pkLG(c, 0, 250, 0, 860, [SP.fire[5], SP.fire[5], 'rgba(116,10,54,0)']), 0.9);
+  tail(0.76, pkLG(c, 0, 250, 0, 800, [SP.fire[4], SP.fire[4], 'rgba(226,50,30,0)']), 0.85);
+  tail(0.5, pkLG(c, 0, 250, 0, 740, [SP.fire[2], SP.fire[3], 'rgba(255,106,30,0)']), 0.8);
+  tail(0.26, pkLG(c, 0, 250, 0, 640, [SP.fire[0], SP.fire[1], 'rgba(255,224,122,0)']), 0.55 + 0.35 * roar);
+  // embers streaming down the tail
+  for (let i = 0; i < 18; i++) { const p = (t * 0.45 + hash2(i, 81)) % 1, y = 280 + p * 560, x = cx(y) + (hash2(i, 82) - 0.5) * 300 * (1 - p * 0.6); blE(c, x, y, 2 + 2 * hash2(i, 83), 2 + 2 * hash2(i, 83), `rgba(255,${180 + 60 * hash2(i, 84) | 0},100,${0.8 * (1 - p)})`); }
+  // the magma heart in its chest, beating; the pilot ends up spinning inside it
+  const hx = cx(440), hy = 440, beat = Math.pow(Math.max(0, Math.sin(t * 3.4)), 6), hr = 46 + 5 * beat + 16 * roar;
+  c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, hx, hy, hr * 3, hr * 2.6, SP.glow, 0.35 + 0.2 * beat + 0.5 * roar); c.restore();
+  blShape(c, mAEl(hx, hy, hr, hr * 0.94), blRG(c, hx - hr * 0.2, hy - hr * 0.25, 2, hx, hy, hr, [[0, '#fffbe8'], [0.35, SP.fire[1]], [0.7, SP.fire[2]], [1, SP.fire[4]]]), { edge: rgbaA(hexRGB(SP.fire[4]), 0.7), ew: 4 });
+  c.save(); c.beginPath(); c.ellipse(hx, hy, hr - 3, hr * 0.94 - 3, 0, 0, TWO_PI); c.clip();
+  for (let k = 0; k < 3; k++) { c.strokeStyle = `rgba(200,50,20,${0.3 - k * 0.07})`; c.lineWidth = 4; c.beginPath(); c.ellipse(hx + Math.sin(t * 2 + k) * 5, hy + 3, hr * (0.35 + k * 0.22), hr * (0.28 + k * 0.2), 0, 0, TWO_PI); c.stroke(); }
+  if (bt >= 1.0) mInBelly(c, hx, hy + 4, 0.42, smooth(1.0, 1.2, bt), t * 3);
+  c.restore();
+  // the swallowed lump: a white-hot glow sliding down its throat into the heart
+  if (gy != null && gy < 426) { c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, cx(gy), gy, 60, 50, SP.hot, 0.7); c.restore(); blShape(c, mAEl(cx(gy), gy, 30, 26), blRG(c, cx(gy) - 8, gy - 8, 2, cx(gy), gy, 32, [[0, '#fff6d0'], [0.6, SP.fire[1]], [1, SP.fire[3]]])); }
+  // a broken ring of crust shards round the heart, as if its core has burst out through its chest: each shard lit on
+  // top, glowing along its inner edge, nudged outward with each beat
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * TWO_PI + 0.2, r0 = hr + 6 + 3 * beat + 8 * roar, len = 30 + 10 * hash2(k, 91), wd = 0.32 + 0.08 * hash2(k, 92);
+    const p = (rr, da) => [hx + Math.cos(a + da) * rr, hy + Math.sin(a + da) * rr * 0.94];
+    const sh = mASm([p(r0, -wd), p(r0 + len * 0.55, -wd * 0.75), p(r0 + len, -wd * 0.15), p(r0 + len * 0.9, wd * 0.35), p(r0 + len * 0.45, wd * 0.8), p(r0, wd)]);
+    blShape(c, sh, pkLG(c, hx, hy - r0 - len, hx, hy + r0 + len, [SP.crust[0], SP.crust[1], SP.crust[2], SP.crust[3]]), { edge: SP.crust[4], ew: 2, rim: 'rgba(230,184,172,.45)', rw: 2.5 });
+    c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = rgbaA(SP.ember, 0.7); c.lineWidth = 3; c.beginPath(); const q0 = p(r0 + 1.5, -wd * 0.8), q1 = p(r0 + 1.5, wd * 0.8); c.moveTo(q0[0], q0[1]); c.quadraticCurveTo(hx + Math.cos(a) * (r0 - 2), hy + Math.sin(a) * (r0 - 2) * 0.94, q1[0], q1[1]); c.stroke(); c.restore();
+  }
+  // the shoulders: two great crust pauldrons the arms grow from, ridged, cracked with light
+  for (const d of [-1, 1]) {
+    blSoft(c, d * 180, 310, 80, 30, [40, 4, 12], 0.5);
+    const pd = mASm([[d * 112, 268], [d * 170, 232], [d * 226, 240], [d * 244, 282], [d * 226, 320], [d * 176, 330], [d * 128, 306]]);
+    spCrust(c, pd, d * 140, 230, d * 220, 330, { ew: 3.5 });
+    c.save(); pd(c); c.clip(); for (let k = 0; k < 3; k++) { const y = 262 + k * 20; c.strokeStyle = 'rgba(20,6,12,.5)'; c.lineWidth = 3; c.beginPath(); c.moveTo(d * 120, y + 10); c.quadraticCurveTo(d * 190, y - 14, d * 250, y + 10); c.stroke(); } c.restore();
+    spCrack(c, [[d * 150, 262], [d * 186, 272], [d * 206, 262], [d * 232, 284]], 2.4, 0.6 + 0.3 * Math.sin(t * 2.2 + d) + 0.5 * roar);
+  }
+}
+// ---- the arms: molten rock armoured with plates of cooling crust ----
+// Drawn from the rig's own capsules (the hitbox overlay is exact): the whole outline in its deepest crimson, then heat
+// toward the core (a molten, glowing arm), dark crust bands that crack open with light, little flames racing along it;
+// the hand: a molten palm, three thick fingers curled over the wall's edge ending in crust talons, a stubby thumb. On the
+// wind-up it heats white from the shoulder to the claws, the crust bands split wide and sparks spit off the hand.
+function spLimb(c, rig, P, layer, t) {
+  if (layer !== 'mid' && layer !== 'front') return;
+  const d = rig.d, ch = layer === 'mid' ? rig.up : armChain(rig), w = rig.wind, pulse = w > 0 ? 0.6 + 0.4 * Math.sin(t * (18 + 26 * w)) : 0, hot = Math.min(1, w * pulse * 1.2);
+  c.save(); c.globalCompositeOperation = 'lighter'; capStroke(c, ch, rgbaA(SP.ember, 0.1 + 0.3 * hot), r => 2 * r + 8); c.restore();   // the heat haze round it (light only)
+  blLimbTones(c, [ch], d, [SP.fire[5], SP.fire[4], SP.fire[3], SP.fire[2], SP.fire[0]]);
+  c.save(); cbCapPath(c, [ch], [], 1.4); c.clip();
+  // the molten underside: bright flowing magma, white-hot as it winds up
+  grabAlong(c, ch, d, -0.45, rgbaA(hexRGB(SP.fire[1]), 0.6 + 0.3 * hot), Math.max(3, ch[ch.length >> 1][2] * 0.5));
+  c.save(); c.globalCompositeOperation = 'lighter';
+  chainEvery(ch, 10).forEach(([x, y, r, a], i) => { const f = (t * 1.6 + i * 0.31) % 1; blE(c, x + Math.sin(t * 5 + i) * r * 0.2, y + f * 6, r * 0.4, r * 0.26, `rgba(255,236,170,${0.3 * Math.sin(f * Math.PI) + 0.35 * hot})`, a); });
+  c.restore();
+  // a shell of cooling crust along its lit side (the magma stays bright underneath), broken into segments by glowing
+  // seams across it and split along its length, lit on top
+  const sh = blLitChain(ch, d, 0.34);
+  capStroke(c, sh, SP.crust[4], r => 2 * r * 0.66);
+  capStroke(c, blLitChain(ch, d, 0.38), SP.crust[2], r => 2 * r * 0.56);
+  capStroke(c, blLitChain(ch, d, 0.5), SP.crust[1], r => 2 * r * 0.3);
+  capStroke(c, blLitChain(ch, d, 0.6), 'rgba(230,184,172,.45)', r => Math.max(1, 2 * r * 0.08));
+  chainEvery(ch, 21).forEach(([x, y, r, a], i) => {
+    if (i < (layer === 'mid' ? 1 : 0)) return;
+    let bj = 0, bd = 1e9; ch.forEach((p, j) => { const dd = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (dd < bd) { bd = dd; bj = j; } });
+    const [nx, ny] = litSide(ch, d)[bj], ux = Math.cos(a), uy = Math.sin(a), j = (hash2(i, 31) - 0.5) * 9, k2 = (hash2(i, 32) - 0.5) * 7, P2 = (u, v) => [x + nx * r * u + ux * v, y + ny * r * u + uy * v];
+    spCrack(c, [P2(0.04, j), P2(0.3, k2 - 2), P2(0.52, j * 0.4 + 3), P2(0.74, -j)], 1.3 + 1.6 * hot, 0.65 + 0.35 * hot + 0.15 * Math.sin(t * 3 + i));
+    spCrack(c, [P2(0.3, k2 - 2), P2(0.4, k2 + 8 * (i % 2 ? 1 : -1))], 1 + hot, 0.5 + 0.4 * hot);
+  });
+  if (layer === 'mid') limbRootShadeSpirit(c, rig.up);
+  c.restore();
+  if (layer === 'front') spHand(c, rig, t, hot);
+}
+function limbRootShadeSpirit(c, up) { const n = Math.max(2, Math.round(up.length * 0.3)); for (let i = 1; i < n; i++) capStroke(c, [up[i - 1], up[i]], `rgba(50,4,16,${(0.5 * (1 - i / n)).toFixed(3)})`, r => 2 * r - 3); }
+function spHand(c, rig, t, hot) {
+  const H = rig.hand, d = rig.d, soft = H.filter(p => p[5] !== 'talon');
+  blLimbTones(c, soft.map(blPart), d, [SP.fire[5], SP.fire[4], SP.fire[3], SP.fire[2], SP.fire[0]]);
+  c.save(); cbCapPath(c, [], soft, 1.4); c.clip();
+  const pm = H[0]; c.save(); c.globalCompositeOperation = 'lighter'; blSoft(c, pm[0], (pm[1] + pm[3]) / 2, pm[4] * 1.4, pm[4] * 1.2, SP.hot, 0.35 + 0.5 * hot); c.restore();
+  for (const p of soft) if (p[5] === 'fing' && p[0] !== p[2] && Math.abs(p[1] - p[3]) < 6) { const [x0, y0, x1, y1, r] = p; blShape(c, mAEl((x0 + x1) / 2, (y0 + y1) / 2 - r * 0.25, r * 0.8, r * 0.55), pkLG(c, 0, y0 - r, 0, y0 + r, [SP.crust[0], SP.crust[2], SP.crust[3]]), { under: rgbaA(SP.ember, 0.7), uw: 1.5 }); }
+  for (const p of soft) if (p[5] === 'fing' || p[5] === 'thumb') { const [x0, y0, x1, y1, r] = p; spCrack(c, [[lerp(x0, x1, 0.5) - r * 0.4, lerp(y0, y1, 0.5) - r * 0.3], [lerp(x0, x1, 0.6), lerp(y0, y1, 0.6) + r * 0.2]], 1.2, 0.6 + 0.4 * hot); }
+  c.restore();
+  // the talons: cooled crust claws, dark and hooked, an ember glowing at each tip (kept inside their capsules)
+  for (const [x0, y0, x1, y1, r, role] of H) {
+    if (role !== 'talon') continue;
+    const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, w = r - 0.6;
+    const pts = [[x0 - uy * w, y0 + ux * w], [x0 - ux * w * 0.6, y0 - uy * w * 0.6], [x0 + uy * w, y0 - ux * w], [x1 + ux * (r - 0.8), y1 + uy * (r - 0.8)]];
+    blShape(c, mAPoly(pts), pkLG(c, x0, y0, x1, y1, [SP.crust[2], SP.crust[3], SP.crust[1]]), { edge: SP.crust[4], ew: 1 });
+    blE(c, x1, y1, r * 0.45, r * 0.45, rgbaA(SP.ember, 0.6 + 0.4 * hot));
+  }
+  // drips of magma falling from the hand, sparks spitting off it as it winds up, a splash where it slams
+  const gs = blGrab(d);
+  for (let k = 0; k < 2; k++) { const p = (t * 0.9 + k * 0.5) % 1, x = pm[0] + d * (6 + k * 6), y = pm[1] + 10 + p * p * 60; blE(c, x, y, 3.2 * (1 - p * 0.5), 4.4 * (1 - p * 0.3), `rgba(255,${150 + 80 * (1 - p) | 0},60,${0.85 * (1 - p)})`); }
+  if (hot > 0) for (let k = 0; k < 6; k++) { const p = (t * 3 + k / 6) % 1, a = -Math.PI / 2 + (hash2(k, 9) - 0.5) * 2.4; blE(c, pm[0] + Math.cos(a) * p * 30, pm[1] - 14 + Math.sin(a) * p * 30, 2, 2, `rgba(255,240,180,${(1 - p) * hot})`); }
+  if (gs && gs.slam >= 0) { const p = gs.slam; for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * 0.4, rr = 8 + 30 * p; blE(c, pm[0] + d * 14 + Math.cos(a) * rr * 0.5, pm[1] - 30 + Math.sin(a) * rr, 3.5 * (1 - p) + 1, 3.5 * (1 - p) + 1, `rgba(255,${190 + 50 * hash2(k, 2) | 0},90,${1 - p})`); } }
+}
 const MONSTERS = [
   { id: 'worm', name: 'Scissorjaw', label: 'scissorjaw', haze: [255, 120, 90], v3: true, hazeK: 0.45, ownHands: true, mouth: [0, 210, 100, 88], biteDrop: 0.8, halfW: 262,
     // its ringed body: armoured segments shrinking away down the shaft in a slow S, a glass bristle tuft on each side
@@ -19512,124 +20452,20 @@ const MONSTERS = [
       for (const [x, y, k] of [[-238, 100, 1], [244, 96, 2], [-60, 200, 3], [150, 106, 4]]) avDrip(c, x, y, t, k);
     },
   },
-  { id: 'tiki', name: 'Tiki titan', label: 'tiki titan', haze: [60, 220, 200], v3: true, mouth: [0, 200, 130, 60],
-    body(c, m) {
-      // a totem stack: two more carved faces under the head, each with its own grimace, the pole fading below
-      const T = m.t, wood = ['#ffc880', '#b8742e', '#4a2410'], gy = mGulpY(m, 340, 820);
-      const face = (y0, w, h, k) => {
-        const blk = mASm([[-w, y0 + 10], [-w + 14, y0], [w - 14, y0], [w, y0 + 10], [w + 6, y0 + h * 0.5], [w, y0 + h - 10], [w - 14, y0 + h], [-w + 14, y0 + h], [-w, y0 + h - 10], [-w - 6, y0 + h * 0.5]]);
-        mAShape(c, blk, pkLG(c, -w, 0, w, 0, ['#8a4a1a', '#d08a44', '#b8742e', '#6a3410']), { rim: 'rgba(255,230,180,.6)', rw: 5, lw: 4.5 });
-        c.save(); blk(c); c.clip(); c.strokeStyle = 'rgba(70,30,6,.35)'; c.lineWidth = 2; for (let j = 0; j < 6; j++) { const x = -w + 20 + j * (w * 2 - 40) / 5; c.beginPath(); c.moveTo(x, y0); c.quadraticCurveTo(x + 8, y0 + h * 0.5, x - 4, y0 + h); c.stroke(); } c.restore();
-        pkRect(c, -w + 10, y0 + h * 0.18, w * 2 - 20, 14, 5, '#5a2c0c', 3);
-        for (const d of [-1, 1]) { pkE(c, d * w * 0.42, y0 + h * 0.42, w * 0.2, w * 0.17, '#fff6dc', 3.4); pkE(c, d * w * 0.42, y0 + h * 0.42, w * 0.08, w * 0.08, k ? '#2ae0d0' : '#ff7a2a', 0); }
-        pkPath(c, [[-w * 0.16, y0 + h * 0.4], [0, y0 + h * 0.62], [w * 0.16, y0 + h * 0.4]], '#a05a20', 3);
-        const my = y0 + h * 0.74, mw = w * (k ? 0.55 : 0.4), mh = k ? 14 : 22;
-        pkRect(c, -mw, my - mh / 2, mw * 2, mh, 6, '#2a0e04', 3);
-        for (let j = 0; j < 5; j++) pkRect(c, -mw + 4 + j * (mw * 2 - 8) / 5, my - mh / 2 + 1, (mw * 2 - 8) / 5 - 3, mh * 0.45, 2, '#fff6dc', 1.6);
-        c.strokeStyle = '#2ae0d0'; c.lineWidth = 4; for (const d of [-1, 1]) { c.beginPath(); c.moveTo(d * w * 0.75, y0 + h * 0.3); c.lineTo(d * w * 0.65, y0 + h * 0.5); c.lineTo(d * w * 0.78, y0 + h * 0.7); c.stroke(); }
-      };
-      mAShape(c, mASm(mAMirror([[96, 300], [104, 900], [70, 1300], [30, 1500]])), pkLG(c, -100, 0, 100, 0, ['#6a3410', '#b8742e', '#4a2410']), { lw: 4 });
-      face(560, 128, 180, 0);
-      face(330, 150, 210, 1);
-      if (gy != null) { mAGlow(c, 0, gy, 110, [60, 230, 210], 0.55); }
-    },
-    head(c, m) {
-      // a carved totem head: a flat-topped block with flared ears, a carved brow bar over round glaring eyes, a broad
-      // nose and a huge box of a mouth with square teeth and a jutting tongue. On the bite the whole jaw block drops;
-      // then it bangs shut again and again, chips of wood flying
-      const T = m.t, ct = mChewT(m), ce = mChewE(ct);
-      let J = mJ(m, 0.45); if (ct >= 0) J = 0.34 * ce * Math.abs(Math.sin(ct * 10));
-      const D = J * 82, glow = 0.6 + 0.4 * Math.sin(T * 2.5) + 0.4 * (m.rage || 0);
-      // ear flares carved with spirals
-      for (const d of [-1, 1]) {
-        mAShape(c, mASm([[d * 160, 90], [d * 222, 104], [d * 236, 160], [d * 214, 230], [d * 168, 236]]), pkLG(c, d * 160, 0, d * 236, 0, ['#c47a36', '#7a3e14']), { rim: 'rgba(255,220,170,.5)', rw: 4, lw: 4.5 });
-        c.strokeStyle = '#4a2410'; c.lineWidth = 3.5; c.beginPath(); for (let k = 0; k < 30; k++) { const a = k * 0.42, r = 22 - k * 0.65; c.lineTo(d * 200 + Math.cos(a) * r * d, 164 + Math.sin(a) * r); } c.stroke();
-        c.strokeStyle = '#2ae0d0'; c.lineWidth = 3; c.beginPath(); c.moveTo(d * 214, 112); c.lineTo(d * 228, 150); c.stroke();
-      }
-      // the jaw block (drops on its own) and the mouth's dark box
-      const jt = 176 + D, jaw = mASm([[-150, jt - 8], [150, jt - 8], [158, jt + 40], [150, jt + 92], [120, jt + 104], [-120, jt + 104], [-150, jt + 92], [-158, jt + 40]]);
-      mAShape(c, jaw, pkLG(c, -150, 0, 150, 0, ['#8a4a1a', '#d89050', '#b8742e', '#6a3410']), { rim: 'rgba(255,230,180,.6)', rw: 5, lw: 4.5 });
-      c.save(); jaw(c); c.clip(); c.strokeStyle = 'rgba(70,30,6,.35)'; c.lineWidth = 2; for (let j = 0; j < 7; j++) { const x = -130 + j * 43; c.beginPath(); c.moveTo(x, jt); c.quadraticCurveTo(x + 8, jt + 50, x - 4, jt + 110); c.stroke(); }
-      c.strokeStyle = '#2ae0d0'; c.lineWidth = 4; c.beginPath(); for (let j = 0; j <= 10; j++) c.lineTo(-110 + j * 22, jt + 74 + (j % 2 ? -8 : 8)); c.stroke(); c.restore();
-      const upper = [[-118, 168], [-60, 164], [0, 162], [60, 164], [118, 168]], lower = [[-118, 168], [-112, jt + 4], [-56, jt + 8], [0, jt + 8], [56, jt + 8], [112, jt + 4], [118, 168]];
-      const sq = (n, y, h, up) => { for (let j = 0; j < n; j++) { const w = 220 / n, x = -110 + j * w; pkRect(c, x + 2, up ? y : y - h, w - 4, h, 3, pkLG(c, 0, up ? y : y - h, 0, up ? y + h : y, ['#fffaea', '#e8d2a8']), 2); } };
-      mMouth(c, upper, lower, { throat: ['#ff8a4a', '#6a1a08', '#160402'], glow: [60, 230, 210], deep: true, lw: 4.5,
-        inner: (c2, mo) => { if (J > 0.2) { const ty = 168 + D * 0.65; mAShape(c2, mASm([[-36, 170], [36, 170], [40, ty + 10], [0, ty + 34], [-40, ty + 10]]), pkLG(c2, 0, 170, 0, ty + 34, ['#ff8aa0', '#d03a5a']), { lw: 3 }); } } });
-      if (J > 0.05) { c.save(); c.beginPath(); c.rect(-130, 150, 260, D + 60); c.clip(); sq(6, jt + 6, 18 + 6 * clamp(J, 0, 1), false); c.restore(); }
-      // the head block: flat top, carved brow bar, round eyes, a broad nose
-      const head = mASm([[-176, 22], [-160, 6], [160, 6], [176, 22], [184, 100], [176, 170], [118, 170], [60, 166], [0, 164], [-60, 166], [-118, 170], [-176, 170], [-184, 100]]);
-      mAShape(c, head, pkLG(c, -180, 0, 180, 0, ['#8a4a1a', '#e09a56', '#c47a36', '#6a3410']), { rim: 'rgba(255,235,190,.75)', rw: 7, under: 'rgba(60,230,210,.3)', uw: 10, lw: 5 });
-      c.save(); head(c); c.clip();
-      c.strokeStyle = 'rgba(70,30,6,.35)'; c.lineWidth = 2.2; for (let j = 0; j < 8; j++) { const x = -160 + j * 46; c.beginPath(); c.moveTo(x, 0); c.quadraticCurveTo(x + 10, 80, x - 6, 170); c.stroke(); }
-      pkRect(c, -190, 10, 380, 24, 4, '#5a2c0c', 0);   // the carved crown band, notched, painted
-      c.strokeStyle = '#2ae0d0'; c.lineWidth = 4; c.beginPath(); for (let j = 0; j <= 18; j++) c.lineTo(-180 + j * 20, 22 + (j % 2 ? -7 : 7)); c.stroke();
-      for (const d of [-1, 1]) { c.strokeStyle = '#2ae0d0'; c.lineWidth = 5; c.beginPath(); c.moveTo(d * 158, 104); c.lineTo(d * 140, 128); c.lineTo(d * 160, 150); c.stroke(); }
-      c.restore();
-      mAShape(c, mASm([[-150, 52], [-20, 50], [0, 62], [20, 50], [150, 52], [154, 70], [20, 70], [0, 82], [-20, 70], [-154, 70]]), pkLG(c, 0, 50, 0, 82, ['#7a3e14', '#4a2410']), { rim: 'rgba(255,220,170,.5)', rw: 3, lw: 3.6 });   // the brow bar
-      for (const d of [-1, 1]) {
-        pkE(c, d * 82, 104, 46, 34, '#5a2c0c', 3.6);
-        mEyeC(c, d * 82, 104, 38, 27, m.look, { sc: '#fff6dc', iris: ['#c8fff6', '#2ae0d0', '#0a6a60'], ir: 0.62, pupil: 'round', lid: '#a05a20', squint: 0.3, slant: 0.9, glow: [60, 230, 210], socket: false });
-      }
-      mAShape(c, mASm([[-14, 76], [14, 76], [36, 132], [44, 150], [0, 158], [-44, 150], [-36, 132]]), pkLG(c, 0, 76, 0, 158, ['#e09a56', '#8a4a1a']), { rim: 'rgba(255,230,180,.6)', rw: 3, lw: 3.8 });
-      for (const d of [-1, 1]) pkE(c, d * 22, 146, 9, 6, '#3a1806', 0);
-      sq(6, 168, 20 + 4 * clamp(J, 0, 1), true);
-      if (glow > 0.8) mAGlow(c, 0, 104, 160, [60, 230, 210], 0.12 * glow);
-      // wood chips flying as it chomps
-      if (ct >= 0) for (let k = 0; k < 6; k++) { const p = (ct * 1.4 + k / 6) % 1, d = k % 2 ? 1 : -1, x = d * (120 + p * 60), y = 190 - 40 * Math.sin(p * Math.PI) + p * 60; c.save(); c.globalAlpha = (1 - p) * ce; c.translate(x, y); c.rotate(k + p * 8); pkRect(c, -7, -3, 14, 6, 2, '#c47a36', 1.6); c.restore(); }
-    } },
-
-  { id: 'spirit', name: 'Magma spirit', label: 'magma spirit', haze: [255, 150, 50], v3: true, mouth: [0, 196, 80, 46], dy: 5,
-    body(c, m) {
-      // a column of living fire tapering down into embers, sparks streaming up it; it flares as it burns its meal
-      const T = m.t, ct = mChewT(m), ce = mChewE(ct);
-      const col = (y0, y1, w0, w1, cols, k) => { const pts = []; for (let i = 0; i <= 20; i++) { const u = i / 20, y = lerp(y0, y1, u), w = lerp(w0, w1, u) * (1 + 0.08 * Math.sin(y * 0.03 - T * 6 + k)); pts.push([w + Math.sin(y * 0.012 + T * 2 + k) * 14, y]); } return mASm([...pts, ...pts.slice().reverse().map(([x, y]) => [-x + Math.sin(y * 0.013 - T * 2.3 + k) * 20, y])]); };
-      mAShape(c, col(200, 1100, 200, 40, 0, 0), pkLG(c, 0, 200, 0, 1100, ['#ff8a1a', '#d0300a', '#5a0a04']), { rim: 'rgba(255,230,150,.7)', rw: 7, lw: 4.5, ink: '#5a0e04' });
-      c.save(); c.globalCompositeOperation = 'lighter';
-      mAShape(c, col(220, 900, 120, 20, 0, 2), pkLG(c, 0, 220, 0, 900, ['rgba(255,240,160,.8)', 'rgba(255,160,40,.0)']), { lw: 0 });
-      for (let k = 0; k < 18; k++) { const p = (T * 0.5 + hash2(k, 91)) % 1, x = (hash2(k, 92) - 0.5) * 260 * (1 - p * 0.5), y = 1000 - p * 760; c.fillStyle = `rgba(255,${200 - 80 * p | 0},80,${0.9 * (1 - p)})`; c.beginPath(); c.arc(x, y, 2 + hash2(k, 93) * 3, 0, TWO_PI); c.fill(); }
-      mAGlow(c, 0, 360, 200, [255, 170, 60], 0.25 + 0.5 * ce);
-      c.restore();
-    },
-    head(c, m) {
-      // a living flame with a mask of black obsidian for a face: glowing eye holes under carved brows, and a mouth slit
-      // that cracks open into a roaring furnace. On the bite the mask's jaw splits wide; then the whole spirit flares,
-      // sparks bursting, cracks blazing across the mask
-      const T = m.t, ct = mChewT(m), ce = mChewE(ct), flare = ce * (0.6 + 0.4 * Math.sin(ct * 14));
-      let J = mJ(m, 0.4); if (ct >= 0) J = 0.05;
-      const D = J * 78;
-      // the flame: a crown of licking tongues round the mask (tips always under the catch line)
-      const tongues = [];
-      for (let k = 0; k <= 16; k++) { const u = k / 16, a = Math.PI * (1 + u), x = Math.cos(a) * 222, base = 180 + Math.sin(a) * 150, lick = 40 + 34 * Math.sin(T * 9 + k * 1.7) ** 2 + 20 * flare; tongues.push([x, Math.max(6, base - lick * (k % 2 ? 0.15 : 1))]); }
-      const fl = mASm([...tongues, [210, 260], [140, 310], [0, 330], [-140, 310], [-210, 260]]);
-      mAShape(c, fl, pkRG(c, 0, 170, 250, ['#fffbe0', '#ffd040', '#ff7a1a', '#c0280a']), { rim: 'rgba(255,250,220,.9)', rw: 6, lw: 4.5 });
-      c.save(); c.globalCompositeOperation = 'lighter'; mAGlow(c, 0, 160, 240, [255, 190, 80], 0.35 + 0.4 * flare);
-      for (let k = 0; k < 7; k++) { const x = -150 + k * 50, f = (T * 1.6 + k * 0.31) % 1; c.fillStyle = `rgba(255,250,210,${0.5 * Math.sin(f * Math.PI)})`; c.beginPath(); c.ellipse(x, 120 - f * 80, 12, 24, 0, 0, TWO_PI); c.fill(); }
-      c.restore();
-      // the mask's jaw: a slab of obsidian under the mouth slit, dropping open
-      const mask = ['#5a4a46', '#2a1a16', '#0e0806'];
-      const upY = x => 186 + 6 * (x / 92) ** 2, lowY = x => upY(x) + 4 + D * (1 - 0.5 * (x / 92) ** 2);
-      const xs = [-92, -60, -30, 0, 30, 60, 92], upper = xs.map(x => [x, upY(x)]), lower = xs.map(x => [x, Math.abs(x) >= 92 ? upY(x) : lowY(x)]);
-      const jb = lowY(0) + 44;
-      const jaw = mASm([...lower.slice(1, 6), [104, 190], [126, 218 + D * 0.5], [80, jb - 8], [0, jb], [-80, jb - 8], [-126, 218 + D * 0.5], [-104, 190]]);
-      mAShape(c, jaw, pkLG(c, 0, 190, 0, jb, mask), { rim: 'rgba(255,190,120,.6)', rw: 4, lw: 4.5 });
-      mMouth(c, upper, lower, { throat: ['#ffffff', '#fff0a0', '#ff8a1a', '#c0280a'], glow: [255, 230, 120], deep: false,
-        up: { n: 7, L: 12, col: '#2a1a16', grad: ['#4a3a36', '#120806'], prof: (u, k) => (k % 2 ? 1.4 : 0.8), lw: 2, gap: 0.1 },
-        low: { n: 6, L: 11, col: '#2a1a16', grad: ['#4a3a36', '#120806'], prof: (u, k) => (k % 2 ? 0.8 : 1.4), lw: 2, gap: 0.1 } });
-      // the mask: a dark obsidian face with carved brows and glowing eye holes
-      const face = mASm([[0, 56], [80, 62], [140, 100], [150, 160], [104, 190], [60, upY(60)], [0, upY(0)], [-60, upY(-60)], [-104, 190], [-150, 160], [-140, 100], [-80, 62]]);
-      mAShape(c, face, pkLG(c, 0, 56, 0, 196, ['#6a5a56', '#2e1e1a', '#140a08']), { rim: 'rgba(255,200,130,.7)', rw: 5, lw: 4.5 });
-      c.save(); face(c); c.clip();
-      c.fillStyle = 'rgba(255,255,255,.16)'; c.beginPath(); c.moveTo(-120, 90); c.lineTo(-40, 66); c.lineTo(-70, 110); c.closePath(); c.fill();
-      mCracks(c, [[[-120, 110], [-96, 140], [-110, 170]], [[110, 100], [90, 130], [116, 160]], [[0, 66], [8, 90]]], [255, 170, 50], 2.6 + 2 * flare);
-      c.restore();
-      for (const d of [-1, 1]) {
-        mEyeC(c, d * 62, 118, 30, 20, m.look, { sc: '#fffbe0', iris: ['#ffffff', '#ffe060', '#ff8a1a'], ir: 0.6, pupil: 'none', lid: '#2a1a16', squint: 0.25, slant: 0.9, glow: [255, 210, 90], socket: false, rot: d * 0.12 });
-        mBrowC(c, d * 64, 88, 84, { col: '#120806', th: 16, ang: 0.45, arch: 0.15, rim: 'rgba(255,190,120,.5)' });
-      }
-      // sparks bursting as it burns the pilot, and rings of smoke
-      if (ct >= 0) { c.save(); c.globalCompositeOperation = 'lighter'; for (let k = 0; k < 12; k++) { const p = (ct * 1.3 + k / 12) % 1, a = k * 0.52 + 3.3, x = Math.cos(a) * (60 + p * 140), y = 190 + Math.sin(a) * (40 + p * 100); if (y < 4) continue; c.fillStyle = `rgba(255,${230 - 100 * p | 0},90,${(1 - p) * ce})`; c.beginPath(); c.arc(x, y, 3 + 2 * (1 - p), 0, TWO_PI); c.fill(); } c.restore(); }
-    } },
-
+  { id: 'tiki', name: 'Gulpstack', label: 'gulpstack', haze: [70, 235, 210], v3: true, hazeK: 0.5, mouth: [0, 250, 112, 52], halfW: 250, biteDrop: 0.5,
+    // a totem of hungry carved faces (see tkHead, tkBody, tkLimb): the top face's rope-lashed jaw drops open like a
+    // nutcracker's, and the gulp passes down the stack face by face
+    limbArt: tkLimb, ownHands: true,
+    body(c, m) { tkBody(c, m); },
+    head(c, m) { tkHead(c, m); },
+  },
+  { id: 'spirit', name: 'Scorchwake', label: 'scorchwake', haze: [255, 120, 70], v3: true, hazeK: 0.5, mouth: [0, 268, 108, 54], halfW: 250, biteDrop: 0.5,
+    // a comet of living magma (see spHead, spBody, spLimb): its fire streams down behind it, its grin is a furnace
+    // vortex, and what it swallows ends up spinning in the magma heart inside its crust ribs
+    limbArt: spLimb, ownHands: true,
+    body(c, m) { spBody(c, m); },
+    head(c, m) { spHead(c, m); },
+  },
   { id: 'toad', name: 'Giant toad', label: 'giant toad', haze: [90, 200, 255], v3: true, mouth: [0, 176, 150, 50], fit: 0.96,
     body(c, m) {
       // a squat crouched body: a broad warty back, a pale yellow belly, the great hind legs folded up at its sides (its
@@ -20281,8 +21117,8 @@ const LIMB_PAL = {
   blob:    { skin: ['#ffb4ea', '#e83ab2', '#a0107e'], goo: true },
   spider:  { skin: ['#ffc97c', '#ec8232', '#7c3119'], claw: '#fff6e2', palm: '#ffd27a' },
   shark:   { skin: ['#a6dcff', '#2f76e6', '#16357a'], belly: '#fff2dc', web: ['#5cb0ff', '#1f4ead'] },
-  tiki:    { skin: ['#ffc880', '#b8742e', '#4a2410'], paint: '#2ae0d0' },
-  spirit:  { skin: ['#fff6c0', '#ff8a1a', '#c0280a'], glow: [255, 170, 60] },
+  tiki:    { skin: ['#f2b062', '#aa5c24', '#481c0a'], paint: '#1ebdb2' },   // (Gulpstack draws its own arms: tkLimb)
+  spirit:  { skin: ['#ffe07a', '#ff6a1e', '#740a36'], glow: [255, 170, 60] },   // (Scorchwake draws its own arms: spLimb)
   toad:    { skin: ['#a8ecff', '#1a9ae0', '#0a2e5a'], palm: '#ffe060', spot: '#0a1838' },
   giant:   { skin: ['#ffd8bc', '#e0946e', '#6a3420'], cloth: ['#7a9ae0', '#3a5aa0', '#16264e'], palm: '#ffe6d4' },
   hornet:  { skin: ['#5a4a30', '#1c140a', '#060402'], band: '#ffd23a', claw: '#ffe8a0' },
@@ -20520,15 +21356,6 @@ const LIMB_ART = {
     const id = mon.id, d = rig.d;
     if (id === 'golem') {   // the Geode King's stacked stones (see gkArm)
       gkArm(c, rig, P, layer, t);
-    } else if (id === 'tiki') {   // carved wood: banded rings, a notched band at each joint, turquoise paint stripes
-      const ch = limbBase(c, rig, P, layer);
-      chainEvery(ch, 11).forEach(([x, y, r, a], i) => {
-        if (i === 0) return;
-        const nx = -Math.sin(a), ny = Math.cos(a), w = r - 2.5;
-        c.strokeStyle = i % 3 ? 'rgba(60,24,6,.55)' : 'rgba(40,14,2,.85)'; c.lineWidth = i % 3 ? 1.6 : 3; c.beginPath(); c.moveTo(x + nx * w, y + ny * w); c.lineTo(x - nx * w, y - ny * w); c.stroke();
-        if (i % 3 === 0) { c.strokeStyle = P.paint; c.lineWidth = 3; c.beginPath(); c.moveTo(x + nx * w * 0.8 + Math.cos(a) * 5, y + ny * w * 0.8 + Math.sin(a) * 5); c.lineTo(x - nx * w * 0.8 + Math.cos(a) * 5, y - ny * w * 0.8 + Math.sin(a) * 5); c.stroke(); }
-      });
-      grabAlong(c, ch, d, 0.45, 'rgba(255,230,180,.35)', 2);
     } else if (id === 'giant') {   // a big human arm: a rolled denim sleeve at the shoulder, a biceps bulge, a forearm, a wrist crease
       const ch = limbBase(c, rig, P, layer);
       if (layer === 'mid') {
@@ -20815,7 +21642,7 @@ const MONSTER_TAGS = {
   mole: 'A star-nosed mole whose golden drill splits into jaws', golem: "Half its face split open like a geode, and hungry", kraken: 'Its head is a lava lamp. Guess where you end up',
   piranha: 'Gills full of fire and a bite like a bear trap', dragon: 'A furnace for a throat, and room in it for you', rex: '66 million years in amber. Now it is your turn',
   flytrap: 'Every vine ends in a mouth, and the big one is all yours', blob: 'It crashed its saucer, kept its appetite, and you can watch yourself sink', spider: 'Headlamp eyes lock on, the fan flares, then it pounces',
-  shark: 'Swims up through magma, an eye on each end of its hammer', tiki: 'Carved fists and a mouth like a box', spirit: 'A living flame behind an obsidian mask',
+  shark: 'Swims up through magma, an eye on each end of its hammer', tiki: 'Every face on the totem gets a bite', spirit: 'A living volcano with a furnace for a grin',
   toad: 'Sticky pads and a tongue that never misses', giant: 'Grumpy, huge, and punching up the walls', hornet: 'Crowned, striped, and sawing its mandibles',
   crab: 'Pincers clamp the rock, then they clamp you', shadow: 'Smoke claws and an impossible grin',
 };
