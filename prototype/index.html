@@ -13943,15 +13943,17 @@ function mMouth(c, upper, lower, o = {}) {
 const mBlob = (pts, mirror) => mASm(mirror ? mAMirror(pts) : pts);
 // a soft drop shadow (occlusion) under a shape: a dark blurred ellipse
 function mShade(c, x, y, rx, ry, a = 0.35) { c.save(); c.translate(x, y); c.scale(1, ry / rx); const g = c.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, `rgba(10,4,8,${a})`); g.addColorStop(1, 'rgba(10,4,8,0)'); c.fillStyle = g; c.fillRect(-rx, -rx, rx * 2, rx * 2); c.restore(); }
-// crumbs of rocket spraying from a mouth corner as it chews
+// crumbs of rocket spraying from a mouth corner as it chews (d: the side they fly to; 0 alternates). Borderless: each
+// chip is edged in a darker shade of its own colour, never ink.
 function mCrumbs(c, x, y, ct, d = 0, n = 6) {
   if (ct < 0) return;
-  const cols = ['#ffd23a', '#ff7a2a', '#f4f4f4', '#8a5a3a', '#5ad0ff'];
+  const cols = [['#ffd23a', '#b88a10'], ['#ff7a2a', '#a8400e'], ['#f4f4f4', '#9aa0b0'], ['#8a5a3a', '#4a2c18'], ['#5ad0ff', '#1e7aa8']];
   for (let k = 0; k < n; k++) {
     const p = (ct * 1.3 + k / n) % 1, s2 = d || (k % 2 ? 1 : -1), px = x + s2 * (8 + p * 46 + k * 3), py = y + p * p * 120 - p * 20, r = (4 + (k % 3) * 2) * (1 - p * 0.4);
     if (ct + 0.05 < k * 0.06) continue;
-    c.save(); c.globalAlpha = Math.min(1, (1 - p) * 2) * (1 - smooth(1.2, 1.5, ct)); c.translate(px, py); c.rotate(k + p * 6 * s2);
-    pkPath(c, [[-r, -r * 0.6], [r * 0.9, -r], [r * 0.6, r * 0.9], [-r * 0.8, r * 0.7]], cols[k % 5], 2);
+    c.save(); c.globalAlpha *= Math.min(1, (1 - p) * 2) * (1 - smooth(1.2, 1.5, ct)); c.translate(px, py); c.rotate(k + p * 6 * s2);
+    const [fc, ec] = cols[k % 5], pts = [[-r, -r * 0.6], [r * 0.9, -r], [r * 0.6, r * 0.9], [-r * 0.8, r * 0.7]];
+    c.beginPath(); pts.forEach(([a, b2], i) => i ? c.lineTo(a, b2) : c.moveTo(a, b2)); c.closePath(); c.fillStyle = fc; c.fill(); c.strokeStyle = ec; c.lineWidth = 1.2; c.stroke();
     c.restore();
   }
 }
@@ -19947,20 +19949,6 @@ function grbHand(c, rig, t) {
   const g0 = smooth(-5, -35, rig.tipY);
   if (g0 > 0 && wind === 0) { const nails = H0.filter(p => p[5] === 'nl'); for (const [, , x1, y1] of nails) { c.strokeStyle = `rgba(255,236,200,${0.5 * g0})`; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x1 + d * 2, y1); c.lineTo(x1 + d * 7, y1 - 4); c.moveTo(x1 + d * 3, y1 + 1); c.lineTo(x1 + d * 6, y1 + 6); c.stroke(); } }
 }
-// crumbs of rocket spraying from a corner of his mouth as he chews (borderless: each chip edged in a darker shade
-// of its own colour)
-function grbCrumbs(c, x, y, ct, d, n = 6) {
-  if (ct < 0) return;
-  const cols = [['#ffd23a', '#b88a10'], ['#ff7a2a', '#a8400e'], ['#f4f4f4', '#9aa0b0'], ['#8a5a3a', '#4a2c18'], ['#5ad0ff', '#1e7aa8']];
-  for (let k = 0; k < n; k++) {
-    const p = (ct * 1.3 + k / n) % 1, px = x + d * (8 + p * 46 + k * 3), py = y + p * p * 120 - p * 20, r = (4 + (k % 3) * 2) * (1 - p * 0.4);
-    if (ct + 0.05 < k * 0.06) continue;
-    c.save(); c.globalAlpha *= Math.min(1, (1 - p) * 2) * (1 - smooth(1.2, 1.5, ct)); c.translate(px, py); c.rotate(k + p * 6 * d);
-    const [fc, ec] = cols[k % 5], pts = [[-r, -r * 0.6], [r * 0.9, -r], [r * 0.6, r * 0.9], [-r * 0.8, r * 0.7]];
-    c.beginPath(); pts.forEach(([a, b2], i) => i ? c.lineTo(a, b2) : c.moveTo(a, b2)); c.closePath(); c.fillStyle = fc; c.fill(); c.strokeStyle = ec; c.lineWidth = 1.2; c.stroke();
-    c.restore();
-  }
-}
 // the live wind-up of a wall grab (0..1) and its side, or null (only in play: the picker never grabs)
 function grbWind() {
   if (!G || G.state !== 'play' || !G.grab || G.grab.t >= GRAB.wind) return null;
@@ -22767,7 +22755,7 @@ const MONSTERS = [
         grbSoft(c, d * (138 + 8 * puff), 254, 34 * puff, 22 * puff, GRB.rosy, 0.45);
         pkE(c, d * (132 + 8 * puff), 232, 12 * puff, 6 * puff, 'rgba(255,255,255,.5)', 0, -d * 0.4);
       }
-      if (ct >= 0) for (const d of [-1, 1]) grbCrumbs(c, d * 112, 268, ct, d, 5);
+      if (ct >= 0) for (const d of [-1, 1]) mCrumbs(c, d * 112, 268, ct, d, 5);
       // the furrows of a permanent scowl between his brows
       for (const d of [-1, 1]) { c.strokeStyle = 'rgba(40,36,110,.5)'; c.lineWidth = 3; c.beginPath(); c.moveTo(d * 8, 150 + 6 * rage); c.quadraticCurveTo(d * 14, 140, d * 10, 128); c.stroke(); c.strokeStyle = 'rgba(236,240,255,.4)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(d * 13, 150 + 6 * rage); c.quadraticCurveTo(d * 19, 140, d * 15, 128); c.stroke(); }
       // 6. the nose: a huge rosy bulb with a narrow bridge, flaring and snorting
