@@ -532,7 +532,8 @@ const CHAR_FIT = {
   // body is a bust the bin hides (its bottom 2.2 below the rim at most); his hands hook over the rolled rim
   raccoon: { caps: 5, hip: [0, 2.8], sink: 2.2, grip: [[-8.4, 3.38], [8.4, 3.38]], body: [[-3.4, -2.4, 3.4, -2.4, 6.8]] },
   // 12 Frankie the dachshund: head, ears, paws and collar are his (4 caps); drawn whole, his chest rests on the bun's
-  // top and his long body hangs down the split below it (the body capsule, for other rides); paws over the bun's crest
+  // top and his long body hangs down the split below it (the body capsule, for other rides; there his drawing is clipped
+  // where the ride stops hiding, see frkCut); paws over the bun's crest
   dachshund: { caps: 4, hip: [0, -5], sink: 1, grip: [[-6.6, -5.9], [6.6, -5.9]], ow: 14.8, body: [[0, -5, 0, 18.6, 5.8]] },
   // 13 Pip the duckling, drawn whole: head, eggshell helmet and fluffy body are his (3 caps); his round bottom rests
   // just inside the cockpit lip (1.3 below it at most); wings, no hands
@@ -11557,6 +11558,12 @@ function frkHead(c, st, face, t, k, F, P) {
 // pose().tip. His tail was drawn inside the bun's turn, so on his own bun it still is (seat.sig); in any other ride it
 // stays with him. His paws move onto whatever lip the ride has (seat.hand). The bun's bottles are its engines, each
 // nozzle with its own exhaust (ketchup left, mustard right).
+// In any other ride Frankie is cut where that ride stops hiding (its depth below the seat point, or its floor), the way
+// Lumo's abdomen is: his long body (and his tail) would otherwise hang out under shallow rides. The art is all still
+// drawn, only clipped; on his own bun nothing changes. frkCut: the cut's y in his frame, null on his own bun.
+const frkCut = seat => { if (seat.sig) return null; const C = seat.character.fit, V = seat.vehicle.fit.seat;
+  return C.hip[1] + (V.floor != null ? footOf(C) : Math.max(C.sink, (seat.lift + V.depth) / seat.s)); };
+const frkClip = (c, cut) => { c.save(); c.beginPath(); c.rect(-40, -80, 80, 80 + cut); c.clip(); };
 const FRANKIE = {
   id: 'dachshund', line: '#4a2214', bitePose: true,
   palette: { coat: FRK.ch, tan: FRK.tan, collar: FRK.co, tag: FRK.go, mustard: FRK.mu, eyes: '#5a2c14' },
@@ -11575,7 +11582,8 @@ const FRANKIE = {
   },
   draw: {
     back(c, st, seat) {
-      const { t, thr, panic, jx } = seat.cp, C = FRK.ch;
+      const { t, thr, panic, jx } = seat.cp, C = FRK.ch, cut = frkCut(seat);
+      if (cut != null) frkClip(c, cut);
       // (on his own bun the tail turns and jitters with it, as it always did)
       const tailT = () => { if (seat.sig) { const vt = seat.tip; if (vt) { c.translate(0, 10); c.rotate(vt); c.translate(0, -10); } c.translate(jx, 0); } };
       // --- the tail, wagging out of the bottom of the bun (a blur of wags on the climb, tucked in a fright)
@@ -11587,10 +11595,12 @@ const FRANKIE = {
       pkCurve(c, [-0.6, 0.8], [0.2, 4.4], [-0.5, 7.6], 'rgba(255,210,170,.45)', 0.6, false);
       c.restore();
       c.restore();
+      if (cut != null) c.restore();
     },
     body(c, st, seat) {
-      const { t, thr, by, bx, vb } = seat.cp, C = FRK.ch, T = FRK.tan;
+      const { t, thr, by, bx, vb } = seat.cp, C = FRK.ch, T = FRK.tan, cut = frkCut(seat);
       const bodyT = () => { if (vb) { c.translate(0, -1); c.rotate(vb); c.translate(0, 1); } c.translate(bx, by); };
+      if (cut != null) frkClip(c, cut);
       c.save(); bodyT();
       // body: chocolate, a tan chest at the top; the mustard squiggle down it
       const bodyP = () => { c.beginPath(); c.moveTo(-5.6, -6); c.quadraticCurveTo(-6.2, -10.4, 0, -10.6); c.quadraticCurveTo(6.2, -10.4, 5.6, -6); c.lineTo(5.2, 19); c.quadraticCurveTo(0, 23.4 - by, -5.2, 19); c.closePath(); };
@@ -11608,11 +11618,13 @@ const FRANKIE = {
       mzPath(); c.strokeStyle = FRK.mu[1]; c.lineWidth = 1.8; c.stroke();
       c.save(); c.translate(-0.35, -0.4); mzPath(); c.strokeStyle = 'rgba(255,255,220,.85)'; c.lineWidth = 0.5; c.stroke(); c.restore();
       c.restore();
+      if (cut != null) c.restore();
     },
     front(c, st, seat) {
-      const { t, bite, thr, face, k, F, P, by, bx, vb } = seat.cp, C = FRK.ch, T = FRK.tan;
+      const { t, bite, thr, face, k, F, P, by, bx, vb } = seat.cp, C = FRK.ch, T = FRK.tan, cut = frkCut(seat);
       const bodyT = () => { if (vb) { c.translate(0, -1); c.rotate(vb); c.translate(0, 1); } c.translate(bx, by); };
       // --- collar, paws over the bun's top, the head
+      if (cut != null) frkClip(c, cut);
       c.save(); bodyT();
       // front paws: over the top of the bun (on his cheeks in a fright, flung up in the bite; seat.hand: onto another ride's lip)
       const paw = (d, x, y, up) => {
@@ -11648,6 +11660,7 @@ const FRANKIE = {
         paw(d, hx, hy, true);
       }
       c.restore();
+      if (cut != null) c.restore();
     },
   },
 };
