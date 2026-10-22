@@ -226,6 +226,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .pickbtn small { font: 900 10px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .pickbtn b { font-weight: 400; font-size: 15px; line-height: 1.02; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: normal; }   /* long names wrap to two lines instead of clipping */
 @media (max-width: 400px) { .pickbtn { gap: 6px; padding: 0 6px; } .pickbtn canvas { width: 34px; height: 34px; } .pickbtn b { font-size: 14px; } }
+@media (max-width: 340px) { .pickbtn { gap: 4px; padding: 0 5px; } .pickbtn canvas { width: 30px; height: 30px; } }
 .keyart { display: block; width: calc(100% + 40px); height: 230px; margin: -22px -20px -4px; border-radius: 23px 23px 0 0; border-bottom: 3px solid var(--ink); }
 @media (max-height: 700px) { .keyart { height: 180px; } }
 @media (max-height: 600px) { .keyart { height: 140px; } }
@@ -24364,7 +24365,15 @@ function beginResume() {
   G.p.vy = Math.max(0, G.p.vy);
   Object.assign(G.heat, { over: 0, v: Math.min(G.heat.v, 0.5) });
 }
-function fitMenu() { fitText($('menuBest'), 13); fitText($('menuSeed'), 13); }
+function fitMenu() { fitText($('menuBest'), 13); fitText($('menuSeed'), 13); fitPickName($('pilotName')); fitPickName($('monsterName')); }
+// a pilot's or monster's name on its menu button: up to two lines, shrunk when a word is too long for the button or the
+// name needs a third line (never clipped)
+function fitPickName(el) {
+  if (!el) return;
+  el.style.fontSize = '';
+  let size = parseFloat(getComputedStyle(el).fontSize);
+  while ((el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight + 1) && size > 10) { size -= 0.5; el.style.fontSize = size + 'px'; }
+}
 // picker card names: one line each, shrunk to fit their card (never wrapped or clipped)
 function fitCards(grid) { requestAnimationFrame(() => document.querySelectorAll(`#${grid} .pcard span`).forEach(el => fitText(el, 8))); }
 function refreshMenu() {
@@ -24473,7 +24482,7 @@ function selectPilot(i) {
   document.querySelectorAll('#pilotGrid .pcard').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
   $('pilot-' + PILOTS[i].id)?.scrollIntoView({ block: 'nearest' });
   $('pilotInfo').textContent = pilot().ride; $('pilotSelName').textContent = pilot().name;
-  $('pilotName').textContent = pilot().name;
+  $('pilotName').textContent = pilot().name; fitPickName($('pilotName'));
 }
 // Each pilot's drawn bounding box in art units (solid body only, not glows), measured once offscreen.
 const boundsCache = {};
@@ -24625,7 +24634,7 @@ function selectMonster(i) {
   document.querySelectorAll('#monsterGrid .pcard').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
   $('monster-' + MONSTERS[i].id)?.scrollIntoView({ block: 'nearest' });
   $('monsterInfo').textContent = MONSTER_TAGS[monster().id] || ''; $('monsterSelName').textContent = monster().name;
-  $('monsterName').textContent = monster().name;
+  $('monsterName').textContent = monster().name; fitPickName($('monsterName'));
   if (currentScreen === 'tuneScreen') buildTune();
 }
 // The monster alone in a dark shaft, jaws open, lit from below by its own lava glow.
