@@ -263,6 +263,26 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
   background: var(--cream); color: var(--ink); font-weight: 900; font-size: 14px; text-align: center;
   box-shadow: 0 4px 0 var(--ink);
 }
+/* ---- meta: wallet, missions, shop (no dark outlines: soft fills and same-hue edges only) ---- */
+.cn { display: inline-block; position: relative; flex: none; width: 13px; height: 13px; border-radius: 50%; vertical-align: -2px; background: radial-gradient(circle at 34% 30%, #c08a56 0, #7a4a22 48%, #3e220e 100%); }
+.cn::after { content: ''; position: absolute; left: 3px; top: 3px; width: 2px; height: 2px; border-radius: 50%; background: #2c1606; box-shadow: 4px 0 0 #2c1606, 2px 3.5px 0 #2c1606; }
+.wallet { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 5px; border-radius: 999px; background: rgba(40,20,12,.66); color: #ffe7b8; font: 400 17px var(--font-display); line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wallet .cn { width: 18px; height: 18px; }
+.wallet .cn::after { left: 4.5px; top: 4.5px; width: 2.5px; height: 2.5px; box-shadow: 5px 0 0 #2c1606, 2.5px 4.5px 0 #2c1606; }
+.wallet.bump { animation: bump .35s ease-out; }
+#menu .panel { position: relative; }
+#menuWallet { position: absolute; top: 12px; right: 14px; z-index: 1; }
+.pickhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; }
+.pcard .lk { display: inline-block; position: relative; width: 7px; height: 6px; margin: 3px 3px 0 1px; border-radius: 1.5px; background: currentColor; }
+.pcard .lk::before { content: ''; position: absolute; left: 1px; bottom: 5px; width: 5px; height: 4px; border-radius: 3px 3px 0 0; box-shadow: inset 0 0 0 1.4px currentColor; }
+.pcard .ptag .cn { width: 9px; height: 9px; margin-right: 2px; vertical-align: -1px; }
+.pcard .ptag .cn::after { display: none; }
+.pcard.locked .ptag { color: #ffd25e; font-size: 9.5px; }
+.pcard.peek { border-color: #ffd25e; box-shadow: 0 0 14px rgba(255,210,94,.45); transform: scale(1.04); }
+.btn.buy { border-color: #9a5212; box-shadow: 0 4px 0 #6e3608, inset 0 2px 0 rgba(255,255,255,.5); font-size: 19px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; white-space: nowrap; min-width: 0; }
+.btn.buy .cn { width: 18px; height: 18px; }
+.btn.buy .cn::after { left: 4.5px; top: 4.5px; width: 2.5px; height: 2.5px; box-shadow: 5px 0 0 #2c1606, 2.5px 4.5px 0 #2c1606; }
+.btn.buy.short { background: linear-gradient(#5b4245, #3c2a2d); color: var(--muted); border-color: #2e1f22; box-shadow: 0 4px 0 #2a1b1e; font-size: 15px; gap: 4px; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .hint, #over:not([hidden]) .panel, .newbest.sting, .total b.bump { animation: none; } }
 </style>
 
@@ -282,6 +302,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 <div class="screen" id="menu">
   <div class="panel">
     <canvas class="keyart" id="keyArt" aria-hidden="true"></canvas>
+    <span class="wallet" id="menuWallet" aria-label="Coconuts in your wallet"></span>
     <div class="eyebrow" id="menuDate">Daily shaft</div>
     <h1 class="title sr-only">Coconut Rocket</h1>
     <p class="lede">Hold to fly. Grab chilies to blast the monster below, and coconuts to spend. Don't get eaten.</p>
@@ -312,7 +333,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 <!-- Pilot picker: a character and a vehicle, picked separately -->
 <div class="screen" id="pilotScreen" hidden>
   <div class="panel wide">
-    <div class="eyebrow">Choose your pilot</div>
+    <div class="pickhead"><div class="eyebrow">Choose your pilot</div><span class="wallet" id="pickWallet" aria-label="Coconuts in your wallet"></span></div>
     <canvas class="preview" id="pilotPreview" width="480" height="270" aria-hidden="true"></canvas>
     <div class="pickname"><b id="pilotSelName"></b><span id="pilotInfo"></span></div>
     <div class="picktabs" role="tablist" aria-label="Character or vehicle">
@@ -321,7 +342,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
     </div>
     <div class="pilotgrid" id="charGrid" role="tabpanel" aria-labelledby="tabChar"></div>
     <div class="pilotgrid" id="vehGrid" role="tabpanel" aria-labelledby="tabVeh" hidden></div>
-    <button class="btn go" id="pilotDone">Done</button>
+    <div class="btnrow"><button class="btn buy" id="buyBtn" hidden></button><button class="btn go" id="pilotDone">Done</button></div>
   </div>
 </div>
 
@@ -1000,12 +1021,14 @@ const PTS_PER_M = 10;       // points per metre climbed
 // The ad revive is a reward: full score kept, ammo refilled, a `shield` s grace when you launch again, plus a
 // comeback bonus of `share` of the run's coconuts so far (at least `min`) and `pts` points.
 const COMEBACK = { share: 0.5, min: 10, pts: 500, shield: 2.4 };
-// Vehicle perks hook in here later (start ammo, max ammo, fire rate, knockback, coconut value, magnet radius, revive
-// shield): every tunable that a perk may change is read through perk(name, base). For now it returns base.
+// Vehicle perks (start ammo, max ammo, fire rate, knockback, coconut value, magnet radius, revive shield): every
+// tunable that a perk may change is read through perk(name, base). With no hook (the levelgen test) it returns base;
+// the game sets perkHook to apply the chosen vehicle's perk (see PERKS).
 // Names: 'startAmmo', 'maxAmmo', 'fireRate' (seconds between shots), 'push' (knockback), 'shotSpeed', 'cocoValue'
 // (what one coconut is worth; a golden one is read with base COCO_GOLD), 'magnet' (coconut pull radius, 0 = none),
 // 'reviveShield' (seconds of shield after the ad revive).
-function perk(name, base) { return base; }
+let perkHook = null;
+function perk(name, base) { return perkHook ? perkHook(name, base) : base; }
 // The hungry monster's leash: [target gap, speed cap above base] for hunger 0..1 (see chaseSpeed; shared with the test).
 function hungerLeash(target, cap, hunger) { return [lerp(target, -AMMO.lunge, hunger), cap + AMMO.hungerCap * hunger]; }
 const FIRE_HUB = 34;               // drawn hub radius (its hitbox is the hub, the bar flame and the tip)
@@ -2242,6 +2265,7 @@ function zoneName(a) { return ZONE_NAMES[zoneIndex(a)]; }
 // bonus (comebackCoins / comebackPts) when an ad revive paid one. G.closeCount stays the live counter for close calls.
 function newStats() { return { coconuts: 0, golden: 0, chilies: 0, shots: 0, hits: 0, closeCount: 0, metres: 0, revived: false, comebackCoins: 0, comebackPts: 0 }; }
 function newRun(isDaily) {
+  ensureOwned();   // (a run only starts with owned parts)
   const seed = isDaily ? dailySeed : (Math.random() * 4294967296) >>> 0;
   G = {
     seed, isDaily, t: 0,
@@ -15224,7 +15248,7 @@ for (const pl of PILOTS) if (pl.noInk) {
 // framework takes that transform back out for a rider and puts in the one the rider was drawn in (its own ride's inner). A fused pilot (not
 // split yet) is a character and a vehicle that both point at its PILOTS entry (fused); it only flies its own pair
 // (canRide), drawn by its old draw().
-// unlock: groundwork for a shop or unlockables (no shop UI yet): null means free; ownership is UNLOCKS.
+// unlock: null means free, else { price } in coconuts (see the shop below); ownership is UNLOCKS.
 const CHARACTERS = [], VEHICLES = [], CHARACTER_BY = {}, VEHICLE_BY = {};
 PILOTS.forEach((pl, slot) => {
   const vid = SIGNATURE[pl.id], sc = SPLIT_CHARACTERS[pl.id], sv = SPLIT_VEHICLES[vid];
@@ -15238,14 +15262,89 @@ PILOTS.forEach((pl, slot) => {
 });
 // A character can ride a vehicle once both are split; a fused one only rides (or carries) its own partner.
 const canRide = (ch, vh) => ch.signature === vh.id || (!ch.fused && !vh.fused);
-// Ownership: groundwork for a shop or unlockables (no shop UI). owned stays null while everything is free; later it
-// becomes a Set of 'char:<id>' / 'veh:<id>' keys kept with the save. A tap on a locked card calls onLocked (the hook a
-// shop or an unlock screen plugs into); unlock() grants one and calls onUnlock.
+// Ownership: owned is null while everything is free; the shop (below) makes it a Set of 'char:<id>' / 'veh:<id>' keys
+// kept with the save. A tap on a locked card calls onLocked (the shop previews it and offers to buy it); unlock()
+// grants one and calls onUnlock.
 const UNLOCKS = {
   owned: null, onLocked: null, onUnlock: null,
   has(kind, id) { return !this.owned || this.owned.has(kind + ':' + id); },
   locked(kind, id) { if (this.onLocked) this.onLocked(kind, id); },
   unlock(kind, id) { if (this.owned) this.owned.add(kind + ':' + id); if (this.onUnlock) this.onUnlock(kind, id); },
+};
+// ---------- the shop: prices and ownership ----------
+// The starter set is free: the first three characters (Kiko, Ember, Shellby) and their signature rides, plus whatever
+// the default settings pick. Every other character and vehicle costs coconuts, in tiers by slot (a pilot's character and
+// its signature ride share a tier). A decent run banks ~30–70 coconuts, so the 150s come every few runs early on.
+const PRICE_TIERS = [150, 300, 500, 800, 1200, 2000];
+//                  slot: 3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20
+const SLOT_TIER = [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5];
+const STARTER_SLOTS = 3;
+for (const it of [...CHARACTERS, ...VEHICLES]) if (it.slot >= STARTER_SLOTS) it.unlock = { price: PRICE_TIERS[SLOT_TIER[it.slot]] };
+const partOf = (kind, id) => kind === 'char' ? CHARACTER_BY[id] : VEHICLE_BY[id];
+const priceOf = (kind, id) => { const it = partOf(kind, id); return it && it.unlock ? it.unlock.price : 0; };
+// owned: saved as a list of 'char:<id>' / 'veh:<id>' keys ('cr-unlocks'); free parts are always owned
+UNLOCKS.owned = new Set(store.get('cr-unlocks', []));
+for (const [kind, list] of [['char', CHARACTERS], ['veh', VEHICLES]]) for (const it of list) if (!it.unlock) UNLOCKS.owned.add(kind + ':' + it.id);
+UNLOCKS.owned.add('char:lemur'); UNLOCKS.owned.add('veh:coconut');   // (the default settings' pair)
+const saveUnlocks = () => store.set('cr-unlocks', [...UNLOCKS.owned]);
+saveUnlocks();
+// A run only starts with owned parts: a saved character or vehicle that isn't owned falls back to an owned one (the
+// character's own ride if owned, else the first owned ride it can fly).
+function ensureOwned() {
+  let ch = CHARACTER_BY[settings.character], vh = VEHICLE_BY[settings.vehicle], changed = false;
+  if (!ch || !UNLOCKS.has('char', ch.id)) { ch = CHARACTERS.find(c => UNLOCKS.has('char', c.id)); changed = true; }
+  if (!vh || !UNLOCKS.has('veh', vh.id) || !canRide(ch, vh)) {
+    vh = UNLOCKS.has('veh', ch.signature) ? VEHICLE_BY[ch.signature] : VEHICLES.find(v => UNLOCKS.has('veh', v.id) && canRide(ch, v)) || VEHICLE_BY[ch.signature];
+    changed = true;
+  }
+  if (changed || settings.character !== ch.id || settings.vehicle !== vh.id) {
+    settings.character = ch.id; settings.vehicle = vh.id; curPilot = null; store.set('cr-settings', settings);
+  }
+  if (curPilot && (curPilot.character !== ch || curPilot.vehicle !== vh)) curPilot = null;
+}
+// ---------- vehicle perks ----------
+// One small perk per vehicle, read through perk(name, base) (see perk). Gentle: the free starters get mild ones, and
+// the levelgen fairness test holds without any perk (perks only help). add: added to base; mul: base times it;
+// rate: shots per second times it (so fireRate, the seconds between shots, is divided by it). cocoValue's mul is paid
+// as whole coconuts (the fraction is carried from one coconut to the next). Perks never touch hitboxes or art.
+const PERKS = {
+  coconut:     { stat: 'startAmmo', add: 1, text: '+1 starting chili' },
+  stove:       { stat: 'fireRate', rate: 1.08, text: '+8% fire rate' },
+  turboshell:  { stat: 'reviveShield', add: 0.6, text: '+0.6 s revive shield' },
+  fishbowl:    { stat: 'magnet', add: 50, text: 'Coconut magnet (small)' },
+  jamjar:      { stat: 'maxAmmo', add: 2, text: '+2 max chilies' },
+  fountainpen: { stat: 'shotSpeed', mul: 1.25, text: '+25% shot speed' },
+  stockpot:    { stat: 'push', mul: 1.15, text: '+15% knockback' },
+  iceblock:    { stat: 'reviveShield', add: 1.2, text: '+1.2 s revive shield' },
+  swingtop:    { stat: 'fireRate', rate: 1.12, text: '+12% fire rate' },
+  minecart:    { stat: 'startAmmo', add: 2, text: '+2 starting chilies' },
+  cardboard:   { stat: 'magnet', add: 65, text: 'Coconut magnet' },
+  trashcan:    { stat: 'cocoValue', mul: 1.1, text: '+10% coconuts' },
+  hotdog:      { stat: 'push', mul: 1.2, text: '+20% knockback' },
+  ducket:      { stat: 'maxAmmo', add: 3, text: '+3 max chilies' },
+  turboball:   { stat: 'fireRate', rate: 1.15, text: '+15% fire rate' },
+  jackpot:     { stat: 'cocoValue', mul: 1.12, text: '+12% coconuts' },
+  firework:    { stat: 'push', mul: 1.25, text: '+25% knockback' },
+  chilli:      { stat: 'startAmmo', add: 3, text: '+3 starting chilies' },
+  hydrant:     { stat: 'fireRate', rate: 1.2, text: '+20% fire rate' },
+  puffball:    { stat: 'magnet', add: 80, text: 'Coconut magnet (big)' },
+  tintub:      { stat: 'cocoValue', mul: 1.15, text: '+15% coconuts' },
+};
+for (const vh of VEHICLES) if (!PERKS[vh.id]) console.error(`vehicle ${vh.id}: give it a perk (PERKS)`);
+const perkOf = vhId => PERKS[vhId] || null;
+perkHook = (name, base) => {
+  const pk = perkOf(pilot().vehicle.id);
+  if (!pk || pk.stat !== name) return base;
+  if (name === 'cocoValue') {   // whole coconuts: carry the fraction on the run
+    if (!G) return base;
+    G.cocoFrac = (G.cocoFrac || 0) + base * (pk.mul - 1);
+    const extra = Math.floor(G.cocoFrac + 1e-9); G.cocoFrac -= extra;
+    return base + extra;
+  }
+  if (pk.add != null) return base + pk.add;
+  if (pk.mul != null) return base * pk.mul;
+  if (pk.rate != null) return base / pk.rate;
+  return base;
 };
 // A pair: the object the rest of the game calls "the pilot" (pilot()): { id, name, ride, noInk, exhaust, nozzles,
 // bitePose, draw(c, st), character, vehicle, sig, fit }. Its id is the character's id on its signature ride (as before,
@@ -26762,7 +26861,7 @@ function frame(ts) {
     draw();
     if (G && currentScreen === null) updateHud();
     const tt = Math.max(0, ts / 1000);
-    if (currentScreen === 'pilotScreen') { drawPilotThumb($('pilotPreview'), pilot(), tt, true); (pickTab === 'char' ? charCards : vehCards).forEach((cv, i) => drawPilotThumb(cv, cardPair(pickTab, i), tt + i * 0.37, false)); }
+    if (currentScreen === 'pilotScreen') { drawPilotThumb($('pilotPreview'), shownPair(), tt, true); (pickTab === 'char' ? charCards : vehCards).forEach((cv, i) => drawPilotThumb(cv, cardPair(pickTab, i), tt + i * 0.37, false)); }
     if (currentScreen === 'monsterScreen') { drawMonsterThumb($('monsterPreview'), monster(), tt, false); monsterCards.forEach((cv, i) => drawMonsterThumb(cv, MONSTERS[i], tt + i * 0.41, false)); }
     if (currentScreen === 'menu') { drawPilotThumb($('pilotMini'), pilot(), tt, true); drawMonsterThumb($('monsterMini'), monster(), tt, true); drawKeyArt($('keyArt'), tt); }
   } catch (err) {
@@ -26898,6 +26997,7 @@ function refreshMenu() {
   $('menuDate').textContent = `Daily shaft · ${dayLabel}`;
   $('menuBest').textContent = fmtPts(daily.bestPts);
   $('menuSeed').textContent = shaftNo;
+  refreshMeta();
 }
 
 // Menu buttons answer the first tap: a press that starts and ends on the button fires on pointerup even if
@@ -26990,7 +27090,13 @@ let pickTab = 'char';
 const partTint = it => it.palette && it.palette.tint || pilotTint(it.signatureOf ? comboOf(it.signatureOf, it.id) : comboOf(it.id, it.signature));
 // the vehicle a character gets when picked: the current one if the player chose it (it is not the current character's
 // own ride) and the new character can ride it, otherwise the new character's own ride
-function vehicleFor(ch) { const cur = pilot(); return cur.vehicle.id !== cur.character.signature && canRide(ch, cur.vehicle) ? cur.vehicle.id : ch.signature; }
+// (and only an owned one: else the current ride if it can, else the first owned ride it can fly)
+function vehicleFor(ch) {
+  const cur = pilot(), v = cur.vehicle.id !== cur.character.signature && canRide(ch, cur.vehicle) ? cur.vehicle.id : ch.signature;
+  if (UNLOCKS.has('veh', v)) return v;
+  if (canRide(ch, cur.vehicle) && UNLOCKS.has('veh', cur.vehicle.id)) return cur.vehicle.id;
+  return (VEHICLES.find(x => UNLOCKS.has('veh', x.id) && canRide(ch, x)) || VEHICLE_BY[ch.signature]).id;
+}
 function cardPair(kind, i) {
   if (kind === 'char') return comboOf(CHARACTERS[i].id, vehicleFor(CHARACTERS[i]));
   const vh = VEHICLES[i], ch = pilot().character;
@@ -27014,7 +27120,8 @@ function buildPilots() {
 function showPairNames() {
   const pl = pilot(), ch = pl.character, vh = pl.vehicle;
   $('pilotSelName').textContent = ch.name;
-  $('pilotInfo').textContent = pl.sig ? `${vh.name} · signature ride` : `in the ${vh.name}`;
+  $('pilotInfo').textContent = (pl.sig ? `${vh.name} · signature ride` : `in the ${vh.name}`) + perkNote(vh.id);
+  if (pickPeek) showPeekNames();   // a locked card being previewed: its name, price and perk
   $('pilotName').textContent = ch.name; $('pilotRide').textContent = vh.name; fitPickName($('pilotName'));
   $('tabCharName').textContent = ch.name; $('tabVehName').textContent = vh.name;
   requestAnimationFrame(() => ['pilotRide', 'tabCharName', 'tabVehName'].forEach(id => fitText($(id), 8)));
@@ -27023,17 +27130,21 @@ function refreshPicker() {
   const pl = pilot(), ch = pl.character, vh = pl.vehicle;
   document.querySelectorAll('#charGrid .pcard').forEach((b, k) => {
     const it = CHARACTERS[k], own = UNLOCKS.has('char', it.id);
-    b.setAttribute('aria-pressed', String(it === ch)); b.classList.toggle('locked', !own); b.querySelector('.ptag').textContent = own ? '' : 'Locked';
+    b.setAttribute('aria-pressed', String(it === ch)); b.classList.toggle('locked', !own); b.querySelector('.ptag').innerHTML = own ? '' : lockTag('char', it.id);
+    b.classList.toggle('peek', !!pickPeek && pickPeek.kind === 'char' && pickPeek.id === it.id);
   });
   document.querySelectorAll('#vehGrid .pcard').forEach((b, k) => {
     const it = VEHICLES[k], ok = canRide(ch, it), own = UNLOCKS.has('veh', it.id);
     b.setAttribute('aria-pressed', String(it === vh)); b.classList.toggle('other', !ok); b.classList.toggle('locked', !own);
     if (ok) b.removeAttribute('aria-disabled'); else b.setAttribute('aria-disabled', 'true');
-    b.querySelector('.ptag').textContent = !own ? 'Locked' : !ok ? 'Not yet' : it.id === ch.signature ? '★ Signature' : '';
+    if (!own) b.querySelector('.ptag').innerHTML = lockTag('veh', it.id);
+    else b.querySelector('.ptag').textContent = !ok ? 'Not yet' : it.id === ch.signature ? '★ Signature' : '';
+    b.classList.toggle('peek', !!pickPeek && pickPeek.kind === 'veh' && pickPeek.id === it.id);
   });
   showPairNames();
   $('tabChar').setAttribute('aria-selected', String(pickTab === 'char')); $('tabVeh').setAttribute('aria-selected', String(pickTab === 'veh'));
   $('charGrid').hidden = pickTab !== 'char'; $('vehGrid').hidden = pickTab !== 'veh';
+  refreshBuy();
 }
 function setPair(chId, vhId) {
   settings.character = chId; settings.vehicle = vhId; curPilot = null;
@@ -27043,12 +27154,14 @@ function setPair(chId, vhId) {
 function selectCharacter(i) {
   const ch = CHARACTERS[i];
   if (!UNLOCKS.has('char', ch.id)) return UNLOCKS.locked('char', ch.id);
+  if (pickPeek) { pickPeek = null; refreshPicker(); }
   if (ch !== pilot().character) setPair(ch.id, vehicleFor(ch));
   $('char-' + ch.id)?.scrollIntoView({ block: 'nearest' });
 }
 function selectVehicle(i) {
   const vh = VEHICLES[i], ch = pilot().character;
   if (!UNLOCKS.has('veh', vh.id)) return UNLOCKS.locked('veh', vh.id);
+  if (pickPeek) { pickPeek = null; refreshPicker(); }
   if (!canRide(ch, vh)) {   // not split yet: say who flies it, change nothing
     $('pilotInfo').textContent = ch.fused ? `${ch.name.split(' the ')[0]} can't swap rides yet` : `Only ${CHARACTER_BY[vh.signatureOf].name.split(' the ')[0]} flies this one for now`;
     return;
@@ -27190,7 +27303,7 @@ function drawKeyArt(cv, t) {
   c.fillStyle = tg; c.fillText('Rocket', 0, y2);
   c.restore();
 }
-tap($('openPilots'), () => { buildPilots(); show('pilotScreen'); showPickTab(pickTab); });
+tap($('openPilots'), () => { pickPeek = null; buildPilots(); show('pilotScreen'); showPickTab(pickTab); });
 
 // monster picker: each card shows the monster alone, jaws open, lit from below
 const monsterCards = [];
@@ -27249,6 +27362,58 @@ function drawMonsterThumb(cv, mn, t, mini) {
 tap($('openMonsters'), () => { buildMonsters(); show('monsterScreen'); fitCards('monsterGrid'); $('monster-' + monster().id).scrollIntoView({ block: 'center' }); });
 $('monsterDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
+
+// ---------- meta UI: the wallet and the shop in the pilot picker ----------
+const coinHTML = '<b class="cn" aria-hidden="true"></b>';
+const fmtN = v => v.toLocaleString('en-GB');
+const perkNote = vhId => { const pk = perkOf(vhId); return pk ? ` · ${pk.text}` : ''; };
+// a locked card's tag: a lock and its price
+const lockTag = (kind, id) => `<b class="lk" aria-hidden="true"></b>${coinHTML}${fmtN(priceOf(kind, id))}`;
+// the wallet on the menu and in the picker
+function refreshMeta() {
+  const w = coinHTML + fmtN(WALLET.get());
+  $('menuWallet').innerHTML = w; $('pickWallet').innerHTML = w;
+}
+// The shop: a tap on a locked card previews it (the preview canvas and the heading show it) and offers a Buy button,
+// or "Need N more" when the wallet is short. Buying pays, unlocks, selects it and saves.
+let pickPeek = null;   // the locked card being previewed: { kind, id }
+UNLOCKS.onLocked = (kind, id) => { pickPeek = { kind, id }; refreshPicker(); };
+UNLOCKS.onUnlock = () => saveUnlocks();
+function peekPair() {
+  const { kind, id } = pickPeek;
+  if (kind === 'char') { const ch = CHARACTER_BY[id]; return comboOf(ch.id, vehicleFor(ch)); }
+  const vh = VEHICLE_BY[id], ch = pilot().character;
+  return comboOf(canRide(ch, vh) ? ch.id : vh.signatureOf, vh.id);
+}
+const shownPair = () => pickPeek ? peekPair() : pilot();
+function showPeekNames() {
+  const { kind, id } = pickPeek, it = partOf(kind, id);
+  $('pilotSelName').textContent = it.name;
+  $('pilotInfo').textContent = kind === 'veh' ? `Locked vehicle${perkNote(id)}` : `Locked character · shown in the ${peekPair().vehicle.name}`;
+}
+function refreshBuy() {
+  const btn = $('buyBtn');
+  $('pickWallet').innerHTML = coinHTML + fmtN(WALLET.get());
+  btn.hidden = !pickPeek;
+  if (!pickPeek) return;
+  const price = priceOf(pickPeek.kind, pickPeek.id), short = price - WALLET.get();
+  btn.classList.toggle('short', short > 0);
+  btn.setAttribute('aria-disabled', String(short > 0));
+  btn.innerHTML = short > 0 ? `<span>Need</span>${coinHTML}<span>${fmtN(short)} more</span>` : `<span>Buy</span>${coinHTML}<span>${fmtN(price)}</span>`;
+}
+function buyPeek() {
+  if (!pickPeek) return;
+  const { kind, id } = pickPeek, price = priceOf(kind, id);
+  if (UNLOCKS.has(kind, id) || WALLET.get() < price) return;
+  WALLET.add(-price); UNLOCKS.unlock(kind, id); pickPeek = null;
+  if (kind === 'char') { const ch = CHARACTER_BY[id]; setPair(ch.id, vehicleFor(ch)); }
+  else { const ch = pilot().character, vh = VEHICLE_BY[id]; if (canRide(ch, vh)) setPair(ch.id, vh.id); else refreshPicker(); }
+  refreshMeta();
+  const pw = $('pickWallet'); pw.classList.remove('bump'); void pw.offsetWidth; pw.classList.add('bump');
+  toast(`Unlocked ${partOf(kind, id).name}!`); vibrate([15, 30, 15]);
+}
+$('buyBtn').addEventListener('click', buyPeek);
+if (/[?&]debug\b/.test(location.search)) window.CRMETA = { WALLET, UNLOCKS, PERKS, PRICE_TIERS, priceOf, perk, ensureOwned, refreshMeta, get peek() { return pickPeek; }, shownPair, pilot };
 
 // ---------- boot ----------
 refreshMenu();
