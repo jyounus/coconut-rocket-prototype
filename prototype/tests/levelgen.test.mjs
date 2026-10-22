@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const html = fs.readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const regions = [...html.matchAll(/\/\* LEVELGEN:BEGIN \*\/([\s\S]*?)\/\* LEVELGEN:END \*\//g)].map(m => m[1]);
 if (regions.length < 3) throw new Error('LEVELGEN markers not found in index.html');
-const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR };')();
+const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan } = new Function(regions.join('\n') + '\nreturn { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateWarn, gatePeriod, gatePhase, gateStep, gateCommit, gateCloseIn, gateReopenIn, brakeDist, HANG, FALL_CAP, timingOf, hangCaps, zoneOf, batPos, BAT_PAT, CHUNKS, SET_PIECES, BEATS, PILOT_HITS, pilotMaxSize, staticShapes, GRAB, GRAB_STYLE, GRAB_TOTAL, grabPose, grabRig, PILOT_SCALE, PILOT_TILT, SIGNATURE, CHAR_FIT, VEH_FIT, PILOT_CAP, PART_ENV, SEAT_SCALE, SEAT_FLOOR, envScale, seatFit, seatPlace, comboHits, seatLocal, AMMO, CHASE, hungerLeash, COCO_GOLD, CHILI_R, COCO_R, GOLD_R, PICK_R, pickR, ADVENTURE, ADV, advSeed, advLevelOpts, pinJungle, capsSpan };')();
 
 // The widest and tallest pilot hitbox at any tilt (every character in every vehicle it can ride, world units): every
 // lane is sized from these.
@@ -863,6 +863,130 @@ if (zoneMix.gold && zoneMix.goldH) {
   if (zoneMix.per150 < 0.6 || zoneMix.per150 > 1.6) fail('about one golden coconut per 150 m', `${zoneMix.per150.toFixed(2)} per 150 m`);
 }
 
+// ---------- Adventure, World 1 (fixed stages; the endless shafts above never fork) ----------
+// Every stage on its real seed, plus many more seeds on the same settings, checked with the zones pinned to the jungle
+// the way the game runs them:
+// - everything stays jungle (thorn skins, no lavafalls), the shaft is never narrower than RULES.minWidth;
+// - a stage has exactly one fork (the boss shaft none): its pillar stands inside the walls, both lanes keep room for
+//   the widest pilot over its whole height (a sliding window as tall as the tallest pilot): the tight lane at least the
+//   widest pilot plus a wall grab's band plus 8 (a claw on its wall still leaves a pilot room), the wide lane at least
+//   the tight one plus 30 and twice the widest pilot;
+// - nothing makes either lane impassable: no hazard's band (a boulder's whole fall included) reaches into the fork
+//   stretch, and no monster limb above the catch line comes within the widest pilot of the pillar;
+// - pickups clear the pillar like a wall (centre at least ADV.pickMargin from its hitbox, never touching it);
+// - the chili line works in both lanes: a pilot keeping to either lane meets a chili at least every RULES.chili.gap
+//   from the launch to the finish (the boss shaft every stage chiliGap); the tight lane holds more coconut value than
+//   the wide one and a golden coconut;
+// - the finish: no hazard reaches within 120 of the finish deck and no pickup sits above it;
+// - the same seed always gives the same stage, and pickups never pop in on screen.
+const advStats = { levels: 0, forks: 0, tightMin: Infinity, wideMin: Infinity, tightVal: 0, wideVal: 0, golds: 0, pickClear: Infinity, chiliGap: 0, bossChiliGap: 0, finishClear: Infinity, real: [] };
+const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L)) : 0; return Math.hypot(px - ax - dx * t, py - ay - dy * t); };
+const capsDist = (caps, x, a) => Math.min(...caps.map(q => segDist(x, a, q.x0, q.a0, q.x1, q.a1) - q.r));
+pinJungle(true);
+try {
+  for (let k = 0; k < 150; k++) for (const st0 of ADVENTURE.stages) {
+    const st = k ? { ...st0, seed: `${st0.seed}#${k}` } : st0, tag = `${st0.name} seed ${st.seed}`;
+    const opts = advLevelOpts(st), level = createLevel(advSeed(st), opts), hz = [], fruit = [];
+    const end = opts.adv.end, H = st.boss ? 16000 : end + 900;
+    level.fill(H, hz, fruit);
+    advStats.levels++;
+    for (const h of hz) if ((h.type !== 'pillar' && zoneOf(h.alt) !== 0) || h.type === 'lavafall' || (h.type === 'spike' && h.skin !== 'thorn') || (h.skin != null && typeof h.skin === 'number' && h.skin !== 0)) { fail('adventure stages stay in the jungle', `${tag}: ${h.type} at ${h.alt | 0}`); break; }
+    for (let a = 0; a < H; a += 4) { const [l, r] = level.walls(a); if (r - l < RULES.minWidth - 0.01) { fail('adventure shafts keep the minimum width', `${tag} at ${a}: ${(r - l).toFixed(1)}`); break; } }
+    const pillars = hz.filter(h => h.type === 'pillar');
+    if (pillars.length !== (st.boss ? 0 : 1)) fail('each stage forks once (the boss shaft never)', `${tag}: ${pillars.length}`);
+    if (k < 15) {
+      const again = [], againF = []; createLevel(advSeed(st), opts).fill(H, again, againF);
+      if (JSON.stringify(again) !== JSON.stringify(hz) || JSON.stringify(againF) !== JSON.stringify(fruit)) fail('the same stage seed gives the same stage', tag);
+    }
+    // the chili line, for a pilot keeping to one lane (outside the fork both lanes are the whole shaft)
+    const laneOf = f => { for (const pl of pillars) if (f.alt > pl.lo && f.alt < pl.hi) { const sp = capsSpan(pl.caps, f.alt); if (sp) return f.x < (sp[0] + sp[1]) / 2 ? -1 : 1; } return 0; };
+    const chilies = fruit.filter(f => f.kind === 'chili' && f.alt < (end || H) - 200);
+    const gapMax = st.boss ? st.chiliGap : RULES.chili.gap;
+    for (const side of [-1, 1]) {
+      const alts = [58, ...chilies.filter(f => { const l = laneOf(f); return l === 0 || l === side; }).map(f => f.alt).sort((p, q) => p - q), end ? end - 200 : H - 1200];
+      let worst = 0; for (let i = 1; i < alts.length; i++) worst = Math.max(worst, alts[i] - alts[i - 1]);
+      if (st.boss) advStats.bossChiliGap = Math.max(advStats.bossChiliGap, worst); else advStats.chiliGap = Math.max(advStats.chiliGap, worst);
+      if (worst > gapMax + 1) fail(`the chili line works in both lanes${st.boss ? ' (boss shaft: its own gap)' : ''}`, `${tag} lane ${side}: ${worst.toFixed(0)} without a chili`);
+    }
+    if (end) {
+      for (const h of hz) { const top = h.type === 'pend' ? h.aAlt : h.hi; if (h.type !== 'pillar' && top < end + 400) advStats.finishClear = Math.min(advStats.finishClear, end - top); if (h.type !== 'pillar' && top > end - 120 && h.lo < end + 60) fail('no hazard near the finish deck', `${tag}: ${h.type} up to ${top | 0} (finish ${end})`); }
+      if (fruit.some(f => f.alt > end - 60)) fail('no pickups above the finish deck', tag);
+    }
+    for (const pl of pillars) {
+      advStats.forks++;
+      // lane widths over a sliding window as tall as the tallest pilot
+      const step = 2, rows = [];
+      for (let a = pl.lo - 4; a <= pl.hi + 4; a += step) {
+        const [l, r] = level.walls(a), sp = capsSpan(pl.caps, a);
+        if (!sp) { rows.push(null); continue; }
+        if (sp[0] - l < 1 || r - sp[1] < 1) fail('the pillar stands clear of both walls', `${tag} at ${a | 0}`);
+        rows.push(pl.tight < 0 ? [sp[0] - l, r - sp[1]] : [r - sp[1], sp[0] - l]);
+      }
+      const win = Math.ceil(PILOT_H / step);
+      let tMin = Infinity, wMin = Infinity;
+      for (let i = 0; i < rows.length; i++) {
+        let t = Infinity, w = Infinity;
+        for (let j = i; j < Math.min(rows.length, i + win); j++) if (rows[j]) { t = Math.min(t, rows[j][0]); w = Math.min(w, rows[j][1]); }
+        if (t < Infinity) { tMin = Math.min(tMin, t); wMin = Math.min(wMin, w); }
+      }
+      advStats.tightMin = Math.min(advStats.tightMin, tMin); advStats.wideMin = Math.min(advStats.wideMin, wMin);
+      if (tMin < PILOT_W + GRAB.band + 8) fail('the tight lane fits the widest pilot beside a wall grab', `${tag}: ${tMin.toFixed(1)}`);
+      if (wMin < tMin + 30 || wMin < PILOT_W * 2) fail('the wide lane is clearly wider', `${tag}: ${wMin.toFixed(1)} vs ${tMin.toFixed(1)}`);
+      // no hazard reaches into the fork (a boulder's whole fall counted), so neither lane is ever blocked
+      for (const h of hz) {
+        if (h === pl) continue;
+        const low = h.type === 'boulder' ? h.alt - RULES.boulderFall : h.lo, top = h.type === 'pend' ? h.aAlt : h.hi;
+        if (low < pl.hi + 40 && top > pl.lo - 40) fail('no hazard inside the fork', `${tag}: ${h.type} ${low | 0}-${top | 0} vs fork ${pl.lo | 0}-${pl.hi | 0}`);
+      }
+      // pickups clear the pillar like a wall
+      for (const f of fruit) {
+        if (f.alt < pl.lo - 80 || f.alt > pl.hi + 80) continue;
+        const d = capsDist(pl.caps, f.x, f.alt);
+        advStats.pickClear = Math.min(advStats.pickClear, d);
+        if (d < ADV.pickMargin - 0.5 || d < pickR(f) + 4) fail('pickups keep clear of the pillar', `${tag}: ${f.kind} ${d.toFixed(1)} from it`);
+      }
+      // the risky tight lane pays more, with a golden coconut
+      const inLane = side => fruit.filter(f => f.alt > pl.lo && f.alt < pl.hi && laneOf(f) === side);
+      const val = list => list.reduce((n, f) => n + (f.kind === 'gold' ? COCO_GOLD : f.kind === 'coco' ? 1 : 0), 0);
+      const tv = val(inLane(pl.tight)), wv = val(inLane(-pl.tight)), gold = inLane(pl.tight).some(f => f.kind === 'gold');
+      advStats.tightVal += tv; advStats.wideVal += wv; if (gold) advStats.golds++;
+      if (tv <= wv || !gold) fail('the tight lane holds more coconuts and a golden one', `${tag}: ${tv} vs ${wv}, golden ${gold}`);
+      if (k === 0) advStats.real.push(`${st0.name} ${pl.lo | 0}-${pl.hi | 0}: lanes ${tMin.toFixed(0)}/${wMin.toFixed(0)}, coconut value ${tv}/${wv}`);
+    }
+  }
+  // the fork can never be touched by a monster limb: its nearest point to a wall is beyond the grab band plus the widest pilot
+  const st = ADVENTURE.stages.find(q => q.branch), level = createLevel(advSeed(st), advLevelOpts(st)), hz = [];
+  level.fill(st.len * 10, hz, null);
+  const pl = hz.find(h => h.type === 'pillar'), wallAt = a => level.walls(a);
+  let nearest = Infinity;
+  for (const [id, gs] of Object.entries(GRAB_STYLE)) for (let kill = pl.lo - 100; kill < pl.hi; kill += 37) for (const d of [-1, 1]) for (const ph of [0.55, 0.62, 0.8, null]) {
+    const rig = grabRig(gs, d, wallAt, kill, grabPose(ph, kill * 0.1, d, GRAB.reach, gs), kill * 0.1, 200);
+    for (const [x0, y0, x1, y1, r] of rig.caps) for (const u of [0, 0.5, 1]) {
+      const x = lerp(x0, x1, u), a = kill - lerp(y0, y1, u);
+      if (a <= kill || a < pl.lo - 40 || a > pl.hi + 40) continue;   // (above the catch line: below it is the monster's own body)
+      const dd = capsDist(pl.caps, x, a) - r;
+      nearest = Math.min(nearest, dd);
+      if (dd < PILOT_W) fail('monster limbs never come near the pillar', `${id} side ${d}: ${dd.toFixed(1)}`);
+    }
+  }
+  advStats.limbGap = nearest;
+  // pickups (the fork's included) never pop in on screen
+  for (let k = 0; k < 40; k++) for (const st0 of ADVENTURE.stages) {
+    const st1 = { ...st0, seed: `${st0.seed}~${k}` }, lv = createLevel(advSeed(st1), advLevelOpts(st1)), hz1 = [], fr = [], VIEW = 1100;
+    lv.fill(VIEW + 900, hz1, fr);
+    let seenF = fr.length, seenH = hz1.length;
+    for (let cam = 10; cam < (st0.boss ? 9000 : st0.len * 10); cam += 10) {
+      lv.fill(cam + VIEW + 900, hz1, fr);
+      for (; seenF < fr.length; seenF++) if (fr[seenF].alt < cam + VIEW + 100) fail('adventure pickups never pop in on screen', `${st0.name}: ${fr[seenF].kind} at ${fr[seenF].alt | 0}, screen top ${cam + VIEW}`);
+      for (; seenH < hz1.length; seenH++) if (hz1[seenH].lo < cam + VIEW + 100) fail('the fork never pops in on screen', `${st0.name}: ${hz1[seenH].type} at ${hz1[seenH].lo | 0}, screen top ${cam + VIEW}`);
+    }
+  }
+} finally { pinJungle(false); }
+if (RULES.zones[0] !== 6800 || RULES.zones[1] !== 15000) fail('pinJungle(false) puts the endless zones back', RULES.zones.join());
+for (const st of ADVENTURE.stages) if (!(st.reward > 0 && st.target > 0)) fail('every stage pays a reward and sets a coconut target', st.name);
+if (ADVENTURE.stages.length !== 5 || !ADVENTURE.stages[4].boss) fail('World 1 has four stages and the boss', '');
+const advSummary = () => `PASS: adventure: ${advStats.levels} stage shafts (${ADVENTURE.stages.length} stages × 150 seeds) stay jungle, ${advStats.forks} forks: tight lane ${advStats.tightMin.toFixed(1)}+ and wide lane ${advStats.wideMin.toFixed(1)}+ (widest pilot ${PILOT_W.toFixed(1)} + grab band ${GRAB.band}), no hazard inside, pickups ${advStats.pickClear.toFixed(1)}+ from the pillar, limbs ${advStats.limbGap.toFixed(0)}+ from it; chili line in both lanes ${advStats.chiliGap.toFixed(0)} or less (boss shaft ${advStats.bossChiliGap.toFixed(0)}), coconut value tight ${advStats.tightVal} vs wide ${advStats.wideVal} with ${advStats.golds} golden; hazards end ${advStats.finishClear.toFixed(0)}+ below the finish. Real stages: ${advStats.real.join('; ')}`;
+
 if (failures.size) {
   console.log(`FAILED: ${failures.size} rule(s) broken across ${checked} shafts`);
   for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
@@ -875,4 +999,5 @@ console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every l
   console.log(`PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo steady fire spends; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
+console.log(advSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);

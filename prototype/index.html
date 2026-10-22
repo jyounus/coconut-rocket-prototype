@@ -1113,6 +1113,54 @@ const BEATS = [
 // a chunk covers the centre line when it has bats, a centred step, an offset crusher or a gate
 const coversCentre = c => c.steps.some(([t, v, w]) => t === 'bat' || t === 'gate' || t === 'crusher' || t === 'hang' || v === 'C' || v === 'L' || w === 'L');
 
+// ---------- adventure mode (fixed stages; never used by the endless Daily and Practice shafts) ----------
+// World 1, Jungle Roots: four fixed-length climbs on a fixed seed each, ending at a finish deck, then the boss shaft.
+// len: metres to the finish deck; seed: its shaft; reward: coconuts for the first clear (replays pay ADV.replay of it);
+// target: coconuts for the second star; density / intro (m) / diff0 (difficulty added on top of the usual ramp) set its
+// hazards; branch: where the shaft splits round a central rock pillar (at, len in world units; tight: which side the
+// tight lane is on, -1 left; lane: the tight lane's width). The boss shaft (boss: true) has no end and no fork; its
+// chilies come every chiliGap. Every stage stays in the jungle (pinJungle) however high it climbs.
+const ADVENTURE = {
+  id: 'w1', name: 'Jungle Roots',
+  stages: [
+    { name: 'Root Run',      len: 300, seed: 'w1-1', reward: 40,  target: 28, density: 1.1, intro: 300, diff0: 0,    branch: { at: 1450, len: 600,  tight: -1, lane: 122 } },
+    { name: 'Vine Gully',    len: 400, seed: 'w1-2', reward: 60,  target: 30, density: 1.4, intro: 160, diff0: 0.05, branch: { at: 1900, len: 700,  tight: 1,  lane: 118 } },
+    { name: 'Thorn Hollow',  len: 500, seed: 'w1-3', reward: 80,  target: 38, density: 1.6,  intro: 60,  diff0: 0.15, branch: { at: 2400, len: 800,  tight: -1, lane: 116 } },
+    { name: 'Spider Drop',   len: 600, seed: 'w1-4', reward: 100, target: 50, density: 1.8,  intro: 0,   diff0: 0.3,  branch: { at: 2900, len: 900,  tight: 1,  lane: 114 } },
+    { name: 'Gobblebloom',   boss: true, seed: 'w1-boss', reward: 300, target: 150, density: 0.6, intro: 0, diff0: 0.1, chiliGap: 380 },
+  ],
+};
+// The fork: inside its stretch the walls open to branchWidth and a rock pillar stands in the middle, its radius pillarR
+// (tapering to tipR over the first and last `taper` of its length). The tight lane keeps exactly `lane` (from the stage)
+// to its wall, sampled every `step`; the wide lane gets the rest. No hazards inside it (clearBelow under it, clearAbove
+// over it, boulders never fall into it). Chilies sit below and above it and in pairs (one per lane) every chiliEvery
+// inside, so both lanes keep the chili line; the tight lane carries a coconut trail (cocoStep) with a golden one, the
+// wide lane a few (wideCocoStep). Pickups keep pickMargin from the pillar, as from the walls. endClear: the stretch below
+// the finish deck that stays hazard-free; clearStart: the hazard-free launch (shorter than endless). replay: share of a
+// stage's reward paid again on later clears.
+const ADV = { branchWidth: 388, pillarR: 34, tipR: 7, taper: 0.3, step: 30, padLo: 140, padHi: 360, clearBelow: 220, clearAbove: 160,
+  chiliEvery: 280, cocoStep: 44, wideCocoStep: 120, pickMargin: RULES.fruitMargin + 6, endClear: 260, clearStart: 640, replay: 0.25 };
+// A stage's shaft seed and the createLevel options it runs on (shared by the game and the test).
+const advSeed = st => cyrb32('coconut-rocket/' + st.seed);
+const advLevelOpts = st => ({ density: st.density, intro: st.intro,
+  adv: { end: st.boss ? 0 : st.len * UNITS_PER_M, branch: st.branch || null, diff0: st.diff0 || 0, chiliGap: st.chiliGap || 0, boss: !!st.boss } });
+// Pin every zone to the jungle while an adventure stage runs (and back to the endless heights for Daily and Practice):
+// the zone heights move out of reach, so walls, palette, hazard skins, chunk weights and set pieces all stay jungle.
+const ZONES_ENDLESS = RULES.zones.slice();
+function pinJungle(on) { RULES.zones[0] = on ? 1e9 : ZONES_ENDLESS[0]; RULES.zones[1] = on ? 2e9 : ZONES_ENDLESS[1]; }
+// The horizontal extent [x0, x1] of a capsule chain (a pillar's hitbox) at height a, or null where it has none.
+function capsSpan(caps, a) {
+  let lo = Infinity, hi = -Infinity;
+  for (const q of caps) {
+    if (a < Math.min(q.a0, q.a1) - q.r || a > Math.max(q.a0, q.a1) + q.r) continue;
+    const t = q.a1 === q.a0 ? 0.5 : clamp((a - q.a0) / (q.a1 - q.a0), 0, 1), xs = q.x0 + (q.x1 - q.x0) * t;
+    if (ptSeg(xs, a, q.x0, q.a0, q.x1, q.a1) > q.r) continue;
+    const edge = d => { let i = 0, o = q.r + Math.abs(q.x1 - q.x0) + 1; for (let k = 0; k < 30; k++) { const m = (i + o) / 2; if (ptSeg(xs + d * m, a, q.x0, q.a0, q.x1, q.a1) <= q.r) i = m; else o = m; } return xs + d * i; };
+    lo = Math.min(lo, edge(-1)); hi = Math.max(hi, edge(1));
+  }
+  return lo <= hi ? [lo, hi] : null;
+}
+
 function zoneT(a) { const [z1, z2] = RULES.zones; return [smooth(z1 - 600, z1 + 600, a), smooth(z2 - 700, z2 + 700, a)]; }
 function zoneOf(a) { return a < RULES.zones[0] ? 0 : a < RULES.zones[1] ? 1 : 2; }
 // how far through its zone a height is, 0..1 (the magma core counts as 8000 deep)
@@ -1277,7 +1325,11 @@ function shapeDist(q, x, a) {
 
 function createLevel(seed, opts) {
   const intro = opts.intro * UNITS_PER_M, density = opts.density;
-  const difficulty = a => clamp((a - intro) / RULES.ramp, 0, 1);
+  // adventure stages only (opts.adv): a finish height, a fork round a rock pillar, a difficulty head start, a chili gap
+  const adv = opts.adv || null, endAt = adv && adv.end || 0, br = adv && adv.branch ? { ...adv.branch, planned: false, placed: false } : null;
+  const difficulty = adv ? a => clamp((a - intro) / RULES.ramp + (adv.diff0 || 0), 0, 1) : a => clamp((a - intro) / RULES.ramp, 0, 1);
+  const pillars = [];                // the forks' pillars placed so far (adventure only)
+  const clearStart = adv ? ADV.clearStart : RULES.clearStart;  // (an adventure stage's hazard-free launch is shorter)
   // Shaft shape: an authored plan of stretches (wide, pinch down to minWidth, or a calm chamber)
   // drawn from its own random stream, so the shape never depends on where hazards land or in what
   // order anything asks about it. A pinch is never followed by another pinch, so narrow stretches
@@ -1297,6 +1349,16 @@ function createLevel(seed, opts) {
       kind = 'pinch'; w = lerp(RULES.pinchWidth[0], RULES.pinchWidth[1], r1); sinceCalm++;
     } else {
       kind = 'wide'; w = lerp(RULES.wideWidth[0], RULES.wideWidth[1], diff) + 14 * r1; sinceCalm++;
+    }
+    if (br && !br.planned && a0 + len >= br.at) {
+      // the fork: this stretch ends where it starts, then one wide stretch holds the pillar (ADV.padLo below it to
+      // open out, ADV.padHi above it to close back in)
+      br.planned = true;
+      const a1 = Math.max(a0 + 240, br.at);
+      plan.push({ a0, a1, w, kind, zone: zoneOf((a0 + a1) / 2) });
+      plan.push({ a0: a1, a1: a1 + ADV.padLo + br.len + ADV.padHi, w: ADV.branchWidth, kind: 'branch', zone: 0 });
+      br.lo = a1 + ADV.padLo; br.hi = br.lo + br.len;
+      return;
     }
     plan.push({ a0, a1: a0 + len, w, kind, zone: zoneOf(a0 + len / 2) });
   }
@@ -1523,7 +1585,7 @@ function createLevel(seed, opts) {
 
   // Which hazard types the easy start allows at height a (null: everything).
   function allowed(a) {
-    if (intro > 0 && a < RULES.clearStart + intro * RULES.intro.staticOnly) return RULES.intro.first;   // (thorns only, after the clear launch)
+    if (intro > 0 && a < clearStart + intro * RULES.intro.staticOnly) return RULES.intro.first;   // (thorns only, after the clear launch)
     if (a < intro) return RULES.intro.types;
     return null;
   }
@@ -1557,6 +1619,11 @@ function createLevel(seed, opts) {
     for (const z of RULES.zones) if (h.lo < z + RULES.landmarkAfter && h.hi > z - RULES.landmarkClear) return true;
     const top = h.type === 'pend' ? h.aAlt : h.hi;
     if (chamberNear(h.lo - 10, top + 10)) return true;                  // calm chambers stay empty
+    if (br && br.lo != null) {                                          // (adventure) the fork stays empty, and no rock falls into it
+      const low = h.type === 'boulder' ? h.alt - RULES.boulderFall : h.lo;
+      if (low < br.hi + ADV.clearAbove && top > br.lo - ADV.clearBelow) return true;
+    }
+    if (endAt && top > endAt - ADV.endClear) return true;              // (adventure) nothing reaches the finish stretch
     if (h.type === 'boulder' && chamberNear(h.alt - RULES.boulderZone[0], h.hi)) return true;   // and no rock falls into one
     for (const q of recent) {
       if (h.lo < q.hi) return true;                                    // bands may never overlap
@@ -1574,12 +1641,12 @@ function createLevel(seed, opts) {
 
   const rng = mulberry32((seed ^ 0x1E7E1A7) >>> 0);
   const recent = [];                 // last placed hazards, newest last
-  let spikesPlaced = 0, arcsSeen = 0, pendStart = 0;
-  let floor = RULES.clearStart + Math.floor(rng() * 160), pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
+  let spikesPlaced = 0, arcsSeen = 0, pendStart = 0, skipTrail = false;
+  let floor = clearStart + Math.floor(rng() * 160), pending = 0, queue = [], chunk = null, sideA = 1, retries = 0, placed = 0, lastBat = null;
   const marks = [], setDone = [false, false, false];   // set pieces placed, as { alt, name, zone }
   const chambers = [], specDone = [0, 0, 0];
   const chunkMarks = [];             // where each chunk starts (after its breather): the chase surges here
-  let markNext = null, nextBeat = RULES.clearStart + 1000;
+  let markNext = null, nextBeat = clearStart + 1000;
   const arenaDone = [false, false];  // breather arenas' fruit weaves placed
 
   // A calm chamber: no hazards, just a fruit weave from wall to wall that rewards steering. The
@@ -1648,7 +1715,7 @@ function createLevel(seed, opts) {
   let settled = 0;
   const pendFruit = [];
   // the launch stretch (hazard-free) carries a gentle coconut weave, so the first seconds teach "grab these"
-  for (let a = 220, k = 0; a < RULES.clearStart - 40; a += RULES.chamberFruitStep, k++) {
+  for (let a = 220, k = 0; a < clearStart - 40; a += RULES.chamberFruitStep, k++) {
     const [l, r] = walls(a), M = RULES.fruitMargin + 30;
     pendFruit.push({ x: clamp((l + r) / 2 + Math.sin(k * 0.5 + (seed & 1 ? 0.6 : 3.7)) * ((r - l) / 2 - M) * 0.7, l + M, r - M), alt: a, kind: 'coco' });
   }
@@ -1667,8 +1734,10 @@ function createLevel(seed, opts) {
   function pickupSpot(x, a, out, avoid) {
     const [l, r] = walls(a), M = RULES.fruitMargin, C = RULES.pickup.clear, D = 2 * PICK_R + 8;
     const near = avoid && avoid.filter(f => Math.abs(f.alt - a) < D);
+    const rock = pillars.filter(pl => a > pl.lo - 60 && a < pl.hi + 60);     // (adventure) a fork's pillar counts as a wall
     for (let d = 0; d <= r - l; d += 4) for (const xx of d ? [x - d, x + d] : [x]) {
       if (xx < l + M || xx > r - M || clearance(xx, a, out) < C) continue;
+      if (rock.length && rock.some(pl => pl.caps.some(q => shapeDist({ k: 's', ...q }, xx, a) < ADV.pickMargin))) continue;
       if (near && near.some(f => Math.hypot(f.x - xx, f.alt - a) < D)) continue;
       return xx;
     }
@@ -1680,8 +1749,9 @@ function createLevel(seed, opts) {
       const f = pendFruit.shift(), x = pickupSpot(f.x, f.alt, out);
       if (x != null) fruitOut.push({ ...f, x });
     }
-    // the chili line: only chilies count toward the gap
-    const G = RULES.chili.gap, recent = fruitOut.filter(f => f.alt > settled - G - 200), alts = recent.filter(f => f.kind === 'chili').map(f => f.alt).sort((x, y) => x - y);
+    // the chili line: only chilies count toward the gap (an adventure stage may set its own gap and ends at its finish)
+    if (endAt) { upTo = Math.min(upTo, endAt - 120); for (let i = fruitOut.length - 1; i >= 0 && fruitOut[i].alt > endAt - 60; i--) fruitOut.splice(i, 1); }
+    const G = adv && adv.chiliGap || RULES.chili.gap, recent = fruitOut.filter(f => f.alt > settled - G - 200), alts = recent.filter(f => f.kind === 'chili').map(f => f.alt).sort((x, y) => x - y);
     let prev = settled ? (alts.filter(a => a <= settled).pop() ?? settled - G + 40) : 58;
     for (const a of [...alts.filter(a => a > prev), upTo]) {
       while (a - prev > G) {
@@ -1696,7 +1766,49 @@ function createLevel(seed, opts) {
     }
     settled = upTo;
   }
+  // (adventure) The fork: a rock pillar down the middle of the wide stretch, its hitbox a chain of capsules (also its
+  // drawn outline), set ADV.pillarR + lane in from the tight side's wall all the way up, so the tight lane keeps its
+  // width as the wall wiggles; plus the fork's pickups (see ADV).
+  function placePillar(out, fruitOut) {
+    br.placed = true;
+    const n = Math.max(4, Math.round(br.len / ADV.step)), pts = [], caps = [];
+    for (let i = 0; i <= n; i++) {
+      const u = i / n, a = br.lo + br.len * u, r = ADV.tipR + (ADV.pillarR - ADV.tipR) * smooth(0, ADV.taper, u) * (1 - smooth(1 - ADV.taper, 1, u));
+      const [L, R] = opening(a - br.len / n / 2, a + br.len / n / 2);
+      pts.push([br.tight < 0 ? L + br.lane + ADV.pillarR : R - br.lane - ADV.pillarR, a, r]);
+    }
+    for (let i = 0; i < n; i++) caps.push({ x0: pts[i][0], a0: pts[i][1], x1: pts[i + 1][0], a1: pts[i + 1][1], r: Math.max(pts[i][2], pts[i + 1][2]) });
+    const lo = Math.min(...caps.map(q => Math.min(q.a0, q.a1) - q.r)), hi = Math.max(...caps.map(q => Math.max(q.a0, q.a1) + q.r));
+    const h = { type: 'pillar', caps, tight: br.tight, lane: br.lane, x: pts[n >> 1][0], alt: hi, lo, hi, seed: seed & 0xffff };
+    out.push(h); pillars.push(h);
+    marks.push({ alt: lo - 120, name: 'The fork: pick a lane', zone: 0, fork: true });
+    if (fruitOut) {
+      const laneX = (a, side) => { const [l, r] = walls(a), sp = capsSpan(caps, a) || [(l + r) / 2, (l + r) / 2]; return side < 0 ? (l + sp[0]) / 2 : (sp[1] + r) / 2; };
+      const mid = a => { const [l, r] = walls(a); return (l + r) / 2; };
+      pendFruit.push({ x: mid(lo - 90), alt: lo - 90, fill: true, kind: 'chili', fork: 'below' });
+      pendFruit.push({ x: mid(hi + 90), alt: hi + 90, fill: true, kind: 'chili', fork: 'above' });
+      const chiliAt = [];
+      for (let a = lo + ADV.chiliEvery; a < hi - 120; a += ADV.chiliEvery) {
+        chiliAt.push(a);
+        for (const side of [-1, 1]) pendFruit.push({ x: laneX(a, side), alt: a, fill: true, kind: 'chili', fork: side === br.tight ? 'tight' : 'wide' });
+      }
+      const free = a => chiliAt.every(c => Math.abs(c - a) > 44);
+      const t0 = lo + br.len * 0.18, t1 = hi - br.len * 0.16, goldAt = (t0 + t1) / 2;
+      let gold = false;
+      for (let a = t0; a <= t1; a += ADV.cocoStep) if (free(a)) {
+        const g = !gold && a >= goldAt - ADV.cocoStep / 2; if (g) gold = true;
+        pendFruit.push({ x: laneX(a, br.tight), alt: a, kind: g ? 'gold' : 'coco', bonus: true, fork: 'tight' });
+      }
+      for (let a = lo + br.len * 0.25; a <= hi - br.len * 0.2; a += ADV.wideCocoStep) if (free(a)) pendFruit.push({ x: laneX(a, -br.tight), alt: a, kind: 'coco', fork: 'wide' });
+    }
+    floor = hi + ADV.clearAbove; pending = 0; skipTrail = true;
+  }
   function step(out, fruitOut) {
+    if (adv) {
+      // no hazards in the last stretch below the finish deck: the shaft just climbs on, empty
+      if (endAt && floor + pending + 200 > endAt - ADV.endClear) { floor += 400; pending = 0; return; }
+      if (br && !br.placed) { if (!br.planned) segIndex(br.at + 1); if (floor + pending + 260 > br.lo - ADV.clearBelow) { placePillar(out, fruitOut); return; } }
+    }
     arena(fruitOut);
     const inIntro = floor < intro, diff = difficulty(floor);
     if (queue.length && !markNext && (setPieceDue() >= 0 || floor >= nextBeat + 500)) queue = [];
@@ -1790,13 +1902,14 @@ function createLevel(seed, opts) {
     if (h.type === 'spike') spikesPlaced++;
     if (markNext) { marks.push({ alt: h.lo, ...markNext }); markNext = null; }
     if (fruitOut && hash2(placed, seed + 41) < RULES.fruitChance) trail(h, pendFruit);
-    if (fruitOut && prev) gapTrail(prev, h);
+    if (fruitOut && prev && !skipTrail) gapTrail(prev, h);
+    skipTrail = false;
     placed++;
     floor = h.hi; pending = 0;
   }
 
   return {
-    seed, intro, walls, difficulty, safeLane, marks, chambers, segAt, allowed, chunkMarks,
+    seed, intro, walls, difficulty, safeLane, marks, chambers, segAt, allowed, chunkMarks, pillars, end: endAt, branch: br,
     fill(upTo, out, fruitOut) {
       // (the floor itself must pass upTo, not just floor + pending: a long skip past a chamber can leave it far
       // behind, and pickups only settle below floor - 400, so they would pop in on screen)
