@@ -521,12 +521,9 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .msheet .mlist li > .mtick { position: absolute; left: -9px; top: -9px; animation-delay: 0s; } .msheet .mlist li .mtick .ok { animation-delay: .2s; }
 .msheet .mlist li.out { transform: translateX(-108%); opacity: 0; }
 .msheet .mlist li.in { transform: translateX(40%); opacity: 0; transition: none; }
-/* a new mission's corner ribbon: a gold band across the row's top-left corner (clipped to the row's rounded corner);
-   the title steps in to clear it */
-.msheet .mlist li .nrib { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
-.msheet .mlist li .nrib b { position: absolute; top: 9px; left: -27px; width: 92px; padding: 3px 0; transform: rotate(-40deg); text-align: center; font: 900 9.5px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: #3a1d04;
-  background: linear-gradient(#ffe68a, #ffb238); box-shadow: 0 2px 4px rgba(30,12,2,.35), inset 0 1px 0 rgba(255,255,255,.55); }
-.msheet .mlist li.isnew .mt { padding-left: 24px; }
+/* a new mission's tag: a gold pill at the start of its title, flowing with the text (a long title wraps under it) */
+.msheet .mlist .newtag { display: inline-block; margin-right: 7px; padding: 3px 7px 2px; border-radius: 7px; vertical-align: 2px; font: 900 10px/1.1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: #3a1d04;
+  background: linear-gradient(#ffe68a, #ffb238); box-shadow: 0 2px 0 #b8700f, inset 0 1px 0 rgba(255,255,255,.55); }
 .fab .badge.done { background: linear-gradient(#ffd65c, #f39a1e); color: #4a2606; }
 .mstreak { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 18px; background: linear-gradient(100deg, rgba(255,210,94,.2), rgba(255,178,56,.08)); color: #ffe7b8; font-size: 13px; font-weight: 800; line-height: 1.3; }
 .mstreak b { display: block; font: 400 17px var(--font-display); letter-spacing: .02em; color: #ffd25e; }
@@ -27788,11 +27785,11 @@ function revealMissions() {
   const fresh = [...list.children].map(li => li.innerHTML);   // (the new rows, rendered by refreshMeta)
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const at = (ms, fn) => revealTimers.push(setTimeout(fn, ms));
-  const seen = new Set(), ribbon = '<i class="nrib" aria-hidden="true"><b>New</b></i>';
+  const seen = new Set(), newTag = `<span class="newtag">${T('new')}</span>`;
   queue.forEach((r, k) => {
     if (seen.has(r.slot)) return; seen.add(r.slot);
     const li = list.children[r.slot]; if (!li) return;
-    if (reduce) { li.classList.add('isnew'); li.insertAdjacentHTML('afterbegin', ribbon); return; }
+    if (reduce) { li.classList.add('isnew'); li.querySelector('.mt').insertAdjacentHTML('afterbegin', newTag); return; }
     const num = v => r.count ? `${fmtN(v)}/${fmtN(r.n)}` : v >= r.n ? '1/1' : '0/1';
     li.classList.add('was');
     li.innerHTML = `<span class="mt">${r.text}</span><span class="mr">${coinHTML}${r.reward}</span><span class="mbar" style="--p:${Math.round(r.from * 100)}%"><i></i></span><span class="mp">${num(Math.round(r.from * r.n))}</span>`;
@@ -27812,7 +27809,7 @@ function revealMissions() {
     });
     at(t0 + fill + 1100, () => li.classList.add('out'));   // it slides away...
     at(t0 + fill + 1450, () => {                            // ...and the new mission slides into its slot
-      li.className = 'isnew in'; li.innerHTML = ribbon + (fresh[r.slot] || '');
+      li.className = 'isnew in'; li.innerHTML = fresh[r.slot] || ''; li.querySelector('.mt')?.insertAdjacentHTML('afterbegin', newTag);
       requestAnimationFrame(() => requestAnimationFrame(() => li.classList.remove('in')));
     });
   });
@@ -28250,6 +28247,10 @@ tap($('openMonsters'), () => { buildMonsters(); show('monsterScreen'); fitCards(
 $('monsterDone').addEventListener('click', () => { refreshDebug(); show('debugScreen'); });
 $('pilotDone').addEventListener('click', () => { refreshMenu(); show('menu'); });
 
+// Player-facing words that are not part of a sentence yet live here, so a translation can replace them in one place
+// (the seed of a strings table for localisation).
+const STRINGS = { new: 'New' };
+const T = k => STRINGS[k] || k;
 // ---------- meta UI: the wallet, missions, the daily streak, and the shop in the pilot picker ----------
 const coinHTML = '<b class="cn" aria-hidden="true"></b>';
 const fmtN = v => v.toLocaleString('en-GB');
