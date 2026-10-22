@@ -3887,106 +3887,252 @@ function drawProgressTick() {
   }
   ctx.restore();
 }
+// Fire geysers: a crusty fumarole vent in the wall and a jet of flame that never stops. No ink anywhere: the flame's
+// edge is a band of its own deep crimson, the rock's edge a darker shade of the rock. Layers, outside in: a crimson
+// rim, an orange body, a yellow inner flame, a white-hot core and a blue premix cone right at the mouth. Every layer
+// keeps the shared geyserHalf shape and only ever licks outward from it, so the flame always stays a little bigger
+// than its hitbox (GEYSER_HIT: 92% of the length, 85% of the thickness).
 const GEYSER_LAYERS = [
-  // outer flame body, then the bright inner flame, then the white-hot core near the vent
-  { k: 1.0,  L: 1.0,  turb: 1.0, stops: ['rgba(255,80,20,.95)', 'rgba(255,60,16,1)',    'rgba(235,24,60,.95)',  'rgba(200,10,80,.75)'] },
-  { k: 0.68, L: 0.86, turb: 0.7, stops: ['rgba(255,220,90,.8)', 'rgba(255,175,30,1)',   'rgba(255,100,20,.8)',  'rgba(255,80,20,0)'] },
-  { k: 0.38, L: 0.62, turb: 0.4, stops: ['rgba(255,255,255,1)', 'rgba(255,255,236,1)', 'rgba(255,230,150,.7)', 'rgba(255,190,80,0)'] },
+  // k: thickness, L: length, turb: how much the edge licks, stops along the jet: vent, 12%, 70%, tip
+  { k: 1.0,  L: 1.0,  turb: 1.0, stops: ['#ff6a1e', '#ff5414', '#ec2c1a', 'rgba(200,24,40,.85)'] },
+  { k: 0.72, L: 0.88, turb: 0.8, stops: ['#ffd25a', '#ffa424', 'rgba(255,110,24,.9)', 'rgba(255,90,20,0)'] },
+  { k: 0.44, L: 0.66, turb: 0.5, stops: ['#fffef4', '#fff6c4', 'rgba(255,226,120,.75)', 'rgba(255,200,90,0)'] },
 ];
-function drawGeyser(h) {
-  const dir = h.side, bx = sx(h.base), by = sy(h.alt), T = G.t, ph = h.ph;
-  const lenPx = h.len * s;
-
-  // soot stain on the wall above the vent
-  ctx.fillStyle = 'rgba(10,4,2,.35)';
-  ctx.beginPath(); ctx.ellipse(bx - dir * 2 * s, by - 26 * s, 9 * s, 26 * s, 0, 0, 6.283); ctx.fill();
-
-  // basalt vent lip sticking out of the wall
-  ctx.save(); ctx.translate(bx, by);
+// the flame's edge band: a deep crimson of its own colour (never black), drawn as the outer layer swollen a little
+const GEYSER_RIM = ['#c8240e', '#b81a12', '#a01220', 'rgba(150,14,40,.6)'];
+// the vent rock in each zone: [light, mid, dark], the edge shade, and the mineral crust round the mouth
+const GEYSER_VENT = [
+  { rock: ['#b2a888', '#7a7052', '#3e3824'], edge: '#4a4028', crust: ['#fff2a0', '#e2c43a'], moss: ['#9ad24a', '#4e8a24'] },
+  { rock: ['#9aa2c8', '#5a6088', '#2a2e4a'], edge: '#30345a', crust: ['#fff4b0', '#e8cc48'] },
+  { rock: ['#7a6068', '#46323a', '#22161c'], edge: '#3a2228', crust: ['#ffe2a0', '#ff9a3a'], seams: true },
+];
+function geyserLayerPath(h, ly, bx, by, dir, T, ph, L, swell = 0) {
+  const N = 22;
   ctx.beginPath();
-  for (let k = 0; k < 10; k++) {
-    const a = k / 10 * 6.283, rr = (15 + 5 * hash2(k, h.alt | 0)) * s;
-    ctx.lineTo(Math.cos(a) * rr * 0.75 + dir * 5 * s, Math.sin(a) * rr);
+  for (const edge of [1, -1]) {                      // upper edge out to the tip, lower edge back
+    for (let i = 0; i <= N; i++) {
+      const t = (edge > 0 ? i : N - i) / N, tt = t * L;
+      // a licking edge: travelling waves plus value noise streaming outward. It only ever swells the flame
+      // (0.97..1.3 of its shape), so the outer layer never pulls inside the hitbox.
+      const nz = vnoise(tt * 9 - T * 7 + edge * 13 + ph, 77);
+      const wob = (0.5 + 0.5 * Math.sin(tt * 14 - T * 22 + ph + edge * 1.7)) * 0.12 + (0.5 + 0.5 * Math.sin(tt * 29 - T * 37 + ph * 2 + edge)) * 0.06 + nz * 0.14;
+      const half = geyserHalf(h, t) * ly.k * (0.97 + wob * (0.4 + tt) * ly.turb) + swell;
+      const x = bx + dir * h.len * tt * s, y = by - (geyserRise(tt) + edge * half) * s;
+      i === 0 && edge > 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
   }
   ctx.closePath();
-  const vg = ctx.createLinearGradient(0, -20 * s, 0, 20 * s);
-  vg.addColorStop(0, '#5a3b30'); vg.addColorStop(0.5, '#2e1c17'); vg.addColorStop(1, '#170d0a');
-  ctx.fillStyle = vg; ctx.strokeStyle = '#120806'; ctx.lineWidth = 2.5; ctx.fill(); ctx.stroke();
-  // glowing mouth and a slow lava dribble
-  const mx = dir * 12 * s;
-  const mg = ctx.createRadialGradient(mx, 0, 1, mx, 0, 10 * s);
-  mg.addColorStop(0, '#fffbe0'); mg.addColorStop(0.4, '#ffb238'); mg.addColorStop(1, '#5a1406');
-  ctx.fillStyle = mg; ctx.beginPath(); ctx.ellipse(mx, 0, 5 * s, 9 * s, 0, 0, 6.283); ctx.fill();
-  const drip = (6 + 5 * (0.5 + 0.5 * Math.sin(T * 1.7 + ph))) * s;
-  ctx.fillStyle = '#ff8a2a'; ctx.beginPath(); ctx.ellipse(mx - dir * 2 * s, 8 * s + drip / 2, 1.8 * s, drip / 2, 0, 0, 6.283); ctx.fill();
+}
+// An irregular rock chunk, lit from the top left: gradient fill, an edge in its own darkest shade, a lit top arc.
+function hzRock(x, y, r, seed, cols, edge, ry = r) {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283 + seed, k = 0.8 + 0.3 * hash2(i, seed * 97 | 0); ctx.lineTo(x + Math.cos(a) * r * k, y + Math.sin(a) * ry * k); }
+  ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, x - r * 0.4, y - ry, x + r * 0.3, y + ry, cols); ctx.fill();
+  ctx.strokeStyle = edge; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,240,.32)'; ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.ellipse(x, y, r * 0.62, ry * 0.62, 0, 3.7, 5.0); ctx.stroke();
+}
+// The geyser's fumarole: the back mound (behind the flame) or the front lips (drawn over the flame's root so it
+// pours out of the mouth), with sulphur crust and a glowing throat.
+function geyserVent(h, V, bx, by, dir, T, ph, front) {
+  const sd = (h.alt | 0) % 7;
+  ctx.save(); ctx.translate(bx, by); ctx.scale(s * dir, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (!front) {
+    // scorched wall: a warm soot fan licking up the rock above the vent
+    const soot = ctx.createRadialGradient(0, -16, 2, 0, -18, 38);
+    soot.addColorStop(0, 'rgba(46,18,8,.5)'); soot.addColorStop(0.6, 'rgba(46,18,8,.22)'); soot.addColorStop(1, 'rgba(46,18,8,0)');
+    ctx.fillStyle = soot; ctx.beginPath(); ctx.ellipse(-1, -22, 16, 38, 0, 0, 6.283); ctx.fill();
+    const ao = ctx.createRadialGradient(-2, 2, 6, -2, 2, 30);
+    ao.addColorStop(0, 'rgba(30,12,6,.5)'); ao.addColorStop(1, 'rgba(30,12,6,0)');
+    ctx.fillStyle = ao; ctx.beginPath(); ctx.ellipse(-2, 3, 18, 30, 0, 0, 6.283); ctx.fill();
+    // the mound: one big lumpy dome, rounded all the way round (no cut edge), sunk into the wall rock
+    ctx.beginPath();
+    for (let k = 0; k < 20; k++) {
+      const a = k / 20 * 6.283, lump = 1 + 0.18 * (hash2(k, h.alt | 0) - 0.5);
+      ctx.lineTo(-3 + Math.cos(a) * 16 * lump, Math.sin(a) * 23 * lump);
+    }
+    ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, -6, -23, 4, 23, V.rock); ctx.fill();
+    ctx.strokeStyle = V.edge; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.save(); ctx.clip();
+    for (let k = 0; k < 3; k++) {     // strata: a dark groove with a lit ledge above it
+      ctx.strokeStyle = rgbaA(pkRGBA(V.rock[2]), 0.5); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(-10, -13 + k * 11); ctx.quadraticCurveTo(0, -10 + k * 10, 9, -5 + k * 6); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,240,.14)'; ctx.beginPath(); ctx.moveTo(-10, -14.5 + k * 11); ctx.quadraticCurveTo(0, -11.5 + k * 10, 9, -6.5 + k * 6); ctx.stroke();
+    }
+    const hl = ctx.createLinearGradient(0, -21, 0, -8); hl.addColorStop(0, 'rgba(255,255,240,.4)'); hl.addColorStop(1, 'rgba(255,255,240,0)');
+    ctx.fillStyle = hl; ctx.fillRect(-12, -22, 34, 14);
+    const bounce = ctx.createLinearGradient(0, 21, 0, 6); bounce.addColorStop(0, 'rgba(255,120,40,.5)'); bounce.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = bounce; ctx.fillRect(-12, 6, 34, 16);
+    if (V.seams) {      // magma: glowing cracks through the rock
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,120,40,${0.55 + 0.25 * Math.sin(T * 3 + ph)})`; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(-9, -12); ctx.lineTo(-3, -8); ctx.lineTo(0, -14); ctx.moveTo(-8, 11); ctx.lineTo(-2, 8); ctx.lineTo(2, 13); ctx.stroke();
+    }
+    ctx.restore();
+    // the throat, glowing deep inside the mouth
+    const mg = ctx.createRadialGradient(10, 0, 1, 10, 0, 10);
+    mg.addColorStop(0, '#fffbe6'); mg.addColorStop(0.45, '#ffc444'); mg.addColorStop(1, '#a8300c');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.ellipse(10, 0, 4.6, 9, 0, 0, 6.283); ctx.fill();
+  } else {
+    // the upper and lower lips: rock chunks round the mouth, crusted with sulphur, lit by the flame from inside
+    for (const d of [-1, 1]) {
+      hzRock(-2, d * 18, 8, sd + 2 + d, [V.rock[0], V.rock[1], V.rock[2]], V.edge, 6);
+      hzRock(8, d * 13.4, 8.6, sd + d, d < 0 ? [V.rock[0], V.rock[1], V.rock[2]] : [V.rock[1], V.rock[2]], V.edge, 6);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fl = ctx.createRadialGradient(10, d * 7.5, 0, 10, d * 7.5, 7);
+      fl.addColorStop(0, 'rgba(255,170,70,.75)'); fl.addColorStop(1, 'rgba(255,120,40,0)');
+      ctx.fillStyle = fl; ctx.beginPath(); ctx.arc(10, d * 7.5, 7, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+    // sulphur crust: lumpy yellow deposits along the lips
+    // a jagged crystalline rim of it along each lip's inner edge, plus a few clumps further out
+    for (const d of [-1, 1]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 7; i++) ctx.lineTo(3 + i * 1.9, d * (7.4 + 0.5 * Math.sin(i * 2.1)));
+      for (let i = 7; i >= 0; i--) ctx.lineTo(3 + i * 1.9 + (i % 2) * 0.9, d * (9.6 + (i % 2 ? 2.6 : 0.6) * (0.6 + 0.6 * hash2(i, d + 5)) + (7 - i) * 0.25));
+      ctx.closePath();
+      ctx.fillStyle = pkLG(ctx, 0, d * 7, 0, d * 12, V.crust); ctx.fill();
+      ctx.strokeStyle = 'rgba(150,110,20,.7)'; ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,230,.7)'; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(4, d * 8.2); ctx.lineTo(15, d * 8.4); ctx.stroke();
+    }
+    for (const [cx, cy, r] of [[8.5, -16, 1.9], [4, 19.6, 1.6], [2.6, -20.4, 1.4], [11, 15, 1.5]]) {
+      ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283 + cx, rr = r * (i % 2 ? 0.6 : 1.1); ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } ctx.closePath();
+      ctx.fillStyle = pkLG(ctx, cx, cy - r, cx, cy + r, V.crust); ctx.fill();
+    }
+    if (V.moss) for (let k = 0; k < 6; k++) {
+      const x = -6 + k * 3, y = -20.5 + k * 0.8 + (k % 2) * 0.9;
+      ctx.fillStyle = k % 2 ? V.moss[1] : V.moss[0]; ctx.beginPath(); ctx.ellipse(x, y, 3, 1.9, -0.2, 0, 6.283); ctx.fill();
+    }
+    // a slow lava dribble off the lower lip
+    const drip = 5 + 5 * (0.5 + 0.5 * Math.sin(T * 1.7 + ph));
+    ctx.fillStyle = pkLG(ctx, 0, 14, 0, 16 + drip, ['#ffcf5a', '#ff7a1e', '#c8380e']);
+    ctx.beginPath(); ctx.ellipse(10.5, 15 + drip / 2, 1.6, drip / 2, 0, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawGeyser(h) {
+  const dir = h.side, bx = sx(h.base), by = sy(h.alt), T = G.t, ph = h.ph, V = GEYSER_VENT[zoneOf(h.alt)];
+  const lenPx = h.len * s;
+
+  // heat glow lighting up the shaft round the jet
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const gx = bx + dir * lenPx * 0.45, gr = lenPx * 0.85;
+  const glow = ctx.createRadialGradient(gx, by, 4 * s, gx, by, gr);
+  glow.addColorStop(0, `rgba(255,96,36,${(0.36 + 0.06 * Math.sin(T * 9 + ph)) * (0.25 + 0.75 * glowK)})`); glow.addColorStop(0.5, `rgba(255,70,40,${0.1 * (0.25 + 0.75 * glowK)})`); glow.addColorStop(1, 'rgba(255,40,60,0)');
+  ctx.fillStyle = glow; ctx.fillRect(gx - gr, by - gr, gr * 2, gr * 2);
   ctx.restore();
 
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  // heat glow lighting up the shaft around the jet
-  const gx = bx + dir * lenPx * 0.4, gr = lenPx * 0.9;
-  const glow = ctx.createRadialGradient(gx, by, 4 * s, gx, by, gr);
-  glow.addColorStop(0, `rgba(255,90,40,${(0.4 + 0.06 * Math.sin(T * 9 + ph)) * (0.25 + 0.75 * glowK)})`); glow.addColorStop(1, 'rgba(255,40,60,0)');
-  ctx.fillStyle = glow; ctx.fillRect(gx - gr, by - gr, gr * 2, gr * 2);
+  // the vent's back: a lumpy fumarole mound half sunk in the wall, its throat glowing
+  geyserVent(h, V, bx, by, dir, T, ph, false);
 
-  // the jet: three turbulent layers that roll outward from the vent. The outer body is solid and
-  // ink-edged so it reads as a hard, lethal shape against any cave; the inner layers glow.
-  const N = 20;
+  // the jet. The crimson rim layer first (the outer body swollen by ~1.6 units), then each layer on top.
+  ctx.save(); ctx.lineJoin = 'round';
+  const L0 = 1 + 0.03 * Math.sin(T * 17 + ph);        // the tip flickers, never short of the hitbox
+  ctx.globalAlpha = 0.95;
+  geyserLayerPath(h, GEYSER_LAYERS[0], bx, by, dir, T, ph, L0, 1.7);
+  let g = ctx.createLinearGradient(bx, 0, bx + dir * lenPx * L0, 0);
+  g.addColorStop(0, GEYSER_RIM[0]); g.addColorStop(0.12, GEYSER_RIM[1]); g.addColorStop(0.7, GEYSER_RIM[2]); g.addColorStop(1, GEYSER_RIM[3]);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.globalAlpha = 1;
   for (const ly of GEYSER_LAYERS) {
     ctx.globalCompositeOperation = ly.k === 1 ? 'source-over' : 'lighter';
-    const L = ly.L * (ly.k === 1 ? 1 + 0.035 * Math.sin(T * 17 + ph) : 1);   // tip tongues flicker, never past the hitbox much
-    const g = ctx.createLinearGradient(bx, 0, bx + dir * lenPx * L, 0);
+    const L = ly.L * L0;
+    geyserLayerPath(h, ly, bx, by, dir, T, ph, L);
+    g = ctx.createLinearGradient(bx, 0, bx + dir * lenPx * L, 0);
     g.addColorStop(0, ly.stops[0]); g.addColorStop(0.12, ly.stops[1]); g.addColorStop(0.7, ly.stops[2]); g.addColorStop(1, ly.stops[3]);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    for (const edge of [1, -1]) {                      // upper edge out to the tip, lower edge back
-      for (let i = 0; i <= N; i++) {
-        const t = (edge > 0 ? i : N - i) / N, tt = t * L;
-        // a noisy, licking edge: two travelling waves plus value noise that streams outward
-        const nz = vnoise(tt * 9 - T * 7 + edge * 13 + ph, 77) - 0.5;
-        const wob = (Math.sin(tt * 14 - T * 22 + ph + edge * 1.7) * 0.2 + Math.sin(tt * 29 - T * 37 + ph * 2 + edge) * 0.1 + nz * 0.55) * tt * ly.turb;
-        const half = geyserHalf(h, t) * ly.k * (1 + wob);
-        const x = bx + dir * h.len * tt * s, y = by - (geyserRise(tt) + edge * half) * s;
-        i === 0 && edge > 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
+    ctx.fillStyle = g; ctx.fill();
+    if (ly.k === 1) {
+      // the body's own shading: a warm sheen along the top, a deeper red along the underside
+      ctx.save(); ctx.clip();
+      const sh = ctx.createLinearGradient(0, by - 30 * s, 0, by + 26 * s);
+      sh.addColorStop(0, 'rgba(255,220,120,.35)'); sh.addColorStop(0.42, 'rgba(255,220,120,0)'); sh.addColorStop(0.6, 'rgba(150,10,20,0)'); sh.addColorStop(1, 'rgba(150,10,20,.4)');
+      ctx.fillStyle = sh; ctx.fillRect(Math.min(bx, bx + dir * lenPx * 1.1), by - 40 * s, lenPx * 1.1, 80 * s);
+      ctx.restore();
     }
-    ctx.closePath(); ctx.fill();
-    if (ly.k === 1) { ctx.strokeStyle = 'rgba(70,6,16,.9)'; ctx.lineWidth = 2.6 * s; ctx.lineJoin = 'round'; ctx.stroke(); }
   }
+  ctx.globalCompositeOperation = 'source-over';
+  geyserVent(h, V, bx, by, dir, T, ph, true);   // the vent's front lips, over the flame's root
   ctx.globalCompositeOperation = 'lighter';
-
-  // flame tongues tearing off the outer edge
-  for (let j = 0; j < 6; j++) {
-    const prog = (T * 2.3 + j / 6 + ph * 0.7) % 1, t = 0.25 + prog * 0.65, edge = j % 2 ? 1 : -1;
-    const half = geyserHalf(h, t), x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + edge * half * 0.9) * s;
-    const len = (6 + 10 * (1 - prog)) * s, al = 0.55 * (1 - prog);
-    ctx.fillStyle = `rgba(255,${150 + 60 * (1 - prog) | 0},40,${al})`;
-    ctx.beginPath(); ctx.moveTo(x - dir * 5 * s, y); ctx.quadraticCurveTo(x + dir * 2 * s, y - edge * len * 0.6, x + dir * 6 * s, y - edge * len); ctx.quadraticCurveTo(x + dir * 4 * s, y - edge * len * 0.3, x + dir * 6 * s, y); ctx.closePath(); ctx.fill();
-  }
-  // white-hot throat right at the vent
-  const core = ctx.createRadialGradient(bx + dir * 8 * s, by, 1, bx + dir * 8 * s, by, 16 * s);
-  core.addColorStop(0, 'rgba(255,255,255,1)'); core.addColorStop(0.5, 'rgba(255,250,210,.7)'); core.addColorStop(1, 'rgba(255,220,140,0)');
-  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(bx + dir * 8 * s, by, 16 * s, 0, 6.283); ctx.fill();
-  // heat shimmer rising off the vent
+  // streaks of brighter gas racing out along the jet
   ctx.lineCap = 'round';
+  for (let j = 0; j < 5; j++) {
+    const prog = (T * 2.6 + j / 5 + ph * 0.3) % 1, t0 = 0.08 + prog * 0.6, t1 = t0 + 0.16, off = (hash2(j, 9) - 0.5) * 0.9;
+    const y0 = by - (geyserRise(t0) + off * geyserHalf(h, t0) * 0.6) * s, y1 = by - (geyserRise(t1) + off * geyserHalf(h, t1) * 0.6) * s;
+    ctx.strokeStyle = `rgba(255,240,170,${0.45 * Math.sin(prog * Math.PI)})`; ctx.lineWidth = 2.2 * s;
+    ctx.beginPath(); ctx.moveTo(bx + dir * h.len * t0 * s, y0); ctx.lineTo(bx + dir * h.len * t1 * s, y1); ctx.stroke();
+  }
+  // flame tongues tearing off the outer edge, curling upward as the hot gas rises
+  for (let j = 0; j < 7; j++) {
+    const prog = (T * 2.3 + j / 7 + ph * 0.7) % 1, t = 0.22 + prog * 0.66, edge = j % 2 ? 1 : -1;
+    const half = geyserHalf(h, t), x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + edge * half * 0.92) * s;
+    const len = (5 + 10 * (1 - prog)) * s, al = 0.6 * (1 - prog), up = edge > 0 ? 1 : 0.55;
+    ctx.fillStyle = `rgba(255,${120 + 80 * (1 - prog) | 0},36,${al})`;
+    ctx.beginPath(); ctx.moveTo(x - dir * 5 * s, y); ctx.quadraticCurveTo(x + dir * 2 * s, y - edge * len * 0.6 * up, x + dir * 7 * s, y - edge * len * up - len * 0.3);
+    ctx.quadraticCurveTo(x + dir * 4 * s, y - edge * len * 0.3, x + dir * 6 * s, y); ctx.closePath(); ctx.fill();
+  }
+  // rolling fireballs give the jet volume: each swells as it travels out, then burns away
+  for (let j = 0; j < 8; j++) {
+    const prog = (T * 1.5 + j / 8 + ph) % 1, t = prog * 0.95;
+    const r = geyserHalf(h, t) * (0.8 + 0.25 * hash2(j, h.alt | 0)) * s;
+    if (r < 1) continue;
+    const x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + Math.sin(j * 2.3 + T * 6) * geyserHalf(h, t) * 0.22) * s;
+    const heat = 1 - prog;
+    const fg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    fg.addColorStop(0, `rgba(255,${200 + 55 * heat | 0},${90 + 120 * heat | 0},${0.42 * heat + 0.1})`);
+    fg.addColorStop(0.6, `rgba(255,${90 + 70 * heat | 0},20,${0.26 * heat + 0.04})`);
+    fg.addColorStop(1, 'rgba(200,40,10,0)');
+    ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+  }
+  // the tip breaks up into tongues that flick out, curl upward and burn away (past the hitbox's end: a near miss)
+  for (let j = 0; j < 3; j++) {
+    const prog = (T * 2.6 + j / 3 + ph * 0.5) % 1, e = j - 1, t0 = 0.72 + prog * 0.1, t1 = 0.97 + prog * 0.13;
+    const xa = bx + dir * h.len * t0 * s, xb = bx + dir * h.len * t1 * s, ya = by - (geyserRise(t0) + e * geyserHalf(h, t0) * 0.4) * s;
+    const yb = by - (geyserRise(t1) + e * 5 + 3 + prog * 9) * s, w = geyserHalf(h, t0) * 0.4 * (1 - prog * 0.5) * s;
+    const tg = ctx.createLinearGradient(xa, ya, xb, yb);
+    tg.addColorStop(0, `rgba(255,${120 + 60 * (1 - prog) | 0},30,${0.7 * (1 - prog)})`); tg.addColorStop(1, 'rgba(255,90,30,0)');
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.moveTo(xa, ya - w);
+    ctx.bezierCurveTo(xa + (xb - xa) * 0.5, ya - w, xb - dir * 6 * s, yb + 2 * s, xb, yb);
+    ctx.bezierCurveTo(xb - dir * 8 * s, yb + 5 * s, xa + (xb - xa) * 0.5, ya + w, xa, ya + w); ctx.closePath(); ctx.fill();
+  }
+  // the blue premix cone in the mouth (a real gas jet burns blue where it leaves the nozzle), then the white-hot throat
+  ctx.globalCompositeOperation = 'source-over';
+  const mx = bx + dir * 12 * s;
+  ctx.beginPath(); ctx.moveTo(mx, by - 6.5 * s);
+  ctx.quadraticCurveTo(mx + dir * 14 * s, by - 5 * s, mx + dir * 22 * s, by - 0.4 * s); ctx.quadraticCurveTo(mx + dir * 14 * s, by + 5 * s, mx, by + 6.5 * s); ctx.closePath();
+  const bc = ctx.createLinearGradient(mx, 0, mx + dir * 22 * s, 0);
+  bc.addColorStop(0, 'rgba(150,190,255,.95)'); bc.addColorStop(0.5, 'rgba(120,150,255,.55)'); bc.addColorStop(1, 'rgba(190,170,255,0)');
+  ctx.fillStyle = bc; ctx.fill();
+  ctx.globalCompositeOperation = 'lighter';
+  const core = ctx.createRadialGradient(mx + dir * 8 * s, by, 1, mx + dir * 8 * s, by, 11 * s);
+  core.addColorStop(0, 'rgba(255,255,255,.9)'); core.addColorStop(0.45, 'rgba(255,250,215,.45)'); core.addColorStop(1, 'rgba(255,220,140,0)');
+  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(mx + dir * 8 * s, by, 11 * s, 0, 6.283); ctx.fill();
+  // sparks spat out along the jet
+  for (let j = 0; j < 7; j++) {
+    const prog = (T * 1.1 + j / 7 + ph * 1.3) % 1, t = 0.3 + prog * 0.85, side = (hash2(j, 41) - 0.5) * 2;
+    const x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + side * geyserHalf(h, Math.min(t, 1)) * 1.1 + prog * prog * 26) * s;
+    ctx.fillStyle = `rgba(255,${210 - 90 * prog | 0},90,${0.9 * (1 - prog)})`;
+    ctx.beginPath(); ctx.arc(x, y, (1.6 * (1 - prog) + 0.5) * s, 0, 6.283); ctx.fill();
+  }
+  // heat shimmer rising off the vent
   for (let j = 0; j < 4; j++) {
     const prog = (T * 0.9 + j / 4 + ph) % 1, x0 = bx + dir * (6 + j * 7) * s;
-    ctx.strokeStyle = `rgba(255,230,200,${0.09 * Math.sin(prog * Math.PI)})`; ctx.lineWidth = 2.5 * s;
+    ctx.strokeStyle = `rgba(255,230,200,${0.08 * Math.sin(prog * Math.PI)})`; ctx.lineWidth = 2.5 * s;
     ctx.beginPath();
     for (let k = 0; k <= 8; k++) { const yy = by - (14 + prog * 40 + k * 5) * s, xx = x0 + Math.sin(k * 1.1 + T * 9 + j) * 3 * s; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }
     ctx.stroke();
   }
-  // rolling fireballs give the jet volume: each one swells as it travels out, then burns away
-  for (let j = 0; j < 9; j++) {
-    const prog = (T * 1.5 + j / 9 + ph) % 1, t = prog * 0.97;
-    const r = geyserHalf(h, t) * (0.95 + 0.25 * hash2(j, h.alt | 0)) * s;
-    if (r < 1) continue;
-    const x = bx + dir * h.len * t * s, y = by - (geyserRise(t) + Math.sin(j * 2.3 + T * 6) * geyserHalf(h, t) * 0.25) * s;
-    const heat = 1 - prog;
-    const fg = ctx.createRadialGradient(x, y, 0, x, y, r);
-    fg.addColorStop(0, `rgba(255,${200 + 55 * heat | 0},${90 + 120 * heat | 0},${0.55 * heat + 0.15})`);
-    fg.addColorStop(0.6, `rgba(255,${90 + 70 * heat | 0},20,${0.35 * heat + 0.05})`);
-    fg.addColorStop(1, 'rgba(200,40,10,0)');
-    ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+  // smoke curling up off the tip: warm grey, soft, always rising away from the flame
+  ctx.globalCompositeOperation = 'source-over';
+  for (let j = 0; j < 5; j++) {
+    const prog = (T * 0.55 + j / 5 + ph * 0.2) % 1, t = 0.84 + prog * 0.32;
+    const x = bx + dir * h.len * t * s, y = by - (geyserRise(1) + 6 + prog * 34) * s, r = (5 + prog * 12) * s;
+    const sg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    sg.addColorStop(0, `rgba(84,62,62,${0.26 * Math.sin(prog * Math.PI)})`); sg.addColorStop(1, 'rgba(84,62,62,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
   }
   ctx.restore();
 }
@@ -4025,16 +4171,36 @@ function backlight(x, y, r, zi, a = 0.3) {
   ctx.fillStyle = g; ctx.fillRect(x - r * s, y - r * s, r * s * 2, r * s * 2);
   ctx.restore();
 }
-// Zone skins for the creatures and the swinging pod: jungle, basalt caves, magma core.
+// Zone skins for the small cave bat and cave spider: jungle, basalt caves, magma core. The two share one danger
+// language: bodies darker and cooler than the pilots, ember eyes that glow, and hot DANGER red on every fang, claw
+// and marking. Nothing is black: each part's edge is a deeper shade of its own colour.
 const BAT_SKINS = [
-  { wing: ['#2a0e30', '#8a1450', DANGER], body: ['#8a5a9a', '#22102a'], ear: DANGER, eye: '#ffe14a' },
-  { wing: ['#1a0a26', '#5a1a6a', '#ff4aa8'], body: ['#8a6a9a', '#1e1028'], ear: '#ff6ab8', eye: '#ffe14a' },
-  { wing: ['#140604', '#6a1406', '#ffb238'], body: ['#5a3a32', '#140806'], ear: '#ff7a2a', eye: '#fff1a0' },
+  // jungle: wine-chestnut fur, wine membranes that glow hot red toward the trailing edge (reads on the green)
+  { fur: ['#f0a08a', '#9a3a4c', '#3e1020'], edge: '#4a0e22', ruff: ['#ffd8c0', '#e8928a'],
+    mem: ['#3a0a1c', '#8a1a3c', '#ff4a6a'], memEdge: '#5a0c26', bone: ['#ffcab6', '#c0606c', '#6a1a2c'],
+    inner: ['#ff9aa4', '#c42a4c'], mouth: '#3a0414', eye: ['#fffbd0', '#ffd23a', '#ff7a1a'], pupil: '#4a0a10', glow: [255, 120, 60] },
+  // basalt: dusky rose-mauve fur, magenta membranes lit warm from behind (reads on the indigo rock)
+  { fur: ['#ffc8de', '#b0608e', '#4a1840'], edge: '#4a1040', ruff: ['#fff0f4', '#e8a8c4'],
+    mem: ['#2e0c36', '#7a2070', '#ff5ab0'], memEdge: '#4a0e48', bone: ['#ffdcee', '#c06aa0', '#5a1a50'],
+    inner: ['#ffa8cc', '#d02a7a'], mouth: '#36062a', eye: ['#fffbd0', '#ffd23a', '#ff7a1a'], pupil: '#40081e', glow: [255, 110, 150] },
+  // magma: pale ash fur, ember membranes glowing amber (light against the dark red core)
+  { fur: ['#fff2e4', '#b4968c', '#44282a'], edge: '#40221e', ruff: ['#fffaf2', '#e8cab8'],
+    mem: ['#1e0806', '#7a1e08', '#ffb43a'], memEdge: '#3a1006', bone: ['#fff2e2', '#c09a8a', '#5a3a30'],
+    inner: ['#ffb474', '#e04a1a'], mouth: '#3a0c06', eye: ['#ffffff', '#fff27a', '#ffa21a'], pupil: '#4a1406', glow: [255, 170, 60] },
 ];
 const SPIDER_SKINS = [
-  { leg: '#5a6a1e', abd: ['#a8c040', '#2e3e0a'], head: '#3e4e12', mark: '#ffd23a', eye: '#ff3b3b' },
-  { leg: '#6a5a7a', abd: ['#8a6a9a', '#2a1a36'], head: '#4a3a5a', mark: DANGER, eye: '#ffe14a' },
-  { leg: '#3a2a2a', abd: ['#4a3434', '#0e0606'], head: '#241414', mark: '#ff8a2a', eye: '#ffd24a' },
+  // jungle: a violet jewel spider with a hot red hourglass and red-banded knees (violet reads on the green)
+  { abd: ['#e4c8ff', '#7a44b0', '#2a0e48'], ceph: ['#d0b0f4', '#5a2e8a', '#220c3a'], edge: '#2c0e4a',
+    leg: ['#c09ae8', '#5a3290', '#2a1048'], band: '#ff4a6a', mark: ['#ffc0b0', DANGER], eye: ['#fff4c8', '#ff6a3a', '#c0102a'],
+    fang: ['#fff6ee', '#dcbccc', '#9a6a80'], silk: [246, 240, 255], lava: false },
+  // basalt: a pale ghost spider, ivory and lilac, with magenta markings (bright on the dark indigo rock)
+  { abd: ['#ffffff', '#dcc8dc', '#6a4a6e'], ceph: ['#fffafc', '#ccb4cc', '#5a3e5e'], edge: '#5a3460',
+    leg: ['#f8eef8', '#ac8cb0', '#4a2e50'], band: '#ff3a8a', mark: ['#ffa8d8', '#ff2a8a'], eye: ['#fff4c8', '#ff4a5a', '#b0082a'],
+    fang: ['#fff6ee', '#d0aac4', '#8a5a7a'], silk: [246, 240, 255], lava: false },
+  // magma: an ash-and-obsidian spider with glowing lava seams and joints (ash-lit top against the dark red core)
+  { abd: ['#e0d0cc', '#5a4448', '#1c0e10'], ceph: ['#d4c0bc', '#4e3a3e', '#1a0c0e'], edge: '#2a1416',
+    leg: ['#b49c9a', '#4a3436', '#1e0e10'], band: '#ffa21a', mark: ['#fff0a0', '#ff8a1a'], eye: ['#ffffff', '#ffd23a', '#ff5a0a'],
+    fang: ['#fff8e6', '#dcbca4', '#8a6248'], silk: [255, 236, 210], lava: true },
 ];
 
 function drawHazards() {
@@ -4052,73 +4218,257 @@ function drawHazards() {
 
 // Three bat breeds per zone, so a flight of bats never looks like clones: the classic, a long-eared
 // glider with a pale belly and long fangs, and a round fuzzball with stubby wings and a crest.
+// (wing, ear, flap and body also size the hitbox in hazardShapes; belly, fang and tuft are art only.)
 const BAT_LOOKS = [
   { wing: 1, ear: 1, flap: 16, body: 1 },
   { wing: 1.2, ear: 1.75, flap: 12, body: 0.9, belly: true, fang: 1.6 },
   { wing: 0.8, ear: 0.55, flap: 26, body: 1.2, tuft: true },
 ];
+// The bat's tell, read from its own flight (batPos; art only, the flight never changes): it flares just before it
+// turns, most of all at the end of a dart pattern's hover, right before the dart. 0..1.
+function batTell(h) {
+  const ph = G.t * h.speed + h.ph, sn = Math.sin(ph), k = smooth(0.5, 0.88, Math.abs(sn)) * smooth(0, 0.3, -sn * Math.cos(ph));
+  return h.pat === 2 ? k : k * 0.45;
+}
+// One wing in the bat's own frame (d = side, x already mirrored by the bat's facing). Its bones keep the old
+// outline (shoulder, wrist, tip at 37 × the breed's span), so the inner wing stays in its hitbox capsule: a forearm
+// to a wrist with a hooked thumb claw, three finger bones and a scalloped membrane, dark at the root and glowing hot
+// toward the trailing edge, with veins, and lit along the leading edge by the zone's rim light.
+function batWing(K, L, d, lift, tell, rim) {
+  const P = (x, y) => [d * x * L.wing, y];
+  const S = P(6.5, -4.5), Wr = P(19, -11.5 - lift * 0.75), F1 = P(37, -8 - lift), F2 = P(33, 6 - lift * 0.3), F3 = P(23, 10.5 - lift * 0.15), B = P(8.5, 8.5);
+  const lead = P(12, -12 - lift * 0.5), tipC = P(29, -12.5 - lift * 0.95);
+  const sc = (a, b, k) => [lerp((a[0] + b[0]) / 2, Wr[0], k), lerp((a[1] + b[1]) / 2, Wr[1], k)];   // a scallop, pulled toward the wrist
+  const c12 = sc(F1, F2, 0.3), c23 = sc(F2, F3, 0.36), c3b = sc(F3, B, 0.3);
+  const outline = () => {
+    ctx.beginPath(); ctx.moveTo(...S);
+    ctx.quadraticCurveTo(...lead, ...Wr); ctx.quadraticCurveTo(...tipC, ...F1);
+    ctx.quadraticCurveTo(...c12, ...F2); ctx.quadraticCurveTo(...c23, ...F3); ctx.quadraticCurveTo(...c3b, ...B);
+    ctx.quadraticCurveTo(...P(4.5, 2.5), ...S); ctx.closePath();
+  };
+  const trailing = () => { ctx.beginPath(); ctx.moveTo(...F1); ctx.quadraticCurveTo(...c12, ...F2); ctx.quadraticCurveTo(...c23, ...F3); ctx.quadraticCurveTo(...c3b, ...B); };
+  // the membrane: root to trailing edge, dark wine to hot
+  outline();
+  const mg = ctx.createLinearGradient(...S, (F2[0] + F3[0]) / 2, (F2[1] + F3[1]) / 2 + 3);
+  mg.addColorStop(0, K.mem[0]); mg.addColorStop(0.5, K.mem[1]); mg.addColorStop(1, K.mem[2]);
+  ctx.fillStyle = mg; ctx.fill();
+  ctx.save(); outline(); ctx.clip();
+  // panels between the bones: the outer one catches the light, the one by the body sits in its shadow
+  ctx.fillStyle = 'rgba(255,236,236,.12)';
+  ctx.beginPath(); ctx.moveTo(...Wr); ctx.quadraticCurveTo(...tipC, ...F1); ctx.quadraticCurveTo(...c12, ...F2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = K.mem[0] + '88';
+  ctx.beginPath(); ctx.moveTo(...S); ctx.lineTo(...Wr); ctx.lineTo(...F3); ctx.quadraticCurveTo(...c3b, ...B); ctx.closePath(); ctx.fill();
+  // light soaking through the thin trailing edge, and the veins branching off each finger
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = K.mem[2] + '70'; ctx.lineWidth = 4.5; trailing(); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,${(200 + 40 * tell) | 0},180,${0.22 + 0.25 * tell})`; ctx.lineWidth = 1.6; trailing(); ctx.stroke();
+  ctx.strokeStyle = K.mem[2] + '55'; ctx.lineWidth = 0.55;
+  for (const [a, b] of [[F1, F2], [F2, F3], [F3, B]]) for (const u of [0.35, 0.65]) {
+    const m = [lerp(a[0], b[0], u), lerp(a[1], b[1], u)], r0 = [lerp(Wr[0], a[0], 0.55), lerp(Wr[1], a[1], 0.55)];
+    ctx.beginPath(); ctx.moveTo(...r0); ctx.quadraticCurveTo(lerp(r0[0], m[0], 0.5) + d * 1.2, lerp(r0[1], m[1], 0.5), lerp(r0[0], m[0], 0.86), lerp(r0[1], m[1], 0.86)); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // the zone's rim light along the leading edge, and occlusion where the wing meets the body
+  ctx.strokeStyle = rgb(rim, 0.7); ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(S[0], S[1] + 1.4); ctx.quadraticCurveTo(lead[0], lead[1] + 1.4, Wr[0], Wr[1] + 1.4); ctx.quadraticCurveTo(tipC[0], tipC[1] + 1.4, F1[0], F1[1] + 1.2); ctx.stroke();
+  const ao = ctx.createRadialGradient(...S, 1, ...S, 13);
+  ao.addColorStop(0, K.mem[0] + 'cc'); ao.addColorStop(1, K.mem[0] + '00');
+  ctx.fillStyle = ao; ctx.fillRect(S[0] - 14, S[1] - 14, 28, 28);
+  ctx.restore();
+  outline(); ctx.strokeStyle = K.memEdge; ctx.lineWidth = 0.9; ctx.stroke();
+  // bones: a deeper shade underneath for the edge, the bone, and a lit stripe
+  const bone = (a, c, b, w) => {
+    for (const [col, ww, dy] of [[K.bone[2], w + 0.8, 0], [K.bone[1], w, 0], [K.bone[0] + 'b0', w * 0.32, -w * 0.22]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = ww;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1] + dy); ctx.quadraticCurveTo(c[0], c[1] + dy, b[0], b[1] + dy); ctx.stroke();
+    }
+  };
+  const bow = (a, b, k) => [lerp(a[0], b[0], 0.5) + d * k * 0.3, lerp(a[1], b[1], 0.5) - k];
+  bone(Wr, bow(Wr, F3, 0.8), F3, 0.75);
+  bone(Wr, bow(Wr, F2, 1), F2, 0.9);
+  bone(Wr, tipC, F1, 1.15);
+  bone(S, lead, Wr, 2);
+  // the wrist knuckle and its hooked thumb claw, hot at the point
+  const [wx, wy] = Wr;
+  ctx.fillStyle = pkLG(ctx, wx, wy - 2, wx, wy + 2, [K.bone[0], K.bone[1]]);
+  ctx.beginPath(); ctx.ellipse(wx, wy, 2, 1.8, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = K.bone[2]; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(wx - d * 1.4, wy - 0.8); ctx.quadraticCurveTo(wx - d * 0.6, wy - 4.6, wx - d * 3.2, wy - 5.6);
+  ctx.quadraticCurveTo(wx + d * 0.2, wy - 3.6, wx + d * 1.3, wy - 1); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, wx, wy, wx - d * 3, wy - 5.6, [K.bone[0], '#ffe8e0', DANGER]); ctx.fill();
+  ctx.strokeStyle = '#a8183e'; ctx.lineWidth = 0.5; ctx.stroke();
+}
 function drawBat(h) {
-  const L = BAT_LOOKS[h.look || 0], x = sx(h.x), y = sy(h.alt), flap = Math.sin(G.t * L.flap + h.ph), K = BAT_SKINS[h.skin || 0];
-  const rimLit = pal('rim', h.alt).map(v => Math.min(255, v + 70));
+  const L = BAT_LOOKS[h.look || 0], look = h.look || 0, zi = h.skin || 0, K = BAT_SKINS[zi], x = sx(h.x), y = sy(h.alt), T = G.t;
+  const flap = Math.sin(T * L.flap + h.ph), tell = batTell(h);
+  const lift = flap * 13 + tell * Math.sin(T * 70 + h.ph) * 2;    // (the wings shiver through the tell)
+  const rim = pal('rim', h.alt).map(v => Math.min(255, v + 60) | 0);
   hazardShadow(x, y, 36, 9);
-  backlight(x, y, 58, h.skin || 0);
-  dangerGlow(x, y, 46);
+  backlight(x, y, 58, zi);
+  dangerGlow(x, y, 46 + 8 * tell, 0.32 + 0.18 * tell);
   ctx.save(); ctx.translate(x, y); ctx.scale(s * h.face * 1.35, s * 1.35);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  for (const d of [-1, 1]) {
-    ctx.save(); ctx.scale(d * L.wing, 1);
-    const lift = flap * 13;
-    ctx.beginPath();
-    ctx.moveTo(7, -4);
-    ctx.quadraticCurveTo(18, -15 - lift, 37, -8 - lift);
-    ctx.quadraticCurveTo(31, -1 - lift * 0.45, 33, 6 - lift * 0.3);
-    ctx.quadraticCurveTo(26, 2 - lift * 0.2, 23, 10 - lift * 0.15);
-    ctx.quadraticCurveTo(16, 5, 12, 11);
-    ctx.quadraticCurveTo(9, 6, 6, 7);
-    ctx.closePath();
-    const wg = ctx.createLinearGradient(6, -12, 36, 10);
-    if (h.look === 2) { wg.addColorStop(0, K.wing[1]); wg.addColorStop(1, K.wing[0]); }
-    else { wg.addColorStop(0, K.wing[0]); wg.addColorStop(0.6, K.wing[1]); wg.addColorStop(1, h.look === 1 ? K.ear : K.wing[2]); }
-    ctx.fillStyle = wg; ctx.strokeStyle = INK; ctx.lineWidth = 2.6 / L.wing; ctx.fill(); ctx.stroke();
-    // zone rim light on the wing's upper edge, so a dark bat reads on dark rock
-    ctx.save(); ctx.clip(); ctx.translate(0, 2.2); ctx.strokeStyle = rgb(rimLit, 0.85); ctx.lineWidth = 3 / L.wing; ctx.stroke(); ctx.restore();
-    ctx.strokeStyle = 'rgba(20,4,16,.8)'; ctx.lineWidth = 1.3 / L.wing;
-    ctx.beginPath();
-    ctx.moveTo(8, -3); ctx.lineTo(37, -8 - lift);
-    ctx.moveTo(8, -3); ctx.lineTo(33, 6 - lift * 0.3);
-    ctx.moveTo(8, -3); ctx.lineTo(23, 10 - lift * 0.15);
-    ctx.stroke();
+  // the screech: hot rings rolling out of its mouth through the tell
+  if (tell > 0.02) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 1.4;
+    for (let j = 0; j < 3; j++) {
+      const u = (T * 2.6 + j / 3) % 1;
+      ctx.strokeStyle = rgbaA(DANGER_RGB, tell * (1 - u) * 0.75);
+      ctx.beginPath(); ctx.arc(0, 6, 8 + u * 14, Math.PI * 0.3, Math.PI * 0.7); ctx.stroke();
+    }
     ctx.restore();
   }
-  const bg = ctx.createRadialGradient(-3, -5, 2, 0, 0, 14);
-  bg.addColorStop(0, K.body[0]); bg.addColorStop(1, K.body[1]);
-  ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
+  for (const d of [-1, 1]) batWing(K, L, d, lift, tell, rim);
+  const b = L.body, rx = 12 * b, ry = 12.5 * b + 0.8;            // the body fills its round hitbox
+  const furG = (cx, cy, r) => pkRG(ctx, cx, cy, r, [K.fur[0], K.fur[1], K.fur[2]]);
+  // ears, behind the head: fur outside, a hot inner ear, a twitch; they lay back a little through the tell
+  const EAR = [[6.5, -19.5, 10, -5.5], [6, -26.5, 9, -6.5], [10.5, -15.5, 12.5, -7]][look];
   for (const d of [-1, 1]) {
-    const e = L.ear;
-    ctx.fillStyle = bg;
-    ctx.beginPath(); ctx.moveTo(d * 9, -7); ctx.lineTo(d * (8 + 2 * (e - 1)), -7 - 14 * e); ctx.lineTo(d * 2, -11); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = K.ear;
-    ctx.beginPath(); ctx.moveTo(d * 7.5, -9); ctx.lineTo(d * (7.5 + 2 * (e - 1)), -9 - 8 * e); ctx.lineTo(d * 4, -11); ctx.closePath(); ctx.fill();
+    const tw = Math.sin(T * 2.3 + d * 1.7 + h.ph) > 0.93 ? 0.8 : 0;
+    const tx = d * (EAR[0] + tell * 1.6), ty = EAR[1] + tell * 2.2 + tw, bx = d * EAR[2], by = EAR[3];
+    const ear = (k) => {
+      const cx = (d * 2.5 + tx + bx) / 3, cy = (-10 + ty + by) / 3, m = (px, py) => [lerp(cx, px, k), lerp(cy, py, k)];
+      ctx.beginPath(); ctx.moveTo(...m(d * 2.5, -10));
+      ctx.quadraticCurveTo(...m(d * (EAR[0] * 0.35 + 0.6), lerp(-10, ty, 0.62)), ...m(tx, ty));
+      ctx.quadraticCurveTo(...m(bx + d * 1.8, lerp(by, ty, 0.42)), ...m(bx, by)); ctx.closePath();
+    };
+    ear(1); ctx.fillStyle = pkLG(ctx, 0, ty, 0, by, [K.fur[1], K.fur[2]]); ctx.fill();
+    ctx.save(); ear(1); ctx.clip();
+    ear(0.62); ctx.fillStyle = pkLG(ctx, 0, ty, 0, by, [K.inner[0], K.inner[1], K.mouth]); ctx.fill();
+    ctx.strokeStyle = K.inner[0] + '99'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(lerp(d * 2.5, bx, 0.5), lerp(-10, by, 0.5)); ctx.lineTo(lerp(lerp(d * 2.5, bx, 0.5), tx, 0.7), lerp(lerp(-10, by, 0.5), ty, 0.7)); ctx.stroke();
+    ctx.strokeStyle = rgb(rim, 0.55); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(tx, ty + 1); ctx.quadraticCurveTo(bx + d * 1.2, lerp(by, ty, 0.42), bx, by); ctx.stroke();
+    ctx.restore();
+    ear(1); ctx.strokeStyle = K.edge; ctx.lineWidth = 0.9; ctx.stroke();
   }
-  if (L.tuft) for (let k = -1; k <= 1; k++) pkPath(ctx, [[k * 3 - 2.5, -12], [k * 4.5, -21 - (k ? 0 : 3)], [k * 3 + 2.5, -12]], K.ear, 1.8);
-  ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(0, 0, 12 * L.body, 13.5 * (L.body > 1 ? 1.08 : 1), 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.clip(); ctx.translate(0, 2.4); ctx.strokeStyle = rgb(rimLit, 0.8); ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
-  if (L.belly) { ctx.fillStyle = 'rgba(255,240,220,.4)'; ctx.beginPath(); ctx.ellipse(0, 4, 5.5, 8, 0, 0, 6.283); ctx.fill(); }
-  else { ctx.fillStyle = 'rgba(255,225,255,.18)'; ctx.beginPath(); ctx.ellipse(0, 5, 7, 6, 0, 0, 6.283); ctx.fill(); }
-  const er = h.look === 2 ? 4.4 : 3.6;
-  for (const ex of [-4.6, 4.6]) {
-    ctx.fillStyle = K.eye; ctx.beginPath(); ctx.arc(ex * (h.look === 2 ? 1.1 : 1), -2.5, er, 0, 6.283); ctx.fill();
-    ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(ex * (h.look === 2 ? 1.1 : 1) + 0.4, -2.5, 0.9, er * 0.72, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 1, -3.8, 0.9, 0, 6.283); ctx.fill();
+  // the crest of the fuzzball: three fur spikes with hot tips
+  if (L.tuft) for (const [cx, hgt] of [[-3.4, 3.4], [3.4, 3.4], [0, 4.8]]) {
+    ctx.beginPath(); ctx.moveTo(cx - 2.6, -ry + 2.5); ctx.quadraticCurveTo(cx - 1, -ry - hgt * 0.5, cx + cx * 0.15, -ry - hgt);
+    ctx.quadraticCurveTo(cx + 0.8, -ry - hgt * 0.4, cx + 2.6, -ry + 2.5); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, -ry + 2, 0, -ry - hgt, [K.fur[1], K.fur[0], K.inner[0]]); ctx.fill();
+    ctx.strokeStyle = K.edge; ctx.lineWidth = 0.8; ctx.stroke();
   }
-  ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.moveTo(-8.5, -8.5); ctx.lineTo(-1.5, -4.8); ctx.moveTo(8.5, -8.5); ctx.lineTo(1.5, -4.8); ctx.stroke();
-  const fl = 4.5 * (L.fang || 1);
-  ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(-3.2, 4); ctx.lineTo(-2, 4 + fl); ctx.lineTo(-0.8, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0.8, 4); ctx.lineTo(2, 4 + fl); ctx.lineTo(3.2, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.arc(0, 0, 10.5, -2.7, -1.3); ctx.stroke();
+  // the body: a scruffy fur ball (smooth on top, tufted at the cheeks and below), breathing with the beat
+  ctx.save(); ctx.scale(1, 1 - 0.025 * flap);
+  const furPath = () => {
+    ctx.beginPath();
+    const N = 36, pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = i / N * TWO_PI - Math.PI / 2, low = Math.max(0, Math.sin(a)), side = Math.abs(Math.cos(a));
+      const amp = i % 2 ? 0.005 + 0.05 * low * low + 0.03 * side * smooth(-0.2, 0.4, Math.sin(a)) + (look === 2 ? 0.02 : 0) : -0.012;
+      pts.push([Math.cos(a) * rx * (1 + amp), Math.sin(a) * ry * (1 + amp)]);
+    }
+    const mid = i => [(pts[i][0] + pts[(i + 1) % N][0]) / 2, (pts[i][1] + pts[(i + 1) % N][1]) / 2];
+    ctx.moveTo(...mid(N - 1));
+    for (let i = 0; i < N; i++) ctx.quadraticCurveTo(...pts[i], ...mid(i));
+    ctx.closePath();
+  };
+  furPath(); ctx.fillStyle = furG(-rx * 0.28, -ry * 0.42, ry * 1.05); ctx.fill();
+  ctx.save(); furPath(); ctx.clip();
+  // the chest ruff (a pale belly on the glider), fur strokes, a lighter muzzle
+  ctx.fillStyle = pkLG(ctx, 0, 1, 0, ry, [K.ruff[0] + (L.belly ? 'ee' : 'aa'), K.ruff[1] + '55']);
+  ctx.beginPath();
+  if (L.belly) ctx.ellipse(0, ry * 0.42, rx * 0.5, ry * 0.62, 0, 0, TWO_PI);
+  else { ctx.moveTo(-rx * 0.62, ry * 0.25); for (let k = 0; k <= 6; k++) { const u = k / 6, px = lerp(-rx * 0.62, rx * 0.62, u); ctx.quadraticCurveTo(px - rx * 0.1, ry * 0.25 + (k % 2 ? 2.4 : 0.6), px, ry * 0.32); } ctx.lineTo(rx * 0.5, ry); ctx.lineTo(-rx * 0.5, ry); ctx.closePath(); }
+  ctx.fill();
+  ctx.lineWidth = 0.6;
+  for (let k = 0; k < 16; k++) {
+    const a = hash2(k, 7 + look) * TWO_PI, r = (0.45 + 0.5 * hash2(k, 19)) * rx, px = Math.cos(a) * r, py = Math.sin(a) * r * ry / rx;
+    if (Math.abs(px) < 7 && py > -8 && py < 8) continue;          // keep the face clear
+    ctx.strokeStyle = k % 3 ? K.fur[2] + '66' : K.fur[0] + '88';
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo(px + Math.cos(a) * 1.2, py + 1, px + Math.cos(a) * 1.8, py + 2.2); ctx.stroke();
+  }
+  { const mz = ctx.createRadialGradient(0, 3.4, 0.5, 0, 4.2, 6.6); mz.addColorStop(0, K.ruff[0] + 'aa'); mz.addColorStop(0.7, K.ruff[1] + '66'); mz.addColorStop(1, K.ruff[1] + '00');
+    ctx.fillStyle = mz; ctx.beginPath(); ctx.ellipse(0, 4.2, 6.8, 5, 0, 0, TWO_PI); ctx.fill(); }
+  // deep-set eye sockets, rim light on the crown, warm bounce light from below, shadow at the wing roots
+  ctx.fillStyle = K.fur[2] + '80';
+  for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(d * 4.7 * (look === 2 ? 1.1 : 1), -2.8, 5, 4.4, d * -0.25, 0, TWO_PI); ctx.fill(); }
+  ctx.strokeStyle = rgb(rim, 0.7); ctx.lineWidth = 1.8; ctx.beginPath(); ctx.ellipse(0.4, 1.2, rx - 0.4, ry - 0.3, 0, 3.45, 4.95); ctx.stroke();
+  ctx.strokeStyle = rgb(rim, 0.3); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(-0.3, 1.1, rx - 0.5, ry - 0.4, 0, 4.95, 5.7); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  const bl = ctx.createRadialGradient(0, ry + 2, 1, 0, ry + 2, ry * 0.9);
+  bl.addColorStop(0, rgbaA(K.glow, zi === 2 ? 0.5 : 0.32)); bl.addColorStop(1, rgbaA(K.glow, 0));
+  ctx.fillStyle = bl; ctx.fillRect(-rx, 0, rx * 2, ry + 2);
+  ctx.globalCompositeOperation = 'source-over';
+  for (const d of [-1, 1]) {
+    const ag = ctx.createRadialGradient(d * rx, -1, 0.5, d * rx, -1, 7);
+    ag.addColorStop(0, K.fur[2] + 'aa'); ag.addColorStop(1, K.fur[2] + '00');
+    ctx.fillStyle = ag; ctx.fillRect(d * rx - 7, -8, 14, 14);
+  }
+  ctx.restore();
+  furPath(); ctx.strokeStyle = K.edge; ctx.lineWidth = 1; ctx.stroke();
+  // through the tell a hot rim flickers round it
+  if (tell > 0.02) { furPath(); ctx.strokeStyle = rgbaA(DANGER_RGB, tell * (0.55 + 0.25 * Math.sin(T * 30))); ctx.lineWidth = 1.5; ctx.stroke(); }
+  ctx.restore();
+  // eyes: slanted almond ember eyes with slit pupils looking where it flies, glowing hotter through the tell
+  const er = look === 2 ? 4.4 : 3.9, eyeX = look === 2 ? 5.3 : 4.7;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const d of [-1, 1]) {
+    const eg = ctx.createRadialGradient(d * eyeX, -2.6, 0.5, d * eyeX, -2.6, 6 + 4 * tell);
+    eg.addColorStop(0, rgbaA(K.glow, 0.35 + 0.45 * tell)); eg.addColorStop(1, rgbaA(K.glow, 0));
+    ctx.fillStyle = eg; ctx.fillRect(d * eyeX - 10, -12.6, 20, 20);
+  }
+  ctx.restore();
+  for (const d of [-1, 1]) {
+    const ex = d * eyeX, ey = -2.6;
+    const eye = () => {
+      ctx.beginPath(); ctx.moveTo(ex - d * er, ey + 0.7);
+      ctx.quadraticCurveTo(ex - d * er * 0.1, ey - er * 0.62 + 0.6 * tell, ex + d * er, ey - 1.2);
+      ctx.quadraticCurveTo(ex + d * er * 0.2, ey + er * 1.25, ex - d * er, ey + 0.7); ctx.closePath();
+    };
+    eye();
+    const ig = ctx.createRadialGradient(ex + d * 0.3, ey + 0.4, 0.3, ex, ey, er * 1.2);
+    ig.addColorStop(0, tell > 0.5 ? '#ffffff' : K.eye[0]); ig.addColorStop(0.5, K.eye[1]); ig.addColorStop(1, K.eye[2]);
+    ctx.fillStyle = ig; ctx.fill();
+    ctx.save(); eye(); ctx.clip();
+    ctx.fillStyle = K.pupil; ctx.beginPath(); ctx.ellipse(ex + 0.6, ey + 0.3, 0.9 - 0.3 * tell, er * 0.72, 0, 0, TWO_PI); ctx.fill();
+    const lid = ctx.createLinearGradient(0, ey - er, 0, ey);
+    lid.addColorStop(0, K.fur[2] + 'aa'); lid.addColorStop(1, K.fur[2] + '00');
+    ctx.fillStyle = lid; ctx.fillRect(ex - er - 1, ey - er - 1, er * 2 + 2, er + 1);
+    ctx.restore();
+    eye(); ctx.strokeStyle = K.pupil + 'aa'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex - d * 1.1, ey - 0.6, 0.8, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(ex + d * 1.3, ey + 1.3, 0.4, 0, TWO_PI); ctx.fill();
+    // a heavy angry brow of darker fur, lit along its top; it drops lower through the tell
+    const bi = [d * 1.1, -4.6 + 0.9 * tell], bo = [d * (eyeX + er + 0.8), -8.4];
+    ctx.beginPath(); ctx.moveTo(bi[0], bi[1] + 1.1); ctx.quadraticCurveTo(lerp(bi[0], bo[0], 0.5), lerp(bi[1], bo[1], 0.5) - 0.2, bo[0], bo[1]);
+    ctx.quadraticCurveTo(lerp(bi[0], bo[0], 0.45), lerp(bi[1], bo[1], 0.45) - 2.4, bi[0], bi[1] - 1); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, bo[1] - 2, 0, bi[1] + 1, [K.fur[1], K.fur[2]]); ctx.fill();
+    ctx.strokeStyle = rgb(rim, 0.5); ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(bi[0], bi[1] - 0.9); ctx.quadraticCurveTo(lerp(bi[0], bo[0], 0.45), lerp(bi[1], bo[1], 0.45) - 2.2, bo[0], bo[1]); ctx.stroke();
+  }
+  // the leaf nose
+  ctx.beginPath(); ctx.moveTo(0, -0.4); ctx.quadraticCurveTo(1.9, 0.3, 1.3, 2.3); ctx.quadraticCurveTo(0, 3.1, -1.3, 2.3); ctx.quadraticCurveTo(-1.9, 0.3, 0, -0.4); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, 0, -0.4, 0, 3, [K.inner[0], K.inner[1]]); ctx.fill();
+  ctx.strokeStyle = K.inner[1]; ctx.lineWidth = 0.5; ctx.stroke();
+  ctx.fillStyle = K.mouth; for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(d * 0.6, 2, 0.35, 0.5, 0, 0, TWO_PI); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(-0.5, 0.5, 0.4, 0, TWO_PI); ctx.fill();
+  // the snarl: an open mouth (it gapes into a screech through the tell), long upper fangs with hot points
+  const fl = 4.6 * (L.fang || 1), jaw = 7.6 + (L.fang ? 0.8 : 0) + tell * 2.4;
+  const mouth = () => { ctx.beginPath(); ctx.moveTo(-4.4, 4.3); ctx.quadraticCurveTo(-2, 3.2, 0, 4); ctx.quadraticCurveTo(2, 3.2, 4.4, 4.3); ctx.quadraticCurveTo(0, jaw + 1.4, -4.4, 4.3); ctx.closePath(); };
+  mouth(); ctx.fillStyle = pkLG(ctx, 0, 4, 0, jaw, [K.mouth, K.inner[1]]); ctx.fill();
+  ctx.save(); mouth(); ctx.clip();
+  ctx.fillStyle = K.inner[0] + 'cc'; ctx.beginPath(); ctx.ellipse(0, jaw + 0.4, 2.4, 1.6, 0, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#fff4ec'; for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(d * 0.8, jaw + 1); ctx.lineTo(d * 1.5, jaw - 1.4); ctx.lineTo(d * 2.2, jaw + 1); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  mouth(); ctx.strokeStyle = K.edge; ctx.lineWidth = 0.6; ctx.stroke();
+  for (const d of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(d * 3.4, 3.9); ctx.quadraticCurveTo(d * 2.9, 4 + fl * 0.6, d * 2.1, 4 + fl); ctx.quadraticCurveTo(d * 1.5, 4 + fl * 0.5, d * 1.1, 3.8); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, 3.8, 0, 4 + fl, ['#fffaf4', '#f2dcd4', '#ff8aa4', DANGER]); ctx.fill();
+    ctx.strokeStyle = '#b07a84'; ctx.lineWidth = 0.4; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.ellipse(d * 2.6, 5.1, 0.3, 0.9, d * 0.2, 0, TWO_PI); ctx.fill();
+  }
+  // little hooked feet tucked under the body, hot claws
+  for (const d of [-1, 1]) {
+    const fx = d * 3.4, fy = ry - 2.4;
+    ctx.fillStyle = pkLG(ctx, 0, fy - 1.5, 0, fy + 1.5, [K.fur[1], K.fur[2]]);
+    ctx.beginPath(); ctx.ellipse(fx, fy, 2, 1.5, 0, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = K.edge; ctx.lineWidth = 0.6; ctx.stroke();
+    for (const o of [-1.2, 0, 1.2]) {
+      ctx.beginPath(); ctx.moveTo(fx + o - 0.45, fy + 0.8); ctx.quadraticCurveTo(fx + o, fy + 2.8, fx + o - d * 0.6, fy + 3); ctx.lineTo(fx + o + 0.45, fy + 0.8); ctx.closePath();
+      ctx.fillStyle = pkLG(ctx, 0, fy + 0.8, 0, fy + 3, ['#fff2ea', DANGER]); ctx.fill();
+    }
+  }
   ctx.restore();
 }
 
@@ -4319,198 +4669,619 @@ function drawColumnSeg(h, x, y) {
   dangerGlow(x, y + hh * 0.8 * s, r * 1.6, 0.25);
 }
 
-// Fire wheel: a big riveted iron hub with a molten heart, and a bar of solid flame sweeping round
-// it: an ink-edged flame body (the size of its hitbox, a little bigger), a white-hot 14-unit core, an
-// additive outer glow, and a trailing arc of embers along the sweep it just made. The hub is lethal too.
+// Fire wheel: a heavy furnace wheel (warm cast iron, brass bezel and rivets, a grille over a molten heart) that
+// spins a bar of solid flame round it. No ink: the flame's edge is a band of its own deep crimson, the iron's a
+// darker iron. The flame body is as wide as its hitbox (br × 1.08) with licks that only swell it; a white-hot core
+// runs down the middle; a brass nozzle collar on the hub points the way the bar leaves it; flame trails and embers
+// stream behind the sweep (they lag the way it spins, a tell for its direction). The hub (its hitbox, 2 inside the
+// drawn ring) is lethal too.
+const FIREBAR_IRON = ['#9a8e9c', '#5a5060', '#2e2834'];      // cast iron: light, mid, dark
+const FIREBAR_BRASS = ['#fff0b0', '#ffc850', '#c07a24', '#7a4614'];
 function drawFirebar(h) {
-  const cx = sx(h.cx), cy = sy(h.alt), ang = h.ang ?? h.ph, dir = Math.sign(h.w), br = h.br, T = G.t;
-  const sa = -ang, L = h.len;                         // the bar's angle on screen (y points down)
+  const cx = sx(h.cx), cy = sy(h.alt), ang = h.ang ?? h.ph, dir = Math.sign(h.w) || 1, br = h.br, T = G.t;
+  const sa = -ang, L = h.len, R = br * 1.08, x0 = FIRE_HUB * 0.5;   // the bar's angle on screen (y points down)
+  const back = dir;                                    // the side of the bar (local y) that trails the sweep
   dangerGlow(cx + Math.cos(sa) * L * 0.6 * s, cy + Math.sin(sa) * L * 0.6 * s, L * 0.95, 0.22);
   ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-  // trailing ember arc: bands of fading fire along the sweep just behind the bar
-  for (let j = 1; j <= 9; j++) {
-    const a0 = sa - dir * j * 0.075, a1 = sa - dir * (j - 1) * 0.075, f = 1 - j / 10;
-    ctx.strokeStyle = `rgba(255,${110 + 90 * f | 0},40,${0.42 * f * (0.85 + 0.15 * Math.sin(T * 20 + j))})`;
-    ctx.lineWidth = br * 1.6 * f + 2;
-    ctx.beginPath(); ctx.arc(0, 0, L * 0.72, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
-    ctx.lineWidth = br * 1.1 * f + 1.5;
-    ctx.beginPath(); ctx.arc(0, 0, L + br * 0.1, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
+  // the trail: fading bands of fire along the sweep just behind the bar (butt ends, so they join into one smooth band)
+  ctx.lineCap = 'butt';
+  for (let j = 1; j <= 10; j++) {
+    const a0 = sa + back * j * 0.07, a1 = sa + back * (j - 1) * 0.07, f = 1 - j / 11;
+    ctx.strokeStyle = `rgba(255,${100 + 100 * f | 0},40,${0.36 * f * (0.85 + 0.15 * Math.sin(T * 20 + j))})`;
+    ctx.lineWidth = R * 1.5 * f + 2;
+    ctx.beginPath(); ctx.arc(0, 0, L * 0.7, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
+    ctx.lineWidth = R * 1.0 * f + 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, L, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
   }
-  for (let k = 0; k < 10; k++) {                      // embers shed from the tip, drifting off the arc
-    const u = (T * 1.7 + k / 10) % 1, a = sa - dir * u * 1.1, r = L * (0.55 + 0.45 * hash2(k, 31)) + u * 10;
-    ctx.fillStyle = `rgba(255,${180 - 80 * u | 0},60,${0.9 * (1 - u)})`;
-    ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r + u * 8, 2.4 * (1 - u) + 0.6, 0, 6.283); ctx.fill();
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 8; k++) {                       // embers shed off the bar, drifting off the arc and rising
+    const u = (T * 1.7 + k / 8 + hash2(k, 7) * 0.5) % 1, a = sa + back * u * 1.1, r = L * (0.5 + 0.5 * hash2(k, 31)) + u * 10;
+    ctx.fillStyle = `rgba(255,${190 - 90 * u | 0},70,${0.9 * (1 - u)})`;
+    ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r - u * 3, 1.8 * (1 - u) + 0.5, 0, 6.283); ctx.fill();
   }
-  // outer glow along the bar
   ctx.rotate(sa);
-  for (const [w, al] of [[br * 4.2, 0.18], [br * 2.8, 0.3]]) {
-    ctx.strokeStyle = `rgba(255,120,30,${al * (0.9 + 0.1 * Math.sin(T * 13))})`; ctx.lineWidth = w;
-    ctx.beginPath(); ctx.moveTo(FIRE_HUB * 0.6, 0); ctx.lineTo(L, 0); ctx.stroke();
+  // heat glow along the bar
+  for (const [w, al] of [[R * 4, 0.16], [R * 2.7, 0.26]]) {
+    ctx.strokeStyle = `rgba(255,110,30,${al * (0.9 + 0.1 * Math.sin(T * 13))})`; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(L, 0); ctx.stroke();
   }
   ctx.globalCompositeOperation = 'source-over';
-  // the flame body: ink-edged, as wide as its hitbox, with a licking edge
-  ctx.beginPath();
-  for (let i = 0; i <= 12; i++) { const x = FIRE_HUB * 0.5 + (L - FIRE_HUB * 0.5) * i / 12, w = br * (1 + 0.12 * Math.sin(T * 24 + i * 1.7)); i ? ctx.lineTo(x, -w) : ctx.moveTo(x, -w); }
-  ctx.arc(L, 0, br * 1.08, -Math.PI / 2, Math.PI / 2);
-  for (let i = 12; i >= 0; i--) { const x = FIRE_HUB * 0.5 + (L - FIRE_HUB * 0.5) * i / 12, w = br * (1 + 0.12 * Math.sin(T * 21 + i * 2.3)); ctx.lineTo(x, w); }
-  ctx.closePath();
-  ctx.fillStyle = pkLG(ctx, 0, -br, 0, br, ['#ffb84a', '#ff5a1a', '#c8200a']); ctx.fill();
-  ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
-  // the white-hot core, 14 units thick
+  // the flame body: a path from the hub out to a round head at the tip. Its half-width is R at its narrowest
+  // (the hitbox) and licks a little wider; the trailing edge licks more, streaming back.
+  const N = 16;
+  const bar = (k, swell, lick) => {
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const u = i / N, x = x0 + (L - x0) * u, wv = 0.5 + 0.5 * Math.sin(T * 24 + i * 1.7 + (back > 0 ? 0 : 2));
+      const w = (R * (1 + lick * (back < 0 ? 0.16 : 0.07) * wv * u)) * k + swell;
+      i ? ctx.lineTo(x, -w) : ctx.moveTo(x, -w);
+    }
+    ctx.arc(L, 0, R * k + swell, -Math.PI / 2, Math.PI / 2);
+    for (let i = N; i >= 0; i--) {
+      const u = i / N, x = x0 + (L - x0) * u, wv = 0.5 + 0.5 * Math.sin(T * 21 + i * 2.3 + (back > 0 ? 2 : 0));
+      const w = (R * (1 + lick * (back > 0 ? 0.16 : 0.07) * wv * u)) * k + swell;
+      ctx.lineTo(x, w);
+    }
+    ctx.closePath();
+  };
+  bar(1, 1.6, 1);                                      // the crimson edge band
+  ctx.fillStyle = pkLG(ctx, 0, -R, 0, R, ['#d8361a', '#b81c12', '#9a1020']); ctx.fill();
+  bar(1, 0, 1);                                        // the orange body, lit from above
+  ctx.fillStyle = pkLG(ctx, 0, -R, 0, R, ['#ffb04a', '#ff6a1e', '#ff4a16', '#d8280e']); ctx.fill();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,230,140,.95)'; ctx.lineWidth = br * 1.4;
-  ctx.beginPath(); ctx.moveTo(FIRE_HUB * 0.6, 0); ctx.lineTo(L - 2, 0); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,240,1)'; ctx.lineWidth = br * 0.6;
-  ctx.beginPath(); ctx.moveTo(FIRE_HUB * 0.7, 0); ctx.lineTo(L - 4, 0); ctx.stroke();
-  // flame head at the tip
-  const fl = 1 + 0.1 * Math.sin(T * 25), hg = ctx.createRadialGradient(L, 0, 1, L, 0, br * 2.2 * fl);
-  hg.addColorStop(0, 'rgba(255,255,230,1)'); hg.addColorStop(0.35, 'rgba(255,200,70,.9)'); hg.addColorStop(0.7, 'rgba(255,80,30,.5)'); hg.addColorStop(1, 'rgba(255,40,60,0)');
-  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(L, 0, br * 2.2 * fl, 0, 6.283); ctx.fill();
+  bar(0.66, 0, 0.6);                                   // the yellow inner flame
+  ctx.fillStyle = pkLG(ctx, x0, 0, L, 0, ['rgba(255,214,90,.95)', 'rgba(255,196,70,.85)', 'rgba(255,170,50,.7)']); ctx.fill();
+  // the white-hot core, and bright gas streaming out along it
+  ctx.strokeStyle = 'rgba(255,240,170,.9)'; ctx.lineWidth = R * 0.62;
+  ctx.beginPath(); ctx.moveTo(x0 + 4, 0); ctx.lineTo(L - 3, 0); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,245,1)'; ctx.lineWidth = R * 0.28;
+  ctx.beginPath(); ctx.moveTo(x0 + 6, 0); ctx.lineTo(L - 5, 0); ctx.stroke();
+  for (let j = 0; j < 4; j++) {
+    const u = (T * 3 + j / 4) % 1, xa = x0 + (L - x0) * u, yo = (hash2(j, 5) - 0.5) * R * 0.9;
+    ctx.strokeStyle = `rgba(255,236,170,${0.5 * Math.sin(u * Math.PI)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xa, yo); ctx.lineTo(Math.min(L, xa + 16), yo * 0.8); ctx.stroke();
+  }
+  // the flame head at the tip
+  const fl = 1 + 0.08 * Math.sin(T * 25), hg = ctx.createRadialGradient(L, 0, 1, L, 0, R * 1.9 * fl);
+  hg.addColorStop(0, 'rgba(255,255,235,1)'); hg.addColorStop(0.35, 'rgba(255,206,80,.85)'); hg.addColorStop(0.7, 'rgba(255,90,30,.4)'); hg.addColorStop(1, 'rgba(255,40,60,0)');
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(L, 0, R * 1.9 * fl, 0, 6.283); ctx.fill();
   ctx.restore();
-  // the hub: twice the old size, an iron ring with bolts and a lit top round a molten heart
-  hazardShadow(cx, cy, FIRE_HUB, 9);
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
-  pkE(ctx, 0, 0, FIRE_HUB, FIRE_HUB, pkRG(ctx, 0, 0, FIRE_HUB, ['#a8a4b0', '#4a4652', '#16141a']), 3.5);
-  ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, FIRE_HUB - 4, 3.6, 5.2); ctx.stroke();
-  for (let k = 0; k < 10; k++) { const a = sa + k / 10 * 6.283; pkE(ctx, Math.cos(a) * (FIRE_HUB - 8), Math.sin(a) * (FIRE_HUB - 8), 3.4, 3.4, '#d8d0c8', 1.4); }
-  pkE(ctx, 0, 0, 20, 20, '#2a0a04', 2.6);
+
+  // the hub
+  const HR = FIRE_HUB;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.lineJoin = 'round';
+  // contact shadow under it (warm, soft) and occlusion ring
+  const sh = ctx.createRadialGradient(3, 7, HR * 0.6, 3, 7, HR * 1.25);
+  sh.addColorStop(0, 'rgba(30,10,8,.4)'); sh.addColorStop(1, 'rgba(30,10,8,0)');
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(3, 7, HR * 1.25, 0, 6.283); ctx.fill();
+  // the iron wheel, lit from the top left
+  ctx.beginPath(); ctx.arc(0, 0, HR, 0, 6.283);
+  ctx.fillStyle = pkRG(ctx, 0, 0, HR, FIREBAR_IRON); ctx.fill();
+  ctx.strokeStyle = '#2a2230'; ctx.lineWidth = 1.6; ctx.stroke();
+  // the fire lights its lower right
+  ctx.save(); ctx.clip();
+  const fireLit = ctx.createRadialGradient(Math.cos(sa) * HR, Math.sin(sa) * HR, 2, Math.cos(sa) * HR, Math.sin(sa) * HR, HR * 1.2);
+  fireLit.addColorStop(0, 'rgba(255,130,50,.5)'); fireLit.addColorStop(1, 'rgba(255,130,50,0)');
+  ctx.fillStyle = fireLit; ctx.fillRect(-HR, -HR, HR * 2, HR * 2);
+  ctx.restore();
+  // brass bezel ring with a bright top bevel
+  ctx.beginPath(); ctx.arc(0, 0, HR - 6, 0, 6.283); ctx.arc(0, 0, HR - 11, 0, 6.283, true);
+  ctx.fillStyle = pkLG(ctx, -HR, -HR, HR, HR, [FIREBAR_BRASS[0], FIREBAR_BRASS[1], FIREBAR_BRASS[2], FIREBAR_BRASS[3]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(122,70,20,.8)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,230,.55)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 0, HR - 7.2, 3.5, 5.1); ctx.stroke();
+  // rivets round the iron rim (they turn with the bar)
+  for (let k = 0; k < 10; k++) {
+    const a = sa + (k + 0.5) / 10 * 6.283, rx = Math.cos(a) * (HR - 3.2), ry = Math.sin(a) * (HR - 3.2);
+    ctx.fillStyle = 'rgba(40,24,30,.55)'; ctx.beginPath(); ctx.arc(rx + 0.6, ry + 0.8, 2.2, 0, 6.283); ctx.fill();
+    ctx.fillStyle = pkRG(ctx, rx, ry, 2.2, [FIREBAR_BRASS[0], FIREBAR_BRASS[2]]); ctx.beginPath(); ctx.arc(rx, ry, 2.1, 0, 6.283); ctx.fill();
+  }
+  // the furnace: a dark recessed well with a molten heart, behind a turning grille
+  ctx.beginPath(); ctx.arc(0, 0, HR - 11, 0, 6.283);
+  ctx.fillStyle = pkRG(ctx, 0, 0, HR - 11, ['#5a1a10', '#3a0e0c', '#2a0a0e']); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const heat = 0.85 + 0.15 * Math.sin(T * 6 + h.ph);
+  const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, HR - 12);
+  cg.addColorStop(0, '#fffbe0'); cg.addColorStop(0.35, `rgba(255,${190 * heat | 0},70,1)`); cg.addColorStop(0.75, 'rgba(255,80,20,.6)'); cg.addColorStop(1, 'rgba(200,30,10,.1)');
+  ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, HR - 12, 0, 6.283); ctx.fill();
+  ctx.restore();
+  // the grille: four iron spokes and a hub cap, lit on top, shading to dark iron below
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 4; k++) {
+    const a = sa + Math.PI / 4 + k * Math.PI / 2, ca = Math.cos(a), sn = Math.sin(a);
+    ctx.strokeStyle = '#3a3040'; ctx.lineWidth = 5.4; ctx.beginPath(); ctx.moveTo(ca * 5, sn * 5); ctx.lineTo(ca * (HR - 12), sn * (HR - 12)); ctx.stroke();
+    ctx.strokeStyle = '#7a6e7e'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(ca * 5, sn * 5); ctx.lineTo(ca * (HR - 12), sn * (HR - 12)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,240,230,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ca * 6 - sn, sn * 6 + ca * -1); ctx.lineTo(ca * (HR - 13) - sn, sn * (HR - 13) - ca); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, 6.5, 0, 6.283); ctx.fillStyle = pkRG(ctx, 0, 0, 6.5, [FIREBAR_BRASS[0], FIREBAR_BRASS[1], FIREBAR_BRASS[3]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(122,70,20,.8)'; ctx.lineWidth = 1; ctx.stroke();
+  // the nozzle collar where the bar leaves the hub: a brass sleeve over the flame root, its mouth glowing
+  ctx.rotate(sa);
+  ctx.beginPath(); ctx.roundRect(HR - 14, -R - 2.5, 13, (R + 2.5) * 2, 3);
+  ctx.fillStyle = pkLG(ctx, 0, -R - 2.5, 0, R + 2.5, [FIREBAR_BRASS[0], FIREBAR_BRASS[1], FIREBAR_BRASS[2], FIREBAR_BRASS[3]]); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,60,16,.85)'; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,230,.5)'; ctx.fillRect(HR - 12.5, -R - 1.2, 10, 1.6);
+  ctx.strokeStyle = 'rgba(110,60,16,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(HR - 8, -R - 2); ctx.lineTo(HR - 8, R + 2); ctx.stroke();
   ctx.globalCompositeOperation = 'lighter';
-  const cg = ctx.createRadialGradient(0, 0, 1, 0, 0, 20);
-  cg.addColorStop(0, '#fffbe0'); cg.addColorStop(0.5, `rgba(255,${150 + 60 * Math.sin(T * 6) | 0},40,1)`); cg.addColorStop(1, 'rgba(255,60,20,.25)');
-  ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, 17, 0, 6.283); ctx.fill();
+  const ng = ctx.createRadialGradient(HR - 1, 0, 1, HR - 1, 0, R * 1.2);
+  ng.addColorStop(0, 'rgba(255,250,210,.9)'); ng.addColorStop(1, 'rgba(255,160,60,0)');
+  ctx.fillStyle = ng; ctx.beginPath(); ctx.arc(HR - 1, 0, R * 1.2, 0, 6.283); ctx.fill();
   ctx.restore();
 }
 
+// Wall spikes, one per zone, all drawn without ink: each shape is shaded with its own gradient and edged with a
+// darker shade of its own colour. Thorn: a gnarled bramble branch with hooked cream thorns tipped hot pink and a few
+// jungle leaves at the root. Crystal: a rose-magenta quartz cluster (warm, never the pickups' icy blue) with lit,
+// mid and shaded facets and twinkling glints. Obsidian: a violet volcanic-glass blade with conchoidal ripples, a
+// lilac sheen on top, a lava rim light below and glowing seams. Every body follows the hitbox (spikeHalf: a taper
+// from the wall to the tip); the thorns stay inside its extra 4 units near the wall; the side crystals are prisms
+// as wide as their capsules.
 const SPIKE_SKINS = {
-  thorn:    { body: ['#7a4a2a', '#3a1e0e'], rim: 'rgba(255,225,170,.45)', point: '#f1dfb0' },
-  crystal:  { body: ['#4a3e5a', '#120c1a'], rim: 'rgba(255,150,210,.7)', point: '#ff2a8a' },
-  obsidian: { body: ['#4a3d55', '#0e0b12'], rim: 'rgba(255,140,60,.9)', point: '#ffb238' },
+  thorn:    { body: ['#d08a52', '#9a5a30', '#6a3a1c', '#4a2410'], edge: '#4a2410', thorn: ['#fff6dc', '#f2d29a', '#c89458'], thornEdge: '#9a6430',
+              socket: ['#8a6040', '#4e3018'], leaf: ['#a8e05a', '#5a9a2a', '#2e6a1a'] },
+  crystal:  { face: [['#ffd4ee', '#ff9ad2'], ['#ff5ab4', '#e02c8e'], ['#b8187a', '#5a0840']], edge: '#5a0a40', glow: [255, 70, 170],
+              socket: ['#a2a8cc', '#5e6490', '#33375a'] },
+  obsidian: { body: ['#a494cc', '#62508a', '#3c2c5a', '#2a1c40'], edge: '#36244e', rim: [255, 140, 60], sheen: 'rgba(220,200,255,.55)',
+              socket: ['#a07468', '#62403a', '#40262a'] },
 };
+// the spike's drawn half-width at t (0 at the wall, 1 at the tip): just inside its hitbox radius, to a sharp point
+function spikeBodyHalf(h, t) { return Math.max(0, h.half * (1 - t) * 0.95 + 2 - 1.2 - 1.6 * t * t); }
+function spikeBodyPath(h, len, shrink = 0, lift = 0) {
+  const N = 14;
+  ctx.beginPath(); ctx.moveTo(-10, -(spikeBodyHalf(h, 0) + 1 - shrink));
+  for (let i = 0; i <= N; i++) { const t = i / N; ctx.lineTo(len * t, -(spikeBodyHalf(h, t) - shrink) + lift * t); }
+  for (let i = N; i >= 0; i--) { const t = i / N; ctx.lineTo(len * t, spikeBodyHalf(h, t) - shrink + lift * t); }
+  ctx.lineTo(-10, spikeBodyHalf(h, 0) + 1 - shrink); ctx.closePath();
+}
 function drawSpike(h) {
-  const k = SPIKE_SKINS[h.skin], len = h.len, hf = h.half;
+  const k = SPIKE_SKINS[h.skin], len = h.len, hf = h.half, T = G.t;
   const bx = sx(h.base), by = sy(h.alt);
   hazardShadow(bx + h.side * len * 0.45 * s, by, len * 0.45, 8);
   dangerGlow(bx + h.side * len * 0.8 * s, by, 34, 0.4);
   ctx.save(); ctx.translate(bx, by); ctx.scale(s * h.side, s);
-  ctx.lineJoin = 'round';
-  const spikePath = (l, w, a = 0) => {
-    ctx.beginPath();
-    ctx.moveTo(-8, -w); ctx.quadraticCurveTo(l * 0.5, -w * 0.75 + a, l, a); ctx.quadraticCurveTo(l * 0.5, w * 0.75 + a, -8, w); ctx.closePath();
-  };
-  if (h.skin === 'crystal') {
-    // a faceted cluster of 2-3 crystal points: each has a lit upper face, a shaded lower face,
-    // a bright ridge highlight and a hot tip; the small ones fan out from the base
-    // (dark obsidian glass with hot magenta tips: never icy blue, so it can't be mistaken for a crystal pickup)
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const glow = ctx.createRadialGradient(len * 0.4, 0, 2, len * 0.4, 0, len * 0.7);
-    glow.addColorStop(0, 'rgba(255,42,140,.3)'); glow.addColorStop(1, 'rgba(255,42,140,0)');
-    ctx.fillStyle = glow; ctx.fillRect(-10, -len * 0.7, len * 1.2, len * 1.4);
-    ctx.restore();
-    const pts = len > 80 ? [[len * 0.5, hf * 0.6, -0.36], [len * 0.62, hf * 0.66, 0.3], [len, hf, 0]] : [[len * 0.58, hf * 0.66, -0.34], [len, hf, 0.05]];
-    for (const [l, w, rot] of pts) {
-      ctx.save(); ctx.rotate(rot);
-      const sh = l * 0.66;                         // where the flat sides turn into the point
-      // whole outline first (ink), then the two faces
-      ctx.beginPath(); ctx.moveTo(-8, -w); ctx.lineTo(sh, -w * 0.7); ctx.lineTo(l, 0); ctx.lineTo(sh, w * 0.7); ctx.lineTo(-8, w); ctx.closePath();
-      ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-8, -w); ctx.lineTo(sh, -w * 0.7); ctx.lineTo(l, 0); ctx.lineTo(sh, w * 0.12); ctx.lineTo(-8, w * 0.18); ctx.closePath();
-      ctx.fillStyle = pkLG(ctx, 0, -w, 0, w * 0.2, ['#6a5a7e', '#3a2e4a', '#241c30']); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-8, w * 0.18); ctx.lineTo(sh, w * 0.12); ctx.lineTo(l, 0); ctx.lineTo(sh, w * 0.7); ctx.lineTo(-8, w); ctx.closePath();
-      ctx.fillStyle = pkLG(ctx, 0, 0, 0, w, ['#1c1426', '#120c1a', '#08060c']); ctx.fill();
-      // facet lines, a glassy ridge glint and the hot magenta point
-      ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.1;
-      ctx.beginPath(); ctx.moveTo(sh, -w * 0.7); ctx.lineTo(sh, w * 0.7); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,190,220,.75)'; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.moveTo(-4, w * 0.15); ctx.lineTo(sh, w * 0.1); ctx.lineTo(l * 0.97, 0); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,220,240,.35)'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(-4, -w * 0.88); ctx.lineTo(sh * 0.95, -w * 0.64); ctx.stroke();
-      ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(l * 0.84, -w * 0.3); ctx.lineTo(l, 0); ctx.lineTo(l * 0.84, w * 0.3); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-  } else {
-    spikePath(len, hf);
-    const g = ctx.createLinearGradient(0, -hf, 0, hf);
-    g.addColorStop(0, k.body[0]); g.addColorStop(1, k.body[1]);
-    ctx.fillStyle = g; ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.fill(); ctx.stroke();
-    if (h.skin === 'thorn') {
-      // a gnarled bramble: bark grain, big hooked thorns with hot red tips, and a red point
-      ctx.strokeStyle = 'rgba(20,8,2,.6)'; ctx.lineWidth = 1.4;
-      for (const yy of [-7, 1, 8]) { ctx.beginPath(); ctx.moveTo(-4, yy); ctx.quadraticCurveTo(len * 0.4, yy * 0.7, len * 0.75, yy * 0.25); ctx.stroke(); }
-      ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
-      for (let i = 0; i <= 6; i++) {
-        const t = 0.06 + i / 7.4, x = len * t, w = hf * (1 - t) * 0.78 + 1, tl = 11 + 6 * (1 - t);
-        for (const d of [-1, 1]) {
-          if (i > 3 && (i + (d > 0 ? 1 : 0)) % 2) continue;   // both edges near the wall, staggered toward the tip
-          ctx.fillStyle = k.point; ctx.strokeStyle = INK;
-          ctx.beginPath(); ctx.moveTo(x - 6, d * w * 0.9); ctx.quadraticCurveTo(x + 1, d * (w + tl * 0.5), x + 5, d * (w + tl)); ctx.lineTo(x + 4, d * w * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = DANGER; ctx.beginPath(); ctx.moveTo(x + 1.5, d * (w + tl * 0.55)); ctx.lineTo(x + 5, d * (w + tl)); ctx.lineTo(x + 4.2, d * (w + tl * 0.5)); ctx.closePath(); ctx.fill();
-        }
-      }
-      ctx.fillStyle = DANGER; ctx.strokeStyle = INK; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(len * 0.82, -hf * 0.2); ctx.quadraticCurveTo(len * 0.95, -1, len, 0); ctx.quadraticCurveTo(len * 0.95, 1, len * 0.82, hf * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
-    } else {
-      // obsidian: glassy facets with glowing lava seams
-      ctx.fillStyle = 'rgba(255,255,255,.12)';
-      ctx.beginPath(); ctx.moveTo(-6, -hf * 0.8); ctx.quadraticCurveTo(len * 0.5, -hf * 0.55, len * 0.96, -1); ctx.lineTo(-6, -2); ctx.closePath(); ctx.fill();
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(255,120,40,${0.7 + 0.2 * Math.sin(G.t * 3 + h.ph)})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(-4, hf * 0.45); ctx.quadraticCurveTo(len * 0.45, hf * 0.32, len * 0.9, 1); ctx.stroke();
-      const tip = ctx.createRadialGradient(len, 0, 0, len, 0, 13);
-      tip.addColorStop(0, 'rgba(255,220,160,1)'); tip.addColorStop(0.4, 'rgba(255,42,106,.8)'); tip.addColorStop(1, 'rgba(255,42,106,0)');
-      ctx.fillStyle = tip; ctx.beginPath(); ctx.arc(len, 0, 10, 0, 6.283); ctx.fill();
-      ctx.restore();
-    }
-    ctx.strokeStyle = k.rim; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(-4, -hf * 0.78); ctx.quadraticCurveTo(len * 0.5, -hf * 0.58, len * 0.9, -1); ctx.stroke();
-  }
-  // rocky socket where it meets the wall
-  ctx.fillStyle = '#3a2a24'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(-6, 0, 8, hf + 4, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (h.skin === 'crystal') drawSpikeCrystal(h, k, len, hf, T);
+  else if (h.skin === 'thorn') drawSpikeThorn(h, k, len, hf, T);
+  else drawSpikeObsidian(h, k, len, hf, T);
   ctx.restore();
 }
-
-function drawSpider(h) {
-  const x = sx(h.x), y = sy(h.alt), ay = sy(h.aAlt), T = G.t;
-  // silk thread and the web tuft it hangs from
-  ctx.strokeStyle = 'rgba(245,240,255,.85)'; ctx.lineWidth = 1.4;
-  ctx.beginPath(); ctx.moveTo(x, ay); ctx.lineTo(x, y - 12 * s); ctx.stroke();
-  ctx.strokeStyle = 'rgba(245,240,255,.5)'; ctx.lineWidth = 1;
-  for (let k = 0; k < 6; k++) { const a = Math.PI + k / 5 * Math.PI; ctx.beginPath(); ctx.moveTo(x, ay); ctx.lineTo(x + Math.cos(a) * 14 * s, ay + Math.sin(a) * 8 * s); ctx.stroke(); }
-  const K = SPIDER_SKINS[h.skin || 0];
-  hazardShadow(x, y, 22, 8);
-  backlight(x, y, 54, h.skin || 0, 0.36);
-  dangerGlow(x, y, 42);
-  ctx.save(); ctx.translate(x, y); ctx.scale(s * 1.3, s * 1.3);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  // eight jointed legs, wiggling
-  for (const d of [-1, 1]) for (let i = 0; i < 4; i++) {
-    const wig = Math.sin(T * 9 + i * 1.3 + (d > 0 ? 0 : 1.6)) * 2.5;
-    const by = -2 + i * 3.5, kx = d * (13 + i), ky = by - 9 + i * 3 + wig, fx = d * (21 + i * 1.5), fy = by + 2 + i * 4 - wig;
-    ctx.strokeStyle = INK; ctx.lineWidth = 3.6;
-    ctx.beginPath(); ctx.moveTo(d * 4, by); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
-    ctx.strokeStyle = K.leg; ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.moveTo(d * 4, by); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+// occlusion on the wall round a spike's root (drawn before the spike)
+function spikeAO(hf) {
+  const ao = ctx.createRadialGradient(-4, 1, 4, -4, 1, hf + 14);
+  ao.addColorStop(0, 'rgba(24,10,6,.45)'); ao.addColorStop(1, 'rgba(24,10,6,0)');
+  ctx.fillStyle = ao; ctx.beginPath(); ctx.ellipse(-4, 1, 16, hf + 14, 0, 0, 6.283); ctx.fill();
+}
+// a crust of rock chunks where a spike breaks out of the wall (drawn over its root, so there's no cut end):
+// a chunk behind the root's middle and one above and below it, each lit on top; `seam` glows in the cracks
+function spikeSocket(h, cols, edge, hf, seam) {
+  const sd = (h.alt | 0) % 11;
+  if (seam) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(-4, 0, 2, -4, 0, hf + 6);
+    g.addColorStop(0, rgbaA(seam, 0.55)); g.addColorStop(1, rgbaA(seam, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(-4, 0, 9, hf + 6, 0, 0, 6.283); ctx.fill();
+    ctx.restore();
   }
-  // abdomen (up, toward the thread) with a warning marking
-  const ag = ctx.createRadialGradient(-3, -12, 2, 0, -8, 13);
-  ag.addColorStop(0, K.abd[0]); ag.addColorStop(1, K.abd[1]);
-  ctx.fillStyle = ag; ctx.strokeStyle = INK; ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.ellipse(0, -7, 11, 12, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = K.mark;
-  ctx.beginPath(); ctx.moveTo(-4, -13); ctx.lineTo(4, -13); ctx.lineTo(0, -8); ctx.closePath(); ctx.moveTo(-4, -3); ctx.lineTo(4, -3); ctx.lineTo(0, -8); ctx.closePath(); ctx.fill();
-  // head with a cluster of glowing eyes and fangs
-  ctx.fillStyle = K.head; ctx.strokeStyle = INK;
-  ctx.beginPath(); ctx.arc(0, 6, 7.5, 0, 6.283); ctx.fill(); ctx.stroke();
+  hzRock(-8, 0, 6, sd + 1, cols, edge, hf * 0.62);
+  hzRock(-5, -hf * 0.82, 7.2, sd + 3, cols, edge, 6);
+  hzRock(-5.5, hf * 0.84, 7, sd + 5, cols, edge, 5.8);
+  hzRock(-9, -hf * 1.05, 4.6, sd + 7, cols, edge, 4);
+}
+// the bramble's outline: the spike's taper, flaring at the root into the wall like a tree's buttress
+function thornPath(h, len) {
+  const N = 14, f = [[-14, 9], [-8, 4.5], [-3, 1.6]];
+  ctx.beginPath();
+  for (const [x, e] of f) ctx.lineTo(x, -(spikeBodyHalf(h, 0) + e));
+  for (let i = 0; i <= N; i++) { const t = i / N; ctx.lineTo(len * t, -spikeBodyHalf(h, t)); }
+  for (let i = N; i >= 0; i--) { const t = i / N; ctx.lineTo(len * t, spikeBodyHalf(h, t)); }
+  for (let i = f.length - 1; i >= 0; i--) ctx.lineTo(f[i][0], spikeBodyHalf(h, 0) + f[i][1]);
+  ctx.closePath();
+}
+function drawSpikeThorn(h, k, len, hf, T) {
+  spikeAO(hf);
+  // roots gripping the wall above and below: tapered, lit along their tops
+  for (const [y0, y1, w, bend] of [[-14, -36, 4.2, -9], [13, 34, 4, -10], [-6, -26, 2.8, -15], [6, 24, 2.6, -14]]) {
+    const mx = bend, my = (y0 + y1) / 2, nx = -14 - w;
+    ctx.beginPath(); ctx.moveTo(-4, y0 - w); ctx.quadraticCurveTo(mx, my - w * 0.6, nx, y1); ctx.quadraticCurveTo(mx + w * 0.6, my + w * 0.4, -2, y0 + w); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, Math.min(y0, y1), 0, Math.max(y0, y1), [k.body[1], k.body[2]]); ctx.fill();
+    ctx.strokeStyle = k.edge; ctx.lineWidth = 1.1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,214,160,.3)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-4, y0 - w * 0.6); ctx.quadraticCurveTo(mx, my - w * 0.5, nx + 1, y1); ctx.stroke();
+  }
+  // the bark body
+  thornPath(h, len);
+  ctx.fillStyle = pkLG(ctx, 0, -hf, 0, hf, k.body); ctx.fill();
+  ctx.strokeStyle = k.edge; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.save(); thornPath(h, len); ctx.clip();
+  // a deeper shadow along the underside, and a twist: a spiral groove winding round the branch
+  const under = ctx.createLinearGradient(0, 0, 0, hf); under.addColorStop(0, 'rgba(60,24,8,0)'); under.addColorStop(1, 'rgba(60,24,8,.45)');
+  ctx.fillStyle = under; ctx.fillRect(-16, 0, len + 18, hf + 10);
+  for (let j = 0; j < 3; j++) {
+    const xa = len * (0.1 + j * 0.24), xb = xa + len * 0.12, wa = spikeBodyHalf(h, xa / len), wb = spikeBodyHalf(h, xb / len);
+    ctx.strokeStyle = 'rgba(74,36,16,.5)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(xa, -wa); ctx.quadraticCurveTo((xa + xb) / 2 + 3, 0, xb, wb); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,214,160,.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xa - 1.6, -wa); ctx.quadraticCurveTo((xa + xb) / 2 + 1.4, 0, xb - 1.6, wb); ctx.stroke();
+  }
+  // bark grain: long darker furrows with lit ridges beside them, following the taper
+  for (const [f, lit] of [[-0.62, 1], [-0.25, 0], [0.12, 1], [0.48, 0], [0.78, 0]]) {
+    ctx.strokeStyle = 'rgba(74,36,16,.55)'; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let i = 0; i <= 10; i++) { const t = i / 10 * 0.9, y = f * spikeBodyHalf(h, t) + Math.sin(t * 17 + f * 9) * 0.9; i ? ctx.lineTo(len * t, y) : ctx.moveTo(-8, y); }
+    ctx.stroke();
+    if (lit) {
+      ctx.strokeStyle = 'rgba(255,214,160,.35)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 10; i++) { const t = i / 10 * 0.85, y = f * spikeBodyHalf(h, t) - 1.5 + Math.sin(t * 17 + f * 9) * 0.9; i ? ctx.lineTo(len * t, y) : ctx.moveTo(-8, y); }
+      ctx.stroke();
+    }
+  }
+  // a knot, and a lit sheen along the top
+  const kx = len * 0.3, kr = spikeBodyHalf(h, 0.3) * 0.42;
+  ctx.fillStyle = pkRG(ctx, kx, 2, kr, ['#c88450', '#6a3a1c', '#4a2410']); ctx.beginPath(); ctx.ellipse(kx, 2, kr * 1.3, kr, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,210,150,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(kx, 2, kr * 0.8, kr * 0.55, 0, 3.4, 5.6); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,226,180,.45)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-6, -spikeBodyHalf(h, 0) * 0.78); ctx.quadraticCurveTo(len * 0.45, -spikeBodyHalf(h, 0.45) * 0.72, len * 0.86, -spikeBodyHalf(h, 0.86) * 0.5); ctx.stroke();
+  ctx.restore();
+  // hooked thorns, raking toward the tip: big near the wall (inside the hitbox's extra 4 units), small further out
+  for (let i = 0; i < 7; i++) {
+    const t = 0.05 + i * 0.105, x = len * t, w = spikeBodyHalf(h, t), big = t < 0.55;
+    const reach = big ? spikeHalf(h, Math.min(1, t + 0.1)) + 4.6 - w : 2.6;   // thorn length past the bark
+    for (const d of [-1, 1]) {
+      if (!big && (i + (d > 0 ? 1 : 0)) % 2) continue;    // staggered toward the tip
+      const bw = big ? 4.2 : 2.8;                             // half the thorn's base
+      ctx.beginPath(); ctx.moveTo(x - bw, d * (w - 1.2));
+      ctx.quadraticCurveTo(x + bw * 0.1, d * (w + reach * 0.45), x + bw * 1.6, d * (w + reach));
+      ctx.quadraticCurveTo(x + bw * 0.7, d * (w + reach * 0.3), x + bw, d * (w - 1.2)); ctx.closePath();
+      ctx.fillStyle = pkLG(ctx, x, d * w, x + bw, d * (w + reach), k.thorn); ctx.fill();
+      ctx.strokeStyle = k.thornEdge; ctx.lineWidth = 0.9; ctx.stroke();
+      // the hot tip
+      ctx.beginPath(); ctx.moveTo(x + bw * 0.55, d * (w + reach * 0.55)); ctx.lineTo(x + bw * 1.6, d * (w + reach)); ctx.lineTo(x + bw * 0.95, d * (w + reach * 0.42)); ctx.closePath();
+      ctx.fillStyle = DANGER; ctx.fill();
+    }
+  }
+  // jungle leaves sprouting at the root, swaying a touch
+  const sw = Math.sin(T * 1.6 + h.ph) * 0.12;
+  for (const [x, y, a, sz] of [[3, -spikeBodyHalf(h, 0) + 1, -0.9 + sw, 8], [9, -spikeBodyHalf(h, 0.08) + 2, -0.45 + sw, 6.5], [4, spikeBodyHalf(h, 0) - 1, 0.95 - sw, 7]]) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(sz * 0.5, -sz * 0.42, sz, 0); ctx.quadraticCurveTo(sz * 0.5, sz * 0.42, 0, 0); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, -sz * 0.4, 0, sz * 0.4, [k.leaf[0], k.leaf[1]]); ctx.fill();
+    ctx.strokeStyle = k.leaf[2]; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0.5, 0); ctx.lineTo(sz * 0.85, 0); ctx.stroke();
+    ctx.restore();
+  }
+  // the sharpened point, hot pink
+  const pt = len * 0.84;
+  ctx.beginPath(); ctx.moveTo(pt, -spikeBodyHalf(h, 0.84)); ctx.quadraticCurveTo(len * 0.95, -spikeBodyHalf(h, 0.95), len + 0.6, 0); ctx.quadraticCurveTo(len * 0.95, spikeBodyHalf(h, 0.95), pt, spikeBodyHalf(h, 0.84));
+  ctx.quadraticCurveTo(pt - 2, 0, pt, -spikeBodyHalf(h, 0.84)); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, pt, -3, pt, 3, ['#ff7aa6', DANGER, '#b0103e']); ctx.fill();
+  ctx.fillStyle = 'rgba(255,230,240,.7)'; ctx.beginPath(); ctx.ellipse(len * 0.9, -1, 2.2, 0.7, -0.05, 0, 6.283); ctx.fill();
+  // a thin jungle vine winding round the branch: its front loops over the bark, with a leaf or two
+  const vEnd = len * 0.5, vy = x => Math.sin(x / vEnd * Math.PI * 2.5 + 0.6) * spikeBodyHalf(h, x / len) * 0.92;
+  for (const front of [false, true]) {
+    ctx.strokeStyle = front ? k.leaf[1] : 'rgba(46,106,26,.55)'; ctx.lineWidth = front ? 1.5 : 1.2;
+    ctx.beginPath(); let on = false;
+    for (let x = -6; x <= vEnd; x += 2) {
+      const isFront = Math.cos(x / vEnd * Math.PI * 2.5 + 0.6) > 0;
+      if (isFront === front) { on ? ctx.lineTo(x, vy(x)) : ctx.moveTo(x, vy(x)); on = true; } else on = false;
+    }
+    ctx.stroke();
+  }
+  for (const vx of [vEnd * 0.42, vEnd]) {
+    ctx.save(); ctx.translate(vx, vy(vx)); ctx.rotate(-0.5 + sw);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(2.5, -2.4, 5.5, 0); ctx.quadraticCurveTo(2.5, 2.4, 0, 0); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, -2, 0, 2, [k.leaf[0], k.leaf[1]]); ctx.fill(); ctx.strokeStyle = k.leaf[2]; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.restore();
+  }
+  // moss draped over the root's top
+  for (let j = 0; j < 7; j++) {
+    const x = -11 + j * 3.2, y = -(j < 3 ? spikeBodyHalf(h, 0) + [7, 3.6, 1.2][j] : spikeBodyHalf(h, x / len)) + 0.6;
+    ctx.fillStyle = j % 2 ? k.leaf[1] : k.leaf[0];
+    ctx.beginPath(); ctx.ellipse(x, y, 2.6 + (j % 3) * 0.5, 1.8, -0.15, 0, 6.283); ctx.fill();
+  }
+}
+function drawSpikeCrystal(h, k, len, hf, T) {
+  spikeAO(hf);
+  // a soft magenta glow inside the cluster
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const eg = ctx.createRadialGradient(0, 4, 1, 0, 4, 10); eg.addColorStop(0, 'rgba(255,60,80,.7)'); eg.addColorStop(1, 'rgba(255,60,80,0)');
-  ctx.fillStyle = eg; ctx.fillRect(-10, -6, 20, 20); ctx.restore();
-  ctx.fillStyle = K.eye;
-  for (const [ex, ey, er] of [[-2.8, 5, 1.9], [2.8, 5, 1.9], [-5, 3, 1.2], [5, 3, 1.2], [-1.2, 2.2, 1], [1.2, 2.2, 1]]) { ctx.beginPath(); ctx.arc(ex, ey, er, 0, 6.283); ctx.fill(); }
-  ctx.fillStyle = DANGER; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.moveTo(-3.4, 11); ctx.lineTo(-1.5, 17); ctx.lineTo(-0.3, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(3.4, 11); ctx.lineTo(1.5, 17); ctx.lineTo(0.3, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.arc(0, -7, 8.5, -2.6, -1.4); ctx.stroke();
+  const glow = ctx.createRadialGradient(len * 0.45, 0, 2, len * 0.45, 0, len * 0.7);
+  glow.addColorStop(0, rgbaA(k.glow, 0.26 * (0.4 + 0.6 * glowK))); glow.addColorStop(1, rgbaA(k.glow, 0));
+  ctx.fillStyle = glow; ctx.fillRect(-10, -len * 0.7, len * 1.2, len * 1.4);
+  ctx.restore();
+  // [length along its axis, its half-width, its angle]: the side prisms are as wide as their hitbox capsules (which run
+  // to 85% of their length), the main point follows the spike's taper
+  const side = len > 80 ? [[len * 0.5, hf * 0.6, -0.36], [len * 0.62, hf * 0.66, 0.3]] : [[len * 0.58, hf * 0.66, -0.34]];
+  const prism = (l, w, rot, main) => {
+    ctx.save(); ctx.rotate(rot);
+    // outline: main spike tapers like the hitbox; side prisms keep their width out to a short point
+    let top, bot;
+    if (main) {
+      const P = [0, 0.35, 0.72, 1].map(t => [l * t, spikeBodyHalf(h, t) + 0.6]);
+      top = [[-8, -(hf + 0.5)], ...P.map(([x, y]) => [x, -y]).slice(0, 3), [l + 0.6, 0]];
+      bot = [[-8, hf + 0.5], ...P.map(([x, y]) => [x, y]).slice(0, 3), [l + 0.6, 0]];
+    } else {
+      const r = w * 0.55 + 0.4, L = l * 0.85 + r * 0.9;
+      top = [[-2, -r], [L * 0.7, -r * 0.92], [L, 0]]; bot = [[-2, r], [L * 0.7, r * 0.92], [L, 0]];
+      l = L;
+    }
+    const outline = () => { ctx.beginPath(); top.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]); ctx.closePath(); };
+    outline();
+    ctx.fillStyle = k.face[1][1]; ctx.fill();
+    ctx.save(); outline(); ctx.clip();
+    // three facets: lit top, bright middle ridge, shaded bottom; the facet seams converge on the tip
+    const yA = (x) => { for (let i = 1; i < top.length; i++) if (x <= top[i][0]) { const [x0, y0] = top[i - 1], [x1, y1] = top[i]; return y0 + (y1 - y0) * (x - x0) / Math.max(1e-6, x1 - x0); } return 0; };
+    const seam = (f) => { const pts = []; for (let i = 0; i <= 8; i++) { const x = -8 + (l + 8) * i / 8; pts.push([x, -yA(x) * f]); } return pts; };
+    const upper = seam(-0.3), lower = seam(0.32);   // y = f × the outline's half-width (negative: above the axis)
+    const band = (a, b, fill) => { ctx.beginPath(); a.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = b.length - 1; i >= 0; i--) ctx.lineTo(b[i][0], b[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    const edgeTop = seam(-1.05), edgeBot = seam(1.05);
+    band(edgeTop, upper, pkLG(ctx, 0, -w, 0, 0, k.face[0]));
+    band(upper, lower, pkLG(ctx, 0, -w * 0.3, 0, w * 0.3, k.face[1]));
+    band(lower, edgeBot, pkLG(ctx, 0, 0, 0, w, k.face[2]));
+    // inner light: a brighter streak inside the glass, and facet seams in a deeper rose
+    ctx.strokeStyle = 'rgba(160,20,100,.45)'; ctx.lineWidth = 0.9;
+    for (const sm of [upper, lower]) { ctx.beginPath(); sm.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }
+    if (main) { ctx.beginPath(); ctx.moveTo(l * 0.72, -spikeBodyHalf(h, 0.72)); ctx.lineTo(l * 0.72, spikeBodyHalf(h, 0.72)); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,240,250,.7)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); upper.forEach(([x, y], i) => i ? ctx.lineTo(x, y + 1) : ctx.moveTo(x + 3, y + 1)); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const ig = ctx.createLinearGradient(0, 0, l, 0); ig.addColorStop(0, 'rgba(255,120,200,0)'); ig.addColorStop(0.7, 'rgba(255,140,210,.22)'); ig.addColorStop(1, 'rgba(255,220,240,.5)');
+    ctx.fillStyle = ig; ctx.fillRect(-8, -w, l + 10, w * 2);
+    ctx.restore();
+    outline(); ctx.strokeStyle = k.edge; ctx.lineWidth = 1.4; ctx.stroke();
+    // the hot point
+    const tg = ctx.createRadialGradient(l, 0, 0, l, 0, 7);
+    tg.addColorStop(0, 'rgba(255,255,255,1)'); tg.addColorStop(0.35, 'rgba(255,170,220,.9)'); tg.addColorStop(1, 'rgba(255,42,140,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(l, 0, 7, 0, 6.283); ctx.fill(); ctx.restore();
+    ctx.restore();
+  };
+  for (const [l, w, rot] of side) prism(l, w, rot, false);
+  prism(len, hf, 0, true);
+  // twinkling glints on the facets
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let j = 0; j < 3; j++) {
+    const tw = Math.max(0, Math.sin(T * 2.2 + j * 2.1 + h.ph)), x = len * (0.22 + j * 0.2), y = -spikeBodyHalf(h, 0.22 + j * 0.2) * 0.55, r = 3.2 * tw;
+    if (r < 0.3) continue;
+    ctx.fillStyle = `rgba(255,245,252,${0.9 * tw})`; ctx.beginPath();
+    for (let q = 0; q < 8; q++) { const a = q / 8 * 6.283, rr = q % 2 ? r * 0.22 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  // a crust of slate rock it grows out of, with small stub crystals
+  spikeSocket(h, k.socket, k.socket[2], hf);
+  for (const [x, y, a, l] of [[-4, -hf * 0.95, -0.9, 7], [-3, hf * 0.9, 0.8, 6]]) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.beginPath(); ctx.moveTo(0, -2.4); ctx.lineTo(l * 0.7, -2); ctx.lineTo(l, 0); ctx.lineTo(l * 0.7, 2); ctx.lineTo(0, 2.4); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, -2.4, 0, 2.4, [k.face[0][1], k.face[1][1], k.face[2][1]]); ctx.fill();
+    ctx.strokeStyle = k.edge; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawSpikeObsidian(h, k, len, hf, T) {
+  spikeAO(hf);
+  // the glass blade: conical, a lilac sheen across the top facet, a lava rim light along the underside
+  spikeBodyPath(h, len);
+  ctx.fillStyle = pkLG(ctx, 0, -hf, 0, hf, k.body); ctx.fill();
+  ctx.save(); spikeBodyPath(h, len); ctx.clip();
+  // the upper facet, cut flat and catching the light
+  ctx.beginPath(); ctx.moveTo(-10, -hf - 2);
+  for (let i = 0; i <= 10; i++) { const t = i / 10; ctx.lineTo(len * t, -spikeBodyHalf(h, t) * 0.18 - 1); }
+  ctx.lineTo(len, -hf - 2); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, 0, -hf, 0, 0, ['#d4c6f2', '#8a78b8', '#5a4884']); ctx.fill();
+  // conchoidal ripples: curved fracture lines, a light edge over a dark one
+  for (let j = 0; j < 4; j++) {
+    const cx = len * (0.12 + j * 0.2), r = spikeBodyHalf(h, 0.12 + j * 0.2) * 1.1 + 4;
+    ctx.strokeStyle = 'rgba(30,18,50,.5)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(cx - r * 0.6, 0, r, -0.9, 0.9); ctx.stroke();
+    ctx.strokeStyle = 'rgba(210,190,255,.28)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(cx - r * 0.6 - 1.4, 0, r, -0.85, 0.85); ctx.stroke();
+  }
+  // a glassy specular streak along the top
+  ctx.strokeStyle = k.sheen; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.moveTo(-4, -spikeBodyHalf(h, 0) * 0.7); ctx.quadraticCurveTo(len * 0.45, -spikeBodyHalf(h, 0.45) * 0.66, len * 0.88, -spikeBodyHalf(h, 0.88) * 0.4); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(len * 0.2, -spikeBodyHalf(h, 0.2) * 0.62, 4, 1.1, -0.05, 0, 6.283); ctx.fill();
+  // the lava below lights its underside
+  ctx.globalCompositeOperation = 'lighter';
+  const rl = ctx.createLinearGradient(0, hf, 0, 0); rl.addColorStop(0, rgbaA(k.rim, 0.6)); rl.addColorStop(0.45, rgbaA(k.rim, 0));
+  ctx.fillStyle = rl; ctx.fillRect(-10, 0, len + 12, hf + 2);
+  // glowing seams cracking through the glass
+  const pulse = 0.65 + 0.25 * Math.sin(T * 3 + h.ph);
+  ctx.strokeStyle = `rgba(255,130,40,${pulse})`; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(-6, spikeBodyHalf(h, 0) * 0.45); ctx.lineTo(len * 0.2, spikeBodyHalf(h, 0.2) * 0.3); ctx.lineTo(len * 0.34, spikeBodyHalf(h, 0.34) * 0.5);
+  ctx.lineTo(len * 0.55, spikeBodyHalf(h, 0.55) * 0.2); ctx.lineTo(len * 0.88, 0.5); ctx.stroke();
+  ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(len * 0.2, spikeBodyHalf(h, 0.2) * 0.3); ctx.lineTo(len * 0.27, spikeBodyHalf(h, 0.27) * 0.85); ctx.moveTo(len * 0.55, spikeBodyHalf(h, 0.55) * 0.2); ctx.lineTo(len * 0.6, spikeBodyHalf(h, 0.6) * 0.75); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,230,160,${pulse * 0.8})`; ctx.lineWidth = 0.6;
+  ctx.beginPath(); ctx.moveTo(-6, spikeBodyHalf(h, 0) * 0.45); ctx.lineTo(len * 0.2, spikeBodyHalf(h, 0.2) * 0.3); ctx.lineTo(len * 0.34, spikeBodyHalf(h, 0.34) * 0.5); ctx.stroke();
+  ctx.restore();
+  spikeBodyPath(h, len); ctx.strokeStyle = k.edge; ctx.lineWidth = 1.5; ctx.stroke();
+  // the white-hot tip
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const tip = ctx.createRadialGradient(len, 0, 0, len, 0, 11);
+  tip.addColorStop(0, 'rgba(255,236,190,1)'); tip.addColorStop(0.35, 'rgba(255,110,60,.85)'); tip.addColorStop(1, 'rgba(255,42,106,0)');
+  ctx.fillStyle = tip; ctx.beginPath(); ctx.arc(len, 0, 11, 0, 6.283); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.moveTo(len * 0.86, -spikeBodyHalf(h, 0.86)); ctx.lineTo(len + 0.6, 0); ctx.lineTo(len * 0.86, spikeBodyHalf(h, 0.86)); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, len * 0.86, 0, len, 0, ['rgba(255,90,60,.6)', 'rgba(255,220,170,1)']); ctx.fill();
+  // a crust of basalt where the blade breaks out of the wall, magma glowing in the cracks between the chunks
+  spikeSocket(h, k.socket, k.socket[2], hf, [255, 120, 40]);
+}
+
+// The cave spider's pose, read from its own bob (art only; the bob never changes): it tenses at the top of each
+// climb, legs drawn in, fangs spread and eyes flaring, right before it drops (tell), and lifts its legs as it falls.
+function spiderPose(h) {
+  const th = G.t * h.w + h.ph, sn = Math.sin(th), cs = Math.cos(th);
+  return { tell: smooth(0.5, 0.96, -sn) * (1 - smooth(0.05, 0.5, cs)), drop: smooth(0.25, 0.95, cs) };
+}
+// Hip, knee, ankle and claw of each leg on the right side (rear 0 to front 3), in the spider's frame: the feet sit on
+// the ends of the legs' hitbox capsule and the knees just over it, so the art and the hitbox line up.
+const SPIDER_LEGS = [
+  [[4.5, 0.5], [11, -11], [18, -6.5], [22.5, -3]],
+  [[5.8, 2.5], [14, -7], [21, -3.5], [24.5, 0.5]],
+  [[6.3, 4.5], [14.5, -2], [21.5, 2], [24, 6]],
+  [[5.8, 6.8], [12.5, 3], [17, 7.5], [19, 9.5]],
+];
+// One leg: tapered segments (a deeper shade underneath for the edge, the leg colour, a lit stripe), bristles,
+// a hot band at each joint and a hooked claw. wig walks it, curl draws it in toward the hip, lift raises it.
+function spiderLeg(K, d, i, wig, curl, lift) {
+  const R = SPIDER_LEGS[i], [hx, hy] = R[0];
+  const p = R.map(([x, y], j) => {
+    let px = x, py = y + [0, 1.3, 0.9, 0.4][j] * wig - lift * j * 0.5;
+    px = lerp(px, hx, curl * j * 0.09); py = lerp(py, hy, curl * j * 0.05) - (j === 1 ? curl * 1.4 : 0);
+    return [d * px, py];
+  });
+  const W = [[2.5, 2], [1.9, 1.4], [1.3, 0.7]];
+  const seg = (a, b, w0, w1, col) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l;
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.moveTo(a[0] + nx * w0 / 2, a[1] + ny * w0 / 2); ctx.lineTo(b[0] + nx * w1 / 2, b[1] + ny * w1 / 2);
+    ctx.lineTo(b[0] - nx * w1 / 2, b[1] - ny * w1 / 2); ctx.lineTo(a[0] - nx * w0 / 2, a[1] - ny * w0 / 2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(a[0], a[1], w0 / 2, 0, TWO_PI); ctx.arc(b[0], b[1], w1 / 2, 0, TWO_PI); ctx.fill();
+  };
+  for (let j = 0; j < 3; j++) seg(p[j], p[j + 1], W[j][0] + 1, W[j][1] + 1, K.leg[2]);
+  for (let j = 0; j < 3; j++) seg(p[j], p[j + 1], W[j][0], W[j][1], K.leg[1]);
+  // the lit stripe along the top of each segment
+  for (let j = 0; j < 3; j++) {
+    const o = [-0.3 * d, -W[j][0] * 0.22];
+    seg([p[j][0] + o[0], p[j][1] + o[1]], [p[j + 1][0] + o[0], p[j + 1][1] + o[1]], W[j][0] * 0.32, W[j][1] * 0.3, K.leg[0] + 'cc');
+  }
+  // bristles on the femur and tibia
+  ctx.lineWidth = 0.45; ctx.strokeStyle = K.leg[0] + '99';
+  for (let j = 0; j < 2; j++) for (let k = 1; k <= 3; k++) {
+    const u = k / 4, bx = lerp(p[j][0], p[j + 1][0], u), by = lerp(p[j][1], p[j + 1][1], u);
+    ctx.beginPath(); ctx.moveTo(bx, by - W[j][0] * 0.4); ctx.lineTo(bx + d * 0.9, by - W[j][0] * 0.4 - 1.3); ctx.stroke();
+  }
+  // hot joint bands at the knee and ankle
+  for (const j of [1, 2]) {
+    const r = W[j - 1][1] * 0.5;
+    ctx.fillStyle = K.band; ctx.beginPath(); ctx.ellipse(p[j][0], p[j][1], r, r, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = 'rgba(255,240,230,.7)'; ctx.beginPath(); ctx.arc(p[j][0] - 0.3 * d, p[j][1] - r * 0.4, r * 0.35, 0, TWO_PI); ctx.fill();
+  }
+  // the hooked claw, carrying on past the tip and curling down
+  const [ax, ay] = p[2], [fx, fy] = p[3], dl = Math.hypot(fx - ax, fy - ay) || 1, ux = (fx - ax) / dl, uy = (fy - ay) / dl;
+  ctx.beginPath(); ctx.moveTo(fx - uy * 0.55, fy + ux * 0.55);
+  ctx.quadraticCurveTo(fx + ux * 2, fy + uy * 2, fx + ux * 2.2 + 0.2, fy + uy * 2.2 + 1.4);
+  ctx.quadraticCurveTo(fx + ux * 1, fy + uy * 1 + 0.4, fx + uy * 0.55, fy - ux * 0.55); ctx.closePath();
+  ctx.fillStyle = pkLG(ctx, fx, fy, fx + ux * 2.2, fy + uy * 2.2 + 1.4, ['#fff0ea', DANGER]); ctx.fill();
+}
+function drawSpider(h) {
+  const x = sx(h.x), y = sy(h.alt), ay = sy(h.aAlt), T = G.t, zi = h.skin || 0, K = SPIDER_SKINS[zi];
+  const { tell, drop } = spiderPose(h), k = 1.3, rim = pal('rim', h.alt).map(v => Math.min(255, v + 60) | 0);
+  // silk: a fine dragline from the anchor down to the spinnerets with a glint sliding down it, and a little orb-web
+  // tuft where it is fixed (thin, pale and edge-free: scenery, not danger)
+  const top = y - 20.5 * k * s;
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = rgbaA(K.silk, 0.18); ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.moveTo(x, ay); ctx.lineTo(x, top); ctx.stroke();
+  ctx.strokeStyle = rgbaA(K.silk, 0.9); ctx.lineWidth = 1.1 * s; ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let j = 0; j < 2; j++) {
+    const u = (T * 0.45 + j * 0.5) % 1, gy = lerp(ay, top, u), gr = 5 * s;
+    const g = ctx.createRadialGradient(x, gy, 0, x, gy, gr);
+    g.addColorStop(0, rgbaA(K.silk, 0.8 * Math.sin(u * Math.PI))); g.addColorStop(1, rgbaA(K.silk, 0));
+    ctx.fillStyle = g; ctx.fillRect(x - gr, gy - gr, gr * 2, gr * 2);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = rgbaA(K.silk, 0.55); ctx.lineWidth = 0.8 * s;
+  const spokes = [];
+  for (let j = 0; j < 7; j++) { const a = Math.PI * (0.06 + 0.88 * j / 6), r = (13 + 4 * Math.sin(j * 2.1)) * s; spokes.push([Math.cos(a), Math.sin(a), r]); ctx.beginPath(); ctx.moveTo(x, ay); ctx.lineTo(x + Math.cos(a) * r, ay + Math.sin(a) * r * 0.75); ctx.stroke(); }
+  ctx.strokeStyle = rgbaA(K.silk, 0.4); ctx.lineWidth = 0.6 * s;
+  for (const f of [0.42, 0.78]) {
+    ctx.beginPath();
+    spokes.forEach(([cx, cy, r], j) => { const px = x + cx * r * f, py = ay + cy * r * f * 0.75; if (!j) ctx.moveTo(px, py); else { const [qx, qy, qr] = spokes[j - 1]; ctx.quadraticCurveTo((px + x + qx * qr * f) / 2, (py + ay + qy * qr * f * 0.75) / 2 + 2 * s, px, py); } });
+    ctx.stroke();
+  }
+  ctx.restore();
+  hazardShadow(x, y, 22, 8);
+  backlight(x, y, 54, zi, 0.36);
+  dangerGlow(x, y, 42 + 8 * tell, 0.32 + 0.18 * tell);
+  ctx.save(); ctx.translate(x, y); ctx.scale(s * k, s * k * (1 - 0.06 * tell)); ctx.rotate(Math.sin(T * 1.7 + h.ph) * 0.03);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // eight legs, walking in two alternating sets (rear legs first, behind)
+  for (let i = 0; i < 4; i++) for (const d of [-1, 1]) spiderLeg(K, d, i, Math.sin(T * 9 + i * 1.6 + (d > 0 ? 0 : Math.PI)) * (1 - tell), tell, drop);
+  // the abdomen (up, toward the thread): a glossy egg with a hot hourglass, spots, fuzz, rim light and spinnerets
+  const abd = () => { ctx.beginPath(); ctx.ellipse(0, -9, 11.4, 11.9, 0, 0, TWO_PI); };
+  ctx.fillStyle = pkLG(ctx, -1.5, -21.5, 1.5, -19, [K.abd[1], K.abd[2]]);
+  ctx.beginPath(); ctx.ellipse(0, -20.4, 2, 1.3, 0, 0, TWO_PI); ctx.fill();
+  abd(); ctx.fillStyle = pkRG(ctx, -2, -12.5, 12.5, [K.abd[0], K.abd[1], K.abd[2]]); ctx.fill();
+  ctx.save(); abd(); ctx.clip();
+  const pulse = 0.85 + 0.15 * Math.sin(T * 5 + h.ph) + 0.4 * tell;
+  const hg = () => { ctx.beginPath(); ctx.moveTo(-4.4, -16.5); ctx.quadraticCurveTo(0, -15.4, 4.4, -16.5); ctx.quadraticCurveTo(1, -12.4, 1.2, -10.4); ctx.quadraticCurveTo(1, -8.6, 4.6, -4.2); ctx.quadraticCurveTo(0, -5.4, -4.6, -4.2); ctx.quadraticCurveTo(-1, -8.6, -1.2, -10.4); ctx.quadraticCurveTo(-1, -12.4, -4.4, -16.5); ctx.closePath(); };
+  hg(); ctx.fillStyle = pkLG(ctx, 0, -16.5, 0, -4.2, [K.mark[1], K.mark[0], K.mark[1]]); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, 0.35 * pulse);
+  hg(); ctx.fillStyle = K.mark[0]; ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = K.mark[1];
+  for (const d of [-1, 1]) for (const [px, py, r] of [[6.8, -13.5, 1.3], [7.6, -8.6, 1.1], [6.2, -4.2, 0.9]]) { ctx.beginPath(); ctx.ellipse(d * px, py, r, r * 0.85, 0, 0, TWO_PI); ctx.fill(); }
+  if (K.lava) {   // lava seams glowing between ash plates
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255,${(130 + 60 * Math.sin(T * 4 + h.ph)) | 0},40,.75)`; ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    for (const d of [-1, 1]) { ctx.moveTo(d * 11.4, -13); ctx.lineTo(d * 8.6, -11.6); ctx.lineTo(d * 7.4, -9); ctx.lineTo(d * 10.8, -6.6); ctx.moveTo(d * 8.6, -11.6); ctx.lineTo(d * 7.8, -16.8); ctx.moveTo(d * 7.4, -9); ctx.lineTo(d * 5.6, -3.4); }
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.lineWidth = 0.5;
+  for (let j = 0; j < 22; j++) {
+    const a = j / 22 * TWO_PI + 0.1, px = Math.cos(a) * 10.8, py = -9 + Math.sin(a) * 11.3;
+    ctx.strokeStyle = j % 2 ? K.abd[0] + '88' : K.abd[2] + '88';
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * 1.1 + 0.4, py + Math.sin(a) * 1.1 + 0.6); ctx.stroke();
+  }
+  ctx.save(); ctx.translate(0.6, 1.7); abd(); ctx.strokeStyle = rgb(rim, 0.6); ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore();
+  const ao = ctx.createLinearGradient(0, -2, 0, 3);
+  ao.addColorStop(0, K.abd[2] + '00'); ao.addColorStop(1, K.abd[2] + 'cc');
+  ctx.fillStyle = ao; ctx.fillRect(-12, -2, 24, 6);
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(-4.6, -15, 2.6, 1.6, -0.6, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.ellipse(-5.2, -15.6, 0.9, 0.55, -0.6, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  abd(); ctx.strokeStyle = K.edge; ctx.lineWidth = 0.9; ctx.stroke();
+  // pedipalps: two short feelers beside the jaws, hot at the tips
+  for (const d of [-1, 1]) {
+    const w = Math.sin(T * 6 + d * 1.3) * 0.5;
+    const a = [d * 4.8, 9.6], m = [d * 7.2, 11.2 + w], e = [d * 6.6, 14.4 + w];
+    for (const [col, ww] of [[K.leg[2], 2.4], [K.leg[1], 1.5]]) { ctx.strokeStyle = col; ctx.lineWidth = ww; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...m); ctx.lineTo(...e); ctx.stroke(); }
+    ctx.fillStyle = K.band; ctx.beginPath(); ctx.arc(e[0], e[1], 1.05, 0, TWO_PI); ctx.fill();
+  }
+  // the head: a rounded carapace, rim lit, with eight glowing eyes under an angry brow
+  const ceph = () => { ctx.beginPath(); ctx.ellipse(0, 5, 8.6, 7.6, 0, 0, TWO_PI); };
+  ceph(); ctx.fillStyle = pkRG(ctx, -1.5, 3, 9, [K.ceph[0], K.ceph[1], K.ceph[2]]); ctx.fill();
+  ctx.save(); ceph(); ctx.clip();
+  ctx.save(); ctx.translate(0.4, 1.5); ceph(); ctx.strokeStyle = rgb(rim, 0.55); ctx.lineWidth = 1.8; ctx.stroke(); ctx.restore();
+  ctx.strokeStyle = K.ceph[2] + '66'; ctx.lineWidth = 0.6;
+  ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, 1.4); ctx.moveTo(-5.5, 0.6); ctx.quadraticCurveTo(-3, 1.6, -1.6, 0.4); ctx.moveTo(5.5, 0.6); ctx.quadraticCurveTo(3, 1.6, 1.6, 0.4); ctx.stroke();
+  const fg = ctx.createRadialGradient(0, 6, 1, 0, 6, 7);
+  fg.addColorStop(0, K.ceph[2] + '99'); fg.addColorStop(1, K.ceph[2] + '00');
+  ctx.fillStyle = fg; ctx.fillRect(-8, 0, 16, 12);
+  ctx.restore();
+  ceph(); ctx.strokeStyle = K.edge; ctx.lineWidth = 0.9; ctx.stroke();
+  const EYES = [[2.5, 6.6, 2.15], [5.4, 5, 1.35], [1.5, 2.8, 0.9], [4, 2.1, 0.75]];
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const eg = ctx.createRadialGradient(0, 5.5, 1, 0, 5.5, 9 + 4 * tell);
+  eg.addColorStop(0, rgbaA([255, 70, 60], 0.45 + 0.4 * tell)); eg.addColorStop(1, rgbaA([255, 70, 60], 0));
+  ctx.fillStyle = eg; ctx.fillRect(-13, -7.5, 26, 26);
+  ctx.restore();
+  for (const d of [-1, 1]) for (const [ex0, ey, er0] of EYES) {
+    const ex = d * ex0, er = er0 * (1 + 0.12 * tell);
+    ctx.fillStyle = K.ceph[2] + 'cc'; ctx.beginPath(); ctx.arc(ex, ey, er + 0.45, 0, TWO_PI); ctx.fill();
+    const ig = ctx.createRadialGradient(ex - d * er * 0.2, ey - er * 0.25, 0.1, ex, ey, er);
+    ig.addColorStop(0, tell > 0.5 ? '#ffffff' : K.eye[0]); ig.addColorStop(0.45, K.eye[1]); ig.addColorStop(1, K.eye[2]);
+    ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(ex, ey, er, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex - d * er * 0.35, ey - er * 0.4, Math.max(0.3, er * 0.3), 0, TWO_PI); ctx.fill();
+  }
+  for (const d of [-1, 1]) {   // the brow ridge over the big eyes (an angry V; lower through the tell)
+    const bi = [d * 0.6, 4.9 + 0.5 * tell], bo = [d * 4.9, 3.6];
+    ctx.beginPath(); ctx.moveTo(bi[0], bi[1] - 0.7); ctx.quadraticCurveTo(lerp(bi[0], bo[0], 0.5), lerp(bi[1], bo[1], 0.5) - 1.4, bo[0], bo[1] - 0.5);
+    ctx.quadraticCurveTo(lerp(bi[0], bo[0], 0.5), lerp(bi[1], bo[1], 0.5) + 0.2, bi[0], bi[1] + 0.6); ctx.closePath();
+    ctx.fillStyle = K.ceph[2]; ctx.fill();
+  }
+  // the jaws: two furry chelicerae and curved fangs, glossy and hot at the points; they spread through the tell
+  for (const d of [-1, 1]) {
+    const cx = d * 2.9, cy = 11.4;
+    ctx.fillStyle = pkLG(ctx, cx, cy - 3, cx, cy + 3, [K.ceph[0], K.ceph[1]]);
+    ctx.beginPath(); ctx.ellipse(cx, cy + 0.4, 2, 2.4, d * -0.2, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = K.edge; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.strokeStyle = K.ceph[0] + '99'; ctx.lineWidth = 0.4;
+    for (const o of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(cx + o * 1.1, cy + 1.6); ctx.lineTo(cx + o * 1.3 + d * 0.3, cy + 2.8); ctx.stroke(); }
+    const tx = d * (0.7 + 1.6 * tell), ty = 19.1;
+    ctx.beginPath(); ctx.moveTo(d * 4.1, 13.3); ctx.quadraticCurveTo(d * 4.2, 17.6, tx, ty);
+    ctx.quadraticCurveTo(d * 2.4, 16.4, d * 1.4, 13.6); ctx.closePath();
+    ctx.fillStyle = pkLG(ctx, 0, 13.3, 0, ty, [K.fang[0], K.fang[1], '#ff8aa4', DANGER]); ctx.fill();
+    ctx.strokeStyle = K.fang[2]; ctx.lineWidth = 0.4; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.ellipse(d * 3.4, 15, 0.35, 1.1, d * -0.2, 0, TWO_PI); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -4758,53 +5529,141 @@ function drawGate(h) {
   }
 }
 
-// Lavafall (magma core only): a constant stream of lava pouring from an obsidian spout on the wall. It
-// lights the wall rock around it, steams where it burns out, and its hitbox stops short of the fade.
+// Lavafall (magma core only): a constant stream of lava pouring from a carved basalt spout on the wall. No ink: the
+// stream's edge is a crust of its own cooling deep red, the spout's a darker shade of its rock. The stream is a
+// molten ribbon (white-gold core, orange body, darker cooling skin at the edges) with ripples and bright filaments
+// flowing down it; it keeps its full width (the hitbox, hw) down to where the hitbox stops (14 above its foot), then
+// frays into a splash of droplets and steam. It lights the wall rock around it.
 function drawLavafall(h) {
   const x = sx(h.x), top = sy(h.alt), bot = sy(h.lo), T = G.t, hw = h.hw, bx = sx(h.base), d = h.side;
+  const hitBot = sy(h.lo + 14);                        // the hitbox's lowest edge: full width down to here
   // the light it throws on the walls and the shaft around it
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   const cy = (top + bot) / 2, R = (h.fall * 0.9 + 60) * s;
   const lg = ctx.createRadialGradient((x + bx) / 2, cy, 4, (x + bx) / 2, cy, R);
-  lg.addColorStop(0, `rgba(255,120,30,${0.42 + 0.06 * Math.sin(T * 5 + h.ph)})`); lg.addColorStop(0.5, 'rgba(255,80,20,.14)'); lg.addColorStop(1, 'rgba(255,60,10,0)');
+  lg.addColorStop(0, `rgba(255,120,30,${0.4 + 0.06 * Math.sin(T * 5 + h.ph)})`); lg.addColorStop(0.5, 'rgba(255,80,20,.13)'); lg.addColorStop(1, 'rgba(255,60,10,0)');
   ctx.fillStyle = lg; ctx.fillRect((x + bx) / 2 - R, cy - R, R * 2, R * 2);
-  // glowing streak where the light hits the wall face
+  // a glowing streak where the light hits the wall face
   const wg = ctx.createLinearGradient(0, top - 40 * s, 0, bot + 30 * s);
-  wg.addColorStop(0, 'rgba(255,160,60,0)'); wg.addColorStop(0.3, 'rgba(255,150,50,.55)'); wg.addColorStop(1, 'rgba(255,90,20,0)');
+  wg.addColorStop(0, 'rgba(255,160,60,0)'); wg.addColorStop(0.3, 'rgba(255,150,50,.5)'); wg.addColorStop(1, 'rgba(255,90,20,0)');
   ctx.strokeStyle = wg; ctx.lineWidth = 7 * s; ctx.beginPath();
   for (let a = h.alt + 40, i = 0; a >= h.lo - 30; a -= 10, i++) { const wx = sx(walls(a)[d > 0 ? 0 : 1]); i ? ctx.lineTo(wx, sy(a)) : ctx.moveTo(wx, sy(a)); }
   ctx.stroke();
   ctx.restore();
-  // the stream: an ink-edged ribbon that wobbles, bright core and a current running down it
-  const wob = k => Math.sin(k * 0.09 + T * 7 + h.ph) * 1.6 * s;
-  const fade = smooth(0, 0.22, 1);
+
+  // the stream. Its half-width: full (hw, the hitbox, bulging a touch as gouts pass) down to the hitbox's foot,
+  // then narrowing into the splash.
+  const wob = y => Math.sin(y * 0.09 / s + T * 7 + h.ph) * 1.1 * s;
+  const halfAt = y => hw * s * (y <= hitBot ? 1 + 0.07 * (0.5 + 0.5 * Math.sin(y * 0.06 / s - T * 8 + h.ph)) : 1 - 0.5 * smooth(hitBot, bot, y));
+  const ribbon = grow => {
+    ctx.beginPath();
+    for (let y = top; y <= bot; y += 4) ctx.lineTo(x - halfAt(y) - grow + wob(y), y);
+    ctx.lineTo(x - halfAt(bot) - grow + wob(bot), bot);
+    for (let y = bot; y >= top; y -= 4) ctx.lineTo(x + halfAt(y) + grow + wob(y + 30), y);
+    ctx.closePath();
+  };
+  const fadeG = (c0, c1) => { const g = ctx.createLinearGradient(0, top, 0, bot); g.addColorStop(0, c0); g.addColorStop(0.78, c0); g.addColorStop(1, c1); return g; };
   ctx.save();
+  // the cooling skin at the edge: the ribbon swollen by 1.8, deep red, fading out with the stream
+  ribbon(1.8 * s);
+  ctx.fillStyle = fadeG('#9a200c', 'rgba(150,26,10,0)'); ctx.fill();
+  // the molten body, hottest at the spout and cooling as it falls
+  ribbon(0);
   const sg = ctx.createLinearGradient(0, top, 0, bot);
-  sg.addColorStop(0, '#fff2b0'); sg.addColorStop(0.25, '#ffb238'); sg.addColorStop(0.75, '#ff5a1a'); sg.addColorStop(1, 'rgba(200,40,10,0)');
-  ctx.beginPath();
-  for (let y = top; y <= bot; y += 6) ctx.lineTo(x - hw * s * (1 - 0.35 * smooth(0.75, 1, (y - top) / (bot - top))) + wob(y), y);
-  for (let y = bot; y >= top; y -= 6) ctx.lineTo(x + hw * s * (1 - 0.35 * smooth(0.75, 1, (y - top) / (bot - top))) + wob(y + 30), y);
-  ctx.closePath(); ctx.fillStyle = sg; ctx.fill();
+  sg.addColorStop(0, '#ffe68a'); sg.addColorStop(0.18, '#ffb436'); sg.addColorStop(0.65, '#ff7a1e'); sg.addColorStop(0.9, 'rgba(240,70,16,.85)'); sg.addColorStop(1, 'rgba(220,50,10,0)');
+  ctx.fillStyle = sg; ctx.fill();
   ctx.save(); ctx.clip();
+  // round across its width: darker cooling skin at both edges, a hot band just left of centre
+  const across = ctx.createLinearGradient(x - hw * s, 0, x + hw * s, 0);
+  across.addColorStop(0, 'rgba(160,30,10,.6)'); across.addColorStop(0.22, 'rgba(160,30,10,0)'); across.addColorStop(0.42, 'rgba(255,250,200,.35)');
+  across.addColorStop(0.55, 'rgba(255,250,200,0)'); across.addColorStop(0.8, 'rgba(160,30,10,.12)'); across.addColorStop(1, 'rgba(160,30,10,.6)');
+  ctx.fillStyle = across; ctx.fillRect(x - hw * s * 2, top, hw * s * 4, bot - top);
+  // striations: darker, cooler strands running down the flow between the hot ones, wavering as they fall
+  for (const [kx, lw, sp] of [[-0.72, 1.6, 0.9], [0.05, 1.2, 1.2], [0.62, 1.8, 0.8], [-0.38, 1, 1.5]]) {
+    ctx.strokeStyle = 'rgba(170,40,10,.32)'; ctx.lineWidth = lw * s;
+    ctx.beginPath();
+    for (let y = top + 6 * s; y <= hitBot + 6 * s; y += 5) ctx.lineTo(x + kx * hw * s + wob(y) * 0.6 + Math.sin(y * 0.045 / s - T * 5 * sp + kx * 7) * 1.6 * s, y);
+    ctx.stroke();
+  }
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,255,220,.85)'; ctx.lineWidth = 3 * s; ctx.setLineDash([12 * s, 18 * s]); ctx.lineDashOffset = -T * 160 * s;
-  for (const k of [-0.4, 0.3]) { ctx.beginPath(); ctx.moveTo(x + k * hw * s, top); ctx.lineTo(x + k * hw * s, bot); ctx.stroke(); }
-  ctx.setLineDash([]); ctx.restore();
-  const ig = ctx.createLinearGradient(0, top, 0, bot); ig.addColorStop(0, 'rgba(70,10,4,.95)'); ig.addColorStop(0.8, 'rgba(70,10,4,.6)'); ig.addColorStop(1, 'rgba(70,10,4,0)');
-  ctx.strokeStyle = ig; ctx.lineWidth = 2.6 * s * fade; ctx.stroke();
+  // bright filaments of the hottest lava streaming down the core, unbroken and wavering
+  for (const [kx, lw, al, sp] of [[-0.2, 2.4, 0.75, 1], [0.32, 1.4, 0.5, 1.4], [-0.55, 1, 0.35, 0.8]]) {
+    ctx.strokeStyle = `rgba(255,250,215,${al})`; ctx.lineWidth = lw * s;
+    ctx.beginPath();
+    for (let y = top; y <= hitBot + 10 * s; y += 5) ctx.lineTo(x + kx * hw * s + wob(y) * 0.5 + Math.sin(y * 0.05 / s - T * 6 * sp + kx * 9) * 1.4 * s, y);
+    ctx.stroke();
+  }
+  // gouts: brighter blobs travelling down
+  for (let j = 0; j < 3; j++) {
+    const span = bot - top, yy = top + ((j / 3 * span + T * 90 * s) % span), r = hw * s * 0.8;
+    const gg = ctx.createRadialGradient(x, yy, 0, x, yy, r * 1.6); gg.addColorStop(0, `rgba(255,236,160,${0.35 * (1 - smooth(hitBot - 30 * s, bot, yy))})`); gg.addColorStop(1, 'rgba(255,200,100,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(x + wob(yy), yy, r, r * 1.6, 0, 0, 6.283); ctx.fill();
+  }
+  // a white-gold glow pouring off the lip
+  const pour = ctx.createLinearGradient(0, top, 0, top + 36 * s); pour.addColorStop(0, 'rgba(255,250,220,.7)'); pour.addColorStop(1, 'rgba(255,250,220,0)');
+  ctx.fillStyle = pour; ctx.fillRect(x - hw * s * 1.4, top, hw * s * 2.8, 36 * s);
   ctx.restore();
-  // steam and spatter where it burns out
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const pg = ctx.createRadialGradient(x, bot - 10 * s, 2, x, bot - 10 * s, 34 * s); pg.addColorStop(0, 'rgba(255,200,90,.6)'); pg.addColorStop(1, 'rgba(255,90,20,0)');
-  ctx.fillStyle = pg; ctx.fillRect(x - 34 * s, bot - 44 * s, 68 * s, 68 * s);
   ctx.restore();
-  // the obsidian spout jutting from the wall, lava welling over its lip
-  ctx.save(); ctx.translate(bx, top); ctx.scale(s * d, s);
-  const out = Math.abs(h.x - h.base) + hw - 2;
-  pkPath(ctx, [[-10, -14], [out * 0.6, -16], [out + 4, -8], [out + 2, 4], [out * 0.5, 10], [-10, 12]], pkLG(ctx, 0, -16, 0, 12, ['#5a4448', '#241618', '#0e0606']), 3.2);
-  ctx.strokeStyle = 'rgba(255,170,80,.75)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(out * 0.6, -14.5); ctx.lineTo(out + 2, -7); ctx.stroke();
+  // the splash where it burns out: a glow, droplets flicking out and steam rising
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  pkE(ctx, out - hw + 2, 2, hw, 5, '#ffcf6a', 0);
+  const pg = ctx.createRadialGradient(x, bot - 10 * s, 2, x, bot - 10 * s, 32 * s); pg.addColorStop(0, 'rgba(255,200,90,.55)'); pg.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.fillStyle = pg; ctx.fillRect(x - 32 * s, bot - 42 * s, 64 * s, 64 * s);
+  for (let j = 0; j < 8; j++) {
+    const u = (T * 1.6 + j / 8 + h.ph) % 1, a = (hash2(j, 17) - 0.5) * 2.4, v = 20 + 14 * hash2(j, 4);
+    const px = x + Math.sin(a) * v * u * s, py = bot - 10 * s - (Math.cos(a) * v * u - 30 * u * u) * s;
+    ctx.fillStyle = `rgba(255,${200 - 80 * u | 0},70,${0.9 * (1 - u)})`; ctx.beginPath(); ctx.arc(px, py, (2 * (1 - u) + 0.6) * s, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+  for (let j = 0; j < 4; j++) {
+    const u = (T * 0.5 + j / 4 + h.ph) % 1, px = x + (hash2(j, 8) - 0.5) * 24 * s + Math.sin(T + j) * 4 * s, py = bot - (4 + u * 40) * s, r = (5 + u * 10) * s;
+    const st = ctx.createRadialGradient(px, py, 0, px, py, r); st.addColorStop(0, `rgba(255,236,220,${0.22 * Math.sin(u * Math.PI)})`); st.addColorStop(1, 'rgba(255,236,220,0)');
+    ctx.fillStyle = st; ctx.beginPath(); ctx.arc(px, py, r, 0, 6.283); ctx.fill();
+  }
+
+  // the spout (in its own frame: x out of the wall, y down): a carved basalt trough jutting from the wall, its
+  // channel brimming with lava that rolls over the front lip into the stream
+  ctx.save(); ctx.translate(bx, top); ctx.scale(s * d, s); ctx.lineJoin = 'round';
+  const out = Math.abs(h.x - h.base) + hw - 2, pc = out - hw + 2;   // pc: the stream's centre
+  const ao = ctx.createRadialGradient(-2, 2, 4, -2, 2, 32); ao.addColorStop(0, 'rgba(26,8,4,.55)'); ao.addColorStop(1, 'rgba(26,8,4,0)');
+  ctx.fillStyle = ao; ctx.beginPath(); ctx.ellipse(-2, 2, 20, 28, 0, 0, 6.283); ctx.fill();
+  const ROCK = ['#c89484', '#8a5a50', '#55332f', '#341e1e'], EDGE = '#45252a', sd = (h.alt | 0) % 13;
+  // a basalt outcrop: overlapping rock chunks jutting from the wall, each lit on top and lit by the lava from below
+  hzRock(-6, 6, 9, sd + 1, [ROCK[1], ROCK[2], ROCK[3]], EDGE, 10);
+  const chunks = [[-4, -4, 10, 11], [out * 0.42, -5, Math.max(8, out * 0.36), 10], [out - 3, -4, 8.5, 10.5]];
+  for (const [cx, cy, r, ry] of chunks) hzRock(cx, cy, r, sd + cx * 0.3, ROCK, EDGE, ry);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const ul = ctx.createLinearGradient(0, 10, 0, 0); ul.addColorStop(0, 'rgba(255,120,40,.45)'); ul.addColorStop(1, 'rgba(255,120,40,0)');
+  ctx.fillStyle = ul; ctx.beginPath(); for (const [cx, cy, r, ry] of chunks) { ctx.moveTo(cx + r, cy + ry * 0.4); ctx.ellipse(cx, cy + ry * 0.4, r * 0.85, ry * 0.5, 0, 0, Math.PI); } ctx.fill();
+  ctx.strokeStyle = `rgba(255,130,40,${0.55 + 0.2 * Math.sin(T * 2.4 + h.ph)})`; ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.moveTo(-8, 3); ctx.lineTo(-3, 0); ctx.lineTo(1, 3.5); ctx.lineTo(out * 0.3, 1); ctx.stroke();
+  ctx.restore();
+  // the lava in the channel, brimming
+  // (it wells out of a crack in the wall and runs along the outcrop's top in a molten rivulet to the pool at its lip)
+  ctx.beginPath(); ctx.moveTo(-12, -12.6);
+  for (let i = 1; i <= 6; i++) { const xx = -12 + (pc + 12) * i / 6; ctx.lineTo(xx, -13 - 0.8 * Math.sin(i * 1.9 + T * 2)); }
+  ctx.lineTo(pc, -10); for (let i = 6; i >= 0; i--) { const xx = -12 + (pc + 12) * i / 6; ctx.lineTo(xx, -10.4 + 0.6 * Math.sin(i * 2.3)); }
+  ctx.closePath(); ctx.fillStyle = pkLG(ctx, 0, -14, 0, -10, ['#ffe48a', '#ff9a2a', '#d84a16']); ctx.fill();
+  ctx.strokeStyle = 'rgba(154,32,12,.7)'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(pc, -12, hw + 3, 3.6, 0, 0, 6.283);
+  ctx.fillStyle = pkLG(ctx, 0, -15.6, 0, -8.4, ['#fff4b8', '#ffb43a', '#e8561a']); ctx.fill();
+  ctx.strokeStyle = 'rgba(154,32,12,.75)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const pool = ctx.createRadialGradient(pc, -12, 1, pc, -12, hw + 10); pool.addColorStop(0, 'rgba(255,240,180,.6)'); pool.addColorStop(1, 'rgba(255,120,40,0)');
+  ctx.fillStyle = pool; ctx.beginPath(); ctx.ellipse(pc, -12, hw + 10, 9, 0, 0, 6.283); ctx.fill();
+  ctx.restore();
+  // the pour: lava rolling over the front of the lip as a fat rounded tongue that becomes the stream
+  const tongue = () => { ctx.beginPath(); ctx.moveTo(pc - hw + 1, -13.5); ctx.bezierCurveTo(pc - hw - 4, -12, pc - hw - 3.4, -2, pc - hw - 0.6, 3); ctx.lineTo(pc - hw, 14); ctx.lineTo(pc + hw, 14); ctx.lineTo(pc + hw + 0.6, 3); ctx.bezierCurveTo(pc + hw + 3.4, -2, pc + hw + 4, -12, pc + hw - 1, -13.5); ctx.quadraticCurveTo(pc, -15.5, pc - hw + 1, -13.5); ctx.closePath(); };
+  // its edge: the same deep red skin as the stream's, down the sides only (it flows on into the stream, no seam)
+  ctx.beginPath(); ctx.moveTo(pc - hw, 10); ctx.lineTo(pc - hw - 0.6, 3); ctx.bezierCurveTo(pc - hw - 3.4, -2, pc - hw - 4, -12, pc - hw + 1, -13.5); ctx.quadraticCurveTo(pc, -15.5, pc + hw - 1, -13.5);
+  ctx.bezierCurveTo(pc + hw + 4, -12, pc + hw + 3.4, -2, pc + hw + 0.6, 3); ctx.lineTo(pc + hw, 10);
+  ctx.lineWidth = 3.4; ctx.strokeStyle = 'rgba(154,32,12,.85)'; ctx.stroke();
+  tongue(); ctx.fillStyle = pkLG(ctx, 0, -12, 0, 14, ['#fff6c0', '#ffd050', 'rgba(255,190,60,.6)', 'rgba(255,180,54,0)']); ctx.fill();
+  ctx.save(); tongue(); ctx.clip();
+  const ac = ctx.createLinearGradient(pc - hw, 0, pc + hw, 0);
+  ac.addColorStop(0, 'rgba(200,60,10,.5)'); ac.addColorStop(0.3, 'rgba(200,60,10,0)'); ac.addColorStop(0.75, 'rgba(200,60,10,0)'); ac.addColorStop(1, 'rgba(200,60,10,.5)');
+  ctx.fillStyle = ac; ctx.fillRect(pc - hw - 4, -14, hw * 2 + 8, 28);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,255,235,.8)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(pc - 3, -11); ctx.quadraticCurveTo(pc - 4.5, -2, pc - 3, 12); ctx.stroke();
   ctx.restore();
   ctx.restore();
 }
