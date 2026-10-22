@@ -541,9 +541,9 @@ const CHAR_FIT = {
   // 18 Axel the axolotl
   axolotl: null,
   // 19 Cappy the toadstool
-  mushroom: null,
+  mushroom: { caps: 3, hip: [0, -1.6], sink: 2.7, grip: [[-12.3, -3.6], [12.3, -3.6]], body: [[-4.4, 1.8, 4.4, 1.8, 5]] },   // drawn whole, sat on the crown: his stem rests 2.7 below it at most (breathing; the pump bounces him deeper), his legs dangle; mittens on the handlebars; body: stem and legs, inside the ball's capsule
   // 20 Bolt the robot
-  robot: null,
+  robot: { caps: 4, hip: [0, -4.8], sink: 7, grip: [[-12.2, -6], [12.2, -6]], body: [[-4.6, -2, 4.6, -2, 4.6]] },   // a bust: his tin torso is cut flat 7 below the rim's top (at its highest bob); pincers on the levers; body: the torso's lower half and corners, inside the tub's capsule
 };
 const VEH_FIT = {
   // 0 Coco-Rocket: the cut lip (LM_RIM) and its deep cavity
@@ -587,9 +587,9 @@ const VEH_FIT = {
   // 18 Runaway hydrant
   hydrant: null,
   // 19 Earthstar puffball
-  puffball: null,
+  puffball: { seat: { x: 0, y: -1.6, w: 28.8, depth: 0, grip: [[-12.3, -3.6], [12.3, -3.6]] } },   // no lip: the seat is the ball's crown (BB - 2 × 13.6), nothing in front of the rider; grips on the bolete handlebars
   // 20 Twin-jet tin tub
-  tintub: null,
+  tintub: { seat: { x: 0, y: -4.8, w: 29.6, depth: 26.2, grip: [[-12.2, -6], [12.2, -6]] } },   // the chrome rim (an ellipse drawn whole over the rider: its top edge) and the opaque tub under it; grips on the levers
 };
 // Size envelopes. Lanes are sized from the widest and tallest pair at any tilt and must not grow, so every pair fits
 // PILOT_CAP (art units, just inside today's widest pilot, the goat, and tallest, the firefly). To make that hold for all
@@ -13919,77 +13919,124 @@ function mshHead(c, st, mood, t) {
   // rim light on the lit cheek
   c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-10.6, -16); c.quadraticCurveTo(-10.8, -10.6, -8.2, -7.4); c.stroke();
 }
-// Cappy, his collar and arms, sat on the puffball (everything above the ball's crown; hy = the head's bob)
-function mshDraw(c, st) {
-  const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const alarm = !panic && !grin && !thr && pkLookDown > 0;
-  const mood = bite ? 'bite' : panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
-  // the pump: on thrust he bounces down on the ball, it squashes and puffs (pp 0..1); at rest it just breathes
+// ---- Cappy and the Earthstar puffball, split into a character and a vehicle (SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: the earthstar's rays, the puffball, its pore and
+// vine, the spore motes, the moss saddle and the bolete handlebars (vehicle back), then Cappy, sat on the crown: his
+// dangling legs and stem (character body), his arms, collar, head and cap (character front, over any lip). The ride has
+// nothing in front of him. On thrust he bounces on the ball to pump it: the ball squashes and puffs (its pose) and Cappy
+// dips with the same pump (his pose: each works it out from the same expressions). In the bite the ball tips over about
+// (0, 12) and Cappy leans back against the tip, flinging his arms up. His mittens hold whatever grips a ride has.
+// mshPump(st): the pump and the ball's squash, which both halves work out the same way (the crown is where he sits)
+function mshPump(st) {
+  const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite;
   const ph = t * 14, pp = thr ? 0.5 + 0.5 * Math.sin(ph) : 0;
   const breathe = Math.sin(t * 2.4);
-  const glow = bite ? 0.6 + 0.4 * Math.sin(t * 30) : thr ? 0.55 + 0.45 * pp : panic ? (Math.sin(t * 37) > 0 ? 0.7 : 0.2) : 0.25 + 0.12 * breathe;
-  const shake = panic ? Math.sin(t * 47) * 0.45 : 0;
-  const tip = bite ? 0.22 + 0.06 * Math.sin(t * 13) : 0;
-  c.save(); c.translate(0, 12); c.rotate(tip); c.translate(0, -12);
-  // ---- the earthstar: four rays under the ball (outer pair behind) ----
   const BB = 25.6, BRX = 14.4 * (1 + 0.055 * pp) + 0.15 * breathe, BRY = 13.6 * (1 - 0.065 * pp) - 0.12 * breathe, BCY = BB - BRY;
-  const flare = thr ? 0.14 * pp : alarm ? -0.22 : panic ? -0.18 + Math.sin(t * 30) * 0.08 : bite ? -0.3 + Math.sin(t * 25) * 0.1 : Math.sin(t * 2.4) * 0.03;
-  for (const d of [-1, 1]) { c.save(); c.translate(d * 8.2, BB - 4.2); c.scale(d, 1); c.rotate(0.62 + flare); mshRay(c, 11.4, 5.6, 1.5 - flare * 4); c.restore(); }
-  // ---- the puffball ----
-  mshBall(c, 0, BCY, BRX, BRY, t, pp, glow);
-  mshPore(c, 0, BB - 0.2, pp, t);
-  mshVine(c, BCY, BRX, BRY, t, thr);
-  for (const d of [-1, 1]) { c.save(); c.translate(d * 4.2, BB - 1.6); c.scale(d, 1); c.rotate(1.08 + flare * 0.8); mshRay(c, 9.2, 4.8, 1.2 - flare * 3); c.restore(); }
-  // spore motes drifting round the ball (thicker as he pumps)
-  for (let k = 0; k < (thr || bite ? 7 : 4); k++) {
-    const p = (t * (thr || bite ? 0.9 : 0.25) + mshHash(k, 9)) % 1, x = (mshHash(k, 10) - 0.5) * 34 + Math.sin(t * 2 + k) * 1.5, y = 30 - p * 30;
-    pkDot(c, x, y, 0.45 + 0.35 * mshHash(k, 11), `rgba(226,255,170,${0.7 * Math.sin(p * Math.PI)})`);
-  }
-  // moss saddle on the crown
-  const top = BCY - BRY;
-  pkE(c, 0, top + 1.6, 8.6, 2.9, pkLG(c, 0, top - 1, 0, top + 4, MSH.moss), 1.1);
-  c.fillStyle = '#d8f890'; for (let k = -3; k <= 3; k++) { c.beginPath(); c.arc(k * 2.4, top + 0.2 + Math.abs(k) * 0.3, 0.8, Math.PI, 0); c.fill(); }
-  // handlebars
-  const lift = thr ? -pp * 0.4 : 0;
-  for (const d of [-1, 1]) mshHandle(c, d, t, lift);
-  // ---- Cappy ----
-  const dip = thr ? pp * 1.7 : 0, bob = breathe * 0.55 + dip - (alarm ? 0.9 : 0) + (bite ? -1.6 : 0), ly = top + 1.2;
-  c.save(); c.translate(shake, 0);
-  if (bite) { c.translate(0, -2); c.rotate(-tip * 1.5); }
-  // legs: dangling over the ball's front, swinging with the pump, kicking when scared or dropping
-  for (const d of [-1, 1]) {
-    const kick = panic ? Math.sin(t * 26 + d * 1.6) * 2.4 : alarm ? Math.sin(t * 9 + d * 1.6) * 1.4 - 1.2 : thr ? -pp * 0.8 : Math.sin(t * 2.4 + d) * 0.4;
-    mshLeg(c, d, d * 3.6, ly - 1.2 + bob * 0.4, d * (6 + (alarm || panic ? 1.2 : 0)), ly + 3.6 + kick * 0.8 + bob * 0.2);
-  }
-  // torso: a short stem
-  c.save(); c.translate(0, bob);
-  c.beginPath(); c.moveTo(-5, -8); c.quadraticCurveTo(-6.3, -2, -5.4, ly - 0.2); c.quadraticCurveTo(0, ly + 1.6, 5.4, ly - 0.2); c.quadraticCurveTo(6.3, -2, 5, -8); c.closePath();
-  c.fillStyle = pkLG(c, -6, 0, 6, 0, ['#fff8ea', '#fff0d6', '#e8c494']); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
-  c.strokeStyle = 'rgba(200,140,90,.35)'; c.lineWidth = 0.5; for (const x of [-2.4, 0.4, 2.8]) { c.beginPath(); c.moveTo(x, -5); c.lineTo(x * 1.1, ly - 1); c.stroke(); }
-  // arms: gripping the bolete handlebars (flung up in the bite)
-  for (const d of [-1, 1]) {
-    if (bite) mshArm(c, d, d * 4.6, -5.6, d * (11.5 + Math.sin(t * 20 + d) * 0.8), -17 + Math.sin(t * 24 + d * 2) * 1.2, true);
-    else mshArm(c, d, d * 4.6, -5.4, d * 12.3, -3.6 - lift - bob + (alarm ? -0.4 : 0), alarm || panic);
-  }
-  mshCollar(c, -6.8, t, thr ? 0.7 : panic ? 0.9 : alarm ? 0.5 : 0.15, alarm || bite ? 1 : panic ? 0.6 : 0);
-  c.restore();
-  // head and cap
-  const hb = bob * 0.85 + (thr ? -0.3 : 0);
-  c.save(); c.translate(0, hb);
-  const CW = 17.5 * (thr ? 1.03 : 1) * (bite ? 1.05 : 1), CH = 18 * (thr ? 0.93 + 0.03 * (1 - pp) : alarm ? 1.08 : panic ? 1.05 + Math.sin(t * 40) * 0.025 : bite ? 0.86 : 1 + 0.015 * breathe);
-  const capRot = -st.look * 0.07 + (grin ? 0.14 : 0) + (bite ? -0.18 : 0) + Math.sin(t * 2.4 + 0.6) * 0.02 + (panic ? Math.sin(t * 40) * 0.03 : 0);
-  c.save(); c.translate(0, -21); c.rotate(capRot); c.translate(0, 21 - (alarm ? 1 : panic ? 0.8 : 0));
-  mshGills(c, CW);
-  c.restore();
-  mshHead(c, st, mood, t);
-  c.save(); c.translate(0, -21); c.rotate(capRot); c.translate(0, 21 - (alarm ? 1 : panic ? 0.8 : 0));
-  mshCap(c, t, mood, CW, CH, thr ? 1 : 0);
-  mshSprout(c, 2.4 * CW / 17.5, -21.6 - CH + 0.4, t, thr ? 0.35 : alarm ? -0.3 : panic ? Math.sin(t * 30) * 0.25 : 0);
-  c.restore();
-  c.restore();
-  c.restore();
-  c.restore();
+  return { pp, breathe, BB, BRX, BRY, BCY, top: BCY - BRY, lift: thr ? -pp * 0.4 : 0 };
 }
+const CAPPY = {
+  id: 'mushroom', line: '#6a1c18', bitePose: true,
+  palette: { cap: MSH.cap[1], spot: MSH.spot[0], skin: MSH.skin[1], gill: MSH.gill[1], eyes: MSH.iris[1], moss: MSH.moss[1] },
+  // moods: 'calm' | 'grit' (thrust: pumping) | 'grin' (near miss) | 'alarm' (dropping) | 'panic' (scared) | 'bite'
+  pose(st, seat) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const alarm = !panic && !grin && !thr && pkLookDown > 0;
+    const mood = bite ? 'bite' : panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
+    // the pump: on thrust he bounces down on the ball (pp 0..1); at rest he just breathes
+    const { pp, breathe, top, lift } = mshPump(st);
+    const shake = panic ? Math.sin(t * 47) * 0.45 : 0;
+    const dip = thr ? pp * 1.7 : 0, bob = breathe * 0.55 + dip - (alarm ? 0.9 : 0) + (bite ? -1.6 : 0), ly = top + 1.2;
+    return { t, bite, thr, panic, grin, alarm, mood, pp, breathe, shake, lift, bob, ly };
+  },
+  draw: {
+    // his legs dangling over the crown (or into a cup) and his short stem
+    body(c, st, seat) {
+      const { t, bite, thr, panic, alarm, pp, shake, bob, ly } = seat.cp;
+      c.save(); c.translate(shake, 0);
+      if (bite) { c.translate(0, -2); c.rotate(-seat.tip * 1.5); }
+      // legs: dangling over the ball's front, swinging with the pump, kicking when scared or dropping
+      for (const d of [-1, 1]) {
+        const kick = panic ? Math.sin(t * 26 + d * 1.6) * 2.4 : alarm ? Math.sin(t * 9 + d * 1.6) * 1.4 - 1.2 : thr ? -pp * 0.8 : Math.sin(t * 2.4 + d) * 0.4;
+        mshLeg(c, d, d * 3.6, ly - 1.2 + bob * 0.4, d * (6 + (alarm || panic ? 1.2 : 0)), ly + 3.6 + kick * 0.8 + bob * 0.2);
+      }
+      // torso: a short stem
+      c.save(); c.translate(0, bob);
+      c.beginPath(); c.moveTo(-5, -8); c.quadraticCurveTo(-6.3, -2, -5.4, ly - 0.2); c.quadraticCurveTo(0, ly + 1.6, 5.4, ly - 0.2); c.quadraticCurveTo(6.3, -2, 5, -8); c.closePath();
+      c.fillStyle = pkLG(c, -6, 0, 6, 0, ['#fff8ea', '#fff0d6', '#e8c494']); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
+      c.strokeStyle = 'rgba(200,140,90,.35)'; c.lineWidth = 0.5; for (const x of [-2.4, 0.4, 2.8]) { c.beginPath(); c.moveTo(x, -5); c.lineTo(x * 1.1, ly - 1); c.stroke(); }
+      c.restore();
+      c.restore();
+    },
+    // his arms on the handlebars (or another ride's grips: seat.hand), the collar, his head and cap
+    front(c, st, seat) {
+      const { t, bite, thr, panic, grin, alarm, mood, pp, breathe, shake, lift, bob } = seat.cp;
+      c.save(); c.translate(shake, 0);
+      if (bite) { c.translate(0, -2); c.rotate(-seat.tip * 1.5); }
+      c.save(); c.translate(0, bob);
+      // arms: gripping the bolete handlebars (flung up in the bite)
+      for (const d of [-1, 1]) {
+        if (bite) mshArm(c, d, d * 4.6, -5.6, d * (11.5 + Math.sin(t * 20 + d) * 0.8), -17 + Math.sin(t * 24 + d * 2) * 1.2, true);
+        else { const [gx, gy] = seat.hand && seat.hand[d > 0 ? 1 : 0] || [0, 0];   // x + 0 === x: no move on his own ride
+          mshArm(c, d, d * 4.6, -5.4, d * 12.3 + gx, -3.6 - lift - bob + (alarm ? -0.4 : 0) + gy, alarm || panic); }
+      }
+      mshCollar(c, -6.8, t, thr ? 0.7 : panic ? 0.9 : alarm ? 0.5 : 0.15, alarm || bite ? 1 : panic ? 0.6 : 0);
+      c.restore();
+      // head and cap
+      const hb = bob * 0.85 + (thr ? -0.3 : 0);
+      c.save(); c.translate(0, hb);
+      const CW = 17.5 * (thr ? 1.03 : 1) * (bite ? 1.05 : 1), CH = 18 * (thr ? 0.93 + 0.03 * (1 - pp) : alarm ? 1.08 : panic ? 1.05 + Math.sin(t * 40) * 0.025 : bite ? 0.86 : 1 + 0.015 * breathe);
+      const capRot = -st.look * 0.07 + (grin ? 0.14 : 0) + (bite ? -0.18 : 0) + Math.sin(t * 2.4 + 0.6) * 0.02 + (panic ? Math.sin(t * 40) * 0.03 : 0);
+      c.save(); c.translate(0, -21); c.rotate(capRot); c.translate(0, 21 - (alarm ? 1 : panic ? 0.8 : 0));
+      mshGills(c, CW);
+      c.restore();
+      mshHead(c, st, mood, t);
+      c.save(); c.translate(0, -21); c.rotate(capRot); c.translate(0, 21 - (alarm ? 1 : panic ? 0.8 : 0));
+      mshCap(c, t, mood, CW, CH, thr ? 1 : 0);
+      mshSprout(c, 2.4 * CW / 17.5, -21.6 - CH + 0.4, t, thr ? 0.35 : alarm ? -0.3 : panic ? Math.sin(t * 30) * 0.25 : 0);
+      c.restore();
+      c.restore();
+      c.restore();
+    },
+  },
+};
+const PUFFBALL = {
+  id: 'puffball', line: '#6a1c18', exhaust: 'spore', nozzles: [[0, 30]], bitePose: true, tip: { pivot: [0, 12] },
+  desc: 'A big soft puffball sat in an earthstar\'s star of rays, with bolete handlebars, a moss saddle and glowing spore pores',
+  palette: { ball: MSH.ball[1], ray: MSH.ray[1], moss: MSH.moss[1], bolete: MSH.bolete[1], tint: '168,126,216' },
+  pose(st) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const alarm = !panic && !grin && !thr && pkLookDown > 0;
+    // pumped, the ball squashes and puffs (pp 0..1); at rest it just breathes. Swallowed: it tips over.
+    const P = mshPump(st), { pp, breathe } = P;
+    const glow = bite ? 0.6 + 0.4 * Math.sin(t * 30) : thr ? 0.55 + 0.45 * pp : panic ? (Math.sin(t * 37) > 0 ? 0.7 : 0.2) : 0.25 + 0.12 * breathe;
+    const tip = bite ? 0.22 + 0.06 * Math.sin(t * 13) : 0;
+    const flare = thr ? 0.14 * pp : alarm ? -0.22 : panic ? -0.18 + Math.sin(t * 30) * 0.08 : bite ? -0.3 + Math.sin(t * 25) * 0.1 : Math.sin(t * 2.4) * 0.03;
+    return { ...P, t, bite, thr, glow, tip, flare };
+  },
+  draw: {
+    back(c, st, seat) {
+      const { t, thr, bite, pp, glow, BB, BRX, BRY, BCY, flare, top, lift } = seat.vp;
+      // ---- the earthstar: four rays under the ball (outer pair behind) ----
+      for (const d of [-1, 1]) { c.save(); c.translate(d * 8.2, BB - 4.2); c.scale(d, 1); c.rotate(0.62 + flare); mshRay(c, 11.4, 5.6, 1.5 - flare * 4); c.restore(); }
+      // ---- the puffball ----
+      mshBall(c, 0, BCY, BRX, BRY, t, pp, glow);
+      mshPore(c, 0, BB - 0.2, pp, t);
+      mshVine(c, BCY, BRX, BRY, t, thr);
+      for (const d of [-1, 1]) { c.save(); c.translate(d * 4.2, BB - 1.6); c.scale(d, 1); c.rotate(1.08 + flare * 0.8); mshRay(c, 9.2, 4.8, 1.2 - flare * 3); c.restore(); }
+      // spore motes drifting round the ball (thicker as he pumps)
+      for (let k = 0; k < (thr || bite ? 7 : 4); k++) {
+        const p = (t * (thr || bite ? 0.9 : 0.25) + mshHash(k, 9)) % 1, x = (mshHash(k, 10) - 0.5) * 34 + Math.sin(t * 2 + k) * 1.5, y = 30 - p * 30;
+        pkDot(c, x, y, 0.45 + 0.35 * mshHash(k, 11), `rgba(226,255,170,${0.7 * Math.sin(p * Math.PI)})`);
+      }
+      // moss saddle on the crown
+      pkE(c, 0, top + 1.6, 8.6, 2.9, pkLG(c, 0, top - 1, 0, top + 4, MSH.moss), 1.1);
+      c.fillStyle = '#d8f890'; for (let k = -3; k <= 3; k++) { c.beginPath(); c.arc(k * 2.4, top + 0.2 + Math.abs(k) * 0.3, 0.8, Math.PI, 0); c.fill(); }
+      // handlebars
+      for (const d of [-1, 1]) mshHandle(c, d, t, lift);
+    },
+  },
+};
+SPLIT_CHARACTERS.mushroom = CAPPY; SPLIT_VEHICLES.puffball = PUFFBALL;
 // ---- Bolt the wind-up robot and the Twin-jet tub (PILOTS 'robot') ----
 // A sunny-yellow tin wind-up toy with a TV-screen face (his expressions are glowing glyphs on the glass), a spring
 // antenna with a bulb, dial ears and a big brass wind-up key in his back that whirls as he flies. He rides a cherry-red
@@ -14179,66 +14226,107 @@ function rbtTub(c, t, thr, glow) {   // the cherry-red tin tub: chrome rim, crea
   c.beginPath(); c.ellipse(0, -1.9, 12.8, 1.5, 0, 0, TWO_PI); c.fillStyle = '#3a1830'; c.fill();
   for (const x of [-12, -6, 6, 12]) rbtRivet(c, x, -0.6 + Math.abs(x) * -0.04, 0.5);
 }
-function rbtDraw(c, st) {
-  const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
-  const alarm = !panic && !grin && !thr && pkLookDown > 0;
-  const mood = bite ? 'bite' : panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
-  const shake = panic ? Math.sin(t * 51) * 0.45 : thr ? Math.sin(t * 61) * 0.18 : 0, bob = Math.sin(t * 2.6) * 0.6 + (alarm ? -0.8 : 0);
-  // the key: whirring on thrust, a slow clockwork tick at rest, unwinding backwards when dropping, rattling when scared
-  const keyA = thr ? t * 14 : alarm ? -t * 4 : panic ? t * 30 : Math.floor(t * 1.5) * 0.7 + smooth(0, 0.15, (t * 1.5) % 1) * 0.7;
-  const lit = thr ? 1 : panic ? (Math.sin(t * 30) > 0 ? 1 : 0) : alarm ? (Math.sin(t * 14) > 0 ? 0.8 : 0.1) : 0.3 + 0.3 * Math.sin(t * 3);
-  const glow = thr ? 0.85 + 0.15 * Math.sin(t * 30) : panic ? (Math.sin(t * 37) > 0 ? 0.7 : 0.1) : 0.15;
-  const tip = bite ? 0.24 + 0.06 * Math.sin(t * 13) : 0;
-  c.save(); c.translate(0, 10); c.rotate(tip); c.translate(0, -10);
-  c.save(); c.translate(shake, 0);
-  // ---- back: fins and jets ----
-  const fl = thr ? 0.05 * Math.sin(t * 44) : panic ? 0.08 * Math.sin(t * 30) : 0;
-  for (const d of [-1, 1]) rbtFin(c, d, fl * d);
-  for (const d of [-1, 1]) rbtJet(c, d * 6.5, thr, t, thr ? 1 : 0);
-  // ---- Bolt, from the waist up, behind the tub's front ----
-  const lean = bite ? -0.2 : 0, rise = (bite ? -3 : 0) + bob + (thr ? 0.6 : 0);
-  c.save(); c.translate(0, rise); c.rotate(lean);
-  // torso: a tin barrel with a chest lamp
-  const tor = () => { c.beginPath(); c.moveTo(-8.4, -14); c.quadraticCurveTo(-9.6, -7, -8, 1); c.lineTo(8, 1); c.quadraticCurveTo(9.6, -7, 8.4, -14); c.quadraticCurveTo(0, -15.2, -8.4, -14); c.closePath(); };
-  tor(); c.fillStyle = pkLG(c, -9, 0, 9, 0, ['#e8a820', '#ffe066', '#ffd040', '#c47c12']); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
-  c.save(); tor(); c.clip(); c.strokeStyle = 'rgba(176,100,14,.55)'; c.lineWidth = 0.5; for (const y of [-11.6, -3.4]) { c.beginPath(); c.moveTo(-9, y); c.quadraticCurveTo(0, y + 0.8, 9, y); c.stroke(); } c.restore();
-  pkRect(c, -4.4, -10.6, 8.8, 6.6, 1.6, pkLG(c, 0, -10.6, 0, -4, RBT.cream), 0.9);
-  const hl = thr ? 1 : panic ? (Math.sin(t * 22) > 0 ? 1 : 0.3) : 0.45 + 0.25 * Math.sin(t * 3.2);
-  if (hl > 0.3) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(-1.4, -7.3, 0.2, -1.4, -7.3, 4); g.addColorStop(0, `rgba(255,90,90,${0.55 * hl})`); g.addColorStop(1, 'rgba(255,90,90,0)'); c.fillStyle = g; c.fillRect(-6, -12, 9, 9); c.restore(); }
-  c.save(); c.translate(-1.4, -7.5); c.scale(0.9, 0.9);   // a little heart lamp
-  c.beginPath(); c.moveTo(0, 1.8); c.bezierCurveTo(-2.6, 0, -2, -2.2, 0, -1); c.bezierCurveTo(2, -2.2, 2.6, 0, 0, 1.8); c.closePath();
-  c.fillStyle = hl > 0.6 ? '#ff8a8a' : '#e8404a'; c.fill(); c.strokeStyle = INK; c.lineWidth = 0.6; c.stroke();
-  pkDot(c, -0.7, -0.8, 0.4, 'rgba(255,255,255,.85)'); c.restore();
-  pkE(c, 2.4, -8.6, 0.8, 0.8, '#5ad0ff', 0.6); pkE(c, 2.4, -6, 0.8, 0.8, '#7ae05a', 0.6);
-  // neck: a chrome bellows
-  for (let k = 0; k < 3; k++) pkRect(c, -3.6 + k * 0.2, -17.2 + k * 1.1, 7.2 - k * 0.4, 1.4, 0.7, pkLG(c, 0, -17, 0, -14, RBT.chrome), 0.7);
-  // arms on the levers (thrust pushes them forward; flung up in the bite)
-  // head
-  const hy = (thr ? 0.3 : 0) + (alarm ? -0.6 : 0) + (panic ? -0.5 : 0);
-  c.save(); c.translate(0, hy); c.rotate(-st.look * 0.05 + (grin ? 0.06 : 0) + (bite ? -0.1 : 0));
-  rbtKey(c, -35, keyA);
-  rbtAntenna(c, t, mood, lit);
-  rbtHead(c, st, mood, t, lit > 0.5, thr ? t * 9 : t * 0.8);
-  c.restore();
-  c.restore();
-  // ---- the tub in front of his waist ----
-  rbtTub(c, t, thr, glow);
-  // the throttle levers poking up from the rim, under his pincers
-  if (!bite) for (const d of [-1, 1]) { const a = thr ? -0.35 : alarm ? 0.25 : 0, x = d * 12.2, y = -1.4;
-    c.save(); c.translate(x, y); c.rotate(a * d * 0 + a);
-    pkRect(c, -0.6, -4.6, 1.2, 4.8, 0.5, pkLG(c, -0.6, 0, 0.6, 0, RBT.chrome), 0.6);
-    pkE(c, 0, -4.8, 1.3, 1.3, pkRG(c, 0, -4.8, 1.3, ['#ffffff', '#ff8a70', '#c02028']), 0.7);
-    c.restore(); }
-  const push = thr ? 1 : 0;
-  c.save(); c.translate(0, rise); c.rotate(lean);
-  for (const d of [-1, 1]) {
-    if (bite) rbtArm(c, d, d * 8.2, -11.6, d * (12.4 + Math.sin(t * 22 + d) * 0.8), -21 + Math.sin(t * 26 + d * 2) * 1.2);
-    else rbtArm(c, d, d * 8.2, -11.2, d * (12.2 - push * 1.4), -6 - rise + push * 0.4 - (alarm ? 0.8 : 0) + (panic ? Math.sin(t * 30 + d) * 0.6 : 0));
-  }
-  c.restore();
-  c.restore();
-  c.restore();
-}
+// ---- Bolt and the Twin-jet tub, split into a character and a vehicle (SPLIT_GUIDE.md) ----
+// The old single drawing cut into layers, every statement unchanged: the tub's fins and jets (vehicle back), Bolt from the
+// waist up, torso, neck and head (character body), the tub in front of his waist and its throttle levers (vehicle front),
+// then his hose arms on the levers (character front). The tub rattles with him (a shake while it fires or he panics) and
+// tips over in the bite, about (0, 10): that is its frame. Bolt rises out of it, leans back and flings his arms up. His
+// pincers close on whatever grips a ride has (seat.hand moves them).
+const BOLT = {
+  id: 'robot', line: '#3c2050', bitePose: true,
+  palette: { tin: RBT.tin[1], red: RBT.red[1], chrome: RBT.chrome[2], screen: RBT.screen[1], glyph: 'rgb(140,252,255)' },
+  // moods: 'calm' | 'grit' (thrust) | 'grin' (near miss) | 'alarm' (dropping) | 'panic' (scared) | 'bite'
+  pose(st, seat) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const alarm = !panic && !grin && !thr && pkLookDown > 0;
+    const mood = bite ? 'bite' : panic ? 'panic' : grin ? 'grin' : alarm ? 'alarm' : thr ? 'grit' : 'calm';
+    const bob = Math.sin(t * 2.6) * 0.6 + (alarm ? -0.8 : 0);
+    // the key: whirring on thrust, a slow clockwork tick at rest, unwinding backwards when dropping, rattling when scared
+    const keyA = thr ? t * 14 : alarm ? -t * 4 : panic ? t * 30 : Math.floor(t * 1.5) * 0.7 + smooth(0, 0.15, (t * 1.5) % 1) * 0.7;
+    const lit = thr ? 1 : panic ? (Math.sin(t * 30) > 0 ? 1 : 0) : alarm ? (Math.sin(t * 14) > 0 ? 0.8 : 0.1) : 0.3 + 0.3 * Math.sin(t * 3);
+    const lean = bite ? -0.2 : 0, rise = (bite ? -3 : 0) + bob + (thr ? 0.6 : 0);
+    return { t, bite, thr, panic, grin, alarm, mood, keyA, lit, lean, rise };
+  },
+  draw: {
+    // ---- Bolt, from the waist up, behind the tub's front ----
+    body(c, st, seat) {
+      const { t, thr, panic, grin, alarm, bite, mood, keyA, lit, lean, rise } = seat.cp;
+      c.save(); c.translate(0, rise); c.rotate(lean);
+      // torso: a tin barrel with a chest lamp
+      const tor = () => { c.beginPath(); c.moveTo(-8.4, -14); c.quadraticCurveTo(-9.6, -7, -8, 1); c.lineTo(8, 1); c.quadraticCurveTo(9.6, -7, 8.4, -14); c.quadraticCurveTo(0, -15.2, -8.4, -14); c.closePath(); };
+      tor(); c.fillStyle = pkLG(c, -9, 0, 9, 0, ['#e8a820', '#ffe066', '#ffd040', '#c47c12']); c.fill(); c.strokeStyle = INK; c.lineWidth = 1.3; c.stroke();
+      c.save(); tor(); c.clip(); c.strokeStyle = 'rgba(176,100,14,.55)'; c.lineWidth = 0.5; for (const y of [-11.6, -3.4]) { c.beginPath(); c.moveTo(-9, y); c.quadraticCurveTo(0, y + 0.8, 9, y); c.stroke(); } c.restore();
+      pkRect(c, -4.4, -10.6, 8.8, 6.6, 1.6, pkLG(c, 0, -10.6, 0, -4, RBT.cream), 0.9);
+      const hl = thr ? 1 : panic ? (Math.sin(t * 22) > 0 ? 1 : 0.3) : 0.45 + 0.25 * Math.sin(t * 3.2);
+      if (hl > 0.3) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(-1.4, -7.3, 0.2, -1.4, -7.3, 4); g.addColorStop(0, `rgba(255,90,90,${0.55 * hl})`); g.addColorStop(1, 'rgba(255,90,90,0)'); c.fillStyle = g; c.fillRect(-6, -12, 9, 9); c.restore(); }
+      c.save(); c.translate(-1.4, -7.5); c.scale(0.9, 0.9);   // a little heart lamp
+      c.beginPath(); c.moveTo(0, 1.8); c.bezierCurveTo(-2.6, 0, -2, -2.2, 0, -1); c.bezierCurveTo(2, -2.2, 2.6, 0, 0, 1.8); c.closePath();
+      c.fillStyle = hl > 0.6 ? '#ff8a8a' : '#e8404a'; c.fill(); c.strokeStyle = INK; c.lineWidth = 0.6; c.stroke();
+      pkDot(c, -0.7, -0.8, 0.4, 'rgba(255,255,255,.85)'); c.restore();
+      pkE(c, 2.4, -8.6, 0.8, 0.8, '#5ad0ff', 0.6); pkE(c, 2.4, -6, 0.8, 0.8, '#7ae05a', 0.6);
+      // neck: a chrome bellows
+      for (let k = 0; k < 3; k++) pkRect(c, -3.6 + k * 0.2, -17.2 + k * 1.1, 7.2 - k * 0.4, 1.4, 0.7, pkLG(c, 0, -17, 0, -14, RBT.chrome), 0.7);
+      // arms on the levers (thrust pushes them forward; flung up in the bite): in the front layer, over the tub
+      // head
+      const hy = (thr ? 0.3 : 0) + (alarm ? -0.6 : 0) + (panic ? -0.5 : 0);
+      c.save(); c.translate(0, hy); c.rotate(-st.look * 0.05 + (grin ? 0.06 : 0) + (bite ? -0.1 : 0));
+      rbtKey(c, -35, keyA);
+      rbtAntenna(c, t, mood, lit);
+      rbtHead(c, st, mood, t, lit > 0.5, thr ? t * 9 : t * 0.8);
+      c.restore();
+      c.restore();
+    },
+    // his hose arms, the pincers on the levers (or on another ride's grips: seat.hand)
+    front(c, st, seat) {
+      const { t, thr, panic, alarm, bite, lean, rise } = seat.cp;
+      const push = thr ? 1 : 0;
+      c.save(); c.translate(0, rise); c.rotate(lean);
+      for (const d of [-1, 1]) {
+        if (bite) rbtArm(c, d, d * 8.2, -11.6, d * (12.4 + Math.sin(t * 22 + d) * 0.8), -21 + Math.sin(t * 26 + d * 2) * 1.2);
+        else { const [gx, gy] = seat.hand && seat.hand[d > 0 ? 1 : 0] || [0, 0];   // x + 0 === x: no move on his own ride
+          rbtArm(c, d, d * 8.2, -11.2, d * (12.2 - push * 1.4) + gx, -6 - rise + push * 0.4 - (alarm ? 0.8 : 0) + (panic ? Math.sin(t * 30 + d) * 0.6 : 0) + gy); }
+      }
+      c.restore();
+    },
+  },
+};
+const TIN_TUB = {
+  id: 'tintub', line: '#3c2050', exhaust: 'fire', nozzles: [[-6.5, 28.5], [6.5, 28.5]], bitePose: true, tip: { pivot: [0, 10] },
+  desc: 'A cherry-red tin rocket tub with a chrome rim, a cream band with a spinning cog badge, two finned sides and twin chrome jets',
+  palette: { red: RBT.red[1], cream: RBT.cream[1], chrome: RBT.chrome[1], brass: RBT.brass[1], tint: '240,68,58' },
+  pose(st) {
+    const t = st.t, bite = st.bite >= 0, thr = !!st.thrust && !bite, panic = bite || pkMood === 'panic', grin = !panic && pkMood === 'grin';
+    const alarm = !panic && !grin && !thr && pkLookDown > 0;
+    // it rattles while it fires (and when its rider panics), and tips over in the bite
+    const shake = panic ? Math.sin(t * 51) * 0.45 : thr ? Math.sin(t * 61) * 0.18 : 0;
+    const glow = thr ? 0.85 + 0.15 * Math.sin(t * 30) : panic ? (Math.sin(t * 37) > 0 ? 0.7 : 0.1) : 0.15;
+    const tip = bite ? 0.24 + 0.06 * Math.sin(t * 13) : 0;
+    const fl = thr ? 0.05 * Math.sin(t * 44) : panic ? 0.08 * Math.sin(t * 30) : 0;
+    return { t, bite, thr, alarm, shake, glow, tip, fl };
+  },
+  // the tip about (0, 10), then the rattle: round the whole pair (one save for the old two, closed together)
+  frame(c, st, seat) { const { shake } = seat.vp; c.translate(0, 10); c.rotate(seat.tip); c.translate(0, -10); c.translate(shake, 0); },
+  draw: {
+    // ---- back: fins and jets ----
+    back(c, st, seat) {
+      const { t, thr, fl } = seat.vp;
+      for (const d of [-1, 1]) rbtFin(c, d, fl * d);
+      for (const d of [-1, 1]) rbtJet(c, d * 6.5, thr, t, thr ? 1 : 0);
+    },
+    // ---- the tub in front of the rider's waist ----
+    front(c, st, seat) {
+      const { t, thr, alarm, bite, glow } = seat.vp;
+      rbtTub(c, t, thr, glow);
+      // the throttle levers poking up from the rim, under his pincers
+      if (!bite) for (const d of [-1, 1]) { const a = thr ? -0.35 : alarm ? 0.25 : 0, x = d * 12.2, y = -1.4;
+        c.save(); c.translate(x, y); c.rotate(a * d * 0 + a);
+        pkRect(c, -0.6, -4.6, 1.2, 4.8, 0.5, pkLG(c, -0.6, 0, 0.6, 0, RBT.chrome), 0.6);
+        pkE(c, 0, -4.8, 1.3, 1.3, pkRG(c, 0, -4.8, 1.3, ['#ffffff', '#ff8a70', '#c02028']), 0.7);
+        c.restore(); }
+    },
+  },
+};
+SPLIT_CHARACTERS.robot = BOLT; SPLIT_VEHICLES.tintub = TIN_TUB;
 const PILOTS = [
   { id: 'lemur', name: 'Kiko the lemur', ride: 'Coco-Rocket' },   // split: KIKO on the COCO_ROCKET (exhaust, nozzles and art from the parts)
 
@@ -14274,8 +14362,8 @@ const PILOTS = [
 
   { id: 'axolotl', name: 'Axel the axolotl', ride: 'Runaway hydrant', noInk: '#5a1e3a', exhaust: 'water', nozzles: [[0, 31.5]], bitePose: true, draw(c, st) { axDraw(c, st); } },
 
-  { id: 'mushroom', name: 'Cappy the toadstool', ride: 'Earthstar puffball', noInk: '#6a1c18', exhaust: 'spore', nozzles: [[0, 30]], bitePose: true, draw(c, st) { mshDraw(c, st); } },
-  { id: 'robot', name: 'Bolt the robot', ride: 'Twin-jet tin tub', noInk: '#3c2050', exhaust: 'fire', nozzles: [[-6.5, 28.5], [6.5, 28.5]], bitePose: true, draw(c, st) { rbtDraw(c, st); } },
+  { id: 'mushroom', name: 'Cappy the toadstool', ride: 'Earthstar puffball' },   // split: CAPPY on the PUFFBALL
+  { id: 'robot', name: 'Bolt the robot', ride: 'Twin-jet tin tub' },   // split: BOLT in the TIN_TUB
 ];
 for (const pl of PILOTS) if (pl.noInk) {
   const draw = pl.draw;
