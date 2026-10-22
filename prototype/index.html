@@ -488,7 +488,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 /* Missions: a bottom sheet over the live scene */
 .msheet { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; justify-content: flex-end; }
 .mscrim { position: absolute; inset: 0; background: rgba(12,6,8,.55); animation: fadeIn .2s ease-out both; }
-.mpanel { position: relative; width: 100%; max-width: 440px; box-sizing: border-box; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
+.mpanel { position: relative; width: 100%; max-width: 440px; box-sizing: border-box; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; overflow: hidden;   /* (clips a completed mission sliding away) */
   padding: 10px 18px calc(env(safe-area-inset-bottom, 0px) + 22px); border-radius: 30px 30px 0 0;
   background: radial-gradient(120% 60% at 30% 0%, rgba(255,226,190,.08), transparent 60%), linear-gradient(170deg, #4a3331, #2e1f21 70%); box-shadow: 0 -10px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,226,190,.16);
   animation: sheetUp .34s cubic-bezier(.2,1.2,.4,1) both; }
@@ -497,6 +497,7 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 @keyframes sheetDown { to { transform: translateY(100%); } }
 @keyframes fadeIn { from { opacity: 0; } } @keyframes fadeOut { to { opacity: 0; } }
 .mpanel .grab { align-self: center; width: 44px; height: 5px; border-radius: 3px; background: rgba(255,241,214,.18); }
+.mstop { display: flex; margin-bottom: -2px; }
 .mshead { display: flex; align-items: center; gap: 10px; }
 .mshead h2 { flex: 1; margin: 0; font: 400 30px/1 var(--font-display); letter-spacing: .02em; color: var(--cream); text-shadow: 0 3px 0 rgba(90,40,14,.8); }
 .mshead .mpot { font-size: 12.5px; }
@@ -513,6 +514,15 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .msheet .mlist .mr { grid-column: 2; grid-row: 1; justify-self: end; font: 400 19px var(--font-display); gap: 5px; }
 .msheet .mlist li > .mbar { grid-column: 1; grid-row: 2; align-self: center; height: 7px; }
 .msheet .mlist .mr .cn { width: 18px; height: 18px; } .msheet .mlist .mr .cn::after { left: 4.5px; top: 4.5px; width: 2.5px; height: 2.5px; box-shadow: 5px 0 0 #2c1606, 2.5px 4.5px 0 #2c1606; }
+.msheet .mlist li { overflow: visible; transition: transform .35s cubic-bezier(.3, .8, .3, 1), opacity .35s ease, background .3s ease; }
+.msheet .mlist .mbar i { transition: width .75s cubic-bezier(.3, .8, .3, 1); }
+.msheet .mlist li.done { background: linear-gradient(rgba(124,192,74,.34), rgba(80,140,44,.26)); }
+.msheet .mlist li.done .mp { color: #b6f07a; }
+.msheet .mlist li > .mtick { position: absolute; left: -9px; top: -9px; animation-delay: 0s; } .msheet .mlist li .mtick .ok { animation-delay: .2s; }
+.msheet .mlist li.out { transform: translateX(-108%); opacity: 0; }
+.msheet .mlist li.in { transform: translateX(40%); opacity: 0; transition: none; }
+.msheet .mlist li.isnew .mt::after { content: 'New'; display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 8px; vertical-align: 2px; font: 900 10px var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: #2a1606; background: linear-gradient(#ffe27a, #ffb238); }
+.fab .badge.done { background: linear-gradient(#ffd65c, #f39a1e); color: #4a2606; }
 .mstreak { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 18px; background: linear-gradient(100deg, rgba(255,210,94,.2), rgba(255,178,56,.08)); color: #ffe7b8; font-size: 13px; font-weight: 800; line-height: 1.3; }
 .mstreak b { display: block; font: 400 17px var(--font-display); letter-spacing: .02em; color: #ffd25e; }
 .mstreak .sday { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font: 400 22px/1 var(--font-display); color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid) 60%, #f08a1c); box-shadow: 0 3px 0 var(--gold-lip); }
@@ -659,7 +669,8 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
     <div class="mscrim" id="missionScrim"></div>
     <section class="mpanel">
       <i class="grab" aria-hidden="true"></i>
-      <header class="mshead"><button class="roundbtn" id="missionClose" aria-label="Close missions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button><h2 id="msheetTitle">Missions</h2><span class="mpot" id="menuMissionPot"></span></header>
+      <div class="mstop"><button class="roundbtn" id="missionClose" aria-label="Close missions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
+      <header class="mshead"><h2 id="msheetTitle">Missions</h2><span class="mpot" id="menuMissionPot"></span></header>
       <p class="msub">Finish them in any run. Each pays out once, and a new one takes its place.</p>
       <ul class="mlist" id="menuMissions"></ul>
       <div class="mstreak" id="menuStreak"></div>
@@ -3120,11 +3131,15 @@ const MISSIONS = {
       d.queue.push(...MISSION_POOL.map((_, i) => ({ i, c })));
     }
   },
-  complete(m, since) {
-    const df = this.def(m), d = this.data;
-    d.active.splice(d.active.indexOf(m), 1);
+  // complete a mission: pay it, put its replacement in the same slot, and queue a reveal for the home screen's missions
+  // sheet (from: how far its bar showed before this run), which fills it to done and swaps in the new one
+  complete(m, since, from = 0) {
+    const df = this.def(m), d = this.data, slot = d.active.indexOf(m);
+    d.active.splice(slot, 1);
     WALLET.add(df.reward);
     this.give(since, df.kind);
+    if (d.active.length > slot) d.active.splice(slot, 0, d.active.pop());
+    (d.reveal = d.reveal || []).push({ slot, text: df.text, n: df.n, reward: df.reward, count: !!df.k.stat && !df.k.once, from: clamp(from, 0, 1) });
     return df;
   },
   // a run ended: count its stats toward the run missions (each run counts once: missions it hands out start next run)
@@ -3133,8 +3148,8 @@ const MISSIONS = {
     for (const m of [...this.data.active]) {
       if (m.since && m.since === g.runTok) continue;
       const df = this.def(m); if (!df.k.stat) continue;
-      const v = df.k.stat(g.stats, g); m.best = Math.max(m.best || 0, v);
-      if (v >= df.n) done.push(Object.assign(this.complete(m, g.runTok), { slot: m }));
+      const v = df.k.stat(g.stats, g), before = Math.min(m.best || 0, df.n) / df.n; m.best = Math.max(m.best || 0, v);
+      if (v >= df.n) done.push(Object.assign(this.complete(m, g.runTok, before), { slot: m }));
     }
     this.save();
     return done;
@@ -27755,9 +27770,51 @@ function tap(el, fn) {
 tap($('playDaily'), () => start(true));
 tap($('playPractice'), () => start(false));
 // the home screen's missions sheet (over the live scene, so the menu stays the current screen)
-function openMissions() { refreshMeta(); const m = $('missionSheet'); m.classList.remove('closing'); m.hidden = false; $('missionClose').focus({ preventScroll: true }); }
+function openMissions() {
+  refreshMeta(); const m = $('missionSheet'); m.classList.remove('closing'); m.hidden = false; $('missionClose').focus({ preventScroll: true });
+  if ((MISSIONS.data.reveal || []).length) revealMissions();
+}
+// Completed missions the player hasn't seen: each one's row shows it again, its bar fills from where it was to full, it is
+// stamped done (the gold seal and "+N paid"), then it slides away and the new mission that took its slot slides in.
+let revealTimers = [];
+function revealMissions() {
+  const list = $('menuMissions'), queue = MISSIONS.data.reveal || [];
+  MISSIONS.data.reveal = []; MISSIONS.save(); refreshMeta(); revealTimers.forEach(clearTimeout); revealTimers = [];
+  const fresh = [...list.children].map(li => li.innerHTML);   // (the new rows, rendered by refreshMeta)
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const at = (ms, fn) => revealTimers.push(setTimeout(fn, ms));
+  const seen = new Set();
+  queue.forEach((r, k) => {
+    if (seen.has(r.slot)) return; seen.add(r.slot);
+    const li = list.children[r.slot]; if (!li) return;
+    if (reduce) { li.classList.add('isnew'); return; }
+    const num = v => r.count ? `${fmtN(v)}/${fmtN(r.n)}` : v >= r.n ? '1/1' : '0/1';
+    li.classList.add('was');
+    li.innerHTML = `<span class="mt">${r.text}</span><span class="mr">${coinHTML}${r.reward}</span><span class="mbar" style="--p:${Math.round(r.from * 100)}%"><i></i></span><span class="mp">${num(Math.round(r.from * r.n))}</span>`;
+    const t0 = 380 + k * 260, fill = 750;
+    at(t0, () => {   // the bar fills to the top while its count climbs
+      li.querySelector('.mbar').style.setProperty('--p', '100%');
+      const mp = li.querySelector('.mp'), a = r.from * r.n, start = performance.now();
+      const step = now => { if (li.classList.contains('done')) return; const e = clamp((now - start) / fill, 0, 1), v = Math.round(a + (r.n - a) * (1 - (1 - e) ** 3)); mp.textContent = num(v); if (e < 1 && li.isConnected) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+    at(t0 + fill, () => {   // done: stamped with the seal, paid
+      li.classList.add('done');
+      li.insertAdjacentHTML('afterbegin', '<svg class="mtick" viewBox="0 0 28 28" aria-label="Done"><circle class="ring" cx="14" cy="14" r="13"/><circle class="face" cx="14" cy="14" r="11.2"/><ellipse class="gl" cx="14" cy="8.6" rx="8" ry="4.4"/><path class="ok" pathLength="1" d="M8.6 14.4l3.6 3.6 7.4-7.6"/></svg>');
+      li.querySelector('.mr').innerHTML = `${coinHTML}+${r.reward}`;
+      li.querySelector('.mp').textContent = 'Paid';
+      vibrate(8);
+    });
+    at(t0 + fill + 1100, () => li.classList.add('out'));   // it slides away...
+    at(t0 + fill + 1450, () => {                            // ...and the new mission slides into its slot
+      li.className = 'isnew in'; li.innerHTML = fresh[r.slot] || '';
+      requestAnimationFrame(() => requestAnimationFrame(() => li.classList.remove('in')));
+    });
+  });
+}
 function closeMissions(now) {
   const m = $('missionSheet'); if (m.hidden) return;
+  revealTimers.forEach(clearTimeout); revealTimers = []; refreshMeta();
   if (now || matchMedia('(prefers-reduced-motion: reduce)').matches) { m.hidden = true; m.classList.remove('closing'); return; }
   m.classList.add('closing'); setTimeout(() => { if (m.classList.contains('closing')) { m.hidden = true; m.classList.remove('closing'); } }, 190);
 }
@@ -28206,7 +28263,9 @@ function refreshMeta() {
     return `<li><span class="mt">${r.text}</span><span class="mr">${coinHTML}${r.reward}</span><span class="mbar" style="--p:${Math.round(p * 100)}%"><i></i></span><span class="mp">${prog}</span></li>`;
   }).join('');
   $('menuMissionPot').innerHTML = `Up to ${coinHTML}${fmtN(rows.reduce((n, r) => n + r.reward, 0))}`;
-  $('missionBadge').textContent = rows.length || '';
+  const pend = (MISSIONS.data.reveal || []).length;   // completed missions not seen yet: the badge turns gold with a tick
+  $('missionBadge').textContent = pend ? `${pend}✓` : rows.length || '';
+  $('missionBadge').classList.toggle('done', !!pend);
   const d = STREAK.today(), claimed = STREAK.claimed();
   $('playDaily').innerHTML = `<svg class="tri" viewBox="0 0 30 34" aria-hidden="true"><path d="M6 4.2c0-2.3 2.5-3.7 4.5-2.5l17 10.6c1.9 1.2 1.9 3.9 0 5.1l-17 10.6C8.5 29.2 6 27.8 6 25.5z" fill="currentColor"/></svg>Play`
     + (claimed ? `<span class="ribbon done"><small>Day ${d}</small><svg viewBox="0 0 18 18" width="14" height="14" aria-hidden="true"><path d="M4 9.4l3.2 3.2L14 5.6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Claimed</span>`
