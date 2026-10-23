@@ -3904,11 +3904,11 @@ function sfxCoco(t, chain, gold) {
   vTone(out, t + 0.02, f1 * 0.75, { type: 'triangle', v: 0.018, dur: 0.5, a: 0.06, curve: 'lin' });
   vNoise(out, t + 0.04, { f: 3000, f2: 7500, q: 1.2, v: 0.02, dur: 0.7, a: 0.12 });
 }
-// A chili shot landing on the monster, to match what you see (a fireball bursting on its head in a white flash and a
-// ring of flame, seeds and scraps flung out, the head knocked down): a sharp shock crack, the fireball's gritty
-// whoomp (noise through a closing filter and a dropping body, driven into soft saturation), a meaty smack on the
-// hide, a deep body hit, the monster's pained roar (a rough, jittering voice through vowel formants sliding from 'ah'
-// to 'oh', with a growl flutter and breath), the seeds and scraps pattering down and the fire crackling as it dies.
+// A chili shot landing on the monster, to match what you see (a fireball bursting on its head, the head knocked down):
+// a thud and a mini explosion, built from the low end up with no bright clicks (those read as a clap). A soft round
+// pop for the attack, a heavy two-layer thud dropping in pitch, the explosion's body (noise through a filter closing
+// from the low mids down, driven into soft saturation), a rumbling tail, the monster's pained roar (a rough, jittering
+// voice through vowel formants sliding from 'ah' to 'oh', with a growl flutter and breath) and a low smouldering roll.
 // Each hit varies (pitch, pan, roar length and vowel) and the roar's pitch follows the monster, so no two sound alike.
 let hitCurve = null;
 function sfxHit(t) {
@@ -3920,17 +3920,16 @@ function sfxHit(t) {
   const pre = c.createGain(); pre.gain.value = 1.6; pre.connect(drive);
   const out = sfxOut(pan, 0.28, 0.17); drive.connect(out);
   const dry = sfxOut(pan, 0.15, 0.34);   // (the bits that stay clean)
-  // the shock: a sharp crack on the front
-  vNoise(dry, t, { type: 'highpass', f: 2800, v: 0.07, dur: 0.018 });
-  vNoise(dry, t, { f: 1800, q: 1.2, v: 0.05, dur: 0.03 });
-  // the fireball: a whoomp of noise through a closing filter, a dropping body under it, both driven
-  vNoise(pre, t + 0.004, { type: 'lowpass', f: 5200, f2: 380, v: 0.22, dur: 0.32, a: 0.004 });
-  vNoise(pre, t + 0.004, { f: 260, f2: 90, q: 1.4, v: 0.2, dur: 0.28 });
-  // the smack: fire on thick hide
-  vNoise(pre, t, { f: 1100, q: 1.1, v: 0.12, dur: 0.035 });
-  vTone(pre, t, 230 * r, { f2: 95, glide: 0.04, v: 0.12, dur: 0.06 });
-  // the body hit: deep and short, felt more than heard
-  vTone(dry, t, 72 * r, { f2: 34, glide: 0.25, v: 0.16, dur: 0.36 });
+  // the attack: a soft, round pop (pitch only, no noise click)
+  vTone(pre, t, 320 * r, { f2: 110, glide: 0.025, v: 0.16, dur: 0.035 });
+  // the thud: two layers dropping in pitch, the upper one driven, the low one clean and long
+  vTone(pre, t, 150 * r, { f2: 55, glide: 0.09, v: 0.22, dur: 0.16 });
+  vTone(dry, t, 68 * r, { f2: 30, glide: 0.32, v: 0.2, dur: 0.45 });
+  // the explosion: noise through a low-pass closing from the low mids, and a band of it falling under that
+  vNoise(pre, t + 0.003, { type: 'lowpass', f: 1500, f2: 160, v: 0.26, dur: 0.42, a: 0.006 });
+  vNoise(pre, t + 0.003, { f: 220, f2: 70, q: 1.1, v: 0.22, dur: 0.36, a: 0.004 });
+  // the tail: a low rumble rolling away
+  vNoise(dry, t + 0.06, { type: 'lowpass', f: 420, f2: 70, v: 0.07, dur: 0.75, a: 0.05 });
   // the roar: a rough voice (two detuned saws whose pitch jitters), through vowel formants sliding 'ah' to 'oh', with
   // a growl flutter on its level and a breath of noise through the same mouth
   const len = 0.32 + Math.random() * 0.14, t0 = t + 0.035, f0 = 92 * voice, mouth = c.createGain(), lvl = c.createGain(), flutter = c.createOscillator(), fg = c.createGain();
@@ -3949,9 +3948,8 @@ function sfxHit(t) {
   flutter.frequency.value = 31 + Math.random() * 8; fg.gain.value = 0.045; flutter.connect(fg); fg.connect(lvl.gain);
   lvl.gain.setValueAtTime(0.0001, t0); lvl.gain.linearRampToValueAtTime(0.11, t0 + 0.05); lvl.gain.setValueAtTime(0.1, t0 + len * 0.45); lvl.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
   flutter.start(t0); flutter.stop(t0 + len + 0.05); lvl.connect(pre);
-  // the seeds and scraps pattering down, and the fire crackling out
-  for (let i = 0; i < 7; i++) { const tt = t + 0.06 + Math.random() * 0.4; vNoise(dry, tt, { f: 1500 + Math.random() * 3500, q: 5, v: 0.012 + Math.random() * 0.012, dur: 0.01 + Math.random() * 0.012 }); }
-  vNoise(dry, t + 0.05, { type: 'highpass', f: 3500, f2: 2000, v: 0.018, dur: 0.45, a: 0.06 });
+  // the smoulder: a low, soft roll of the flames settling
+  vNoise(dry, t + 0.12, { type: 'lowpass', f: 900, f2: 300, v: 0.02, dur: 0.5, a: 0.1 });
 }
 function sfx(name, o = {}) {
   const c = SND.ctx;
