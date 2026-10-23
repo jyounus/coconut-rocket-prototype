@@ -258,8 +258,9 @@ const DMIN = [62, 64, 65, 67, 69, 70, 73, 74, 76, 77, 79, 81, 82, 85];   // (har
 const TRACKS = {
   menu:   { bpm: 104, tr: 0, form: [['intro', 4]], loop: 0, join: 0, k: { drums: 0.35, stabs: 0, lowBrass: 0, swell: 0, spic: 0.7, steady: 1, brass: 0 } },   // (just the intro, looping: steady, no brass)
   jungle: { bpm: 120, tr: 0, form: [['intro', 4], ['A', 8], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: {} },
-  caves:  { bpm: 112, tr: -2, form: [['intro', 4], ['A', 8], ['B', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: { drums: 0.75, stabs: 0.6 } },
-  magma:  { bpm: 132, tr: 1, form: [['B', 8], ['climax', 8], ['build', 4]], loop: 0, join: 0, k: { drums: 1.15 } },
+  // (the owner liked the jungle score best: the other zones play it too, each a step deeper)
+  caves:  { bpm: 116, tr: -2, form: [['intro', 4], ['A', 8], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: {} },
+  magma:  { bpm: 120, tr: -4, form: [['intro', 4], ['A', 8], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: {} },
 };
 function render(name) {
   const T = TRACKS[name], sp = 60 / T.bpm / 4, bar = sp * 16, map = [];

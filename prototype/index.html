@@ -1214,6 +1214,18 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .labmarks button.on { color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid)); }
 .labtransport { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .labtransport .btn { min-height: 46px; }
+.labsub { font-size: 13px; font-weight: 800; color: rgba(255,226,190,.7); margin: 4px 2px 6px; }
+.labsrc { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.labsrc button { font-size: 15px; min-height: 40px; }
+.fxrow { padding: 8px 12px 10px; border-radius: 14px; background: rgba(255,226,190,.06); margin-bottom: 6px; }
+.fxhead { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; cursor: pointer; }
+.fxhead b { display: block; font-size: 15px; font-weight: 800; color: var(--cream); }
+.fxhead small { display: block; font-size: 12px; color: rgba(255,226,190,.65); }
+.fxsl { display: grid; grid-template-columns: 72px minmax(0, 1fr) 76px; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; font-weight: 700; color: rgba(255,226,190,.8); }
+.fxsl input { width: 100%; accent-color: var(--ember); margin: 0; height: 26px; }
+.fxsl output { text-align: right; font-variant-numeric: tabular-nums; color: var(--cream); }
+.fxrow.off .fxsl { opacity: .4; }
+#labDry[aria-pressed="true"] { color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid)); }
 .labstem { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: rgba(255,226,190,.06); margin-bottom: 6px; }
 .labstem b { font-size: 15px; font-weight: 800; color: var(--cream); }
 .labstem button { min-width: 64px; min-height: 36px; border: 0; border-radius: 10px; font: 900 11px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--cream); background: rgba(255,226,190,.12); cursor: pointer; }
@@ -1308,7 +1320,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 <div class="screen sheet" id="musicLab" hidden>
   <div class="sheetwrap">
     <header class="sheethead"><button class="roundbtn" id="labBack" aria-label="Back to debug"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Music lab <span class="devtag">Dev only</span></h2><span class="headspace"></span></header>
-    <p class="devnote">Pick a track, jump to a section, mute or solo the instruments, and add a note at the exact moment. Copy the notes and send them over.</p>
+    <p class="devnote">Pick a track, jump to a section, mute or solo the instruments, shape its sound, and add a note at the exact moment. Copy the notes and send them over.</p>
     <div class="labtracks" id="labTracks" role="tablist" aria-label="Track"></div>
     <section class="labnow">
       <div class="labtime"><b id="labTime">0:00.0</b><span id="labWhere">Loading</span></div>
@@ -1324,6 +1336,14 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
     <section class="group">
       <div class="ghead">Instruments</div>
       <div id="labStems"></div>
+    </section>
+    <section class="group">
+      <div class="ghead">Sound</div>
+      <p class="devnote">For the track picked above, here and in the game. Switch an effect on, then shape it.</p>
+      <div class="labsub">Plays the music of</div>
+      <div class="lablead labsrc" id="labSrc" role="radiogroup" aria-label="Music source"></div>
+      <div id="labFx"></div>
+      <div class="labtransport"><button class="btn alt" id="labDry" aria-pressed="false">Compare: effects off</button><button class="btn alt" id="labFxReset">Reset this track</button></div>
     </section>
     <section class="group">
       <div class="ghead">Notes</div>
@@ -3911,11 +3931,68 @@ const mfKey = name => settings.lead === 'piano' ? `${name}-pianomix` : name;
 const mfGet = name => { if (MF.info) mfLoad(name, mfUrl(name, mfKey(name)), mfKey(name)); };
 // keep decoded only what's needed: the track playing, the menu, and the next zone's (fetched ahead)
 function mfKeep(want) {
-  const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone].filter(Boolean).map(mfKey));
+  const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone].filter(Boolean).map(n => mfKey(srcOf(n))));
   for (const k of Object.keys(MF.bufs)) if (!keep.has(k) && !SND.players.some(p => p.key === k && p.src)) delete MF.bufs[k];
-  if (want) mfGet(want); if (nextZone) mfGet(nextZone);
+  if (want) mfGet(srcOf(want)); if (nextZone) mfGet(srcOf(nextZone));
 }
 mfInfo();   // (fetch the track list, and with it the menu's file, as the page opens)
+// ---- the music's live effects (tuned per track in the music lab, and played the same way in the game) ----
+// Each track has a recipe: which recording it plays (its own, or another track's), a pitch shift and a few effects,
+// each with an on/off switch. The pitch works like a tape (the whole recording a little slower and deeper, or faster
+// and higher); the effects run on a small chain per player: drive, depth (a low shelf), treble, muffle (a closing
+// low-pass), wobble (a slow chorus), an echo on the beat with filtered repeats, and more of the hall.
+const FX_DEFAULT = { src: '', pitch: 0, echo: 0.2, echoTime: 0.75, echoFb: 0.3, hall: 0.4, depth: 3, treble: -3, muffle: 0.35, wobble: 0.4, drive: 0.3,
+  on: { pitch: false, echo: false, hall: false, depth: false, treble: false, muffle: false, wobble: false, drive: false } };
+const FX_TRACK = {   // each track's own starting point (the lower zones: a touch of echo and a little more depth)
+  caves: { echo: 0.12, depth: 2, on: { echo: true, depth: true } },
+  magma: { echo: 0.12, depth: 3, on: { echo: true, depth: true } },
+};
+function fxBase(name) { const t = FX_TRACK[name] || {}; return { ...FX_DEFAULT, ...t, on: { ...FX_DEFAULT.on, ...(t.on || {}) } }; }
+function fxOf(name) { const b = fxBase(name), u = (settings.musicFx || {})[name] || {}; return { ...b, ...u, on: { ...b.on, ...(u.on || {}) } }; }
+const srcOf = name => { const r = fxOf(name).src; return r && r !== name && (!MF.info || MF.info[r]) ? r : name; };
+const fxRate = r => r.on.pitch ? Math.pow(2, r.pitch / 12) : 1;
+function makeFx(c, dest) {
+  const n = { in: c.createGain(), shaper: c.createWaveShaper(), low: c.createBiquadFilter(), high: c.createBiquadFilter(), lp: c.createBiquadFilter(), out: c.createGain(),
+    chorus: c.createDelay(0.1), chorusMix: c.createGain(), lfo: c.createOscillator(), lfoAmt: c.createGain(),
+    echoSend: c.createGain(), echo: c.createDelay(3), echoLp: c.createBiquadFilter(), echoFb: c.createGain(), hallSend: c.createGain(), dest };
+  n.low.type = 'lowshelf'; n.low.frequency.value = 160; n.high.type = 'highshelf'; n.high.frequency.value = 3500;
+  n.lp.type = 'lowpass'; n.lp.Q.value = 0.5; n.echoLp.type = 'lowpass'; n.echoLp.frequency.value = 2600;
+  n.in.connect(n.shaper); n.shaper.connect(n.low); n.low.connect(n.high); n.high.connect(n.lp); n.lp.connect(n.out); n.out.connect(dest);
+  n.chorus.delayTime.value = 0.014; n.lfo.frequency.value = 0.7; n.lfo.connect(n.lfoAmt); n.lfoAmt.connect(n.chorus.delayTime); n.lfo.start();
+  n.lp.connect(n.chorus); n.chorus.connect(n.chorusMix); n.chorusMix.connect(dest);
+  n.lp.connect(n.echoSend); n.echoSend.connect(n.echo); n.echo.connect(n.echoLp); n.echoLp.connect(n.echoFb); n.echoFb.connect(n.echo); n.echoLp.connect(dest);
+  n.lp.connect(n.hallSend); n.hallSend.connect(SND.verbIn);
+  return n;
+}
+const driveCurves = {};
+function fxApply(n, r, bpm, now = n.in.context.currentTime) {
+  const on = r.on, set = (prm, v) => prm.setTargetAtTime(v, now, 0.03), d = on.drive ? r.drive : 0;
+  if (d > 0) { const k = Math.round(d * 20) / 20; n.shaper.curve = driveCurves[k] || (driveCurves[k] = Float32Array.from({ length: 1024 }, (_, i) => { const x = i / 511.5 - 1; return Math.tanh(x * (1 + k * 6)) / Math.tanh(1 + k * 6); })); }
+  else n.shaper.curve = null;
+  set(n.in.gain, 1 / (1 + d * 0.6));
+  set(n.low.gain, on.depth ? r.depth : 0); set(n.high.gain, on.treble ? r.treble : 0);
+  set(n.lp.frequency, on.muffle ? 18000 * Math.pow(250 / 18000, r.muffle) : 20000);
+  set(n.chorusMix.gain, on.wobble ? r.wobble * 0.7 : 0); set(n.lfoAmt.gain, on.wobble ? 0.002 + r.wobble * 0.004 : 0);
+  set(n.echoSend.gain, on.echo ? r.echo : 0); set(n.echoFb.gain, on.echo ? Math.min(0.85, r.echoFb) : 0);
+  set(n.echo.delayTime, Math.min(2.9, r.echoTime * 60 / bpm));
+  set(n.hallSend.gain, on.hall ? r.hall * 0.8 : 0);
+}
+function fxDispose(n) { try { n.lfo.stop(); } catch {} for (const k of ['in', 'out', 'chorusMix', 'echoLp', 'hallSend']) n[k].disconnect(); }
+// a recipe in words (for the lab's notes): only what differs from the track's own starting point
+function fxSummary(name) {
+  const r = fxOf(name), parts = [];
+  if (srcOf(name) !== name) parts.push(`plays ${srcOf(name)}`);
+  const pc = v => `${Math.round(v * 100)}%`;
+  if (r.on.pitch && r.pitch) parts.push(`pitch ${r.pitch > 0 ? '+' : ''}${r.pitch}`);
+  if (r.on.echo) parts.push(`echo ${pc(r.echo)} every ${r.echoTime} beat, repeats ${pc(r.echoFb)}`);
+  if (r.on.hall) parts.push(`hall ${pc(r.hall)}`);
+  if (r.on.depth) parts.push(`depth ${r.depth > 0 ? '+' : ''}${r.depth} dB`);
+  if (r.on.treble) parts.push(`treble ${r.treble > 0 ? '+' : ''}${r.treble} dB`);
+  if (r.on.muffle) parts.push(`muffle ${pc(r.muffle)}`);
+  if (r.on.wobble) parts.push(`wobble ${pc(r.wobble)}`);
+  if (r.on.drive) parts.push(`drive ${pc(r.drive)}`);
+  return parts.join(', ') || 'no effects';
+}
 // The scheduler runs one player per track that is sounding. A change of track never cuts: the new track starts on the
 // old one's next bar line (at its intro from silence or the menu, at its main theme when it follows another run
 // track) and the two crossfade over a few seconds, each with its own fader on its dry sound and its reverb send.
@@ -3924,7 +4001,7 @@ function schedMusic() {
   if (!c || c.state !== 'running') return;
   const now = c.currentTime, cur = SND.players.find(p => !p.dies), want = settings.music === false ? null : SND.want;
   if (!MF.failed) { mfInfo(); if (want) mfKeep(want); }
-  const waiting = want && !MF.failed && !(MF.info && MF.bufs[mfKey(want)]);   // (the recorded track isn't decoded yet)
+  const waiting = want && !MF.failed && !(MF.info && MF.bufs[mfKey(srcOf(want))]);   // (the recorded track isn't decoded yet)
   if ((cur ? cur.name : null) !== want && !waiting) {
     const runs = n => n === 'jungle' || n === 'caves' || n === 'magma';
     let at = now + 0.05, X = 2.4;
@@ -3937,14 +4014,15 @@ function schedMusic() {
       cur.dies = (want ? at : now) + X;
     }
     if (want) {
-      const key = mfKey(want), fi = MF.info && MF.info[want], buf = MF.bufs[key], synth = TRACKS[want], tr = fi ? { bpm: fi.bpm, vol: FILE_VOL } : synth;
+      const from = srcOf(want), key = mfKey(from), fi = MF.info && MF.info[from], buf = MF.bufs[key], synth = TRACKS[want], fx = fxOf(want), rate = fi ? fxRate(fx) : 1;
+      const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
-      bus.connect(SND.music); send.connect(SND.verbIn);
+      const chain = makeFx(c, SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
       for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? 0.85 : 0.5)); }
-      const p = { name: want, key, tr, bus, send, step: joinBars * 16, next: at };
+      const p = { name: want, key, tr, bus, send, fx: chain, base: fi ? fi.bpm : 0, step: joinBars * 16, next: at };
       if (fi && buf) {   // the recorded track: a looping buffer from its join point (the danger layer still follows its beat)
         const src = c.createBufferSource(), off = MF.off[key] || 0;
-        src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off;
+        src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off; src.playbackRate.value = rate;
         src.connect(bus); src.start(at, joinBars * 240 / fi.bpm + off); p.src = src;
       }
       SND.players.push(p);
@@ -3962,7 +4040,7 @@ function schedMusic() {
   }
   SND.bus = SND.music; SND.vsend = SND.verbIn;
   // a faded player is let go once its tails have rung out
-  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { if (p.src) try { p.src.stop(); } catch {} p.bus.disconnect(); p.send.disconnect(); return false; } return true; });
+  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { if (p.src) try { p.src.stop(); } catch {} p.bus.disconnect(); p.send.disconnect(); if (p.fx) fxDispose(p.fx); return false; } return true; });
   const top = SND.players.find(p => !p.dies); SND.track = top ? top.name : null;
 }
 // every frame: which track, how muffled, the danger level and the resume count
@@ -29492,14 +29570,14 @@ tap($('debugBack'), () => { disarmReset(); syncSettings(); show('settingsScreen'
 // A track's four stems (strings, brass, percussion, winds) play in sync, each through its own gain (mute and solo),
 // straight to the output; the game's own music fades out while the lab is open. Notes keep the time, the bar, the
 // beat and the section, and copy as plain text.
-const LAB = { track: 'jungle', playing: false, t0: 0, from: 0, srcs: [], gains: {}, mute: {}, solo: null, notes: [], raf: 0 };
+const LAB = { track: 'jungle', playing: false, t0: 0, from: 0, srcs: [], gains: {}, mute: {}, solo: null, notes: [], raf: 0, rate: 1, fx: null, dry: false };
 const LAB_STEMS = { strings: 'Strings', brass: 'Brass', piano: 'Piano', perc: 'Percussion', winds: 'Winds' };
 const labOut = st => (st === 'brass' || st === 'piano') && st !== settings.lead;   // the lead not picked stays silent
-const labInfo = () => MF.info && MF.info[LAB.track];
-const labKey = (st) => `${LAB.track}-${st}`;
+const labInfo = () => MF.info && MF.info[srcOf(LAB.track)];   // (the recording the track plays: its own or another's)
+const labKey = (st) => `${srcOf(LAB.track)}-${st}`;
 function labPos() {   // where in the track we are (s), following the loop
   const fi = labInfo(); if (!fi) return 0;
-  let x = LAB.playing ? LAB.from + (SND.ctx.currentTime - LAB.t0) : LAB.from;
+  let x = LAB.playing ? LAB.from + (SND.ctx.currentTime - LAB.t0) * LAB.rate : LAB.from;
   if (x >= fi.loopEnd) x = fi.loopStart + (x - fi.loopStart) % (fi.loopEnd - fi.loopStart);
   return x;
 }
@@ -29515,10 +29593,12 @@ function labStop() { for (const s2 of LAB.srcs) try { s2.stop(); } catch {} LAB.
 function labStart(from) {
   const fi = labInfo(), c = SND.ctx; if (!fi || !c) return;
   labStop(); LAB.from = from; LAB.t0 = c.currentTime + 0.05; LAB.playing = true;
+  if (!LAB.fx) LAB.fx = makeFx(c, SND.out);
+  labFxLive();
   for (const st of fi.stems) {
     const buf = MF.bufs[labKey(st)]; if (!buf) continue;
     const off = MF.off[labKey(st)] || 0, src = c.createBufferSource(), g = LAB.gains[st] || (LAB.gains[st] = c.createGain());
-    g.disconnect(); g.connect(SND.out); src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off;
+    g.disconnect(); g.connect(LAB.fx.in); src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off; src.playbackRate.value = LAB.rate;
     src.connect(g); src.start(LAB.t0, from + off); LAB.srcs.push(src);
   }
   labGains();
@@ -29538,7 +29618,58 @@ function labRender() {
   $('labStems').innerHTML = Object.entries(LAB_STEMS).filter(([st]) => !labOut(st)).map(([st, nm]) => `<div class="labstem"><b>${nm}</b><button class="mute" data-st="${st}" aria-pressed="${!!LAB.mute[st]}">Mute</button><button class="solo" data-st="${st}" aria-pressed="${LAB.solo === st}">Solo</button></div>`).join('');
   $('labNotes').innerHTML = LAB.notes.map(n => `<li><span>${n.where}</span> ${n.text.replace(/[<&]/g, ch => ch === '<' ? '&lt;' : '&amp;')}</li>`).join('');
   $('labPlay').textContent = LAB.playing ? 'Pause' : 'Play';
+  labFxRender();
 }
+// the Sound section: the music source, then each effect with its switch and sliders
+const pct = v => `${Math.round(v * 100)}%`, sdb = v => `${v > 0 ? '+' : ''}${v} dB`;
+const FX_UI = [
+  { k: 'pitch', name: 'Pitch', sub: 'Deeper or higher, like a tape (a little slower or faster too)', sl: [['pitch', 'Semitones', -6, 6, 0.5, v => `${v > 0 ? '+' : ''}${v}`]] },
+  { k: 'echo', name: 'Echo', sub: 'Repeats on the beat, fading away', sl: [['echo', 'Amount', 0, 1, 0.02, pct], ['echoTime', 'Every', 0.25, 2, 0.25, v => `${v} beat`], ['echoFb', 'Repeats', 0, 0.85, 0.05, pct]] },
+  { k: 'hall', name: 'Hall', sub: 'More of the big room', sl: [['hall', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'depth', name: 'Depth', sub: 'More (or less) low end', sl: [['depth', 'Bass', -6, 12, 1, sdb]] },
+  { k: 'treble', name: 'Treble', sub: 'Brighter or darker', sl: [['treble', 'Treble', -12, 6, 1, sdb]] },
+  { k: 'muffle', name: 'Muffle', sub: 'As if through a wall, or under water', sl: [['muffle', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'wobble', name: 'Wobble', sub: 'A slow chorus shimmer', sl: [['wobble', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'drive', name: 'Drive', sub: 'Grit and warmth', sl: [['drive', 'Amount', 0, 1, 0.05, pct]] },
+];
+const TRACK_NAMES = { menu: 'Menu', jungle: 'Jungle', caves: 'Caves', magma: 'Magma' };
+function labFxRender() {
+  const r = fxOf(LAB.track), src = srcOf(LAB.track);
+  $('labSrc').innerHTML = [LAB.track, ...Object.keys(TRACK_NAMES).filter(n => n !== LAB.track && n !== 'menu')].slice(0, 4).map(n => `<button role="radio" aria-checked="${src === n}" data-src="${n === LAB.track ? '' : n}">${n === LAB.track ? 'Its own' : TRACK_NAMES[n]}</button>`).join('');
+  $('labFx').innerHTML = FX_UI.map(f => `<div class="fxrow${r.on[f.k] ? '' : ' off'}"><label class="fxhead"><span><b>${f.name}</b><small>${f.sub}</small></span><input type="checkbox" class="switch" data-on="${f.k}"${r.on[f.k] ? ' checked' : ''}></label>${f.sl.map(([k, nm, mn, mx, st, fmt]) => `<label class="fxsl"><span>${nm}</span><input type="range" data-k="${k}" min="${mn}" max="${mx}" step="${st}" value="${r[k]}"><output>${fmt(r[k])}</output></label>`).join('')}</div>`).join('');
+  $('labDry').setAttribute('aria-pressed', LAB.dry);
+}
+// what the lab plays: the recipe, or with every effect off while comparing (the source and pitch stay)
+const labRecipe = () => { const r = fxOf(LAB.track); return LAB.dry ? { ...r, on: { ...FX_DEFAULT.on, pitch: r.on.pitch } } : r; };
+function labFxLive() {
+  const fi = labInfo(), c = SND.ctx; if (!fi || !c) return;
+  const r = labRecipe(), rate = fxRate(r);
+  if (rate !== LAB.rate) { if (LAB.playing) { LAB.from = labPos(); LAB.t0 = c.currentTime; } LAB.rate = rate; for (const s2 of LAB.srcs) s2.playbackRate.setValueAtTime(rate, c.currentTime); }
+  if (LAB.fx) fxApply(LAB.fx, r, fi.bpm * rate);
+  // (and any game player of this track, so the game sounds the same)
+  for (const p of SND.players) if (p.name === LAB.track && p.fx && !p.dies) { const pr = fxOf(p.name), rr = fxRate(pr); if (p.base) p.tr.bpm = p.base * rr; if (p.src) p.src.playbackRate.value = rr; fxApply(p.fx, pr, p.tr.bpm); }
+}
+function labSetFx(change) {
+  const r = fxOf(LAB.track); change(r);
+  (settings.musicFx || (settings.musicFx = {}))[LAB.track] = r; store.set('cr-settings', settings);
+  labFxLive();
+}
+function labSourceChanged() { labStop(); LAB.playing = false; LAB.from = 0; labLoad(); labRender(); }
+$('labSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const was = srcOf(LAB.track); labSetFx(r => { r.src = b.dataset.src; }); if (srcOf(LAB.track) !== was) labSourceChanged(); else labRender(); });
+$('labFx').addEventListener('change', e => { const k = e.target.dataset.on; if (!k) return; labSetFx(r => { r.on[k] = e.target.checked; }); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); });
+$('labFx').addEventListener('input', e => {
+  const k = e.target.dataset.k; if (!k) return;
+  const v = +e.target.value, f = FX_UI.flatMap(x => x.sl).find(x => x[0] === k);
+  e.target.nextElementSibling.textContent = f[5](v);
+  labSetFx(r => { r[k] = v; });
+});
+$('labDry').addEventListener('click', () => { LAB.dry = !LAB.dry; labFxLive(); labFxRender(); });
+$('labFxReset').addEventListener('click', () => {
+  const was = srcOf(LAB.track);
+  if (settings.musicFx) { delete settings.musicFx[LAB.track]; store.set('cr-settings', settings); }
+  labFxLive(); if (srcOf(LAB.track) !== was) labSourceChanged(); else labFxRender();
+  toast(`${TRACK_NAMES[LAB.track]} sound reset`);
+});
 function labTick() {
   if (currentScreen !== 'musicLab') { LAB.raf = 0; return; }
   const fi = labInfo(), x = labPos(), w = labWhere(x);
@@ -29570,10 +29701,12 @@ $('labStems').addEventListener('click', e => {
 $('labAddNote').addEventListener('click', () => {
   const text = $('labNoteText').value.trim(); if (!text) return;
   const x = labPos(), w = labWhere(x), heard = LAB.solo ? ` (solo ${LAB_STEMS[LAB.solo]})` : Object.keys(LAB.mute).some(k => LAB.mute[k]) ? ` (muted: ${Object.keys(LAB.mute).filter(k => LAB.mute[k]).map(k => LAB_STEMS[k]).join(', ')})` : '';
-  LAB.notes.push({ where: `${LAB.track} ${labClock(x)} · ${w.text}${heard}`, text }); $('labNoteText').value = ''; labRender();
+  const fxs = fxSummary(LAB.track);
+  LAB.notes.push({ where: `${LAB.track} ${labClock(x)} · ${w.text}${heard}${fxs !== 'no effects' ? ` [sound: ${fxs}]` : ''}`, text }); $('labNoteText').value = ''; labRender();
 });
 $('labCopy').addEventListener('click', () => {
-  const txt = LAB.notes.map(n => `- ${n.where}: ${n.text}`).join('\n');
+  const set = Object.keys(settings.musicFx || {}), head = set.length ? `Sound settings:\n${set.map(n => `- ${n}: ${fxSummary(n)}`).join('\n')}\n\n` : '';
+  const txt = LAB.notes.length || set.length ? head + LAB.notes.map(n => `- ${n.where}: ${n.text}`).join('\n') : '';
   if (!txt) return toast('No notes yet');
   (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Notes copied'), () => { $('labNoteText').value = txt; toast('Select the text to copy it'); });
 });
