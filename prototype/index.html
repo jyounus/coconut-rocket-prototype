@@ -1195,6 +1195,32 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .ptoggles .icontog .togl { font-size: 13.5px; max-width: 100%; text-align: center; overflow-wrap: anywhere; }
 .ptoggles .icontog .togst { display: none; }
 .ptoggles .icontog[aria-pressed="false"] .togl { opacity: .7; }
+
+/* ---------- debug: the music lab ---------- */
+.labtracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.labtracks button { min-height: 44px; border: 0; border-radius: 14px; font: 400 15px/1 var(--font-display); letter-spacing: .02em; color: var(--cream); background: linear-gradient(var(--chip-hi), var(--chip-lo)); box-shadow: 0 3px 0 var(--chip-lip); cursor: pointer; }
+.labtracks button[aria-selected="true"] { color: var(--go-ink); background: linear-gradient(var(--go-hi), var(--go-mid) 60%, var(--go-lo)); box-shadow: 0 3px 0 var(--go-lip); }
+.labnow { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 18px; background: linear-gradient(170deg, var(--card-hi), var(--card-lo)); }
+.labtime { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.labtime b { font: 400 30px/1 var(--font-display); color: var(--cream); font-variant-numeric: tabular-nums; }
+.labtime span { font-size: 13px; font-weight: 800; color: var(--muted); text-align: right; }
+.labbar { position: relative; height: 14px; border-radius: 99px; background: rgba(20,10,6,.45); cursor: pointer; overflow: hidden; }
+.labbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px; background: linear-gradient(var(--fill-hi), var(--fill-lo)); }
+.labmarks { display: flex; flex-wrap: wrap; gap: 6px; }
+.labmarks button { padding: 6px 10px; border: 0; border-radius: 99px; font: 900 11px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--cream); background: rgba(255,226,190,.1); cursor: pointer; }
+.labmarks button.on { color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid)); }
+.labtransport { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.labtransport .btn { min-height: 46px; }
+.labstem { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: rgba(255,226,190,.06); margin-bottom: 6px; }
+.labstem b { font-size: 15px; font-weight: 800; color: var(--cream); }
+.labstem button { min-width: 64px; min-height: 36px; border: 0; border-radius: 10px; font: 900 11px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--cream); background: rgba(255,226,190,.12); cursor: pointer; }
+.labstem button[aria-pressed="true"].mute { color: #ffd8c8; background: #8a3424; }
+.labstem button[aria-pressed="true"].solo { color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid)); }
+.labnote { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.labnote textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 0; border-radius: 12px; font: 800 14px/1.35 var(--font-body); color: var(--cream); background: rgba(255,226,190,.08); box-shadow: inset 0 0 0 1.5px rgba(255,226,190,.2); resize: vertical; }
+.labnote textarea::placeholder { color: var(--muted); }
+.labnotes { margin: 10px 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 800; color: var(--cream); }
+.labnotes li span { color: var(--gold-hi); }
 </style>
 
 <canvas id="game" aria-label="Coconut Rocket game"></canvas>
@@ -1276,6 +1302,29 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 </div>
 
 <!-- Debug: developer tools for play-testing (not part of the player-facing game) -->
+<div class="screen sheet" id="musicLab" hidden>
+  <div class="sheetwrap">
+    <header class="sheethead"><button class="roundbtn" id="labBack" aria-label="Back to debug"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Music lab <span class="devtag">Dev only</span></h2><span class="headspace"></span></header>
+    <p class="devnote">Pick a track, jump to a section, mute or solo the instruments, and add a note at the exact moment. Copy the notes and send them over.</p>
+    <div class="labtracks" id="labTracks" role="tablist" aria-label="Track"></div>
+    <section class="labnow">
+      <div class="labtime"><b id="labTime">0:00.0</b><span id="labWhere">Loading</span></div>
+      <div class="labbar" id="labBar"><i id="labFill"></i></div>
+      <div class="labmarks" id="labMarks"></div>
+      <div class="labtransport"><button class="btn go" id="labPlay">Play</button><button class="btn alt" id="labRestart">From the top</button></div>
+    </section>
+    <section class="group">
+      <div class="ghead">Instruments</div>
+      <div id="labStems"></div>
+    </section>
+    <section class="group">
+      <div class="ghead">Notes</div>
+      <div class="labnote"><textarea id="labNoteText" rows="2" placeholder="What you hear here, and what should change"></textarea><button class="btn alt" id="labAddNote">Add note</button></div>
+      <ol class="labnotes" id="labNotes"></ol>
+      <button class="btn alt" id="labCopy">Copy notes</button>
+    </section>
+  </div>
+</div>
 <div class="screen sheet" id="debugScreen" hidden>
   <div class="sheetwrap">
     <header class="sheethead"><button class="roundbtn" id="debugBack" aria-label="Back to settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Debug <span class="devtag">Dev only</span></h2><span class="headspace"></span></header>
@@ -1285,6 +1334,10 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <button class="srow" id="openTune"><span class="rico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="9" cy="6" r="2.6" fill="currentColor"/><circle cx="15" cy="12" r="2.6" fill="currentColor"/><circle cx="8" cy="18" r="2.6" fill="currentColor"/></svg></span><span class="rtxt"><b>Tune the feel</b><small id="dbgTuneSub">Default feel</small></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <label class="srow" for="showHitboxes"><span class="rico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="3 2.4"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span class="rtxt"><b>Show hitboxes</b><small>Or press H during a run</small></span><input type="checkbox" class="switch" id="showHitboxes"></label>
       <button class="srow" id="openMonsters"><canvas class="rthumb" id="monsterMini" width="72" height="72" aria-hidden="true"></canvas><span class="rtxt"><b>Monster</b><small id="monsterName">Magma worm</small></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </section>
+    <section class="group">
+      <div class="ghead">Sound</div>
+      <button class="srow" id="openMusicLab"><span class="rico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17.5V6.2l10-2.2v11.3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="6.6" cy="17.6" r="2.9" fill="currentColor"/><circle cx="16.6" cy="15.4" r="2.9" fill="currentColor"/></svg></span><span class="rtxt"><b>Music lab</b><small>Play the soundtrack by section and instrument, and note exact moments</small></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </section>
     <section class="group">
       <div class="ghead">Shop &amp; progress</div>
@@ -3783,6 +3836,7 @@ function epicStep(t, bar, s, sp, map, k, o) {
 // a track: its form, tempo, transposition, how loud each layer is (0 drops it), where it loops back to, and where it
 // joins when it follows another run track
 const FULL = { str: 1, choir: 1, spic: 1, bass: 1, lowBrass: 1, brass: 1, horns: 1, violin: 1, fx: 1 };
+const FILE_VOL = 0.9;   // the recorded tracks' level on the music bus (they are mastered already)
 const mkTrack = (form, bpm, vol, o, k, loopAt = 0, join = 0) => { const map = formMap(form); return { bpm, vol, bars: map.length, loop: loopAt, join, play: (t, b, s, sp) => epicStep(t, b, s, sp, map, { ...FULL, ...k }, o) }; };
 const TRACKS = {
   // the menu: the theme with the drive pulled back (no big drums, no climax), the call, the breather
@@ -3801,6 +3855,41 @@ function dangerLayer(t, s, sp) {
   if (s % 2 === 0) I.tom(t, s % 4 ? 95 : 80, 0.1 * d);
   if (s % 4 === 0) vTone(SND.bus, t, mf(31), { type: 'sawtooth', v: 0.05 * d, dur: sp * 3, lp: 400 });
 }
+// ---- the soundtrack as recorded files ----
+// The music is rendered offline on real instruments (prototype/tools/music: the score played on the VSCO 2 CE sample
+// library) to audio/music/<track>.m4a, each a seamless loop, with tracks.json giving its tempo, loop points and
+// sections. A file is fetched and decoded when it is first wanted (the next zone's is fetched ahead), and only the ones
+// in use stay decoded. If the files can't be had (offline, or a build without them) the synthesised score plays instead.
+// AAC files may carry a few ms of encoder priming at the start, so each buffer's true start is found (every render
+// opens on a hit at 0) and the loop points are shifted by it.
+const MUSIC_DIR = 'audio/music/';
+const MF = { info: null, failed: false, bufs: {}, off: {}, busy: {} };
+function mfInfo() {
+  if (MF.info || MF.failed || MF.busy.info) return;
+  MF.busy.info = true;
+  fetch(MUSIC_DIR + 'tracks.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(j => { MF.info = j; }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
+}
+function mfLoad(name, url = MUSIC_DIR + name + '.m4a', key = name) {
+  if (MF.bufs[key] || MF.busy[key] || MF.failed) return;
+  MF.busy[key] = true;
+  const c = SND.ctx;
+  fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(ab => new Promise((res, rej) => c.decodeAudioData(ab, res, rej)))
+    .then(buf => {
+      const d = buf.getChannelData(0), lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.12)); let i = 0;
+      while (i < lim && Math.abs(d[i]) < 0.002) i++;
+      MF.off[key] = i < lim ? i / buf.sampleRate : 0; MF.bufs[key] = buf;
+    })
+    .catch(() => { if (key === name) MF.failed = true; })
+    .finally(() => { MF.busy[key] = false; });
+}
+// keep decoded only what's needed: the track playing, the menu, and the next zone's (fetched ahead)
+function mfKeep(want) {
+  const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone]);
+  for (const n of Object.keys(MF.bufs)) if (!keep.has(n) && !SND.players.some(p => p.name === n && p.src)) delete MF.bufs[n];
+  if (want) mfLoad(want); if (nextZone) mfLoad(nextZone);
+}
 // The scheduler runs one player per track that is sounding. A change of track never cuts: the new track starts on the
 // old one's next bar line (at its intro from silence or the menu, at its main theme when it follows another run
 // track) and the two crossfade over a few seconds, each with its own fader on its dry sound and its reverb send.
@@ -3808,7 +3897,9 @@ function schedMusic() {
   const c = SND.ctx;
   if (!c || c.state !== 'running') return;
   const now = c.currentTime, cur = SND.players.find(p => !p.dies), want = settings.music === false ? null : SND.want;
-  if ((cur ? cur.name : null) !== want) {
+  if (!MF.failed) { mfInfo(); if (want) mfKeep(want); }
+  const waiting = want && !MF.failed && !(MF.info && MF.bufs[want]);   // (the recorded track isn't decoded yet)
+  if ((cur ? cur.name : null) !== want && !waiting) {
     const runs = n => n === 'jungle' || n === 'caves' || n === 'magma';
     let at = now + 0.05, X = 2.4;
     if (cur) {
@@ -3820,10 +3911,17 @@ function schedMusic() {
       cur.dies = (want ? at : now) + X;
     }
     if (want) {
-      const tr = TRACKS[want], bus = c.createGain(), send = c.createGain(), from = cur && runs(cur.name) && runs(want) ? tr.join || 0 : 0;
+      const fi = MF.info && MF.info[want], buf = MF.bufs[want], synth = TRACKS[want], tr = fi ? { bpm: fi.bpm, vol: FILE_VOL } : synth;
+      const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
       bus.connect(SND.music); send.connect(SND.verbIn);
       for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? 0.85 : 0.5)); }
-      SND.players.push({ name: want, tr, bus, send, step: from * 16, next: at });
+      const p = { name: want, tr, bus, send, step: joinBars * 16, next: at };
+      if (fi && buf) {   // the recorded track: a looping buffer from its join point (the danger layer still follows its beat)
+        const src = c.createBufferSource(), off = MF.off[want] || 0;
+        src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off;
+        src.connect(bus); src.start(at, joinBars * 240 / fi.bpm + off); p.src = src;
+      }
+      SND.players.push(p);
     }
   }
   for (const p of SND.players) {
@@ -3831,14 +3929,14 @@ function schedMusic() {
     SND.bus = p.bus; SND.vsend = p.send;
     while (p.next < now + 0.12 && (!p.dies || p.next < p.dies)) {
       const s = p.step % 16, bn = p.step / 16 | 0, lp = tr.loop || 0, b = bn < tr.bars ? bn : lp + (bn - tr.bars) % (tr.bars - lp);
-      tr.play(p.next, b, s, sp);
+      if (!p.src) tr.play(p.next, b, s, sp);
       if (!p.dies && p.name !== 'menu') dangerLayer(p.next, s, sp);
       p.step++; p.next += sp;
     }
   }
   SND.bus = SND.music; SND.vsend = SND.verbIn;
   // a faded player is let go once its tails have rung out
-  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { p.bus.disconnect(); p.send.disconnect(); return false; } return true; });
+  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { if (p.src) try { p.src.stop(); } catch {} p.bus.disconnect(); p.send.disconnect(); return false; } return true; });
   const top = SND.players.find(p => !p.dies); SND.track = top ? top.name : null;
 }
 // every frame: which track, how muffled, the danger level and the resume count
@@ -3848,7 +3946,7 @@ function audioTick(dt) {
   let want = 'menu';
   if (G && currentScreen === null && !homeScene()) want = G.state === 'dead' ? null : ['jungle', 'caves', 'magma'][G.zone || 0];
   else if (currentScreen === 'pause' && G) want = ['jungle', 'caves', 'magma'][G.zone || 0];
-  else if (currentScreen === 'ad') want = null;
+  else if (currentScreen === 'ad' || currentScreen === 'musicLab') want = null;
   SND.want = settings.music === false ? null : want;
   const t = c.currentTime, muffle = currentScreen === 'pause' || currentScreen === 'ad';
   SND.musicLp.frequency.setTargetAtTime(muffle ? 650 : 18000, t, 0.12);
@@ -29085,7 +29183,7 @@ function hazardBehind([l, t, r, b]) { return hazardRects((x0, y0, x1, y1) => x1 
 const $ = id => document.getElementById(id);
 let currentScreen = 'menu';
 function show(id) {
-  for (const sid of ['menu', 'pause', 'over', 'ad', 'tuneScreen', 'pilotScreen', 'monsterScreen', 'settingsScreen', 'debugScreen']) $(sid).hidden = sid !== id;
+  for (const sid of ['menu', 'pause', 'over', 'ad', 'tuneScreen', 'pilotScreen', 'monsterScreen', 'settingsScreen', 'debugScreen', 'musicLab']) $(sid).hidden = sid !== id;
   currentScreen = id;
   if (id !== 'menu') closeMissions(true); else checkNewDay();
   $('hud').hidden = id !== null;   // (hidden on pause too: the pause card shows the score and height)
@@ -29364,6 +29462,87 @@ for (const [id, k] of [['optMusic', 'music'], ['optSfx', 'sfx']]) $(id).addEvent
 $('optVibrate').addEventListener('change', () => { settings.vibrate = $('optVibrate').checked; store.set('cr-settings', settings); vibrate(20); });
 tap($('openDebug'), () => { refreshDebug(); show('debugScreen'); });
 tap($('debugBack'), () => { disarmReset(); syncSettings(); show('settingsScreen'); });
+// ---- the music lab (debug): the recorded tracks by section and instrument, with notes at exact moments ----
+// A track's four stems (strings, brass, percussion, winds) play in sync, each through its own gain (mute and solo),
+// straight to the output; the game's own music fades out while the lab is open. Notes keep the time, the bar, the
+// beat and the section, and copy as plain text.
+const LAB = { track: 'jungle', playing: false, t0: 0, from: 0, srcs: [], gains: {}, mute: {}, solo: null, notes: [], raf: 0 };
+const LAB_STEMS = { strings: 'Strings', brass: 'Brass', perc: 'Percussion', winds: 'Winds' };
+const labInfo = () => MF.info && MF.info[LAB.track];
+const labKey = (st) => `${LAB.track}-${st}`;
+function labPos() {   // where in the track we are (s), following the loop
+  const fi = labInfo(); if (!fi) return 0;
+  let x = LAB.playing ? LAB.from + (SND.ctx.currentTime - LAB.t0) : LAB.from;
+  if (x >= fi.loopEnd) x = fi.loopStart + (x - fi.loopStart) % (fi.loopEnd - fi.loopStart);
+  return x;
+}
+function labWhere(x) {
+  const fi = labInfo(); if (!fi) return { text: 'Loading', sec: null };
+  const barLen = 240 / fi.bpm, bar = Math.floor(x / barLen), beat = Math.floor((x % barLen) / (barLen / 4));
+  let sec = fi.sections[0]; for (const sc of fi.sections) if (sc.at <= x + 1e-6) sec = sc;
+  const names = { intro: 'Intro', A: 'Theme', B: 'Lift', climax: 'Climax', break: 'Breather', build: 'Build' };
+  return { text: `Bar ${bar + 1} · beat ${beat + 1} · ${names[sec.name] || sec.name}`, sec: sec.name, bar, beat };
+}
+const labClock = x => `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`;
+function labStop() { for (const s2 of LAB.srcs) try { s2.stop(); } catch {} LAB.srcs = []; }
+function labStart(from) {
+  const fi = labInfo(), c = SND.ctx; if (!fi || !c) return;
+  labStop(); LAB.from = from; LAB.t0 = c.currentTime + 0.05; LAB.playing = true;
+  for (const st of fi.stems) {
+    const buf = MF.bufs[labKey(st)]; if (!buf) continue;
+    const off = MF.off[labKey(st)] || 0, src = c.createBufferSource(), g = LAB.gains[st] || (LAB.gains[st] = c.createGain());
+    g.disconnect(); g.connect(SND.out); src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off;
+    src.connect(g); src.start(LAB.t0, from + off); LAB.srcs.push(src);
+  }
+  labGains();
+}
+function labGains() { for (const st of Object.keys(LAB_STEMS)) { const g = LAB.gains[st]; if (g) g.gain.value = LAB.solo ? (LAB.solo === st ? 1 : 0) : LAB.mute[st] ? 0 : 1; } }
+function labLoad() {   // the selected track's stems
+  const fi = labInfo(); if (!fi) return;
+  for (const st of fi.stems) mfLoad(LAB.track, `${MUSIC_DIR}${labKey(st)}.m4a`, labKey(st));
+}
+const labReady = () => { const fi = labInfo(); return !!fi && fi.stems.every(st => MF.bufs[labKey(st)]); };
+function labRender() {
+  const fi = labInfo();
+  $('labTracks').innerHTML = ['menu', 'jungle', 'caves', 'magma'].map(n => `<button role="tab" aria-selected="${n === LAB.track}" data-track="${n}">${{ menu: 'Menu', jungle: 'Jungle', caves: 'Caves', magma: 'Magma' }[n]}</button>`).join('');
+  const names = { intro: 'Intro', A: 'Theme', B: 'Lift', climax: 'Climax', break: 'Breather', build: 'Build' };
+  $('labMarks').innerHTML = fi ? fi.sections.map((sc, i) => `<button data-at="${sc.at}" data-i="${i}">${names[sc.name] || sc.name}</button>`).join('') : '';
+  $('labStems').innerHTML = Object.entries(LAB_STEMS).map(([st, nm]) => `<div class="labstem"><b>${nm}</b><button class="mute" data-st="${st}" aria-pressed="${!!LAB.mute[st]}">Mute</button><button class="solo" data-st="${st}" aria-pressed="${LAB.solo === st}">Solo</button></div>`).join('');
+  $('labNotes').innerHTML = LAB.notes.map(n => `<li><span>${n.where}</span> ${n.text.replace(/[<&]/g, ch => ch === '<' ? '&lt;' : '&amp;')}</li>`).join('');
+  $('labPlay').textContent = LAB.playing ? 'Pause' : 'Play';
+}
+function labTick() {
+  if (currentScreen !== 'musicLab') { LAB.raf = 0; return; }
+  const fi = labInfo(), x = labPos(), w = labWhere(x);
+  $('labTime').textContent = labClock(x);
+  $('labWhere').textContent = !fi ? (MF.failed ? 'The recorded tracks are not available here' : 'Loading') : labReady() ? w.text : 'Loading the instruments';
+  if (fi) $('labFill').style.width = `${(x / fi.loopEnd * 100).toFixed(2)}%`;
+  for (const b of $('labMarks').children) b.classList.toggle('on', fi && fi.sections[+b.dataset.i].name === w.sec && Math.abs(+b.dataset.at - (fi.sections.filter(sc => sc.at <= x + 1e-6).pop() || {}).at) < 1e-6);
+  if (!labInfo() || !labReady()) labLoad();
+  LAB.raf = requestAnimationFrame(labTick);
+}
+tap($('openMusicLab'), () => { audioInit(); mfInfo(); show('musicLab'); labRender(); labLoad(); if (!LAB.raf) LAB.raf = requestAnimationFrame(labTick); });
+tap($('labBack'), () => { labStop(); LAB.playing = false; show('debugScreen'); });
+$('labTracks').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; labStop(); LAB.playing = false; LAB.from = 0; LAB.track = b.dataset.track; labRender(); labLoad(); });
+$('labMarks').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !labReady()) return; labStart(+b.dataset.at); labRender(); });
+$('labBar').addEventListener('click', e => { const fi = labInfo(); if (!fi || !labReady()) return; const r = $('labBar').getBoundingClientRect(); labStart(clamp((e.clientX - r.left) / r.width, 0, 0.999) * fi.loopEnd); labRender(); });
+$('labPlay').addEventListener('click', () => { if (!labReady()) return; if (LAB.playing) { LAB.from = labPos(); labStop(); LAB.playing = false; } else labStart(LAB.from); labRender(); });
+$('labRestart').addEventListener('click', () => { if (!labReady()) return; labStart(0); labRender(); });
+$('labStems').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; const st = b.dataset.st;
+  if (b.classList.contains('mute')) LAB.mute[st] = !LAB.mute[st]; else LAB.solo = LAB.solo === st ? null : st;
+  labGains(); labRender();
+});
+$('labAddNote').addEventListener('click', () => {
+  const text = $('labNoteText').value.trim(); if (!text) return;
+  const x = labPos(), w = labWhere(x), heard = LAB.solo ? ` (solo ${LAB_STEMS[LAB.solo]})` : Object.keys(LAB.mute).some(k => LAB.mute[k]) ? ` (muted: ${Object.keys(LAB.mute).filter(k => LAB.mute[k]).map(k => LAB_STEMS[k]).join(', ')})` : '';
+  LAB.notes.push({ where: `${LAB.track} ${labClock(x)} · ${w.text}${heard}`, text }); $('labNoteText').value = ''; labRender();
+});
+$('labCopy').addEventListener('click', () => {
+  const txt = LAB.notes.map(n => `- ${n.where}: ${n.text}`).join('\n');
+  if (!txt) return toast('No notes yet');
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Notes copied'), () => { $('labNoteText').value = txt; toast('Select the text to copy it'); });
+});
 function refreshDebug() {
   $('dbgTuneSub').textContent = isDefaultTune() ? 'Default feel · daily bests count' : 'Tuned · daily runs can\'t set a best';
   hbBox.checked = settings.hitboxes;
@@ -30808,7 +30987,7 @@ try { if (sessionStorage.getItem('cr-after-reset')) { sessionStorage.removeItem(
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster() };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
