@@ -3481,7 +3481,7 @@ function puff(x, alt, vx, vy, life, size, kind, ex) {
 // a pumping bass ostinato and a square-lead riff). audioTick() picks the track from the game state every frame,
 // crossfades on a change, muffles it while paused and adds a danger layer while the monster is close or hungry.
 const SND = { ctx: null, out: null, music: null, musicLp: null, sfx: null, verb: null, noise: null,
-  track: null, want: null, step: 0, next: 0, timer: 0, fade: null, danger: 0, thrust: null, resumeStep: 0 };
+  track: null, want: null, step: 0, next: 0, timer: 0, fade: null, danger: 0, resumeStep: 0 };
 const mf = m => 440 * Math.pow(2, (m - 69) / 12);
 function audioInit() {
   if (SND.ctx) { if (SND.ctx.state === 'suspended' && !document.hidden) SND.ctx.resume(); return; }
@@ -3640,7 +3640,7 @@ function schedMusic() {
     SND.step++; SND.next += sp;
   }
 }
-// every frame: which track, how muffled, the danger level, the thrust roar and the resume count
+// every frame: which track, how muffled, the danger level and the resume count
 function audioTick(dt) {
   const c = SND.ctx;
   if (!c) return;
@@ -3653,21 +3653,6 @@ function audioTick(dt) {
   SND.musicLp.frequency.setTargetAtTime(muffle ? 650 : 18000, t, 0.12);
   const gap = G && G.state === 'play' ? monsterGap() : 9999;
   SND.danger = G && G.state === 'play' ? Math.max(clamp(1 - (gap - 120) / 380, 0, 1), G.hunger || 0) : 0;
-  // the thrust: filtered noise and a low rumble, swelling while you hold
-  const on = G && G.state === 'play' && G.thrust && currentScreen === null && settings.sfx !== false;
-  if (on && !SND.thrust) {
-    const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), o = c.createOscillator(), og = c.createGain();
-    src.buffer = SND.noise; src.loop = true; fl.type = 'bandpass'; fl.frequency.value = 700; fl.Q.value = 0.8;
-    src.connect(fl); fl.connect(g); g.gain.value = 0; g.connect(SND.sfx);
-    o.type = 'sawtooth'; o.frequency.value = 52; const ol = c.createBiquadFilter(); ol.type = 'lowpass'; ol.frequency.value = 180; o.connect(ol); ol.connect(og); og.gain.value = 0; og.connect(SND.sfx);
-    src.start(); o.start(); SND.thrust = { src, fl, g, o, og };
-  }
-  if (SND.thrust) {
-    const T = SND.thrust, vy = G ? clamp((G.p.vy || 0) / 600, 0, 1) : 0;
-    T.g.gain.setTargetAtTime(on ? 0.07 + 0.05 * vy : 0, t, 0.06); T.og.gain.setTargetAtTime(on ? 0.08 : 0, t, 0.08);
-    T.fl.frequency.setTargetAtTime(600 + 900 * vy, t, 0.1);
-    if (!on && T.g.gain.value < 0.002) { T.src.stop(); T.o.stop(); SND.thrust = null; }
-  }
   // the resume countdown: a wood-block tick on each number, a higher one on go
   if (G && G.resumeT > 0) { const n = Math.ceil(G.resumeT / RESUME_STEP); if (n !== SND.resumeStep) { SND.resumeStep = n; sfx('tick'); } }
   else if (SND.resumeStep) { SND.resumeStep = 0; if (G && G.state === 'play') sfx('go'); }
