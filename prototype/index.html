@@ -3543,10 +3543,12 @@ function die(cause, h) {
   G.knock = cause === 'worm'
     ? { x: p.x, alt: p.alt, vx: dir * (70 + Math.random() * 50), vy: 430, rot: p.rot || 0, spin: dir * 8, eaten: false }
     : { x: p.x, alt: p.alt, vx: 0, vy: 0, rot: p.rot || 0, spin: 0, eaten: false, frozen: true };
-  for (let i = 0; i < 26; i++) {
-    const a = Math.random() * 6.283, v = 120 + Math.random() * 320;
-    puff(p.x, p.alt, Math.cos(a) * v, Math.sin(a) * v, 0.6 + Math.random() * 0.6, 3 + Math.random() * 5, i % 3 ? 'debris' : 'flame');
-  }
+  if (cause === 'worm') {
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * 6.283, v = 120 + Math.random() * 320;
+      puff(p.x, p.alt, Math.cos(a) * v, Math.sin(a) * v, 0.6 + Math.random() * 0.6, 3 + Math.random() * 5, i % 3 ? 'debris' : 'flame');
+    }
+  } else crashFx(cause, h);
   // drop every held input: a key or finger held through the death, the ad and the revive must never launch the
   // pilot on its own (key auto-repeat after this is ignored too, see the keydown handler)
   input.pointers.clear(); input.keys.clear(); input.pressed = false; recomputeThrust();
@@ -3561,6 +3563,89 @@ function causeColour(cause) {
   if (cause === 'crusher' || cause === 'gate') return [255, 200, 70];
   if (cause === 'wall') return pal('rim', G.p.alt);
   return DANGER_RGB;
+}
+
+// A crash into a hazard or a wall: where it touched (the point of the killer nearest the pilot), a cartoon impact
+// star there (G.crash, drawn over the pilot), a dust cloud bursting out of it, shell shards and sparks, and the pilot
+// knocked back from it with a little hop and a tumble (see the frozen dead update), then dizzy stars.
+function contactPoint(h) {
+  const p = G.p, px = p.x, pa = p.alt;
+  if (!h || h.type === 'wall') { const [L, R] = walls(pa); return px < (L + R) / 2 ? [L, pa] : [R, pa]; }
+  let best = null, bd = Infinity;
+  const near = (x, a, r) => { const dx = px - x, da = pa - a, d = Math.hypot(dx, da) || 1, q = [x + dx / d * Math.min(r, d), a + da / d * Math.min(r, d)];
+    const dd = Math.hypot(px - q[0], pa - q[1]); if (dd < bd) { bd = dd; best = q; } };
+  for (const q of hazardShapes(h)) {
+    if (q.k === 'c') near(q.x, q.a, q.r);
+    else if (q.k === 's') { const vx = q.x1 - q.x0, va = q.a1 - q.a0, u = clamp(((px - q.x0) * vx + (pa - q.a0) * va) / (vx * vx + va * va || 1), 0, 1); near(q.x0 + vx * u, q.a0 + va * u, q.r); }
+    else near(clamp(px, q.x0, q.x1), clamp(pa, q.a0, q.a1), 0);
+  }
+  return best || [px, pa];
+}
+function crashFx(cause, h) {
+  const p = G.p, k = G.knock, col = G.flashCol.map(v => v | 0), [ix, ia] = contactPoint(h);
+  // the touch point sits on the hitbox edge, which is inside the art: pull it a little toward the pilot
+  const cx = lerp(ix, p.x, 0.25), ca = lerp(ia, p.alt, 0.25);
+  let dx = p.x - ix, da = p.alt - ia; const d = Math.hypot(dx, da);
+  if (d < 1) { dx = p.x < WORLD_W / 2 ? 1 : -1; da = 0; } else { dx /= d; da /= d; }
+  G.crash = { x: cx, alt: ca, t: 0, col, rot: Math.random() * 6.283 };
+  // knocked back ~30 units away from the hit, kept inside the walls
+  const [L, R] = walls(p.alt), bx = clamp(p.x + dx * 30, L + 34, R - 34);
+  Object.assign(k, { x0: p.x, a0: p.alt, bx: bx - p.x, ba: da * 22, tilt: (dx >= 0 ? 1 : -1) * (0.45 + Math.random() * 0.25), rot0: p.rot || 0 });
+  // dust: grey-brown puffs tinted toward what hit you, mostly flung away from the wall or hazard
+  const dust = col.map((v, i) => Math.round(lerp([196, 182, 166][i], v, 0.22)));
+  for (let i = 0; i < 20; i++) {
+    const a = Math.atan2(da, dx) + (Math.random() - 0.5) * 4.2, v = 80 + Math.random() * 200;
+    puff(cx, ca, Math.cos(a) * v, Math.sin(a) * v + 30, 0.9 + Math.random() * 0.7, 12 + Math.random() * 11, 'cloud', dust);
+  }
+  // shell shards: chunks of coconut shell (dark and light) spinning out under gravity
+  for (let i = 0; i < 10; i++) {
+    const a = Math.atan2(da, dx) + (Math.random() - 0.5) * 2.8, v = 160 + Math.random() * 240, light = i % 2;
+    puff(cx, ca, Math.cos(a) * v, Math.sin(a) * v + 140, 0.9 + Math.random() * 0.5, 2.6 + Math.random() * 3,
+      'rock', { rot: Math.random() * 6.283, spin: (Math.random() - 0.5) * 22, c: light ? [196, 140, 84] : [118, 74, 40], l: light ? [240, 200, 140] : [176, 120, 70] });
+  }
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * 6.283, v = 200 + Math.random() * 300;
+    puff(cx, ca, Math.cos(a) * v, Math.sin(a) * v, 0.35 + Math.random() * 0.3, 1.6 + Math.random() * 1.4, 'spark');
+  }
+}
+// The impact star at the touch point: a jagged white-hot burst with an edge in the colour of what hit you, popping
+// to full size at once (it holds through the freeze-frame) and then shrinking away.
+function drawCrash() {
+  const b = G.crash;
+  if (!b) return;
+  const t = b.t, grow = smooth(0, 0.06, t), fade = 1 - smooth(0.22, 0.5, t), sc = (0.75 + 0.5 * grow) * (0.6 + 0.4 * fade);
+  if (fade <= 0) return;
+  const x = sx(b.x), y = sy(b.alt), R = 34 * s * sc, star = (r0, r1, n, rot) => {
+    ctx.beginPath();
+    for (let i = 0; i < n * 2; i++) { const a = rot + i / (n * 2) * 6.283, r = i % 2 ? r0 : r1 * (0.8 + 0.2 * ((i * 7) % 3) / 2); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+    ctx.closePath(); ctx.fill();
+  };
+  ctx.save(); ctx.globalAlpha = fade;
+  ctx.fillStyle = rgbaA(b.col.map(v => v * 0.72 | 0), 1); star(R * 0.55, R * 1.18, 9, b.rot);
+  ctx.fillStyle = rgbaA(b.col, 1); star(R * 0.46, R, 9, b.rot);
+  ctx.fillStyle = '#fff6d8'; star(R * 0.3, R * 0.66, 9, b.rot + 0.17);
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, R * 0.24, 0, 6.283); ctx.fill();
+  ctx.restore();
+}
+// Dizzy stars: three little gold stars circling over the knocked-out pilot's head after the knock-back.
+function drawDizzy() {
+  const k = G.knock;
+  if (!k || !k.frozen || G.state !== 'dead') return;
+  const e = smooth(0.35, 0.6, G.deadTimer);
+  if (e <= 0) return;
+  const cx = sx(k.x), cy = sy(k.alt + 40 * PILOT_SCALE / 1.5), rx = 22 * s, ry = 7 * s;
+  ctx.save();
+  for (let i = 0; i < 3; i++) {
+    const a = G.t * 5 + i / 3 * 6.283, x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry, front = Math.sin(a) > 0, r = (front ? 5.4 : 4.2) * s;
+    ctx.globalAlpha = e * (front ? 1 : 0.7);
+    ctx.fillStyle = '#e09a1c'; ctx.beginPath();
+    for (let j = 0; j < 10; j++) { const b = -Math.PI / 2 + j / 10 * 6.283 + G.t * 3, rr = j % 2 ? r * 0.45 : r * 1.15; ctx.lineTo(x + Math.cos(b) * rr, y + Math.sin(b) * rr); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffe36a'; ctx.beginPath();
+    for (let j = 0; j < 10; j++) { const b = -Math.PI / 2 + j / 10 * 6.283 + G.t * 3, rr = j % 2 ? r * 0.36 : r * 0.9; ctx.lineTo(x + Math.cos(b) * rr, y + Math.sin(b) * rr); }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // Score is in points: PTS_PER_M per metre climbed, COCO_BONUS per coconut, HIT_BONUS per monster hit, CLOSE_BONUS per
@@ -3896,7 +3981,7 @@ function revive() {
   const [L, R] = walls(p.alt);
   p.x = p.targetX = (L + R) / 2; p.vx = 0; p.vy = 0; p.tilt = 0; p.rot = 0; refreshPilotCaps();
   p.invuln = 0;                                     // the grace period starts when you launch again, so no strobing while you wait
-  G.knock = null; G.killer = null; G.bite = null; G.burst = null; G.punch = 0; G.flash = 0; G.hitStop = 0; G.slow = 0; G.shake = 0;
+  G.knock = null; G.killer = null; G.bite = null; G.burst = null; G.crash = null; G.punch = 0; G.flash = 0; G.hitStop = 0; G.slow = 0; G.shake = 0;
   G.worm.alt = Math.min(G.worm.alt, p.alt - 650); G.worm.snap = 0; G.worm.crouch = 0; G.worm.surge = 0; G.worm.beat = 0; G.worm.nextLunge = 6; G.worm.stun = 0; G.worm.kb = 0;
   Object.assign(G.eng, { offFor: 1, boostT: 0, wasOn: false, cd: 0 });
   G.comebackPop = true;                             // the bonus pops up when you launch again
@@ -4001,6 +4086,7 @@ function update(rawDt) {
   if (G.state === 'dead' && currentScreen !== null) { updateCamera(rawDt); return; }   // frozen behind the game-over panel
   if (homeScene()) { updateHomeScene(rawDt); return; }   // the front end's live backdrop (see updateHomeScene)
   if (G.burst) { G.burst.t += rawDt; if (G.burst.t > 0.6) G.burst = null; }
+  if (G.crash) { G.crash.t += rawDt; if (G.crash.t > 0.6) G.crash = null; }
   if (G.hitStop > 0) { G.hitStop -= rawDt; return; }           // a beat of stillness when you get hit
   if (G.resumeT > 0) {               // frozen during the resume countdown
     G.resumeT = Math.max(0, G.resumeT - rawDt); input.pressed = false;
@@ -4180,7 +4266,13 @@ function update(rawDt) {
   if (G.state === 'dead' && G.knock && G.knock.frozen) {
     // frozen on what killed you: only a small shudder on the pilot, then the panel
     G.deadTimer += dt; G.whiteT = Math.max(0, (G.whiteT || 0) - rawDt);
-    G.knock.rot = (G.p.rot || 0) + Math.sin(G.deadTimer * 40) * 0.08 * Math.max(0, 1 - G.deadTimer * 3);
+    const k = G.knock, kt = G.deadTimer;
+    if (k.x0 !== undefined) {
+      // knocked back from the hit with a hop, tipping over, then settling (easeOutBack), with a shudder on top
+      const e = Math.min(1, kt / 0.32), back = 1 + 2.2 * Math.pow(e - 1, 3) + 1.2 * Math.pow(e - 1, 2);
+      k.x = k.x0 + k.bx * back; k.alt = k.a0 + k.ba * back + 16 * Math.sin(Math.PI * e);
+      k.rot = k.rot0 + k.tilt * back + Math.sin(kt * 40) * 0.08 * Math.max(0, 1 - kt * 3);
+    } else k.rot = (G.p.rot || 0) + Math.sin(kt * 40) * 0.08 * Math.max(0, 1 - kt * 3);
     if (G.deadTimer > 1.25 && currentScreen === null) finishRun();
     updateCamera(dt); updateParticles(dt); updatePops(dt);
     return;
@@ -4684,6 +4776,7 @@ function updateParticles(dt) {
     q.x += q.vx * dt; q.alt += q.vy * dt;
     if (q.kind === 'debris' || q.kind === 'coin' || q.kind === 'rock') { q.vy -= 700 * dt; if (q.kind === 'rock') q.ex.rot += q.ex.spin * dt; }
     else if (q.kind === 'spark') { q.vx *= 1 - dt * 1.6; q.vy += 120 * dt; }
+    else if (q.kind === 'cloud') { q.vx *= 1 - dt * 3.2; q.vy = q.vy * (1 - dt * 3.2) + 26 * dt; }
     else { q.vx *= 1 - dt * 2; q.vy *= 1 - dt * 1.5; }
   }
 }
@@ -4740,6 +4833,7 @@ function draw() {
   drawParticles(false);
   if (G.state !== 'dead') drawPlayer(); else if (!G.bite) drawKnock();
   drawParticles(true);
+  drawClouds(); drawCrash(); drawDizzy();
   drawDangerUnder();
   drawWorm();
   drawShots();
@@ -8418,12 +8512,25 @@ function drawLavafall(h) {
 }
 const DRAW = { hang: drawHang, bat: drawBat, pend: drawPend, geyser: drawGeyser, firebar: drawFirebar, spike: drawSpike, spider: drawSpider, crusher: drawCrusher, gate: drawGate, lavafall: drawLavafall };
 
+// Crash dust: round cartoon puffs that swell and thin out, a darker same-hue underside and a light top, no outline.
+function drawClouds() {
+  ctx.save();
+  for (const q of G.particles) {
+    if (q.kind !== 'cloud') continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt), r = q.size * s * (0.55 + (1 - t) * 0.9), al = Math.min(1, t * 1.6) * 0.92, c = q.ex;
+    ctx.globalAlpha = al;
+    ctx.fillStyle = rgb(c.map(v => v * 0.74)); ctx.beginPath(); ctx.arc(x, y + r * 0.12, r, 0, 6.283); ctx.fill();
+    ctx.fillStyle = rgb(c); ctx.beginPath(); ctx.arc(x - r * 0.06, y - r * 0.04, r * 0.9, 0, 6.283); ctx.fill();
+    ctx.fillStyle = rgb(c.map(v => Math.min(255, v * 1.14 + 20))); ctx.beginPath(); ctx.arc(x - r * 0.28, y - r * 0.3, r * 0.42, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+}
 function drawParticles(additive) {
   ctx.save();
   if (additive) ctx.globalCompositeOperation = 'lighter';
   for (const q of G.particles) {
     const isAdd = q.kind === 'flame' || q.kind === 'spark' || q.kind === 'glint' || q.kind === 'sparkle' || q.kind === 'whoosh' || q.kind === 'ember' || q.kind === 'breath' || q.kind === 'shock' || q.kind === 'frost' || q.kind === 'star';
-    if (isAdd !== additive) continue;
+    if (isAdd !== additive || q.kind === 'cloud') continue;
     const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
     if (q.kind === 'flame') {
       const r = q.size * s * (0.5 + t), ex = EXHAUST[q.ex || 'fire'];
