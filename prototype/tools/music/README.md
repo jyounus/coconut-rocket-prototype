@@ -10,7 +10,7 @@ github.com/sgossner/VSCO-2-CE). Nothing here needs installing beyond Node and ma
 2. `node render.mjs [track ...]` renders each track (`menu`, `jungle`, `caves`, `magma`) to `out/<track>.wav` (a seamless
    loop: its reverb tail is wrapped onto the loop start) plus four stems (`-strings`, `-brass`, `-perc`, `-winds`) and
    `out/tracks.json` (tempo, loop points, join point, sections).
-3. `./encode.sh` encodes them to AAC in `prototype/audio/music/` (mixes 160 kbps, stems 96 kbps) with `tracks.json`.
+3. `./encode.sh` encodes them to AAC (MPEG-4 container, `.mp4`) in `prototype/audio/music/` (mixes 160 kbps, stems 96 kbps) with `tracks.json`.
 4. Checks: `node levels.mjs <track>` (loudness per section and stem, rumble below 40 Hz), `node spectrogram.mjs <wav>
    <png>` (an image of the render), `node pitch.mjs <wav>` (a sample's pitch: VSCO names notes an octave low).
 
