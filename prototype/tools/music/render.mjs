@@ -23,8 +23,9 @@ const SR = 44100;
 
 // ---------- the sample library ----------
 const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
-// VSCO names its notes an octave low (its 'A2' sounds A3, 220 Hz: checked with pitch.mjs), hence the +2.
-const nameToMidi = (n, oct) => (oct + 2) * 12 + NOTE[n];
+// VSCO names its notes an octave low (its 'A2' sounds A3, 220 Hz: checked with pitch.mjs), hence the +2; the upright
+// piano is the exception (its C4 is middle C), so an instrument can say otherwise (oct).
+const nameToMidi = (n, oct, base = 2) => (oct + base) * 12 + NOTE[n];
 const DYN = { pppp: 0, ppp: 1, pp: 2, p: 3, mp: 4, mf: 5, f: 6, ff: 7, fff: 8 };
 // instruments: a folder, how to read a file name (pitch, loudness layer), a level and how long a sample may play
 const INSTR = {
@@ -45,6 +46,7 @@ const INSTR = {
   tubaSus: { dir: 'Brass/Tuba/sus', gain: 0.5 },
   flute: { dir: 'Woodwinds/Flute/susvib', gain: 0.45 },
   marimba: { dir: 'Percussion/Marimba', gain: 0.5 },
+  piano: { dir: 'Keys/Upright Nr1', gain: 0.62, oct: 1 },   // (sampled on C and G at pp, mf and f)
   // unpitched: a list of files per kind, chosen by loudness
   timp: { dir: 'Percussion/Timpani', unpitched: true, gain: 0.8 },
   timpRoll: { dir: 'Percussion/Timpani/Rolls', unpitched: true, gain: 0.7 },
@@ -65,9 +67,9 @@ function index(id) {
     const tag = f.replace(/\.wav$/, '');
     if (I.unpitched) { const dyn = (tag.match(/_(pppp|ppp|pp|p|mp|mf|ff|fff|f)(?:_|$)/) || [])[1]; out.push({ file: join(dir, f), midi: null, layer: dyn != null ? DYN[dyn] : (tag.match(/_v(\d)/) || [])[1] * 1 || 4, tag }); continue; }
     const m = tag.match(/_([A-G]#?)(-?\d)(?:_|$)/); if (!m) continue;
-    const v = tag.match(/_v(\d+)/) || tag.match(/_(loud|soft|med)/);
-    const layer = v ? (v[1] === 'loud' ? 3 : v[1] === 'soft' ? 1 : v[1] === 'med' ? 2 : +v[1]) : 1;
-    out.push({ file: join(dir, f), midi: nameToMidi(m[1], +m[2]), layer, tag });
+    const v = tag.match(/_v(\d+)/) || tag.match(/_(loud|soft|med)/), dyn = (tag.match(/_(pppp|ppp|pp|p|mp|mf|ff|fff|f)(?:_|$)/i) || [])[1];
+    const layer = v ? (v[1] === 'loud' ? 3 : v[1] === 'soft' ? 1 : v[1] === 'med' ? 2 : +v[1]) : dyn ? DYN[dyn.toLowerCase()] : 1;
+    out.push({ file: join(dir, f), midi: nameToMidi(m[1], +m[2], I.oct ?? 2), layer, tag });
   }
   if (!out.length) throw new Error(`no samples for ${id} in ${dir}`);
   return (FILES[id] = out);
@@ -91,13 +93,23 @@ function pick(id, midi, vel, filter) {
 }
 
 // ---------- the mixer: stems of stereo float buffers, a shared hall ----------
-const STEMS = ['strings', 'brass', 'perc', 'winds'];
-const SEND = { strings: 0.32, brass: 0.28, perc: 0.2, winds: 0.38 };
-const LEVEL = { strings: 1, brass: 0.95, perc: 0.9, winds: 0.9 };
+// the piano stem plays everything the brass plays (its alternative: a mix has one or the other)
+const STEMS = ['strings', 'brass', 'piano', 'perc', 'winds'];
+const SEND = { strings: 0.32, brass: 0.28, piano: 0.3, perc: 0.2, winds: 0.38 };
+const LEVEL = { strings: 1, brass: 0.95, piano: 1, perc: 0.9, winds: 0.9 };
+const MIXES = { brass: ['strings', 'brass', 'perc', 'winds'], piano: ['strings', 'piano', 'perc', 'winds'] };
 function stemBufs(n) { const o = {}; for (const k of STEMS) o[k] = { L: new Float32Array(n), R: new Float32Array(n) }; return o; }
 // play one note into a stem. opts: dur (s), vel 0..1, pan -1..1, gain, att (s), rel (s), tune (cents), filter (a
 // RegExp on the file name), maxLen (s)
 function note(bufs, stem, id, midi, t, o = {}) {
+  // every brass note is mirrored on the piano (once: a second horn doubling a line, a hair detuned, is left out); low
+  // brass goes up an octave into the piano's warm range, short brass notes are short on the piano too
+  // (the trumpets only double the horns, so they are left out; a piano note fades where a horn holds, so the held tune
+  // is lifted, while held bass notes and the stab chords stay at their level)
+  if (stem === 'brass' && !o.tune && !o.noPiano && !/^tpt/.test(id)) {
+    const short = /Stac$/.test(id), low = midi < 55, m = midi < 43 ? midi + 12 : midi;
+    note(bufs, 'piano', 'piano', m, t, { vel: Math.min(1, (o.vel ?? 0.7) * 0.95), pan: (o.pan ?? 0) * 0.6, dur: short ? 0.22 : (o.dur ?? 1), rel: short ? 0.18 : 0.7, att: 0.002, gain: (o.gain ?? 1) * (short ? 0.3 : low ? 0.8 : 2.1) });
+  }
   const s = pick(id, midi, o.vel ?? 0.7, o.filter), d = load(s), I = INSTR[id];
   const ratio = (midi != null ? Math.pow(2, (midi - s.midi) / 12) : 1) * Math.pow(2, (o.tune || 0) / 1200);
   const dur = o.dur ?? 10, rel = o.rel ?? 0.25, att = o.att ?? 0.004;
@@ -239,7 +251,7 @@ function render(name) {
           note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.85 : 0.72, pan: -0.25, att: 0.03, rel: 0.35 });
           note(bufs, 'brass', 'hnSus', X(m), t + 0.012, { dur, vel: big ? 0.8 : 0.66, pan: -0.05, att: 0.03, rel: 0.35, tune: -6 });
           note(bufs, 'strings', 'vlnSus', X(m) + 12, t, { dur, vel: big ? 0.8 : 0.6, pan: 0.3, att: 0.05, rel: 0.4 });
-          if (big) { note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.3 }); note(bufs, 'brass', 'hnSus', X(m) - 12, t, { dur, vel: 0.7, pan: 0.1, att: 0.04, rel: 0.35 }); }
+          if (big) { note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.3 }); note(bufs, 'brass', 'hnSus', X(m) - 12, t, { dur, vel: 0.7, pan: 0.1, att: 0.04, rel: 0.35, noPiano: true }); }
         }
       }
       // percussion
@@ -271,32 +283,31 @@ function render(name) {
   });
   // a 40 Hz high-pass on every stem (the lowest note scored is 58 Hz): layered samples build up room rumble below that
   for (const k of STEMS) { highpass(bufs[k].L, 40); highpass(bufs[k].R, 40); }
-  // the hall: every stem's send summed and reverberated, then the loop's tail wrapped onto its start
-  const sendL = new Float32Array(N), sendR = new Float32Array(N);
-  for (const k of STEMS) { const B = bufs[k], a = SEND[k]; for (let i = 0; i < N; i++) { sendL[i] += B.L[i] * a; sendR[i] += B.R[i] * a; } }
-  const hall = freeverb(sendL, sendR);
+  // each stem gets its own hall (so a mix can leave a stem out, its reverb with it), then the loop's tail is wrapped
+  // onto its start; fixed levels (so tracks match)
   const L = Math.round(loopEnd * SR), LS = Math.round(loopStart * SR), wrap = (A) => { const out = A.slice(0, L); for (let i = L; i < A.length && LS + i - L < L; i++) out[LS + i - L] += A[i]; return out; };
-  // the master: fixed levels (so tracks match), the hall shared out across the stems in proportion to their sends
-  const MASTER = 0.55, stems = {}, mixL = new Float32Array(L), mixR = new Float32Array(L);
-  const sendTot = STEMS.reduce((a, k) => a + SEND[k], 0);
+  const MASTER = 0.55, stems = {};
   for (const k of STEMS) {
-    const B = bufs[k], share = SEND[k] / sendTot, sL = new Float32Array(N), sR = new Float32Array(N);
-    for (let i = 0; i < N; i++) { sL[i] = (B.L[i] * LEVEL[k] + hall.L[i] * 0.9 * share) * MASTER; sR[i] = (B.R[i] * LEVEL[k] + hall.R[i] * 0.9 * share) * MASTER; }
-    const wl = wrap(sL), wr = wrap(sR); stems[k] = { L: wl, R: wr };
-    for (let i = 0; i < L; i++) { mixL[i] += wl[i]; mixR[i] += wr[i]; }
+    const B = bufs[k], a = SEND[k], hall = freeverb(B.L.map(v => v * a), B.R.map(v => v * a)), sL = new Float32Array(N), sR = new Float32Array(N);
+    for (let i = 0; i < N; i++) { sL[i] = (B.L[i] * LEVEL[k] + hall.L[i] * 0.9) * MASTER; sR[i] = (B.R[i] * LEVEL[k] + hall.R[i] * 0.9) * MASTER; }
+    stems[k] = { L: wrap(sL), R: wrap(sR) };
   }
+  const mixOf = parts => { const mL = new Float32Array(L), mR = new Float32Array(L); for (const k of parts) for (let i = 0; i < L; i++) { mL[i] += stems[k].L[i]; mR[i] += stems[k].R[i]; } return { L: mL, R: mR }; };
+  const mixes = { brass: mixOf(MIXES.brass), piano: mixOf(MIXES.piano) }, mixL = mixes.brass.L, mixR = mixes.brass.R;
   // a soft limiter: transparent below 0.7, rounding peaks off above it (applied the same way to the stems)
   const lim = x => { const a = Math.abs(x); return a < 0.7 ? x : Math.sign(x) * (0.7 + 0.28 * Math.tanh((a - 0.7) / 0.28)); };
-  let peak = 0, sum = 0;
+  let peak = 0, sum = 0, psum = 0;
   for (let i = 0; i < L; i++) { peak = Math.max(peak, Math.abs(mixL[i]), Math.abs(mixR[i])); mixL[i] = lim(mixL[i]); mixR[i] = lim(mixR[i]); sum += mixL[i] * mixL[i] + mixR[i] * mixR[i]; }
+  { const P = mixes.piano; for (let i = 0; i < L; i++) { P.L[i] = lim(P.L[i]); P.R[i] = lim(P.R[i]); psum += P.L[i] * P.L[i] + P.R[i] * P.R[i]; } }
   for (const k of STEMS) { const S = stems[k]; for (let i = 0; i < L; i++) { S.L[i] = lim(S.L[i]); S.R[i] = lim(S.R[i]); } }
   if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
   writeWav(join(OUT, `${name}.wav`), mixL, mixR, SR);
+  writeWav(join(OUT, `${name}-pianomix.wav`), mixes.piano.L, mixes.piano.R, SR);
   for (const k of STEMS) writeWav(join(OUT, `${name}-${k}.wav`), stems[k].L, stems[k].R, SR);
   // sections for the music lab: name, start (s)
   const sections = []; map.forEach((B, b) => { if (B.i === 0) sections.push({ name: B.sec, at: +(b * bar).toFixed(4) }); });
-  const info = { bpm: T.bpm, bars: map.length, loopStart: +loopStart.toFixed(4), loopEnd: +loopEnd.toFixed(4), join: +(T.join * bar).toFixed(4), sections, stems: STEMS };
-  console.log(`${name}: ${loopEnd.toFixed(1)} s, loop from ${loopStart.toFixed(1)} s, pre-limit peak ${peak.toFixed(2)}, RMS ${(10 * Math.log10(sum / (2 * L))).toFixed(1)} dBFS`);
+  const info = { bpm: T.bpm, bars: map.length, loopStart: +loopStart.toFixed(4), loopEnd: +loopEnd.toFixed(4), join: +(T.join * bar).toFixed(4), sections, stems: STEMS, mixes: { brass: name, piano: `${name}-pianomix` } };
+  console.log(`${name}: ${loopEnd.toFixed(1)} s, loop from ${loopStart.toFixed(1)} s, pre-limit peak ${peak.toFixed(2)}, RMS ${(10 * Math.log10(sum / (2 * L))).toFixed(1)} dBFS (piano mix ${(10 * Math.log10(psum / (2 * L))).toFixed(1)})`);
   return info;
 }
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(TRACKS);

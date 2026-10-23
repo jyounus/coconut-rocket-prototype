@@ -1197,6 +1197,9 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .ptoggles .icontog[aria-pressed="false"] .togl { opacity: .7; }
 
 /* ---------- debug: the music lab ---------- */
+.lablead { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.lablead button { min-height: 46px; border: 0; border-radius: 14px; font: 400 17px/1 var(--font-display); letter-spacing: .02em; color: var(--cream); background: linear-gradient(var(--chip-hi), var(--chip-lo)); box-shadow: 0 3px 0 var(--chip-lip); cursor: pointer; }
+.lablead button[aria-checked="true"] { color: var(--go-ink); background: linear-gradient(var(--go-hi), var(--go-mid) 60%, var(--go-lo)); box-shadow: 0 3px 0 var(--go-lip); }
 .labtracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .labtracks button { min-height: 44px; border: 0; border-radius: 14px; font: 400 15px/1 var(--font-display); letter-spacing: .02em; color: var(--cream); background: linear-gradient(var(--chip-hi), var(--chip-lo)); box-shadow: 0 3px 0 var(--chip-lip); cursor: pointer; }
 .labtracks button[aria-selected="true"] { color: var(--go-ink); background: linear-gradient(var(--go-hi), var(--go-mid) 60%, var(--go-lo)); box-shadow: 0 3px 0 var(--go-lip); }
@@ -1312,6 +1315,11 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <div class="labbar" id="labBar"><i id="labFill"></i></div>
       <div class="labmarks" id="labMarks"></div>
       <div class="labtransport"><button class="btn go" id="labPlay">Play</button><button class="btn alt" id="labRestart">From the top</button></div>
+    </section>
+    <section class="group">
+      <div class="ghead">Lead instrument</div>
+      <div class="lablead" id="labLead" role="radiogroup" aria-label="Lead instrument"></div>
+      <p class="devnote">The tunes, stabs and low parts on brass or on piano. The game plays the one picked here.</p>
     </section>
     <section class="group">
       <div class="ghead">Instruments</div>
@@ -1887,7 +1895,7 @@ const laneSize = () => pilotMaxSize(LANE_SCALE);
 const CFG_KEY = 'cr-cfg9';         // new key: tuned values saved under the old defaults would otherwise stick
 const cfg = Object.assign({}, DEFAULTS, store.get(CFG_KEY, {}));
 const isDefaultTune = () => Object.keys(DEFAULTS).every(k => Math.abs(cfg[k] - DEFAULTS[k]) < 1e-9);
-const settings = Object.assign({ control: 'one', hitboxes: false, vibrate: true, music: true, sfx: true, character: 'lemur', vehicle: 'coconut', monster: 'worm' }, store.get('cr-settings', {}));
+const settings = Object.assign({ control: 'one', hitboxes: false, vibrate: true, music: true, sfx: true, lead: 'brass', character: 'lemur', vehicle: 'coconut', monster: 'worm' }, store.get('cr-settings', {}));
 // (saves from before characters and vehicles were picked separately hold one pilot: it becomes that character on its
 // signature ride; owned/locked parts will be kept here too once there is something to unlock)
 if ('pilot' in settings) {
@@ -3870,7 +3878,7 @@ function mfInfo() {
   fetch(MUSIC_DIR + 'tracks.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(j => { MF.info = j; }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
 }
-function mfLoad(name, url = MUSIC_DIR + name + '.mp4', key = name) {
+function mfLoad(name, url, key) {
   if (MF.bufs[key] || MF.busy[key] || MF.failed) return;
   MF.busy[key] = true;
   const c = SND.ctx;
@@ -3881,14 +3889,17 @@ function mfLoad(name, url = MUSIC_DIR + name + '.mp4', key = name) {
       while (i < lim && Math.abs(d[i]) < 0.002) i++;
       MF.off[key] = i < lim ? i / buf.sampleRate : 0; MF.bufs[key] = buf;
     })
-    .catch(() => { if (key === name) MF.failed = true; })
+    .catch(() => { if (key === mfKey(name)) MF.failed = true; })
     .finally(() => { MF.busy[key] = false; });
 }
+// a track's file for the lead instrument picked in the music lab: the brass mix (<track>) or the piano mix
+const mfKey = name => settings.lead === 'piano' ? `${name}-pianomix` : name;
+const mfGet = name => mfLoad(name, `${MUSIC_DIR}${mfKey(name)}.mp4`, mfKey(name));
 // keep decoded only what's needed: the track playing, the menu, and the next zone's (fetched ahead)
 function mfKeep(want) {
-  const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone]);
-  for (const n of Object.keys(MF.bufs)) if (!keep.has(n) && !SND.players.some(p => p.name === n && p.src)) delete MF.bufs[n];
-  if (want) mfLoad(want); if (nextZone) mfLoad(nextZone);
+  const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone].filter(Boolean).map(mfKey));
+  for (const k of Object.keys(MF.bufs)) if (!keep.has(k) && !SND.players.some(p => p.key === k && p.src)) delete MF.bufs[k];
+  if (want) mfGet(want); if (nextZone) mfGet(nextZone);
 }
 // The scheduler runs one player per track that is sounding. A change of track never cuts: the new track starts on the
 // old one's next bar line (at its intro from silence or the menu, at its main theme when it follows another run
@@ -3898,7 +3909,7 @@ function schedMusic() {
   if (!c || c.state !== 'running') return;
   const now = c.currentTime, cur = SND.players.find(p => !p.dies), want = settings.music === false ? null : SND.want;
   if (!MF.failed) { mfInfo(); if (want) mfKeep(want); }
-  const waiting = want && !MF.failed && !(MF.info && MF.bufs[want]);   // (the recorded track isn't decoded yet)
+  const waiting = want && !MF.failed && !(MF.info && MF.bufs[mfKey(want)]);   // (the recorded track isn't decoded yet)
   if ((cur ? cur.name : null) !== want && !waiting) {
     const runs = n => n === 'jungle' || n === 'caves' || n === 'magma';
     let at = now + 0.05, X = 2.4;
@@ -3911,13 +3922,13 @@ function schedMusic() {
       cur.dies = (want ? at : now) + X;
     }
     if (want) {
-      const fi = MF.info && MF.info[want], buf = MF.bufs[want], synth = TRACKS[want], tr = fi ? { bpm: fi.bpm, vol: FILE_VOL } : synth;
+      const key = mfKey(want), fi = MF.info && MF.info[want], buf = MF.bufs[key], synth = TRACKS[want], tr = fi ? { bpm: fi.bpm, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
       bus.connect(SND.music); send.connect(SND.verbIn);
       for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? 0.85 : 0.5)); }
-      const p = { name: want, tr, bus, send, step: joinBars * 16, next: at };
+      const p = { name: want, key, tr, bus, send, step: joinBars * 16, next: at };
       if (fi && buf) {   // the recorded track: a looping buffer from its join point (the danger layer still follows its beat)
-        const src = c.createBufferSource(), off = MF.off[want] || 0;
+        const src = c.createBufferSource(), off = MF.off[key] || 0;
         src.buffer = buf; src.loop = true; src.loopStart = fi.loopStart + off; src.loopEnd = fi.loopEnd + off;
         src.connect(bus); src.start(at, joinBars * 240 / fi.bpm + off); p.src = src;
       }
@@ -29467,7 +29478,8 @@ tap($('debugBack'), () => { disarmReset(); syncSettings(); show('settingsScreen'
 // straight to the output; the game's own music fades out while the lab is open. Notes keep the time, the bar, the
 // beat and the section, and copy as plain text.
 const LAB = { track: 'jungle', playing: false, t0: 0, from: 0, srcs: [], gains: {}, mute: {}, solo: null, notes: [], raf: 0 };
-const LAB_STEMS = { strings: 'Strings', brass: 'Brass', perc: 'Percussion', winds: 'Winds' };
+const LAB_STEMS = { strings: 'Strings', brass: 'Brass', piano: 'Piano', perc: 'Percussion', winds: 'Winds' };
+const labOut = st => (st === 'brass' || st === 'piano') && st !== settings.lead;   // the lead not picked stays silent
 const labInfo = () => MF.info && MF.info[LAB.track];
 const labKey = (st) => `${LAB.track}-${st}`;
 function labPos() {   // where in the track we are (s), following the loop
@@ -29496,7 +29508,7 @@ function labStart(from) {
   }
   labGains();
 }
-function labGains() { for (const st of Object.keys(LAB_STEMS)) { const g = LAB.gains[st]; if (g) g.gain.value = LAB.solo ? (LAB.solo === st ? 1 : 0) : LAB.mute[st] ? 0 : 1; } }
+function labGains() { for (const st of Object.keys(LAB_STEMS)) { const g = LAB.gains[st]; if (g) g.gain.value = LAB.solo ? (LAB.solo === st ? 1 : 0) : LAB.mute[st] || labOut(st) ? 0 : 1; } }
 function labLoad() {   // the selected track's stems
   const fi = labInfo(); if (!fi) return;
   for (const st of fi.stems) mfLoad(LAB.track, `${MUSIC_DIR}${labKey(st)}.mp4`, labKey(st));
@@ -29507,7 +29519,8 @@ function labRender() {
   $('labTracks').innerHTML = ['menu', 'jungle', 'caves', 'magma'].map(n => `<button role="tab" aria-selected="${n === LAB.track}" data-track="${n}">${{ menu: 'Menu', jungle: 'Jungle', caves: 'Caves', magma: 'Magma' }[n]}</button>`).join('');
   const names = { intro: 'Intro', A: 'Theme', B: 'Lift', climax: 'Climax', break: 'Breather', build: 'Build' };
   $('labMarks').innerHTML = fi ? fi.sections.map((sc, i) => `<button data-at="${sc.at}" data-i="${i}">${names[sc.name] || sc.name}</button>`).join('') : '';
-  $('labStems').innerHTML = Object.entries(LAB_STEMS).map(([st, nm]) => `<div class="labstem"><b>${nm}</b><button class="mute" data-st="${st}" aria-pressed="${!!LAB.mute[st]}">Mute</button><button class="solo" data-st="${st}" aria-pressed="${LAB.solo === st}">Solo</button></div>`).join('');
+  $('labLead').innerHTML = ['brass', 'piano'].map(l => `<button role="radio" aria-checked="${settings.lead === l}" data-lead="${l}">${l === 'brass' ? 'Brass' : 'Piano'}</button>`).join('');
+  $('labStems').innerHTML = Object.entries(LAB_STEMS).filter(([st]) => !labOut(st)).map(([st, nm]) => `<div class="labstem"><b>${nm}</b><button class="mute" data-st="${st}" aria-pressed="${!!LAB.mute[st]}">Mute</button><button class="solo" data-st="${st}" aria-pressed="${LAB.solo === st}">Solo</button></div>`).join('');
   $('labNotes').innerHTML = LAB.notes.map(n => `<li><span>${n.where}</span> ${n.text.replace(/[<&]/g, ch => ch === '<' ? '&lt;' : '&amp;')}</li>`).join('');
   $('labPlay').textContent = LAB.playing ? 'Pause' : 'Play';
 }
@@ -29528,6 +29541,12 @@ $('labMarks').addEventListener('click', e => { const b = e.target.closest('butto
 $('labBar').addEventListener('click', e => { const fi = labInfo(); if (!fi || !labReady()) return; const r = $('labBar').getBoundingClientRect(); labStart(clamp((e.clientX - r.left) / r.width, 0, 0.999) * fi.loopEnd); labRender(); });
 $('labPlay').addEventListener('click', () => { if (!labReady()) return; if (LAB.playing) { LAB.from = labPos(); labStop(); LAB.playing = false; } else labStart(LAB.from); labRender(); });
 $('labRestart').addEventListener('click', () => { if (!labReady()) return; labStart(0); labRender(); });
+$('labLead').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || settings.lead === b.dataset.lead) return;
+  settings.lead = b.dataset.lead; store.set('cr-settings', settings);
+  if (LAB.solo && labOut(LAB.solo)) LAB.solo = null;
+  labGains(); labRender();
+});
 $('labStems').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const st = b.dataset.st;
   if (b.classList.contains('mute')) LAB.mute[st] = !LAB.mute[st]; else LAB.solo = LAB.solo === st ? null : st;
