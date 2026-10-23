@@ -145,8 +145,8 @@ function fitChord(n, chord, root) {
   return n;
 }
 function pianoPart(bufs, P) {
-  const { t0, sp, sec, i, C, X, root, tuneAt } = P, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break';
-  const base = { intro: 0.3 + 0.06 * i, A: 0.42, B: 0.52, climax: 0.72, break: 0.28, build: 0.32 + 0.13 * i }[sec];
+  const { t0, sp, sec, i, C, X, root, tuneAt, steady } = P, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break';
+  const base = { intro: 0.3 + 0.06 * (steady ? 1 : i), A: 0.42, B: 0.52, climax: 0.72, break: 0.28, build: 0.32 + 0.13 * i }[sec];
   const human = () => (rnd() - 0.5) * 0.06;
   // (a pianist changes the pedal with the chord: every note lets go by the next bar line, so nothing smears into it)
   const barEnd = t0 + 16 * sp;
@@ -167,7 +167,7 @@ function pianoPart(bufs, P) {
   }
   // the bass: a deep octave on the chord's root, held on the pedal (from the second bar of the intro; re-struck on
   // every beat as the build drives up, and mid-bar at the climax)
-  if (!(sec === 'intro' && i === 0)) {
+  if (!(sec === 'intro' && i === 0 && !steady)) {
     const low = root - 12 >= 28 ? root - 12 : root, bv = base + 0.08;
     const hits = sec === 'build' ? [0, 4, 8, 12] : big ? [0, 8] : [0];
     for (const s of hits) { key(low, s, bv + human(), { dur: sp * (16 - s), rel: 3, pan: -0.2, gain: 0.85 }); key(low + 12, s, (bv - 0.08) + human(), { dur: sp * (16 - s), rel: 3, pan: -0.15, gain: 0.55 }); }
@@ -256,7 +256,7 @@ const DMIN = [62, 64, 65, 67, 69, 70, 73, 74, 76, 77, 79, 81, 82, 85];   // (har
 // the tracks: form, tempo, transposition, which layers play (0 drops one), where the loop restarts and where a track
 // joins when it follows another run track (both in bars)
 const TRACKS = {
-  menu:   { bpm: 104, tr: 0, form: [['intro', 4], ['A', 8], ['break', 4]], loop: 0, join: 0, k: { drums: 0.35, stabs: 0, lowBrass: 0, swell: 0, spic: 0.7 } },
+  menu:   { bpm: 104, tr: 0, form: [['intro', 4]], loop: 0, join: 0, k: { drums: 0.35, stabs: 0, lowBrass: 0, swell: 0, spic: 0.7, steady: 1, brass: 0 } },   // (just the intro, looping: steady, no brass)
   jungle: { bpm: 120, tr: 0, form: [['intro', 4], ['A', 8], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: {} },
   caves:  { bpm: 112, tr: -2, form: [['intro', 4], ['A', 8], ['B', 8], ['break', 4], ['build', 4]], loop: 4, join: 4, k: { drums: 0.75, stabs: 0.6 } },
   magma:  { bpm: 132, tr: 1, form: [['B', 8], ['climax', 8], ['build', 4]], loop: 0, join: 0, k: { drums: 1.15 } },
@@ -266,18 +266,18 @@ function render(name) {
   for (const [sec, n] of T.form) for (let i = 0; i < n; i++) map.push({ sec, i, n, ch: SEC[sec].ch[i % SEC[sec].ch.length] });
   const loopStart = T.loop * bar, loopEnd = map.length * bar, tail = 5, total = loopEnd + tail, N = Math.ceil(total * SR);
   const bufs = stemBufs(N); bufs.pianoWet = { piano: { L: new Float32Array(N), R: new Float32Array(N) } };
-  const K = { drums: 1, stabs: 1, lowBrass: 1, swell: 1, spic: 1, ...T.k };
+  const K = { drums: 1, stabs: 1, lowBrass: 1, swell: 1, spic: 1, steady: 0, brass: 1, ...T.k };
   seed = 12345; BEAT.sp = sp;
   map.forEach((B, b) => {
     const next = map[(b + 1) % map.length], sec = B.sec, up = (SEC[sec].up || 0) + T.tr, C = EC[B.ch], root = C.r + up, X = m => m + up;
     const t0 = b * bar, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break', last = B.i === B.n - 1, intoNew = last && next.sec !== sec;
-    const D = K.drums;
+    const D = K.drums, lv = K.steady ? 1 : B.i;   // (lv: how far the intro has grown; a steady loop stays put)
     // the section's tune, in the key the brass plays it (the lift's line is written at pitch, so only the track's own
     // transposition applies to it)
     const tuneAt = s => { const n2 = (sec === 'intro' || calm) ? CALL[B.i][s] : (sec === 'A' || big) ? THEME_A[B.i][s] : sec === 'B' ? THEME_B[B.i][s] : null; return n2 && [sec === 'B' ? n2[0] + T.tr : X(n2[0]), n2[1]]; };
-    pianoPart(bufs, { t0, sp, sec, i: B.i, n: B.n, C, X, root, tuneAt });
+    pianoPart(bufs, { t0, sp, sec, i: B.i, n: B.n, C, X, root, tuneAt, steady: K.steady });
     // the string section: a sustained chord across the bar, cellos / violas / violins, swelling in
-    const sv = { intro: 0.35 + 0.08 * B.i, A: 0.45, B: 0.6, climax: 0.8, break: 0.35, build: 0.35 + 0.1 * B.i }[sec];
+    const sv = { intro: 0.35 + 0.08 * lv, A: 0.45, B: 0.6, climax: 0.8, break: 0.35, build: 0.35 + 0.1 * B.i }[sec];
     const [c1, c2, c3, c4, c5] = C.s.map(X);
     note(bufs, 'strings', 'vcSus', c1, t0, { dur: bar - 0.06, vel: sv, pan: -0.45, att: 0.08, rel: 0.22 });
     note(bufs, 'strings', 'vlaSus', c2, t0, { dur: bar - 0.06, vel: sv, pan: -0.15, att: 0.08, rel: 0.22 });
@@ -296,19 +296,20 @@ function render(name) {
       const t = t0 + s * sp, a = ACC[s];
       // the drive: spiccato strings on the 3-3-2 (violas and cellos; violins an octave up when it lifts)
       if (!calm && K.spic) {
-        const lv = (sec === 'intro' ? 0.35 + 0.12 * B.i : sec === 'build' ? 0.4 + 0.12 * B.i : big ? 0.85 : lift ? 0.75 : 0.62) * a * K.spic;
-        note(bufs, 'strings', 'vcSpic', X(C.r + 12 + OSTN[s]), t, { dur: sp * 0.9, vel: lv, pan: -0.35, rel: 0.08 });
-        if (sec !== 'intro' || B.i >= 2) note(bufs, 'strings', 'vlaSpic', X(C.r + 24 + OSTN[s]), t, { dur: sp * 0.9, vel: lv * 0.85, pan: 0.15, rel: 0.08 });
-        if (lift && s % 2 === 0) note(bufs, 'strings', 'vlnSpic', X(C.r + 36 + OSTN[s]), t, { dur: sp * 0.9, vel: lv * 0.7, pan: 0.45, rel: 0.08 });
+        const sl = (sec === 'intro' ? 0.35 + 0.12 * lv : sec === 'build' ? 0.4 + 0.12 * B.i : big ? 0.85 : lift ? 0.75 : 0.62) * a * K.spic;
+        note(bufs, 'strings', 'vcSpic', X(C.r + 12 + OSTN[s]), t, { dur: sp * 0.9, vel: sl, pan: -0.35, rel: 0.08 });
+        if (sec !== 'intro' || (B.i >= 2 && !K.steady)) note(bufs, 'strings', 'vlaSpic', X(C.r + 24 + OSTN[s]), t, { dur: sp * 0.9, vel: sl * 0.85, pan: 0.15, rel: 0.08 });
+        if (lift && s % 2 === 0) note(bufs, 'strings', 'vlnSpic', X(C.r + 36 + OSTN[s]), t, { dur: sp * 0.9, vel: sl * 0.7, pan: 0.45, rel: 0.08 });
       }
       // the bass: contrabass on the accents (pumping octaves at the climax)
       if (!calm && (big ? s % 2 === 0 : a > 0.85)) note(bufs, 'strings', 'cbSpic', big && s % 4 === 2 ? root + 12 : root, t, { dur: sp * 1.5, vel: (big ? 0.85 : 0.7) * a, pan: -0.1, rel: 0.12 });
       // brass stabs on the 3-3-2 (trumpets, horns, trombones) when it lifts
-      if (K.stabs && lift && (s === 0 || s === 3 || s === 6 || (big && (s === 10 || s === 14)))) {
-        // (in the lift a softer, warmer stab: horns and a trombone in the middle range; trumpets join at the climax, never shrill)
-        const v = (big ? 0.8 : 0.55) * a * K.stabs;
-        C.br.forEach((m, i) => { if (big) note(bufs, 'brass', 'tptStac', X(m), t, { vel: v * 0.85, pan: 0.25 - i * 0.1, dur: 0.22, rel: 0.12 }); note(bufs, 'brass', 'hnStac', X(m) - (big ? 0 : 12), t, { vel: v, pan: -0.25 + i * 0.1, dur: 0.22, rel: 0.12 }); });
+      if (K.stabs && lift && (s === 0 || s === 3 || s === 6)) {
+        // (horns and trombones in the middle range, no trumpets: bright stabs on the same notes pumped like an accordion)
+        const v = (big ? 0.75 : 0.55) * a * K.stabs;
+        C.br.forEach((m, i) => note(bufs, 'brass', 'hnStac', X(m) - 12, t, { vel: v, pan: -0.25 + i * 0.1, dur: 0.22, rel: 0.12 }));
         note(bufs, 'brass', 'tbnStac', root + 12, t, { vel: v, pan: 0.1, dur: 0.25, rel: 0.15 });
+        if (big) note(bufs, 'brass', 'tbnStac', root, t, { vel: v * 0.9, pan: 0.2, dur: 0.25, rel: 0.15 });
       }
       // the tunes
       const tune = (sec === 'intro' || calm) ? CALL[B.i][s] : (sec === 'A' || big) ? THEME_A[B.i][s] : sec === 'B' ? THEME_B[B.i][s] : null;
@@ -322,17 +323,17 @@ function render(name) {
           note(bufs, 'strings', 'vlnSus', m + T.tr, t, { dur, vel: 0.7, pan: 0.35, att: 0.05, rel: 0.16, tune: 7 });
           note(bufs, 'brass', 'hnSus', m + T.tr - 12, t, { dur, vel: 0.75, pan: -0.25, att: 0.04, rel: 0.14 });
         } else {
-          // the horn section (two players, a hair apart) with violins an octave up; trumpets join at the climax
-          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.85 : 0.72, pan: -0.25, att: 0.03, rel: 0.14 });
-          note(bufs, 'brass', 'hnSus', X(m), t + 0.012, { dur, vel: big ? 0.8 : 0.66, pan: -0.05, att: 0.03, rel: 0.14, tune: -6 });
+          // the horns with violins an octave up; at the climax trombones double it an octave down (heroic octaves) on the notes that belong to the chord (a passing note an octave down rubs against the strings).
+          // (no detuned second horn and no trumpet in unison: together they sounded like an accordion)
+          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.95 : 0.72, pan: -0.2, att: 0.04, rel: 0.16 });
           note(bufs, 'strings', 'vlnSus', X(m) + 12, t, { dur, vel: big ? 0.8 : 0.6, pan: 0.3, att: 0.05, rel: 0.16 });
-          if (big) note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.14 });
+          if (big && C.s.some(c => (((X(c) - X(m)) % 12) + 12) % 12 === 0)) note(bufs, 'brass', 'tbnSus', X(m) - 12, t, { dur, vel: 0.85, pan: 0.15, att: 0.05, rel: 0.16 });
         }
       }
       // percussion
       if (D) {
         // taiko-like: the big bass drum and tenor drums on the 3-3-2
-        const tk = (sec === 'intro' ? 0.45 + 0.1 * B.i : big ? 1 : sec === 'B' ? 0.85 : sec === 'build' ? 0.45 + 0.13 * B.i : 0.7) * D;
+        const tk = (sec === 'intro' ? 0.45 + 0.1 * lv : big ? 1 : sec === 'B' ? 0.85 : sec === 'build' ? 0.45 + 0.13 * B.i : 0.7) * D;
         if (!calm) {
           if (s === 0 || s === 6) note(bufs, 'perc', 'bdrum', null, t, { vel: Math.min(1, tk), pan: 0, filter: /^bdrum(3)?_(p|mp|f|ff|fff)_/, dur: 2.5, rel: 0.5, gain: 0.9 });
           if (s === 3 || s === 11 || (s === 8 && sec !== 'intro')) note(bufs, 'perc', 'tenorLo', null, t, { vel: Math.min(1, tk * 0.8), pan: s === 3 ? -0.3 : 0.3, dur: 1, rel: 0.3 });
@@ -369,9 +370,11 @@ function render(name) {
     const hall = k === 'piano' ? freeverb(wet(B.L, W.piano.L), wet(B.R, W.piano.R), 0.955, 0.2) : freeverb(B.L.map(v => v * a), B.R.map(v => v * a)), sL = new Float32Array(N), sR = new Float32Array(N);
     for (let i = 0; i < N; i++) { sL[i] = (B.L[i] * LEVEL[k] + hall.L[i] * 0.9) * MASTER; sR[i] = (B.R[i] * LEVEL[k] + hall.R[i] * 0.9) * MASTER; }
     stems[k] = { L: wrap(sL), R: wrap(sR) };
+    if (k === 'brass' && !K.brass) { stems[k].L.fill(0); stems[k].R.fill(0); }   // (a track can leave the brass out)
   }
   const mixOf = parts => { const mL = new Float32Array(L), mR = new Float32Array(L); for (const k of parts) for (let i = 0; i < L; i++) { mL[i] += stems[k].L[i]; mR[i] += stems[k].R[i]; } return { L: mL, R: mR }; };
-  const mixes = { brass: mixOf(MIXES.brass), piano: mixOf(MIXES.piano) }, mixL = mixes.brass.L, mixR = mixes.brass.R;
+  const mixes = { brass: mixOf(K.brass ? MIXES.brass : MIXES.piano), piano: mixOf(MIXES.piano) },   // (no brass: both picks get the piano)
+    mixL = mixes.brass.L, mixR = mixes.brass.R;
   // a soft limiter: transparent below 0.7, rounding peaks off above it (applied the same way to the stems)
   const lim = x => { const a = Math.abs(x); return a < 0.7 ? x : Math.sign(x) * (0.7 + 0.28 * Math.tanh((a - 0.7) / 0.28)); };
   let peak = 0, sum = 0, psum = 0;
