@@ -3871,6 +3871,29 @@ function audioTick(dt) {
   else if (SND.resumeStep) { SND.resumeStep = 0; if (G && G.state === 'play') sfx('go'); }
 }
 // ---- sound effects ----
+// A chili shot landing on the monster: five layers, a little different every time (pitch and pan wander) so a volley
+// never sounds like one sample on repeat. A deep body thud with a sub tail, a wet fleshy squelch (resonant noise
+// sweeping down), the fire bursting (a hiss that flares and dies, with crackles), the monster's grunt (two detuned saws
+// through an 'uh' vowel, falling) and a short room echo; spread across the stereo field.
+function sfxHit(t) {
+  const c = SND.ctx, B = SND.sfx, r = 0.92 + Math.random() * 0.16, pan = (Math.random() - 0.5) * 0.5;
+  const out = c.createStereoPanner ? c.createStereoPanner() : c.createGain(); if (out.pan) out.pan.value = pan; out.connect(B);
+  const room = c.createGain(); room.gain.value = 0.12; out.connect(room); room.connect(SND.verbIn);
+  // the thud: a deep sine knocked down in pitch, and a sub tail under it
+  vTone(out, t, 105 * r, { f2: 38, glide: 0.22, v: 0.13, dur: 0.32 });
+  vTone(out, t + 0.005, 52 * r, { f2: 30, glide: 0.4, v: 0.09, dur: 0.5, a: 0.01 });
+  // the squelch: resonant band-passed noise sweeping down, with a short click on the front
+  vNoise(out, t, { f: 1400 * r, f2: 280, q: 4, v: 0.08, dur: 0.16 });
+  vNoise(out, t, { type: 'highpass', f: 2500, v: 0.035, dur: 0.012 });
+  // the fire: a hiss that flares and dies away, and a few crackles of the chili popping
+  vNoise(out, t + 0.01, { type: 'highpass', f: 3200, f2: 1600, v: 0.04, dur: 0.38, a: 0.03 });
+  for (let i = 0; i < 4; i++) vNoise(out, t + 0.04 + Math.random() * 0.22, { f: 2500 + Math.random() * 3000, q: 6, v: 0.025, dur: 0.012 });
+  // the grunt: two detuned saws through an 'uh' vowel, falling as it's knocked back
+  const g = c.createGain(), src = c.createGain(), f0 = 120 * r;
+  for (const d of [-14, 14]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t + 0.02); o.frequency.exponentialRampToValueAtTime(f0 * 0.62, t + 0.3); o.detune.value = d; o.connect(src); o.start(t + 0.02); o.stop(t + 0.36); }
+  for (const [f, q, lv] of [[520, 6, 1], [900, 7, 0.5], [2400, 9, 0.15]]) { const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * r; bp.Q.value = q; const bg = c.createGain(); bg.gain.value = lv; src.connect(bp); bp.connect(bg); bg.connect(g); }
+  g.gain.setValueAtTime(0.0001, t + 0.02); g.gain.linearRampToValueAtTime(0.11, t + 0.06); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34); g.connect(out);
+}
 function sfx(name, o = {}) {
   const c = SND.ctx;
   if (!c || c.state !== 'running' || settings.sfx === false) return;
@@ -3879,11 +3902,11 @@ function sfx(name, o = {}) {
     case 'tap': vTone(B, t, 900, { f2: 620, glide: 0.04, v: 0.09, dur: 0.05 }); vNoise(B, t, { f: 2500, q: 3, v: 0.03, dur: 0.015 }); break;
     case 'swish': vNoise(B, t, { f: o.close ? 2400 : 700, f2: o.close ? 700 : 2400, q: 1.4, v: 0.07, dur: 0.22, a: 0.04 }); break;
     case 'launch': vNoise(B, t, { f: 400, f2: 2600, q: 0.8, v: 0.18, dur: 0.5, a: 0.02 }); vTone(B, t, 90, { f2: 45, glide: 0.4, v: 0.25, dur: 0.45 }); break;
-    case 'coco': { const k = Math.min(o.chain || 1, 12) - 1, m = 84 + [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19][k]; vTone(B, t, mf(m), { v: 0.12, dur: 0.18 }); vTone(B, t + 0.045, mf(m + 7), { v: 0.08, dur: 0.22 }); vTone(B, t, mf(m) * 4, { v: 0.02, dur: 0.05 }); break; }
-    case 'gold': [84, 88, 91, 96, 100].forEach((m, i) => { vTone(B, t + i * 0.055, mf(m), { v: 0.1, dur: 0.35 }); vTone(B, t + i * 0.055, mf(m) * 2.01, { v: 0.03, dur: 0.2 }); }); vNoise(B, t, { type: 'highpass', f: 7000, v: 0.05, dur: 0.6, a: 0.05 }); break;
-    case 'chili': vNoise(B, t, { type: 'highpass', f: 3000, v: 0.09, dur: 0.22 }); vTone(B, t, 520, { f2: 1040, glide: 0.08, type: 'triangle', v: 0.12, dur: 0.12 }); if (o.full) vTone(B, t + 0.1, 780, { type: 'triangle', v: 0.06, dur: 0.1 }); break;
+    case 'coco': { const k = Math.min(o.chain || 1, 12) - 1, m = 84 + [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19][k]; vTone(B, t, mf(m), { v: 0.07, dur: 0.18 }); vTone(B, t + 0.045, mf(m + 7), { v: 0.045, dur: 0.22 }); vTone(B, t, mf(m) * 4, { v: 0.012, dur: 0.05 }); break; }
+    case 'gold': [84, 88, 91, 96, 100].forEach((m, i) => { vTone(B, t + i * 0.055, mf(m), { v: 0.06, dur: 0.35 }); vTone(B, t + i * 0.055, mf(m) * 2.01, { v: 0.018, dur: 0.2 }); }); vNoise(B, t, { type: 'highpass', f: 7000, v: 0.03, dur: 0.6, a: 0.05 }); break;
+    case 'chili': vNoise(B, t, { type: 'highpass', f: 3000, v: 0.05, dur: 0.22 }); vTone(B, t, 520, { f2: 1040, glide: 0.08, type: 'triangle', v: 0.07, dur: 0.12 }); if (o.full) vTone(B, t + 0.1, 780, { type: 'triangle', v: 0.035, dur: 0.1 }); break;
     case 'shot': vNoise(B, t, { f: 2200, f2: 500, q: 2, v: 0.035, dur: 0.09 }); vTone(B, t, 420, { f2: 180, glide: 0.08, type: 'triangle', v: 0.03, dur: 0.08 }); break;
-    case 'hit': vTone(B, t, 120, { f2: 48, glide: 0.15, v: 0.26, dur: 0.2 }); vNoise(B, t, { type: 'lowpass', f: 1800, f2: 300, v: 0.14, dur: 0.18 }); vTone(B, t + 0.03, 105, { f2: 70, glide: 0.25, type: 'sawtooth', v: 0.06, dur: 0.28, lp: 600 }); break;
+    case 'hit': sfxHit(t); break;
     case 'close': vNoise(B, t, { f: 600, f2: 3200, q: 1.5, v: 0.1, dur: 0.25, a: 0.03 }); vTone(B, t + 0.08, mf(88), { v: 0.07, dur: 0.25 }); vTone(B, t + 0.14, mf(95), { v: 0.06, dur: 0.3 }); break;
     case 'crash': vNoise(B, t, { type: 'lowpass', f: 2600, f2: 200, v: 0.32, dur: 0.5 }); vTone(B, t, 110, { f2: 38, glide: 0.3, v: 0.32, dur: 0.4 });
       for (let i = 0; i < 6; i++) vTone(B, t + 0.05 + i * 0.045, 900 + Math.random() * 1600, { type: 'triangle', v: 0.035, dur: 0.06 });
