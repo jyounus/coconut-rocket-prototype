@@ -95,16 +95,13 @@ function pick(id, midi, vel, filter) {
 // ---------- the mixer: stems of stereo float buffers, a shared hall ----------
 // the piano stem plays everything the brass plays (its alternative: a mix has one or the other)
 const STEMS = ['strings', 'brass', 'piano', 'perc', 'winds'];
-const SEND = { strings: 0.32, brass: 0.28, piano: 0.3, perc: 0.2, winds: 0.38 };
-const LEVEL = { strings: 1, brass: 0.95, piano: 1, perc: 0.9, winds: 0.9 };
+const SEND = { strings: 0.32, brass: 0.28, piano: 0.55, perc: 0.2, winds: 0.38 };
+const LEVEL = { strings: 1, brass: 0.95, piano: 0.8, perc: 0.9, winds: 0.9 };
 const MIXES = { brass: ['strings', 'brass', 'perc', 'winds'], piano: ['strings', 'piano', 'perc', 'winds'] };
 function stemBufs(n) { const o = {}; for (const k of STEMS) o[k] = { L: new Float32Array(n), R: new Float32Array(n) }; return o; }
 // play one note into a stem. opts: dur (s), vel 0..1, pan -1..1, gain, att (s), rel (s), tune (cents), filter (a
 // RegExp on the file name), maxLen (s)
 function note(bufs, stem, id, midi, t, o = {}) {
-  // every brass note is mirrored on the piano (see pianoMirror); a second horn doubling a line (a hair detuned), the
-  // trumpet doublings and lines marked noPiano are left out
-  if (stem === 'brass' && !o.tune && !o.noPiano && !/^tpt/.test(id)) pianoMirror(bufs, id, midi, t, o);
   const s = pick(id, midi, o.vel ?? 0.7, o.filter), d = load(s), I = INSTR[id];
   const ratio = (midi != null ? Math.pow(2, (midi - s.midi) / 12) : 1) * Math.pow(2, (o.tune || 0) / 1200);
   const dur = o.dur ?? 10, rel = o.rel ?? 0.25, att = o.att ?? 0.004;
@@ -121,29 +118,60 @@ function note(bufs, stem, id, midi, t, o = {}) {
     B.L[j] += l * gl * e; B.R[j] += r * gr * e;
   }
 }
-// The piano's version of a brass note, voiced deeper and played with dynamics. Register: the tune an octave below the
-// horns (out of the piano's bright top), doubled an octave lower again when it's loud; held bass notes as low octaves;
-// stab chords an octave down. Dynamics: the section's loudness spread wider (soft intro, forte climax), downbeats
-// accented, every two bars a swell and fall, a little natural variation in touch and timing; held notes ring on as if
-// on the pedal. The piano's three recorded layers (pp, mf, f) follow the touch, and the level follows it further.
-const BEAT = { sp: 0.125 }, PIANO_LEVEL = 0.58;   // the current track's 16th (set per render), for accents and phrasing
-function pianoMirror(bufs, id, midi, t, o) {
-  const short = /Stac$/.test(id), low = midi < 55, v0 = o.vel ?? 0.7, step = Math.round(t / BEAT.sp), s16 = step % 16, s32 = step % 32;
-  const accent = s16 === 0 ? 0.14 : s16 % 4 === 0 ? 0.05 : s16 % 2 ? -0.06 : -0.02, swell = 0.12 * Math.sin(Math.PI * s32 / 32);
-  const curve = Math.max(0.42, 0.3 + (v0 - 0.45) * 0.9) + Math.max(0, v0 - 0.75) * 2.2;   // (gentle through the middle, opening up at the top; never below a soft-but-clear touch)
-  const touch = Math.max(0.08, Math.min(1, curve + accent + swell + (rnd() - 0.5) * 0.08));
-  const lvl = PIANO_LEVEL * (0.35 + 1.1 * touch) * (o.gain ?? 1), at = t + (rnd() - 0.5) * 0.012, pan = (o.pan ?? 0) * 0.5;
-  const play = (m, vel, g, dur, rel) => note(bufs, 'piano', 'piano', m, at, { vel, gain: g, dur, rel, att: 0.002, pan });
-  if (short) {   // a stab: the chord tone an octave down, crisp
-    play(midi - 12, touch, lvl * 0.42, 0.24, 0.22);
-  } else if (low) {   // a held bass note: a deep octave (the lower note only where the piano still has it)
-    const m = midi - 12 >= 28 ? midi - 12 : midi;
-    play(m, touch, lvl * 0.75, o.dur ?? 1, 1.2);
-    if (m !== midi) play(midi, touch * 0.7, lvl * 0.4, o.dur ?? 1, 1.2);
-  } else {   // the tune: an octave below the horns, and in octaves when it's loud
-    play(midi - 12, touch, lvl * 1.7, o.dur ?? 1, 1.2);
-    if (touch > 0.66) play(midi - 24, touch * 0.75, lvl * 0.7, o.dur ?? 1, 1.2);
+// The piano part: written for the piano the way a film-score pianist would play this material (the alternative to the
+// brass, never with it). Left hand: deep octaves held on the pedal, and a rolling broken-chord pattern (root, fifth,
+// octave, tenth) in 8ths through the theme, with a second, higher line on top in the lift. Right hand: the tune in
+// octaves, filled out with chord tones under it on the strong beats, chords rolled a touch from the bottom up. The
+// intro and the breather are spacious held chords; the climax adds full two-handed chord hits on the 3-3-2 and octave
+// bass; the build hammers repeated 8th-note chords in a crescendo. Touch follows the section (soft to forte), the
+// downbeats and a swell every two bars, with a little human variation; the effects come after (see the mixdown).
+const BEAT = { sp: 0.125 };   // the current track's 16th (set per render)
+const ARP = [0, 7, 12, 16, 12, 7, 12, 19];   // the left hand's 8th-note figure, from the root (16: the tenth, minor or major as the chord says)
+function pianoPart(bufs, P) {
+  const { t0, sp, sec, i, n, C, X, root, tuneAt } = P, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break' || sec === 'intro';
+  const base = { intro: 0.3 + 0.05 * i, A: 0.52, B: 0.66, climax: 0.92, break: 0.3, build: 0.38 + 0.14 * i }[sec];
+  const third = C.s.map(X).some(m => ((m - root) % 12 + 12) % 12 === 4) ? 4 : 3;   // the chord's third, for the tenth
+  const chord = C.s.map(X), tonesNear = (top, k) => { const out = []; for (let m = top - 1; m > top - 13 && out.length < k; m--) if (chord.some(c => ((c - m) % 12 + 12) % 12 === 0)) out.push(m); return out; };
+  const touchAt = (s, extra = 0) => { const acc = s % 16 === 0 ? 0.12 : s % 4 === 0 ? 0.04 : -0.04, swell = 0.1 * Math.sin(Math.PI * ((i % 2) * 16 + s) / 32); return Math.max(0.06, Math.min(1, base + acc + swell + extra + (rnd() - 0.5) * 0.07)); };
+  const key = (m, s, vel, o = {}) => note(bufs, 'piano', 'piano', m, t0 + s * sp + (o.roll || 0) + (rnd() - 0.5) * 0.008, { vel, gain: o.gain ?? 1, dur: o.dur ?? sp * 2, rel: o.rel ?? 1.4, att: 0.002, pan: o.pan ?? 0 });
+  const low = root - 12 >= 28 ? root - 12 : root;
+  // left hand: the pedal octave across the bar (re-struck mid-bar at the climax)
+  key(low, 0, touchAt(0, 0.05), { dur: sp * 16, rel: 2.2, pan: -0.25, gain: 0.9 }); key(low + 12, 0, touchAt(0) * 0.8, { dur: sp * 16, rel: 2.2, pan: -0.2, gain: 0.7, roll: 0.012 });
+  if (big) { key(low, 8, touchAt(8, 0.05), { dur: sp * 8, rel: 2, pan: -0.25, gain: 0.85 }); key(low + 12, 8, touchAt(8) * 0.8, { dur: sp * 8, rel: 2, pan: -0.2, gain: 0.65 }); }
+  // the intro and the breather: a held chord, rolled, the top two voices of the strings' chord
+  if (calm) { chord.slice(2).forEach((m, k) => key(m, 0, touchAt(0) * 0.75, { dur: sp * 16, rel: 2.5, pan: 0.15 + k * 0.1, gain: 0.42, roll: 0.03 + k * 0.025 })); if (i % 2) chord.slice(2).forEach((m, k) => key(m + 12, 8, touchAt(8) * 0.55, { dur: sp * 8, rel: 2.5, pan: 0.3, gain: 0.45, roll: k * 0.03 })); }
+  for (let s = 0; s < 16; s++) {
+    // the rolling left hand through the theme, the lift, the climax and the build
+    if (!calm && s % 2 === 0) { const st = s / 2, m = root + 12 + (ARP[st] === 16 ? 12 + third : ARP[st]); key(m, s, touchAt(s) * 0.62, { dur: sp * 3, rel: 1.6, pan: -0.35 + 0.1 * (st % 2), gain: 0.55 }); }
+    // in the lift and the climax a second, higher line answers it on the off-beats
+    if (lift && s % 2 === 1) { const st = (s - 1) / 2, m = root + 24 + (ARP[(st + 3) % 8] === 16 ? 12 + third : ARP[(st + 3) % 8]); key(m, s, touchAt(s) * 0.5, { dur: sp * 2, rel: 1.4, pan: 0.35, gain: 0.42 }); }
+    // the climax's full chord hits on the 3-3-2 (both hands)
+    if (big && (s === 0 || s === 3 || s === 6 || s === 10)) { chord.slice(1).forEach((m, k) => key(m, s, touchAt(s, 0.08) * 0.85, { dur: sp * 2, rel: 1.2, pan: -0.2 + k * 0.1, gain: 0.5, roll: k * 0.006 })); }
+    // the build: repeated chords in 8ths, growing
+    if (sec === 'build' && s % 2 === 0) chord.slice(2).forEach((m, k) => key(m, s, touchAt(s) * (0.55 + 0.03 * s), { dur: sp * 1.6, rel: 0.6, pan: 0.1 + k * 0.1, gain: 0.45 }));
+    // the right hand: the tune (in octaves, an octave down from the horns', with chord tones under it on strong beats)
+    const tn = tuneAt(s); if (!tn) continue;
+    const [m0, len] = tn, m = m0 - 12, dur = len * sp, v = touchAt(s, 0.1);
+    key(m, s, v, { dur, rel: 1.6, pan: 0.2, gain: 1.15 });
+    if (!calm || sec === 'intro') key(m + 12, s, v * 0.7, { dur, rel: 1.6, pan: 0.3, gain: 0.55, roll: 0.008 });
+    if (lift) key(m - 12, s, v * 0.75, { dur, rel: 1.6, pan: 0.1, gain: 0.7 });
+    if (s % 4 === 0 && len >= 4) tonesNear(m, 2).forEach((c, k) => key(c, s, v * 0.6, { dur, rel: 1.6, pan: 0.15, gain: 0.5, roll: -0.01 - k * 0.012 }));
   }
+}
+// The piano's own effects (it sits in front, so it gets its own space): gentle compression to glue it and lengthen its
+// sustain, a ping-pong echo every three 16ths, and a big, long hall with a short pre-delay.
+function compress(L, R, thrDb = -16, ratio = 2, attMs = 10, relMs = 180, makeUpDb = 2) {
+  const thr = Math.pow(10, thrDb / 20), aA = Math.exp(-1 / (SR * attMs / 1000)), aR = Math.exp(-1 / (SR * relMs / 1000)), mu = Math.pow(10, makeUpDb / 20);
+  let env = 0;
+  for (let i = 0; i < L.length; i++) {
+    const x = Math.max(Math.abs(L[i]), Math.abs(R[i])); env = x > env ? aA * env + (1 - aA) * x : aR * env + (1 - aR) * x;
+    const g = env > thr ? Math.pow(env / thr, 1 / ratio - 1) : 1; L[i] *= g * mu; R[i] *= g * mu;
+  }
+}
+function pingPong(L, R, delayS, fb = 0.32, mix = 0.16) {
+  const d = Math.round(delayS * SR), n = L.length, bl = new Float32Array(n), br = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const fromR = i >= d ? br[i - d] : 0, fromL = i >= d ? bl[i - d] : 0; bl[i] = (L[i] + R[i]) * 0.5 + fromR * fb; br[i] = fromL * fb; }
+  for (let i = 0; i < n; i++) { const el = i >= d ? bl[i - d] : 0, er = i >= d ? br[i - d] : 0; L[i] += er * mix; R[i] += el * mix; }
 }
 // a reversed sample (a cymbal roll played backwards: the swell into a big downbeat), ending exactly at tEnd
 function reversed(bufs, stem, id, filter, tEnd, o = {}) {
@@ -221,6 +249,10 @@ function render(name) {
     const next = map[(b + 1) % map.length], sec = B.sec, up = (SEC[sec].up || 0) + T.tr, C = EC[B.ch], root = C.r + up, X = m => m + up;
     const t0 = b * bar, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break', last = B.i === B.n - 1, intoNew = last && next.sec !== sec;
     const D = K.drums;
+    // the section's tune, in the key the brass plays it (the lift's line is written at pitch, so only the track's own
+    // transposition applies to it)
+    const tuneAt = s => { const n2 = (sec === 'intro' || calm) ? CALL[B.i][s] : (sec === 'A' || big) ? THEME_A[B.i][s] : sec === 'B' ? THEME_B[B.i][s] : null; return n2 && [sec === 'B' ? n2[0] + T.tr : X(n2[0]), n2[1]]; };
+    pianoPart(bufs, { t0, sp, sec, i: B.i, n: B.n, C, X, root, tuneAt });
     // the string section: a sustained chord across the bar, cellos / violas / violins, swelling in
     const sv = { intro: 0.35 + 0.08 * B.i, A: 0.45, B: 0.6, climax: 0.8, break: 0.35, build: 0.35 + 0.1 * B.i }[sec];
     const [c1, c2, c3, c4, c5] = C.s.map(X);
@@ -270,7 +302,7 @@ function render(name) {
           note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.85 : 0.72, pan: -0.25, att: 0.03, rel: 0.35 });
           note(bufs, 'brass', 'hnSus', X(m), t + 0.012, { dur, vel: big ? 0.8 : 0.66, pan: -0.05, att: 0.03, rel: 0.35, tune: -6 });
           note(bufs, 'strings', 'vlnSus', X(m) + 12, t, { dur, vel: big ? 0.8 : 0.6, pan: 0.3, att: 0.05, rel: 0.4 });
-          if (big) { note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.3 }); note(bufs, 'brass', 'hnSus', X(m) - 12, t, { dur, vel: 0.7, pan: 0.1, att: 0.04, rel: 0.35, noPiano: true }); }
+          if (big) { note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.3 }); note(bufs, 'brass', 'hnSus', X(m) - 12, t, { dur, vel: 0.7, pan: 0.1, att: 0.04, rel: 0.35 }); }
         }
       }
       // percussion
@@ -307,7 +339,10 @@ function render(name) {
   const L = Math.round(loopEnd * SR), LS = Math.round(loopStart * SR), wrap = (A) => { const out = A.slice(0, L); for (let i = L; i < A.length && LS + i - L < L; i++) out[LS + i - L] += A[i]; return out; };
   const MASTER = 0.55, stems = {};
   for (const k of STEMS) {
-    const B = bufs[k], a = SEND[k], hall = freeverb(B.L.map(v => v * a), B.R.map(v => v * a)), sL = new Float32Array(N), sR = new Float32Array(N);
+    const B = bufs[k], a = SEND[k];
+    if (k === 'piano') { compress(B.L, B.R); pingPong(B.L, B.R, BEAT.sp * 3); }
+    const pre = k === 'piano' ? Math.round(0.025 * SR) : 0, wet = (A) => { const o2 = new Float32Array(N); for (let i = pre; i < N; i++) o2[i] = A[i - pre] * a; return o2; };
+    const hall = k === 'piano' ? freeverb(wet(B.L), wet(B.R), 0.93, 0.22) : freeverb(B.L.map(v => v * a), B.R.map(v => v * a)), sL = new Float32Array(N), sR = new Float32Array(N);
     for (let i = 0; i < N; i++) { sL[i] = (B.L[i] * LEVEL[k] + hall.L[i] * 0.9) * MASTER; sR[i] = (B.R[i] * LEVEL[k] + hall.R[i] * 0.9) * MASTER; }
     stems[k] = { L: wrap(sL), R: wrap(sR) };
   }
