@@ -3475,11 +3475,14 @@ function puff(x, alt, vx, vy, life, size, kind, ex) {
 // Everything is synthesised with Web Audio (no sound files): a music bus and an effects bus into a soft compressor,
 // each switched by its own setting (settings.music / settings.sfx). The context starts on the first touch or key (iOS
 // needs a gesture) and is suspended while the page is hidden.
-// Music: an original cinematic adventure score in the spirit of the wintry ruins music of the jungle platformers: a
-// pulsing 16th-note bass ostinato under sustained strings that rock between a bright Lydian and a dark Phrygian chord a
-// tritone apart, a long-note horn melody, soaring strings in the B section, timpani and low toms, celesta glints. One
-// arrangement, scored per place on a 16th-note grid with a look-ahead scheduler: 'menu' (at rest, no drums), 'jungle'
-// (the full theme, 111 bpm), 'caves' (lower, slower, echoing) and 'magma' (higher, faster, taiko and brass). audioTick() picks the track from the game state every frame,
+// Music: an original long-form cinematic score in the spirit of the wintry-ruins music of the jungle platformers, built
+// to grow: an intro (strings, harp, a muffled pulse), the theme (a 16th-note bass engine under a horn melody, strings
+// rocking between a bright Lydian and a dark Phrygian chord a tritone apart), the theme again bigger (choir, a violin
+// counter-line, taiko, blooming brass), a heroic D minor climax (strings and horns in octaves, brass stabs, full choir,
+// taiko and snare, crashes and booms), a breakdown and a build (rolls, a riser, the filters opening) back into the
+// theme. Every voice sits in the stereo field with a hall send. Scored per place on a 16th-note grid with a look-ahead
+// scheduler: 'menu' (at rest), 'jungle' (the whole piece, 111 bpm), 'caves' (lower, slower, no climax) and 'magma'
+// (higher, faster, straight into the big sections). audioTick() picks the track from the game state every frame,
 // crossfades on a change, muffles it while paused and adds a danger layer while the monster is close or hungry.
 const SND = { ctx: null, out: null, music: null, musicLp: null, sfx: null, verb: null, noise: null,
   track: null, want: null, step: 0, next: 0, timer: 0, fade: null, danger: 0, resumeStep: 0 };
@@ -3510,7 +3513,7 @@ function audioInit() {
   unlockIOS();
   const c = SND.ctx = new AC();
   c.resume().catch(() => {});
-  const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
+  const comp = c.createDynamicsCompressor(); comp.threshold.value = -10; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.2;
   SND.out = c.createGain(); SND.out.gain.value = 0.9; SND.out.connect(comp); comp.connect(c.destination);
   SND.musicLp = c.createBiquadFilter(); SND.musicLp.type = 'lowpass'; SND.musicLp.frequency.value = 18000; SND.musicLp.connect(SND.out);
   SND.music = c.createGain(); SND.music.gain.value = 0; SND.music.connect(SND.musicLp);
@@ -3588,76 +3591,167 @@ const I = {
 // ---- the tracks: bpm, bar count, and what plays on step s (0..15) of bar b at time t ----
 // a phrase table: { step: [midi, length in steps] } per bar
 const ph = (...bars) => bars.map(b => Object.fromEntries(b.map(([s, m, l = 2]) => [s, [m, l]])));
-// the score's orchestra: a sustained string ensemble, a horn, spiccato cellos, a pulsing synth bass, timpani, low toms
-// and a celesta, all warm and dark (nothing bright up top), with plenty of hall
+// ---- the orchestra: every voice has its own place in the stereo field, and a send into the hall ----
+const mPan = (pan) => { const c = SND.ctx; if (!pan || !c.createStereoPanner) return SND.music; const p = c.createStereoPanner(); p.pan.value = pan; p.connect(SND.music); return p; };
+const mSend = (node, amt) => { if (!amt) return; const g = SND.ctx.createGain(); g.gain.value = amt; node.connect(g); g.connect(SND.verbIn); };
 const O = {
-  strings: (t, ms, dur, v = 0.03, lp = 1700) => {
-    const c = SND.ctx, g = c.createGain(), fl = c.createBiquadFilter();
-    fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = 0.5; fl.connect(g);
-    for (const m of ms) for (const d of [-9, 0, 9]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mf(m); o.detune.value = d + (Math.random() - 0.5) * 4; o.connect(fl); o.start(t); o.stop(t + dur + 0.6); }
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + Math.min(0.35, dur * 0.3)); g.gain.setValueAtTime(v, t + dur * 0.85); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.5);
-    g.connect(SND.music); const sg = c.createGain(); sg.gain.value = 0.7; g.connect(sg); sg.connect(SND.verbIn);
+  // a string section: each note twice (left and right desks), slightly detuned, with a slow shared vibrato; the tone
+  // opens from lp0 to lp1 across the note (a crescendo in colour), swelling in over `a` seconds
+  strings: (t, ms, dur, v = 0.03, lp0 = 1200, lp1 = lp0, a = 0.4, spread = 0.6) => {
+    const c = SND.ctx, vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 5.1; vg.gain.value = 7; vib.connect(vg); vib.start(t); vib.stop(t + dur + 0.8);
+    for (const side of [-1, 1]) {
+      const g = c.createGain(), fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.Q.value = 0.6;
+      fl.frequency.setValueAtTime(lp0, t); fl.frequency.linearRampToValueAtTime(lp1, t + dur); fl.connect(g);
+      for (const m of ms) for (const d of [-7, 7]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mf(m); o.detune.value = d + side * 3 + (Math.random() - 0.5) * 5; vg.connect(o.detune); o.connect(fl); o.start(t); o.stop(t + dur + 0.8); }
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.setValueAtTime(v, t + Math.max(a, dur - 0.05)); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.6);
+      const out = mPan(side * spread); g.connect(out); mSend(g, 0.65);
+    }
   },
-  horn: (t, m, dur, v = 0.075) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v, dur, a: 0.08, lp: 1100, q: 0.7, vib: [4.8, f * 0.006], vibAt: 0.3, curve: 'lin', send: 0.45 }); vTone(SND.music, t, f, { v: v * 0.6, dur, a: 0.06, curve: 'lin', send: 0.3 }); vTone(SND.music, t, f * 0.5, { type: 'triangle', v: v * 0.25, dur, a: 0.1, curve: 'lin' }); },
-  lead: (t, m, dur, v = 0.05) => { const f = mf(m); for (const d of [-6, 6]) vTone(SND.music, t, f * Math.pow(2, d / 1200), { type: 'sawtooth', v, dur, a: 0.12, lp: 2200, q: 0.5, vib: [5.2, f * 0.008], vibAt: 0.35, curve: 'lin', send: 0.55 }); },
-  cello: (t, m, v = 0.05) => vTone(SND.music, t, mf(m), { type: 'sawtooth', v, dur: 0.11, a: 0.008, lp: 1400, lp2: 600, q: 1, send: 0.25 }),
-  bass: (t, m, v = 0.14, dur = 0.12) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v: v * 0.6, dur, a: 0.006, lp: 900, lp2: 220, q: 2.5 }); vTone(SND.music, t, f, { v, dur: dur * 1.3, a: 0.006 }); },
-  timp: (t, m, v = 0.2) => { vTone(SND.music, t, mf(m), { f2: mf(m) * 0.94, glide: 0.5, v, dur: 0.9, send: 0.5 }); vNoise(SND.music, t, { type: 'lowpass', f: 500, v: v * 0.25, dur: 0.1 }); },
-  roll: (t, m, sp, steps, v = 0.12) => { for (let i = 0; i < steps * 2; i++) vTone(SND.music, t + i * sp / 2, mf(m), { v: v * (0.35 + 0.65 * i / (steps * 2)), dur: 0.25, send: 0.4 }); },
-  taiko: (t, v = 0.25) => { vTone(SND.music, t, 78, { f2: 46, glide: 0.3, v, dur: 0.5, send: 0.35 }); vNoise(SND.music, t, { type: 'lowpass', f: 700, v: v * 0.35, dur: 0.12 }); },
-  celesta: (t, m, v = 0.035) => { const f = mf(m); vTone(SND.music, t, f, { v, dur: 1.4, send: 0.85 }); vTone(SND.music, t, f * 4, { v: v * 0.15, dur: 0.35, send: 0.85 }); },
-  brass: (t, ms, v = 0.035) => { for (const m of ms) vTone(SND.music, t, mf(m), { type: 'sawtooth', v, dur: 0.22, a: 0.02, lp: 1600, lp2: 600, q: 1, send: 0.35 }); },
+  // a choir on "aah": two detuned saws per note through three vowel formants, a gentle vibrato, a slow swell
+  choir: (t, ms, dur, v = 0.03, pan = 0) => {
+    const c = SND.ctx, g = c.createGain(), vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 4.6; vg.gain.value = 9; vib.connect(vg); vib.start(t); vib.stop(t + dur + 1);
+    const src = c.createGain(); src.gain.value = 1;
+    for (const m of ms) for (const d of [-8, 8]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mf(m); o.detune.value = d; vg.connect(o.detune); o.connect(src); o.start(t); o.stop(t + dur + 1); }
+    for (const [f, q, lv] of [[780, 7, 1], [1150, 8, 0.6], [2700, 10, 0.25]]) { const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const bg = c.createGain(); bg.gain.value = lv; src.connect(bp); bp.connect(bg); bg.connect(g); }
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + Math.min(0.8, dur * 0.4)); g.gain.setValueAtTime(v, t + dur * 0.8); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.9);
+    g.connect(mPan(pan)); mSend(g, 0.9);
+  },
+  // the horn: warm saw through a gentle filter, a delayed vibrato, its own octave-below body
+  horn: (t, m, dur, v = 0.07, pan = -0.25) => { const f = mf(m), bus = mPan(pan); vTone(bus, t, f, { type: 'sawtooth', v, dur, a: 0.09, lp: 1250, q: 0.7, vib: [4.8, f * 0.006], vibAt: 0.35, curve: 'lin', send: 0.5 }); vTone(bus, t, f, { v: v * 0.55, dur, a: 0.07, curve: 'lin', send: 0.3 }); vTone(bus, t, f * 0.5, { type: 'triangle', v: v * 0.22, dur, a: 0.12, curve: 'lin' }); },
+  // the violins' melody line: a pair of detuned saws, bright but rounded, a wide vibrato
+  violin: (t, m, dur, v = 0.045, pan = 0.25) => { const f = mf(m), bus = mPan(pan); for (const d of [-7, 7]) vTone(bus, t, f * Math.pow(2, d / 1200), { type: 'sawtooth', v, dur, a: 0.1, lp: 2800, q: 0.5, vib: [5.6, f * 0.009], vibAt: 0.25, curve: 'lin', send: 0.6 }); },
+  // brass: a section chord that blooms (its filter opening) or a short punchy stab
+  brassSwell: (t, ms, dur, v = 0.03) => { const bus = mPan(-0.1); for (const m of ms) vTone(bus, t, mf(m), { type: 'sawtooth', v, dur, a: dur * 0.6, lp: 400, lp2: 2400, lpT: dur * 0.7, q: 1.2, curve: 'lin', send: 0.5 }); },
+  brassStab: (t, ms, v = 0.04) => { const bus = mPan(-0.1); for (const m of ms) vTone(bus, t, mf(m), { type: 'sawtooth', v, dur: 0.26, a: 0.015, lp: 2600, lp2: 500, lpT: 0.25, q: 1.4, send: 0.45 }); },
+  cello: (t, m, v = 0.045) => vTone(mPan(-0.45), t, mf(m), { type: 'sawtooth', v, dur: 0.12, a: 0.008, lp: 1500, lp2: 600, q: 1, send: 0.3 }),
+  bass: (t, m, v = 0.13, dur = 0.12) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v: v * 0.6, dur, a: 0.006, lp: 950, lp2: 220, q: 2.5 }); vTone(SND.music, t, f, { v, dur: dur * 1.3, a: 0.006 }); },
+  harp: (t, m, v = 0.05) => { const f = mf(m), bus = mPan(0.45); vTone(bus, t, f, { type: 'triangle', v, dur: 0.9, send: 0.7 }); vTone(bus, t, f * 2, { v: v * 0.3, dur: 0.25, send: 0.6 }); },
+  celesta: (t, m, v = 0.035) => { const f = mf(m), bus = mPan(0.35); vTone(bus, t, f, { v, dur: 1.4, send: 0.85 }); vTone(bus, t, f * 4, { v: v * 0.15, dur: 0.35, send: 0.85 }); },
+  timp: (t, m, v = 0.2) => { const bus = mPan(-0.15); vTone(bus, t, mf(m), { f2: mf(m) * 0.94, glide: 0.5, v, dur: 1, send: 0.5 }); vNoise(bus, t, { type: 'lowpass', f: 500, v: v * 0.25, dur: 0.1 }); },
+  timpRoll: (t, m, sp, steps, v0 = 0.04, v1 = 0.16) => { for (let i = 0; i < steps * 3; i++) { const e = i / (steps * 3); vTone(mPan(-0.15), t + i * sp / 3, mf(m), { v: v0 + (v1 - v0) * e * e, dur: 0.3, send: 0.45 }); } },
+  taiko: (t, v = 0.25, pan = 0) => { const bus = mPan(pan); vTone(bus, t, 76, { f2: 44, glide: 0.32, v, dur: 0.55, send: 0.4 }); vNoise(bus, t, { type: 'lowpass', f: 650, v: v * 0.4, dur: 0.12, send: 0.2 }); },
+  snare: (t, v = 0.06) => { const bus = mPan(0.1); vNoise(bus, t, { f: 2000, q: 0.8, v, dur: 0.14, send: 0.35 }); vTone(bus, t, 200, { f2: 160, glide: 0.07, v: v * 0.7, dur: 0.08 }); },
+  snareRoll: (t, sp, steps, v0 = 0.015, v1 = 0.08) => { for (let i = 0; i < steps * 2; i++) { const e = i / (steps * 2); O.snare(t + i * sp / 2, v0 + (v1 - v0) * e); } },
+  crash: (t, v = 0.07) => { vNoise(mPan(0.3), t, { type: 'highpass', f: 4200, v, dur: 2.6, send: 0.5 }); vNoise(mPan(-0.3), t + 0.01, { type: 'highpass', f: 5200, v: v * 0.7, dur: 2.2, send: 0.5 }); },
+  boom: (t, v = 0.3) => { vTone(SND.music, t, 58, { f2: 26, glide: 1.4, v, dur: 1.6, send: 0.3 }); vNoise(SND.music, t, { type: 'lowpass', f: 300, f2: 60, v: v * 0.5, dur: 1.2, send: 0.4 }); },
+  // a riser (filtered noise sweeping up) and a reverse cymbal, both landing exactly on the next downbeat
+  riser: (t, dur, v = 0.05) => { const c = SND.ctx, src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); src.buffer = SND.noise; src.loop = true; fl.type = 'bandpass'; fl.Q.value = 2.5; fl.frequency.setValueAtTime(250, t); fl.frequency.exponentialRampToValueAtTime(5000, t + dur); src.connect(fl); fl.connect(g); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05); g.connect(mPan(0)); mSend(g, 0.5); src.start(t); src.stop(t + dur + 0.1); },
+  swell: (t, dur, v = 0.06) => { const c = SND.ctx, src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); src.buffer = SND.noise; src.loop = true; fl.type = 'highpass'; fl.frequency.value = 3500; src.connect(fl); fl.connect(g); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.03); g.connect(SND.music); mSend(g, 0.4); src.start(t); src.stop(t + dur + 0.1); },
+  // a 16th-note string run up a scale into the next downbeat
+  run: (t, sp, notes, v = 0.035) => notes.forEach((m, i) => { const f = mf(m); for (const side of [-0.4, 0.4]) vTone(mPan(side), t + i * sp, f, { type: 'sawtooth', v: v * (0.6 + 0.4 * i / notes.length), dur: sp * 1.1, a: 0.01, lp: 3000, q: 0.5, send: 0.5 }); }),
 };
-// the score (concert pitch for the jungle; the other places transpose it): bass roots and string voicings per bar. The A
-// section rocks between a bright Lydian bar pair on C and a dark Phrygian pair on F#, a tritone apart; the B section
-// climbs through E minor to a big B major turnaround.
-const SCORE = {
-  roots: [36, 36, 42, 42, 36, 36, 42, 42, 40, 40, 36, 38, 40, 45, 35, 35],
-  voice: [[52, 55, 59, 66], [52, 55, 59, 66], [54, 57, 61, 67], [54, 57, 61, 67], [52, 55, 59, 66], [52, 55, 59, 66], [54, 57, 61, 67], [54, 57, 61, 67],
-          [52, 55, 59, 64], [52, 55, 59, 64], [52, 55, 60, 64], [54, 57, 62, 66], [52, 55, 59, 64], [52, 57, 60, 64], [52, 54, 59, 64], [51, 54, 59, 63]],
-  // the bass ostinato: a 16th pulse (octave and fifth leaps), leaning on the last 16th before each beat
-  ost: [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 0, 12, 7, 12],
-  acc: [1, 0.5, 0.6, 0.85, 0.75, 0.5, 0.6, 0.85, 0.9, 0.5, 0.6, 0.85, 0.75, 0.5, 0.65, 0.9],
-  horn: ph([[0, 67, 6], [6, 69, 2], [8, 71, 8]], [[0, 66, 12], [12, 64, 4]], [[0, 69, 6], [6, 67, 2], [8, 66, 8]], [[0, 64, 4], [4, 66, 4], [8, 67, 8]],
-           [[0, 67, 4], [4, 71, 4], [8, 74, 8]], [[0, 76, 6], [6, 74, 2], [8, 71, 8]], [[0, 69, 4], [4, 73, 4], [8, 74, 6], [14, 73, 2]], [[0, 69, 8], [8, 67, 8]]),
-  lead: ph([[0, 71, 8], [8, 76, 8]], [[0, 74, 4], [4, 76, 4], [8, 79, 8]], [[0, 76, 8], [8, 79, 4], [12, 78, 4]], [[0, 78, 8], [8, 74, 8]],
-           [[0, 71, 6], [6, 72, 2], [8, 74, 8]], [[0, 76, 8], [8, 72, 8]], [[0, 76, 16]], [[0, 75, 8], [8, 78, 8]]),
-  // celesta glints on the A section's bright bars
-  cel: { 0: [[4, 79], [10, 83]], 4: [[4, 83], [12, 86]] },
+// ---- the score ----
+// chords: bass root, the string voicing, the choir's and the brass section's
+const EC = {
+  BbL: { r: 34, s: [50, 53, 57, 64], ch: [62, 65, 69], br: [58, 62, 65] },   // Bb Lydian: bright, the E natural floating on top
+  EP:  { r: 40, s: [52, 55, 59, 65], ch: [64, 67, 71], br: [52, 59, 64] },   // E Phrygian: dark, the F rubbing against the root
+  Dm:  { r: 38, s: [50, 57, 62, 65], ch: [62, 65, 69], br: [50, 57, 62] },
+  Bb:  { r: 34, s: [50, 53, 58, 62], ch: [62, 65, 70], br: [46, 53, 58] },
+  F:   { r: 41, s: [53, 57, 60, 65], ch: [60, 65, 69], br: [53, 57, 60] },
+  C:   { r: 36, s: [52, 55, 60, 64], ch: [60, 64, 67], br: [48, 55, 60] },
+  Gm:  { r: 43, s: [50, 55, 58, 62], ch: [62, 67, 70], br: [55, 58, 62] },
+  Eb:  { r: 39, s: [51, 55, 58, 63], ch: [63, 67, 70], br: [51, 58, 63] },
+  As:  { r: 45, s: [52, 57, 62, 64], ch: [62, 64, 69], br: [57, 62, 64] },
+  A:   { r: 45, s: [52, 57, 61, 64], ch: [61, 64, 69], br: [57, 61, 64] },
 };
-// one arrangement, scored per place: tr transposes, and each layer can be dropped or scaled
-function epicBar(t, b, s, sp, o) {
-  const tr = o.tr || 0, root = SCORE.roots[b] + tr, vc = SCORE.voice[b].map(m => m + tr);
-  if (s === 0) O.strings(t, vc, sp * 16, o.str ?? 0.026, o.lp ?? 1700);
-  if (o.bass !== false) { const k = o.half ? s % 2 === 0 : true; if (k) O.bass(t, root + SCORE.ost[s], (o.bass ?? 0.13) * SCORE.acc[s], o.half ? sp * 1.6 : sp * 0.85); }
-  if (o.cello && s % 2 === 0) O.cello(t, vc[[0, 1, 2, 3, 2, 1, 2, 3][s / 2]], o.cello);   // (8th-note arpeggio through the chord)
-  if (o.drums !== false) {
-    if (s === 0) O.timp(t, root + 12, 0.18 * (o.drums ?? 1));
-    if (s === 10 || (s === 6 && b % 2)) O.taiko(t, 0.16 * (o.drums ?? 1));
-    if (s % 4 === 3) I.tom(t, b % 2 ? 98 : 110, 0.07 * (o.drums ?? 1));
-    if ((b === 7 || b === 15) && s >= 8) O.roll(t, root + 12, sp, 1, 0.1 * (o.drums ?? 1));
+// the sections: their chords (one per bar) and their tunes
+const SEC = {
+  intro: { ch: ['BbL', 'BbL', 'EP', 'EP'] },
+  A1:    { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'EP', 'EP'] },
+  A2:    { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'EP', 'EP'] },
+  climax:{ ch: ['Dm', 'Bb', 'F', 'C', 'Gm', 'Bb', 'As', 'A', 'Dm', 'Bb', 'F', 'C', 'Gm', 'Eb', 'As', 'A'] },
+  break: { ch: ['Dm', 'Bb', 'Gm', 'A'] },
+  build: { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'As', 'A'] },
+};
+// the horn's theme over the Lydian / Phrygian seesaw, and a high violin line against it
+const THEME = ph([[0, 65, 6], [6, 67, 2], [8, 69, 8]], [[0, 69, 8], [8, 67, 4], [12, 64, 4]], [[0, 65, 8], [8, 64, 4], [12, 67, 4]], [[0, 69, 6], [6, 71, 2], [8, 72, 8]],
+                 [[0, 74, 6], [6, 72, 2], [8, 69, 8]], [[0, 67, 4], [4, 69, 4], [8, 76, 8]], [[0, 77, 6], [6, 76, 2], [8, 74, 4], [12, 72, 4]], [[0, 71, 16]]);
+const COUNTER = ph([[0, 74, 16]], [[0, 76, 16]], [[0, 72, 16]], [[0, 71, 8], [8, 72, 8]], [[0, 77, 16]], [[0, 76, 8], [8, 79, 8]], [[0, 81, 16]], [[0, 79, 16]]);
+// the heroic climax theme in D minor (strings with the horns an octave below); the repeat lifts on the Eb chord
+const HERO = ph([[0, 74, 4], [4, 76], [6, 77], [8, 81, 8]], [[0, 79, 4], [4, 77, 4], [8, 74, 8]], [[0, 72, 4], [4, 74], [6, 77], [8, 81, 6], [14, 84]], [[0, 79, 12], [12, 76, 4]],
+                [[0, 74, 4], [4, 79, 4], [8, 82, 8]], [[0, 81, 4], [4, 79, 4], [8, 77, 4], [12, 74, 4]], [[0, 76, 8], [8, 74, 8]], [[0, 73, 16]],
+                [[0, 74, 4], [4, 76], [6, 77], [8, 81, 8]], [[0, 79, 4], [4, 77, 4], [8, 74, 8]], [[0, 72, 4], [4, 74], [6, 77], [8, 81, 6], [14, 84]], [[0, 79, 12], [12, 76, 4]],
+                [[0, 74, 4], [4, 79, 4], [8, 82, 8]], [[0, 79, 4], [4, 82, 4], [8, 79, 4], [12, 75, 4]], [[0, 76, 8], [8, 79, 8]], [[0, 81, 16]]);
+const DMIN = [62, 64, 65, 67, 69, 70, 72, 74, 76, 77, 79, 81, 82, 84];
+// the bass engine: a 16th pulse with octave and fifth leaps, leaning on the last 16th before each beat
+const OST = [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 0, 12, 7, 12], OSTV = [1, 0.5, 0.6, 0.85, 0.75, 0.5, 0.6, 0.85, 0.9, 0.5, 0.6, 0.85, 0.75, 0.5, 0.65, 0.9];
+// a track's form: [section, bars] in order; the bar map says, for every bar, its section, its bar within it and its chord
+function formMap(form) { const out = []; for (const [sec, n] of form) for (let i = 0; i < n; i++) out.push({ sec, i, n, ch: SEC[sec].ch[i % SEC[sec].ch.length] }); return out; }
+// one 16th of the score: what plays depends on the section, its progress (for the build-ups) and the track's options
+function epicStep(t, bar, s, sp, map, k, o) {
+  const B = map[bar], next = map[(bar + 1) % map.length], tr = o.tr || 0, C = EC[B.ch], root = C.r + tr, T = m => m + tr;
+  const sec = B.sec, prog = (B.i + s / 16) / B.n, last = B.i === B.n - 1, D = o.drums ?? 1, newSec = next.sec !== sec || next.i === 0 && (bar + 1) % map.length === 0;
+  const lead2 = s >= 8 && last && newSec;   // the second half of a section's last bar: the lead-in to the next
+  // strings: one sustained chord per bar, opening up through a build
+  if (s === 0) {
+    const lv = { intro: [0.013, 500, 900], A1: [0.022, 1200, 1500], A2: [0.027, 1700, 2000], climax: [0.042, 2700, 3200], break: [0.016, 800, 900], build: [0.016 + 0.024 * B.i / B.n, 900 + 1900 * B.i / B.n, 900 + 1900 * (B.i + 1) / B.n] }[sec];
+    O.strings(t, C.s.map(T), sp * 16, lv[0] * k.str, lv[1], lv[2]);
+    if (sec === 'climax') O.strings(t, C.s.map(m => T(m) + 12), sp * 16, 0.026 * k.str, 2600, 3200, 0.25, 0.8);
   }
-  if (o.brass && (s === 0 || s === 3 || s === 11) && b % 2 === 0) O.brass(t, vc.map(m => m + 12), o.brass);
-  const A = b < 8;
-  if (A) { const n = SCORE.horn[b][s]; if (n && o.horn !== false) (o.hornFn || O.horn)(t, n[0] + tr, n[1] * sp * 0.95, o.horn ?? 0.075); }
-  else { const n = SCORE.lead[b - 8][s]; if (n && o.lead !== false) O.lead(t, n[0] + tr, n[1] * sp * 0.95, o.lead ?? 0.045); }
-  if (o.cel !== false && A && SCORE.cel[b % 8]) for (const [st, m] of SCORE.cel[b % 8]) if (st === s) O.celesta(t, m + tr, o.cel ?? 0.03);
+  // choir
+  if (s === 0 && k.choir && (sec === 'A2' || sec === 'climax' || sec === 'break' || (sec === 'build' && B.i >= 4)))
+    O.choir(t, C.ch.map(T), sp * 16, (sec === 'climax' ? 0.045 : sec === 'break' ? 0.02 : sec === 'build' ? 0.02 + 0.03 * prog : 0.024) * k.choir);
+  // the bass engine (half-time pulse in the intro, gone in the breakdown, driving octaves in the climax)
+  if (k.bass && sec !== 'break') {
+    if (sec === 'intro') { if (s % 4 === 0) O.bass(t, root, 0.05 * k.bass, sp * 3); }
+    else if (sec === 'climax') { if (s % 2 === 0) O.bass(t, root + (s % 4 === 2 ? 12 : 0), 0.17 * k.bass * (s % 8 === 0 ? 1 : 0.8), sp * 1.6); }
+    else O.bass(t, root + OST[s], 0.13 * k.bass * OSTV[s] * (sec === 'build' ? 0.5 + 0.7 * prog : 1), sp * 0.85);
+  }
+  // cellos arpeggiate the chord in 8ths in the theme sections
+  if (k.cello && (sec === 'A1' || sec === 'A2' || sec === 'build') && s % 2 === 0) O.cello(t, T(C.s[[0, 1, 2, 3, 2, 1, 2, 3][s / 2]]), 0.03 * k.cello);
+  // harp shimmer in the intro and breakdown (16ths up and down the chord, two octaves)
+  if (k.harp && (sec === 'intro' || sec === 'break')) { const arp = [...C.ch, ...C.ch.map(m => m + 12)], i = s % 12; O.harp(t, T(arp[i < 6 ? i : 11 - i]), 0.028 * k.harp); }
+  // celesta glints on the bright bars of the theme
+  if (k.cel && (sec === 'A1' || sec === 'A2') && B.ch === 'BbL' && (s === 4 || s === 10)) O.celesta(t, T(s === 4 ? 81 : 84), 0.03 * k.cel);
+  // tunes
+  if (sec === 'A1' || sec === 'A2') {
+    const n = THEME[B.i][s]; if (n && k.horn) O.horn(t, T(n[0]), n[1] * sp * 0.96, (sec === 'A2' ? 0.08 : 0.07) * k.horn);
+    if (sec === 'A2' && k.violin) { const c2 = COUNTER[B.i][s]; if (c2) O.violin(t, T(c2[0]), c2[1] * sp * 0.97, 0.03 * k.violin); }
+    if (o.echoHorn && n) O.horn(t + sp * 3, T(n[0]), n[1] * sp * 0.7, 0.02 * k.horn, 0.4);
+  }
+  if (sec === 'climax') { const n = HERO[B.i][s]; if (n) { if (k.violin) O.violin(t, T(n[0]), n[1] * sp * 0.97, 0.055 * k.violin, 0.15); if (k.horn) { O.horn(t, T(n[0]) - 12, n[1] * sp * 0.96, 0.09 * k.horn, -0.25); O.horn(t, T(n[0]) - 24, n[1] * sp * 0.96, 0.05 * k.horn, 0.1); } } }
+  if (sec === 'break' && k.horn) { const n = THEME[B.i][s]; if (n) O.horn(t, T(n[0]), n[1] * sp * 0.96, 0.05 * k.horn, -0.1); }
+  // brass: blooming chords every second bar of A2, stabs driving the climax, a long crescendo at the end of the build
+  if (k.brass) {
+    if (sec === 'A2' && s === 0 && B.i % 2 === 0) O.brassSwell(t, C.br.map(T), sp * 14, 0.022 * k.brass);
+    if (sec === 'climax') { if (s === 0) O.brassSwell(t, C.br.map(T), sp * 6, 0.04 * k.brass); if (s === 6 || s === 10 || (s === 14 && B.i % 2)) O.brassStab(t, C.br.map(T), 0.045 * k.brass); }
+    if (sec === 'build' && B.i >= 5 && s === 0) O.brassSwell(t, C.br.map(T), sp * 16, (0.022 + 0.02 * prog) * k.brass);
+  }
+  // percussion
+  if (D) {
+    if (sec === 'A1') { if (s === 0) O.timp(t, root + 12, 0.16 * D); if (s % 4 === 3) I.tom(t, 100, 0.05 * D); if (s === 10 && B.i % 2) O.taiko(t, 0.12 * D, 0.2); }
+    if (sec === 'A2') { if (s === 0) O.timp(t, root + 12, 0.18 * D); if (s === 6 || s === 10) O.taiko(t, 0.15 * D, s === 6 ? -0.3 : 0.3); if (s % 4 === 3) I.tom(t, 104, 0.06 * D); if (s === 12) O.snare(t, 0.035 * D); }
+    if (sec === 'climax') {
+      if (s === 0 || s === 10) O.taiko(t, 0.32 * D); if (s === 3 || s === 6 || s === 14) O.taiko(t, 0.2 * D, s === 6 ? -0.35 : 0.35); if (s === 15) O.taiko(t, 0.12 * D, 0.2);
+      if (s === 4 || s === 12) O.snare(t, 0.07 * D); if (s % 2 === 1) I.hat(t, 0.012 * D);
+      if (s === 0 && (B.i === 0 || B.i === 8)) { O.crash(t, 0.08 * D); O.boom(t, 0.3 * D); }
+    }
+    if (sec === 'break' && (s === 0 || s === 3)) O.taiko(t, (s === 0 ? 0.1 : 0.06) * D);
+    if (sec === 'build') { if (s === 0) O.timp(t, root + 12, (0.08 + 0.12 * prog) * D); if (B.i >= 4 && s % 4 === 0) O.taiko(t, (0.08 + 0.16 * prog) * D); if (B.i >= 6 && s % 2 === 0) O.taiko(t, 0.12 * prog * D, s % 4 ? 0.3 : -0.3); }
+    // the lead-ins: a timpani roll into the theme, a snare roll and string run into the climax, a long crescendo out of the build
+    if (sec === 'intro' && last && s === 8) O.timpRoll(t, root + 12, sp, 8, 0.03 * D, 0.14 * D);
+    if (lead2 && s === 8 && (sec === 'A2' || sec === 'climax')) { O.snareRoll(t, sp, 8, 0.02 * D, 0.08 * D); O.run(t, sp, DMIN.slice(sec === 'A2' ? 0 : 5, (sec === 'A2' ? 0 : 5) + 8).map(T), 0.03 * k.str); }
+    if (sec === 'build' && B.i === B.n - 2 && s === 0) O.snareRoll(t, sp, 32, 0.01 * D, 0.09 * D);
+    if (sec === 'A2' && B.i === 0 && s === 0 && o.crashA2 !== false) { O.crash(t, 0.05 * D); O.boom(t, 0.18 * D); }
+  }
+  // risers and reverse cymbals land on the downbeats of the big moments
+  if (k.fx && s === 0) {
+    if ((sec === 'intro' || sec === 'build') && B.i === B.n - 2) O.riser(t, sp * 32, 0.045 * k.fx);
+    if (sec === 'A2' && B.i === B.n - 1) O.swell(t, sp * 16, 0.06 * k.fx);
+  }
 }
+// a track: its form, tempo, transposition and how loud each layer is (0 drops it)
+const FULL = { str: 1, choir: 1, bass: 1, cello: 1, harp: 1, cel: 1, horn: 1, violin: 1, brass: 1, fx: 1 };
+const mkTrack = (form, bpm, vol, o, k, loopAt = 0) => { const map = formMap(form); return { bpm, vol, bars: map.length, loop: loopAt, play: (t, b, s, sp) => epicStep(t, b, s, sp, map, { ...FULL, ...k }, o) }; };
 const TRACKS = {
-  // the menu: the theme at rest, strings and the horn on a soft half-time pulse, no drums
-  menu: { bpm: 96, bars: 16, vol: 0.55, play(t, b, s, sp) { epicBar(t, b, s, sp, { half: true, bass: 0.09, drums: false, str: 0.022, horn: 0.06, lead: 0.035, cel: 0.03 }); } },
-  // the jungle run: the full theme at the reference tempo
-  jungle: { bpm: 111, bars: 16, vol: 0.55, play(t, b, s, sp) { epicBar(t, b, s, sp, { cello: 0.032 }); } },
-  // the basalt caves: down a minor third, slower and sparser, an echoing celesta, soft drums and water drips
-  caves: { bpm: 96, bars: 16, vol: 0.6, play(t, b, s, sp) {
-    epicBar(t, b, s, sp, { tr: -3, half: true, bass: 0.1, drums: 0.5, str: 0.024, lp: 1300, cel: 0.04, hornFn: (tt, m, d, v) => { O.horn(tt, m, d, v); O.horn(tt + sp * 3, m, d * 0.7, v * 0.25); } });
-    if (Math.random() < 0.03) I.drip(t, 0.03);
-  } },
-  // the magma core: up a semitone and faster, taiko and brass stabs driving it
-  magma: { bpm: 126, bars: 16, vol: 0.5, play(t, b, s, sp) {
-    epicBar(t, b, s, sp, { tr: 1, cello: 0.036, drums: 1.35, brass: 0.03, str: 0.028, cel: false });
-    if (s === 4 || s === 12) O.taiko(t, 0.2);
-  } },
+  // the menu: the intro, the theme and the breakdown, at rest (no drums, no brass, no climax)
+  menu: mkTrack([['intro', 4], ['A1', 8], ['break', 4]], 100, 0.55, { drums: 0 }, { brass: 0, fx: 0, bass: 0.7 }),
+  // the jungle run: the whole piece, looping back to the second theme after the build
+  jungle: mkTrack([['intro', 4], ['A1', 8], ['A2', 8], ['climax', 16], ['break', 4], ['build', 8]], 111, 0.5, {}, {}, 12),
+  // the basalt caves: down a tone, slower and darker, an echoing horn, no climax
+  caves: mkTrack([['intro', 4], ['A1', 8], ['A2', 8], ['break', 4], ['build', 8]], 100, 0.55, { tr: -2, drums: 0.55, echoHorn: true }, { brass: 0.5, cel: 1.3 }, 4),
+  // the magma core: up a semitone, faster, straight into the big sections
+  magma: mkTrack([['A2', 8], ['climax', 16], ['build', 8]], 124, 0.46, { tr: 1, drums: 1.25 }, { harp: 0, cel: 0 }, 0),
 };
 // the danger layer over any run track: fast low toms and a pulsing low note, louder the closer the monster
 function dangerLayer(t, s, sp) {
@@ -3682,7 +3776,7 @@ function schedMusic() {
   if (!tr || SND.fade || settings.music === false) { SND.next = Math.max(SND.next, c.currentTime); return; }
   const sp = 60 / tr.bpm / 4;
   while (SND.next < c.currentTime + 0.12) {
-    const s = SND.step % 16, b = (SND.step / 16 | 0) % tr.bars;
+    const s = SND.step % 16, bn = SND.step / 16 | 0, lp = tr.loop || 0, b = bn < tr.bars ? bn : lp + (bn - tr.bars) % (tr.bars - lp);
     tr.play(SND.next, b, s, sp);
     if (SND.track !== 'menu') dangerLayer(SND.next, s, sp);
     SND.step++; SND.next += sp;
@@ -30493,7 +30587,7 @@ try { if (sessionStorage.getItem('cr-after-reset')) { sessionStorage.removeItem(
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
