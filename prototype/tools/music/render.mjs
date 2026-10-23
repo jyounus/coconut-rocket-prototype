@@ -58,6 +58,10 @@ const INSTR = {
   log: { dir: 'VSCO 1 Percussion/varWood/log_drum', unpitched: true, gain: 0.45 },
   shaker: { dir: "VSCO 1 Percussion/varWood/Camo's Shaker", unpitched: true, gain: 0.3 },
 };
+// LOGNOTES=from,to (seconds): list the pitched notes sounding in that window (to find a clash)
+const LOG = process.env.LOGNOTES ? Object.assign(process.env.LOGNOTES.split(',').map(Number), { out: [] }) : null;
+// CLASH=1: after a render, list the moments where two pitched notes a semitone apart (or a minor ninth) sound together
+const AUDIT = process.env.CLASH ? [] : null;
 const FILES = {};   // instrument -> [{ file, midi, layer, take, tag }]
 function index(id) {
   if (FILES[id]) return FILES[id];
@@ -102,6 +106,8 @@ function stemBufs(n) { const o = {}; for (const k of STEMS) o[k] = { L: new Floa
 // play one note into a stem. opts: dur (s), vel 0..1, pan -1..1, gain, att (s), rel (s), tune (cents), filter (a
 // RegExp on the file name), maxLen (s)
 function note(bufs, stem, id, midi, t, o = {}) {
+  if (AUDIT && midi != null && stem !== 'perc' && !o.wet) AUDIT.push({ t, end: t + (o.dur ?? 10) + (o.rel ?? 0.25) * 0.5, midi, who: `${stem}/${id}`, v: o.vel ?? 0.7 });
+  if (LOG && midi != null && t < LOG[1] && t + (o.dur ?? 10) + (o.rel ?? 0.25) > LOG[0] && stem !== 'perc') LOG.out.push(`${t.toFixed(3)}–${(t + (o.dur ?? 10)).toFixed(3)} (+${(o.rel ?? 0.25).toFixed(2)} rel) ${stem}/${id} ${midi} ${['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][midi % 12]}${Math.floor(midi / 12) - 1} vel ${(o.vel ?? 0.7).toFixed(2)}${o.wet ? ' (shimmer)' : ''}`);
   const s = pick(id, midi, o.vel ?? 0.7, o.filter), d = load(s), I = INSTR[id];
   const ratio = (midi != null ? Math.pow(2, (midi - s.midi) / 12) : 1) * Math.pow(2, (o.tune || 0) / 1200);
   const dur = o.dur ?? 10, rel = o.rel ?? 0.25, att = o.att ?? 0.004;
@@ -127,14 +133,33 @@ function note(bufs, stem, id, midi, t, o = {}) {
 // soft chords, then everything at forte). Every two-bar phrase crescendos; a touch of human variation in timing and touch.
 const BEAT = { sp: 0.125 };   // the current track's 16th (set per render)
 const OSTI = [[69, 74, 69, 74, 69, 74, 69, 76], [69, 74, 69, 76, 69, 77, 69, 76]];   // the two-bar cell, in 8ths (D minor; moves with the music)
+// Keep an ostinato note if it fits the chord: a chord tone, or a major chord's ninth (a whole step from everything).
+// Anything else moves to the nearest note that fits: with the strings playing the same chord in the same octave, even
+// a lush seventh becomes a semitone cluster.
+function fitChord(n, chord, root) {
+  const pcs = new Set(chord.map(c => ((c % 12) + 12) % 12)), r = ((root % 12) + 12) % 12, major = pcs.has((r + 4) % 12);
+  const colours = major ? [2] : [];
+  const ok = m => { const pc = ((m % 12) + 12) % 12; return pcs.has(pc) || colours.some(c => (r + c) % 12 === pc); };
+  if (ok(n)) return n;
+  for (const d of [-1, 1, -2, 2, -3, 3]) if (ok(n + d)) return n + d;
+  return n;
+}
 function pianoPart(bufs, P) {
   const { t0, sp, sec, i, C, X, root, tuneAt } = P, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break';
   const base = { intro: 0.3 + 0.06 * i, A: 0.42, B: 0.52, climax: 0.72, break: 0.28, build: 0.32 + 0.13 * i }[sec];
   const human = () => (rnd() - 0.5) * 0.06;
-  const key = (m, s, vel, o = {}) => note(o.wet ? bufs.pianoWet : bufs, 'piano', 'piano', m, t0 + s * sp + (rnd() - 0.5) * 0.007, { vel: Math.max(0.06, Math.min(1, vel)), gain: o.gain ?? 1, dur: o.dur ?? sp * 2, rel: o.rel ?? 2.5, att: 0.002, pan: o.pan ?? 0 });
+  // (a pianist changes the pedal with the chord: every note lets go by the next bar line, so nothing smears into it)
+  const barEnd = t0 + 16 * sp;
+  const key = (m, s, vel, o = {}) => {
+    const at = t0 + s * sp + (rnd() - 0.5) * 0.007, dur = Math.min(o.dur ?? sp * 2, barEnd - at), rel = Math.max(0.06, Math.min(o.rel ?? 2.5, barEnd + 0.05 - (at + dur)));
+    note(o.wet ? bufs.pianoWet : bufs, 'piano', 'piano', m, at, { vel: Math.max(0.06, Math.min(1, vel)), gain: o.gain ?? 1, dur, rel, att: 0.002, pan: o.pan ?? 0 });
+  };
   // the ostinato: 8ths, crescendo across the two-bar phrase, the beat a touch firmer, notes left to ring on the pedal
+  // (and it gives way to the tune: a note a semitone off a tune note sounding over it takes the tune's note instead)
+  const sung = []; for (let s = 0; s < 16; s++) { const tn = tuneAt(s); if (tn) sung.push([s, s + tn[1], tn[0]]); }
+  const giveWay = (m, s) => { for (const [a, b, t] of sung) if (a < s + 6 && b > s) { const d = (((m - t) % 12) + 12) % 12; if (d === 1 || d === 11) return m + (d === 1 ? -1 : 1); } return m; };
   for (let e = 0; e < 8; e++) {
-    const s = e * 2, m = X(OSTI[i % 2][e]), grow = 0.16 * ((i % 2) * 8 + e) / 16, v = base + grow + (e % 2 ? 0 : 0.04) + human();
+    const s = e * 2, m = giveWay(fitChord(X(OSTI[i % 2][e]), C.s.map(X), root), s), grow = 0.16 * ((i % 2) * 8 + e) / 16, v = base + grow + (e % 2 ? 0 : 0.04) + human();
     key(m, s, v, { dur: sp * 4, rel: 2.2, pan: e % 2 ? 0.28 : -0.12, gain: 0.8 });
     if (lift || (sec === 'build' && i >= 2)) key(m + 12, s, v * 0.7, { dur: sp * 3, rel: 2.2, pan: e % 2 ? 0.45 : 0.1, gain: 0.45 });
     // the shimmer: an octave above, heard only through the hall (a halo, not a line)
@@ -220,14 +245,14 @@ const SEC = {
   break:  { ch: ['Dm', 'Bb', 'Gm', 'A'] },
   build:  { ch: ['Gm', 'Bb', 'C', 'A'] },
 };
-const THEME_A = ph([[0, 74, 6], [6, 72, 2], [8, 74, 2], [10, 76, 2], [12, 77, 4]], [[0, 74, 8], [8, 70, 4], [12, 72, 4]], [[0, 72, 6], [6, 69, 2], [8, 72, 2], [10, 74, 2], [12, 76, 4]], [[0, 72, 8], [8, 67, 8]],
+const THEME_A = ph([[0, 74, 6], [6, 72, 2], [8, 74, 2], [10, 76, 2], [12, 77, 4]], [[0, 74, 8], [8, 70, 4], [12, 72, 4]], [[0, 72, 6], [6, 69, 2], [8, 72, 2], [10, 74, 2], [12, 77, 4]], [[0, 72, 8], [8, 67, 8]],
                    [[0, 74, 6], [6, 72, 2], [8, 74, 2], [10, 76, 2], [12, 77, 4]], [[0, 79, 6], [6, 77, 2], [8, 74, 4], [12, 77, 4]], [[0, 79, 4], [4, 77, 4], [8, 74, 4], [12, 72, 4]], [[0, 73, 8], [8, 76, 4], [12, 81, 4]]);
 const THEME_B = ph([[0, 79, 8], [8, 82, 8]], [[0, 82, 4], [4, 79, 4], [8, 75, 8]], [[0, 77, 8], [8, 82, 8]], [[0, 81, 12], [12, 77, 4]],
                    [[0, 79, 8], [8, 82, 8]], [[0, 84, 6], [6, 82, 2], [8, 79, 8]], [[0, 79, 4], [4, 81, 4], [8, 84, 8]], [[0, 85, 16]]);
 const CALL = ph([[0, 62, 6], [6, 69, 2], [8, 74, 8]], [[0, 72, 4], [4, 69, 4], [8, 74, 8]], [[0, 70, 6], [6, 74, 2], [8, 77, 8]], [[0, 76, 8], [8, 73, 8]]);
 const ACC = [1, 0.45, 0.55, 0.9, 0.45, 0.55, 0.95, 0.5, 1, 0.45, 0.55, 0.9, 0.45, 0.55, 0.95, 0.6];
 const OSTN = [0, 0, 12, 0, 7, 0, 12, 7, 0, 0, 12, 0, 7, 0, 12, 7];
-const DMIN = [62, 64, 65, 67, 69, 70, 72, 74, 76, 77, 79, 81, 82, 84];
+const DMIN = [62, 64, 65, 67, 69, 70, 73, 74, 76, 77, 79, 81, 82, 85];   // (harmonic minor: the runs lead into the A chord, so C sharp)
 // the tracks: form, tempo, transposition, which layers play (0 drops one), where the loop restarts and where a track
 // joins when it follows another run track (both in bars)
 const TRACKS = {
@@ -254,18 +279,18 @@ function render(name) {
     // the string section: a sustained chord across the bar, cellos / violas / violins, swelling in
     const sv = { intro: 0.35 + 0.08 * B.i, A: 0.45, B: 0.6, climax: 0.8, break: 0.35, build: 0.35 + 0.1 * B.i }[sec];
     const [c1, c2, c3, c4, c5] = C.s.map(X);
-    note(bufs, 'strings', 'vcSus', c1, t0, { dur: bar + 0.05, vel: sv, pan: -0.45, att: 0.08, rel: 0.6 });
-    note(bufs, 'strings', 'vlaSus', c2, t0, { dur: bar + 0.05, vel: sv, pan: -0.15, att: 0.08, rel: 0.6 });
-    note(bufs, 'strings', 'vlaSus', c3, t0, { dur: bar + 0.05, vel: sv * 0.9, pan: 0.05, att: 0.08, rel: 0.6 });
-    note(bufs, 'strings', 'vlnSus', c4, t0, { dur: bar + 0.05, vel: sv * 0.9, pan: 0.3, att: 0.08, rel: 0.6 });
-    if (lift || calm) note(bufs, 'strings', 'vlnSus', c5, t0, { dur: bar + 0.05, vel: sv * 0.85, pan: 0.5, att: 0.1, rel: 0.6 });
-    if (big) note(bufs, 'strings', 'vlnSus', c5 + 12, t0, { dur: bar + 0.05, vel: 0.65, pan: 0.6, att: 0.1, rel: 0.6 });
+    note(bufs, 'strings', 'vcSus', c1, t0, { dur: bar - 0.06, vel: sv, pan: -0.45, att: 0.08, rel: 0.22 });
+    note(bufs, 'strings', 'vlaSus', c2, t0, { dur: bar - 0.06, vel: sv, pan: -0.15, att: 0.08, rel: 0.22 });
+    note(bufs, 'strings', 'vlaSus', c3, t0, { dur: bar - 0.06, vel: sv * 0.9, pan: 0.05, att: 0.08, rel: 0.22 });
+    note(bufs, 'strings', 'vlnSus', c4, t0, { dur: bar - 0.06, vel: sv * 0.9, pan: 0.3, att: 0.08, rel: 0.22 });
+    if (lift || calm) note(bufs, 'strings', 'vlnSus', c5, t0, { dur: bar - 0.06, vel: sv * 0.85, pan: 0.5, att: 0.1, rel: 0.22 });
+    if (big) note(bufs, 'strings', 'vlnSus', c5 + 12, t0, { dur: bar - 0.06, vel: 0.65, pan: 0.6, att: 0.1, rel: 0.22 });
     // low strings and low brass under the lift and the climax (and the end of the build)
     if (lift || (sec === 'build' && B.i >= 2)) {
-      note(bufs, 'strings', 'cbSus', root, t0, { dur: bar + 0.05, vel: big ? 0.8 : 0.65, pan: -0.2, att: 0.06, rel: 0.5 });
-      if (K.lowBrass) { note(bufs, 'brass', 'tbnSus', root + 12, t0, { dur: bar * 0.94, vel: big ? 0.75 : 0.6, pan: 0.2, att: 0.1, rel: 0.4, gain: K.lowBrass });
-        note(bufs, 'brass', 'tbnSus', root + 19, t0, { dur: bar * 0.94, vel: big ? 0.7 : 0.55, pan: 0.3, att: 0.1, rel: 0.4, gain: K.lowBrass });
-        note(bufs, 'brass', 'tubaSus', root, t0, { dur: bar * 0.94, vel: big ? 0.75 : 0.6, pan: 0.1, att: 0.1, rel: 0.4, gain: K.lowBrass }); }
+      note(bufs, 'strings', 'cbSus', root, t0, { dur: bar - 0.06, vel: big ? 0.8 : 0.65, pan: -0.2, att: 0.06, rel: 0.22 });
+      if (K.lowBrass) { note(bufs, 'brass', 'tbnSus', root + 12, t0, { dur: bar * 0.94, vel: big ? 0.75 : 0.6, pan: 0.2, att: 0.1, rel: 0.2, gain: K.lowBrass });
+        note(bufs, 'brass', 'tbnSus', root + 19, t0, { dur: bar * 0.94, vel: big ? 0.7 : 0.55, pan: 0.3, att: 0.1, rel: 0.2, gain: K.lowBrass });
+        note(bufs, 'brass', 'tubaSus', root, t0, { dur: bar * 0.94, vel: big ? 0.75 : 0.6, pan: 0.1, att: 0.1, rel: 0.2, gain: K.lowBrass }); }
     }
     for (let s = 0; s < 16; s++) {
       const t = t0 + s * sp, a = ACC[s];
@@ -280,27 +305,28 @@ function render(name) {
       if (!calm && (big ? s % 2 === 0 : a > 0.85)) note(bufs, 'strings', 'cbSpic', big && s % 4 === 2 ? root + 12 : root, t, { dur: sp * 1.5, vel: (big ? 0.85 : 0.7) * a, pan: -0.1, rel: 0.12 });
       // brass stabs on the 3-3-2 (trumpets, horns, trombones) when it lifts
       if (K.stabs && lift && (s === 0 || s === 3 || s === 6 || (big && (s === 10 || s === 14)))) {
-        const v = (big ? 0.85 : 0.7) * a * K.stabs;
-        C.br.forEach((m, i) => { note(bufs, 'brass', 'tptStac', X(m) + 12, t, { vel: v, pan: 0.25 - i * 0.1, dur: 0.25, rel: 0.15 }); note(bufs, 'brass', 'hnStac', X(m), t, { vel: v, pan: -0.25 + i * 0.1, dur: 0.25, rel: 0.15 }); });
+        // (in the lift a softer, warmer stab: horns and a trombone in the middle range; trumpets join at the climax, never shrill)
+        const v = (big ? 0.8 : 0.55) * a * K.stabs;
+        C.br.forEach((m, i) => { if (big) note(bufs, 'brass', 'tptStac', X(m), t, { vel: v * 0.85, pan: 0.25 - i * 0.1, dur: 0.22, rel: 0.12 }); note(bufs, 'brass', 'hnStac', X(m) - (big ? 0 : 12), t, { vel: v, pan: -0.25 + i * 0.1, dur: 0.22, rel: 0.12 }); });
         note(bufs, 'brass', 'tbnStac', root + 12, t, { vel: v, pan: 0.1, dur: 0.25, rel: 0.15 });
       }
       // the tunes
       const tune = (sec === 'intro' || calm) ? CALL[B.i][s] : (sec === 'A' || big) ? THEME_A[B.i][s] : sec === 'B' ? THEME_B[B.i][s] : null;
       if (tune) {
-        const [m, len] = tune, dur = len * sp * 0.98;
+        const [m, len] = tune, dur = len * sp * 0.93;   // (and a short release: each note lets go before the next)
         if (sec === 'intro' || calm) {
-          if (calm) note(bufs, 'winds', 'flute', X(m) + 12, t, { dur, vel: 0.55, pan: 0.2, att: 0.05, rel: 0.4 });
-          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: calm ? 0.45 : 0.65, pan: -0.2, att: 0.04, rel: 0.35 });
+          if (calm) note(bufs, 'winds', 'flute', X(m) + 12, t, { dur, vel: 0.55, pan: 0.2, att: 0.05, rel: 0.16 });
+          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: calm ? 0.45 : 0.65, pan: -0.2, att: 0.04, rel: 0.14 });
         } else if (sec === 'B') {
-          note(bufs, 'strings', 'vlnSus', m + T.tr, t, { dur, vel: 0.8, pan: 0.2, att: 0.05, rel: 0.4 });
-          note(bufs, 'strings', 'vlnSus', m + T.tr, t, { dur, vel: 0.7, pan: 0.35, att: 0.05, rel: 0.4, tune: 7 });
-          note(bufs, 'brass', 'hnSus', m + T.tr - 12, t, { dur, vel: 0.75, pan: -0.25, att: 0.04, rel: 0.35 });
+          note(bufs, 'strings', 'vlnSus', m + T.tr, t, { dur, vel: 0.8, pan: 0.2, att: 0.05, rel: 0.16 });
+          note(bufs, 'strings', 'vlnSus', m + T.tr, t, { dur, vel: 0.7, pan: 0.35, att: 0.05, rel: 0.16, tune: 7 });
+          note(bufs, 'brass', 'hnSus', m + T.tr - 12, t, { dur, vel: 0.75, pan: -0.25, att: 0.04, rel: 0.14 });
         } else {
           // the horn section (two players, a hair apart) with violins an octave up; trumpets join at the climax
-          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.85 : 0.72, pan: -0.25, att: 0.03, rel: 0.35 });
-          note(bufs, 'brass', 'hnSus', X(m), t + 0.012, { dur, vel: big ? 0.8 : 0.66, pan: -0.05, att: 0.03, rel: 0.35, tune: -6 });
-          note(bufs, 'strings', 'vlnSus', X(m) + 12, t, { dur, vel: big ? 0.8 : 0.6, pan: 0.3, att: 0.05, rel: 0.4 });
-          if (big) { note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.3 }); note(bufs, 'brass', 'hnSus', X(m) - 12, t, { dur, vel: 0.7, pan: 0.1, att: 0.04, rel: 0.35 }); }
+          note(bufs, 'brass', 'hnSus', X(m), t, { dur, vel: big ? 0.85 : 0.72, pan: -0.25, att: 0.03, rel: 0.14 });
+          note(bufs, 'brass', 'hnSus', X(m), t + 0.012, { dur, vel: big ? 0.8 : 0.66, pan: -0.05, att: 0.03, rel: 0.14, tune: -6 });
+          note(bufs, 'strings', 'vlnSus', X(m) + 12, t, { dur, vel: big ? 0.8 : 0.6, pan: 0.3, att: 0.05, rel: 0.16 });
+          if (big) note(bufs, 'brass', 'tptSus', X(m), t, { dur, vel: 0.7, pan: 0.15, att: 0.03, rel: 0.14 });
         }
       }
       // percussion
@@ -364,5 +390,18 @@ function render(name) {
 }
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(TRACKS);
 const all = existsSync(join(OUT, 'tracks.json')) ? JSON.parse((await import('node:fs')).readFileSync(join(OUT, 'tracks.json'), 'utf8')) : {};
-for (const n of names) { const t0 = Date.now(); all[n] = render(n); console.log(`  (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
+for (const n of names) { const t0 = Date.now(); all[n] = render(n); console.log(`  (${((Date.now() - t0) / 1000).toFixed(1)} s)`); if (LOG) { console.log(LOG.out.sort().join('\n')); LOG.out.length = 0; } if (AUDIT) { clashReport(n); AUDIT.length = 0; } }
+function clashReport(name) {
+  const T = TRACKS[name], sp = 60 / T.bpm / 4, end = Math.max(...AUDIT.map(a => a.t)), bars = {}, names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  for (let t = 0; t < end; t += sp) {
+    const on = AUDIT.filter(a => a.t <= t + 0.001 && a.end > t + 0.1 && a.v > 0.2);   // (a fading tail under 0.1 s into the next chord is a crossfade, not a clash)
+    for (let i = 0; i < on.length; i++) for (let j = i + 1; j < on.length; j++) {
+      const d = Math.abs(on[i].midi - on[j].midi);
+      if ((d === 1 || d === 13) && on[i].who !== on[j].who) { const b = Math.floor(t / (sp * 16)); (bars[b] = bars[b] || new Set()).add(`${names[on[i].midi % 12]}${Math.floor(on[i].midi / 12) - 1}(${on[i].who}) vs ${names[on[j].midi % 12]}${Math.floor(on[j].midi / 12) - 1}(${on[j].who})`); }
+    }
+  }
+  const keys = Object.keys(bars);
+  console.log(`clashes (semitone / minor ninth, different parts) in ${keys.length} of ${Math.ceil(end / (sp * 16))} bars`);
+  for (const b of keys) console.log(`  bar ${+b + 1}: ${[...bars[b]].slice(0, 4).join(' · ')}${bars[b].size > 4 ? ` (+${bars[b].size - 4})` : ''}`);
+}
 writeFileSync(join(OUT, 'tracks.json'), JSON.stringify(all, null, 1));
