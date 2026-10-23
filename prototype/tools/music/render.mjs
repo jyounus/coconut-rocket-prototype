@@ -102,14 +102,9 @@ function stemBufs(n) { const o = {}; for (const k of STEMS) o[k] = { L: new Floa
 // play one note into a stem. opts: dur (s), vel 0..1, pan -1..1, gain, att (s), rel (s), tune (cents), filter (a
 // RegExp on the file name), maxLen (s)
 function note(bufs, stem, id, midi, t, o = {}) {
-  // every brass note is mirrored on the piano (once: a second horn doubling a line, a hair detuned, is left out); low
-  // brass goes up an octave into the piano's warm range, short brass notes are short on the piano too
-  // (the trumpets only double the horns, so they are left out; a piano note fades where a horn holds, so the held tune
-  // is lifted, while held bass notes and the stab chords stay at their level)
-  if (stem === 'brass' && !o.tune && !o.noPiano && !/^tpt/.test(id)) {
-    const short = /Stac$/.test(id), low = midi < 55, m = midi < 43 ? midi + 12 : midi;
-    note(bufs, 'piano', 'piano', m, t, { vel: Math.min(1, (o.vel ?? 0.7) * 0.95), pan: (o.pan ?? 0) * 0.6, dur: short ? 0.22 : (o.dur ?? 1), rel: short ? 0.18 : 0.7, att: 0.002, gain: (o.gain ?? 1) * (short ? 0.3 : low ? 0.8 : 2.1) });
-  }
+  // every brass note is mirrored on the piano (see pianoMirror); a second horn doubling a line (a hair detuned), the
+  // trumpet doublings and lines marked noPiano are left out
+  if (stem === 'brass' && !o.tune && !o.noPiano && !/^tpt/.test(id)) pianoMirror(bufs, id, midi, t, o);
   const s = pick(id, midi, o.vel ?? 0.7, o.filter), d = load(s), I = INSTR[id];
   const ratio = (midi != null ? Math.pow(2, (midi - s.midi) / 12) : 1) * Math.pow(2, (o.tune || 0) / 1200);
   const dur = o.dur ?? 10, rel = o.rel ?? 0.25, att = o.att ?? 0.004;
@@ -124,6 +119,30 @@ function note(bufs, stem, id, midi, t, o = {}) {
     if (i > relStart) e *= Math.max(0, 1 - (i - relStart) / relLen);
     const l = d.L[k] + (d.L[k + 1] - d.L[k]) * f, r = d.R[k] + (d.R[k + 1] - d.R[k]) * f;
     B.L[j] += l * gl * e; B.R[j] += r * gr * e;
+  }
+}
+// The piano's version of a brass note, voiced deeper and played with dynamics. Register: the tune an octave below the
+// horns (out of the piano's bright top), doubled an octave lower again when it's loud; held bass notes as low octaves;
+// stab chords an octave down. Dynamics: the section's loudness spread wider (soft intro, forte climax), downbeats
+// accented, every two bars a swell and fall, a little natural variation in touch and timing; held notes ring on as if
+// on the pedal. The piano's three recorded layers (pp, mf, f) follow the touch, and the level follows it further.
+const BEAT = { sp: 0.125 }, PIANO_LEVEL = 0.58;   // the current track's 16th (set per render), for accents and phrasing
+function pianoMirror(bufs, id, midi, t, o) {
+  const short = /Stac$/.test(id), low = midi < 55, v0 = o.vel ?? 0.7, step = Math.round(t / BEAT.sp), s16 = step % 16, s32 = step % 32;
+  const accent = s16 === 0 ? 0.14 : s16 % 4 === 0 ? 0.05 : s16 % 2 ? -0.06 : -0.02, swell = 0.12 * Math.sin(Math.PI * s32 / 32);
+  const curve = Math.max(0.42, 0.3 + (v0 - 0.45) * 0.9) + Math.max(0, v0 - 0.75) * 2.2;   // (gentle through the middle, opening up at the top; never below a soft-but-clear touch)
+  const touch = Math.max(0.08, Math.min(1, curve + accent + swell + (rnd() - 0.5) * 0.08));
+  const lvl = PIANO_LEVEL * (0.35 + 1.1 * touch) * (o.gain ?? 1), at = t + (rnd() - 0.5) * 0.012, pan = (o.pan ?? 0) * 0.5;
+  const play = (m, vel, g, dur, rel) => note(bufs, 'piano', 'piano', m, at, { vel, gain: g, dur, rel, att: 0.002, pan });
+  if (short) {   // a stab: the chord tone an octave down, crisp
+    play(midi - 12, touch, lvl * 0.42, 0.24, 0.22);
+  } else if (low) {   // a held bass note: a deep octave (the lower note only where the piano still has it)
+    const m = midi - 12 >= 28 ? midi - 12 : midi;
+    play(m, touch, lvl * 0.75, o.dur ?? 1, 1.2);
+    if (m !== midi) play(midi, touch * 0.7, lvl * 0.4, o.dur ?? 1, 1.2);
+  } else {   // the tune: an octave below the horns, and in octaves when it's loud
+    play(midi - 12, touch, lvl * 1.7, o.dur ?? 1, 1.2);
+    if (touch > 0.66) play(midi - 24, touch * 0.75, lvl * 0.7, o.dur ?? 1, 1.2);
   }
 }
 // a reversed sample (a cymbal roll played backwards: the swell into a big downbeat), ending exactly at tEnd
@@ -197,7 +216,7 @@ function render(name) {
   for (const [sec, n] of T.form) for (let i = 0; i < n; i++) map.push({ sec, i, n, ch: SEC[sec].ch[i % SEC[sec].ch.length] });
   const loopStart = T.loop * bar, loopEnd = map.length * bar, tail = 5, total = loopEnd + tail, N = Math.ceil(total * SR);
   const bufs = stemBufs(N), K = { drums: 1, stabs: 1, lowBrass: 1, swell: 1, spic: 1, ...T.k };
-  seed = 12345;
+  seed = 12345; BEAT.sp = sp;
   map.forEach((B, b) => {
     const next = map[(b + 1) % map.length], sec = B.sec, up = (SEC[sec].up || 0) + T.tr, C = EC[B.ch], root = C.r + up, X = m => m + up;
     const t0 = b * bar, big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break', last = B.i === B.n - 1, intoNew = last && next.sec !== sec;
