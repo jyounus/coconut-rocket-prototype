@@ -3483,11 +3483,32 @@ function puff(x, alt, vx, vy, life, size, kind, ex) {
 const SND = { ctx: null, out: null, music: null, musicLp: null, sfx: null, verb: null, noise: null,
   track: null, want: null, step: 0, next: 0, timer: 0, fade: null, danger: 0, resumeStep: 0 };
 const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+// iOS: web audio counts as 'ambient' and the ring/silent switch mutes it, so the page asks for the playback session
+// (Safari 17+), and on older iOS a looping silent <audio> element started from the same tap does the same job. Every
+// gesture retries until the context is really running (some taps don't count as user activation in WebKit).
+let silentEl = null;
+function unlockIOS() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  if (!silentEl) {
+    // 0.1 s of silence as a WAV
+    const n = 800, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = (o, str) => [...str].forEach((ch, i) => b[o + i] = ch.charCodeAt(0));
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+    silentEl = document.createElement('audio'); silentEl.setAttribute('playsinline', ''); silentEl.loop = true; silentEl.preload = 'auto';
+    silentEl.src = URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  if (silentEl.paused) silentEl.play().catch(() => {});
+}
 function audioInit() {
-  if (SND.ctx) { if (SND.ctx.state === 'suspended' && !document.hidden) SND.ctx.resume(); return; }
+  if (SND.ctx) {
+    if (SND.ctx.state !== 'running' && !document.hidden) { unlockIOS(); SND.ctx.resume().catch(() => {}); kickAudio(); }
+    return;
+  }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
+  unlockIOS();
   const c = SND.ctx = new AC();
+  c.resume().catch(() => {});
   const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
   SND.out = c.createGain(); SND.out.gain.value = 0.9; SND.out.connect(comp); comp.connect(c.destination);
   SND.musicLp = c.createBiquadFilter(); SND.musicLp.type = 'lowpass'; SND.musicLp.frequency.value = 18000; SND.musicLp.connect(SND.out);
@@ -3503,10 +3524,16 @@ function audioInit() {
   SND.verbIn = c.createGain(); SND.verbIn.connect(SND.verb);
   SND.next = c.currentTime + 0.1;
   SND.timer = setInterval(schedMusic, 25);
+  kickAudio();
 }
+// the classic WebKit unlock: start a one-sample silent buffer inside the gesture
+function kickAudio() { try { const c = SND.ctx, b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } catch {} }
 // the first gesture anywhere starts (or resumes) the audio
-for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, audioInit, { capture: true, passive: true });
-document.addEventListener('visibilitychange', () => { if (!SND.ctx) return; if (document.hidden) SND.ctx.suspend(); else SND.ctx.resume(); });
+for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown']) document.addEventListener(ev, audioInit, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (!SND.ctx) return;
+  if (document.hidden) { SND.ctx.suspend(); if (silentEl) silentEl.pause(); } else { SND.ctx.resume().catch(() => {}); }
+});
 function applyAudioSettings() {
   if (!SND.ctx) return;
   const t = SND.ctx.currentTime;
@@ -3744,6 +3771,8 @@ function sfx(name, o = {}) {
     case 'revive': vNoise(B, t, { f: 300, f2: 3000, q: 1, v: 0.1, dur: 0.6, a: 0.1 }); [60, 64, 67, 72, 76].forEach((m, i) => vTone(B, t + 0.1 + i * 0.07, mf(m), { type: 'triangle', v: 0.08, dur: 0.4 })); break;
   }
 }
+// ?audiodbg: a corner readout of the audio state (for checking the unlock on phones)
+if (/[?&]audiodbg\b/.test(location.search)) { const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;font:700 12px monospace;color:#fff;background:rgba(0,0,0,.7);padding:4px 6px;border-radius:6px;pointer-events:none'; document.documentElement.appendChild(el); setInterval(() => { el.textContent = `audio: ${SND.ctx ? SND.ctx.state : 'none'} · ${SND.track || '-'} · music ${settings.music !== false ? 'on' : 'off'} · el ${silentEl ? (silentEl.paused ? 'paused' : 'playing') : '-'}`; }, 400); }
 // every button press clicks (the canvas and the pause button's own path excepted)
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button, .srow, .pcard, [role="tab"]')) { audioInit(); sfx('tap'); } }, true);
 
