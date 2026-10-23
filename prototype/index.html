@@ -3475,10 +3475,11 @@ function puff(x, alt, vx, vy, life, size, kind, ex) {
 // Everything is synthesised with Web Audio (no sound files): a music bus and an effects bus into a soft compressor,
 // each switched by its own setting (settings.music / settings.sfx). The context starts on the first touch or key (iOS
 // needs a gesture) and is suspended while the page is hidden.
-// Music: an original oom-pah polka band soundtrack (accordion, tuba, clarinet, snare, tambourine), in the spirit of the
-// European-style rocket-barrel music of the jungle platformers, one tune per place, sequenced on a 16th-note grid with a
-// look-ahead scheduler: 'menu' (the jungle tune taken easy), 'jungle' (A minor, accordion then clarinet), 'caves' (D
-// minor, half the drive, plucked bass and an echoing clarinet) and 'magma' (E minor flat out, 16th-note accordion runs). audioTick() picks the track from the game state every frame,
+// Music: an original cinematic adventure score in the spirit of the wintry ruins music of the jungle platformers: a
+// pulsing 16th-note bass ostinato under sustained strings that rock between a bright Lydian and a dark Phrygian chord a
+// tritone apart, a long-note horn melody, soaring strings in the B section, timpani and low toms, celesta glints. One
+// arrangement, scored per place on a 16th-note grid with a look-ahead scheduler: 'menu' (at rest, no drums), 'jungle'
+// (the full theme, 111 bpm), 'caves' (lower, slower, echoing) and 'magma' (higher, faster, taiko and brass). audioTick() picks the track from the game state every frame,
 // crossfades on a change, muffles it while paused and adds a danger layer while the monster is close or hungry.
 const SND = { ctx: null, out: null, music: null, musicLp: null, sfx: null, verb: null, noise: null,
   track: null, want: null, step: 0, next: 0, timer: 0, fade: null, danger: 0, resumeStep: 0 };
@@ -3585,108 +3586,77 @@ const I = {
   drip: (t, v = 0.05) => { const f = 1600 + Math.random() * 1400; vTone(SND.music, t, f, { f2: f * 1.6, glide: 0.06, v, dur: 0.12, send: 0.9 }); },
 };
 // ---- the tracks: bpm, bar count, and what plays on step s (0..15) of bar b at time t ----
-// the oom-pah band: an accordion (two detuned reeds and a square, with a musette tremolo), a tuba, a clarinet, and a
-// little drum kit (snare with rolls, crash, tambourine)
-const P = {
-  accordion: (t, m, dur, v = 0.05, send = 0.2) => {
-    const c = SND.ctx, f = mf(m), g = c.createGain(), fl = c.createBiquadFilter(), trem = c.createOscillator(), tg = c.createGain();
-    fl.type = 'lowpass'; fl.frequency.value = 3200; fl.Q.value = 0.7; fl.connect(g);
-    for (const [type, det, lv] of [['sawtooth', -12, 1], ['sawtooth', 12, 1], ['square', 0, 0.5]]) {
-      const o = c.createOscillator(), og = c.createGain(); o.type = type; o.frequency.value = f; o.detune.value = det; og.gain.value = lv; o.connect(og); og.connect(fl); o.start(t); o.stop(t + dur + 0.08);
-    }
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.018); g.gain.setValueAtTime(v, t + Math.max(0.02, dur - 0.04)); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05);
-    trem.frequency.value = 6.4; tg.gain.value = v * 0.18; trem.connect(tg); tg.connect(g.gain); trem.start(t); trem.stop(t + dur + 0.08);
-    g.connect(SND.music); if (send) { const sg = c.createGain(); sg.gain.value = send; g.connect(sg); sg.connect(SND.verbIn); }
-  },
-  pah: (t, ms, v = 0.022) => { for (const m of ms) P.accordion(t, m, 0.11, v, 0.12); },
-  tuba: (t, m, v = 0.2, dur = 0.2) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v: v * 0.5, dur, a: 0.015, lp: 700, lp2: 300, q: 1.2 }); vTone(SND.music, t, f, { v, dur: dur * 1.1, a: 0.012 }); },
-  clarinet: (t, m, dur, v = 0.07) => { const f = mf(m); vTone(SND.music, t, f, { type: 'square', v, dur, a: 0.04, lp: 1700, q: 0.8, vib: [5.4, f * 0.01], vibAt: 0.18, curve: 'lin', send: 0.35 }); vTone(SND.music, t, f * 3, { v: v * 0.12, dur, a: 0.05, curve: 'lin' }); },
-  pluck: (t, m, v = 0.12) => { const f = mf(m); vTone(SND.music, t, f, { type: 'triangle', v, dur: 0.22, send: 0.4 }); vTone(SND.music, t, f * 2, { v: v * 0.3, dur: 0.06 }); },
-  snare: (t, v = 0.08) => { vNoise(SND.music, t, { f: 2200, q: 0.7, v, dur: 0.1 }); vTone(SND.music, t, 190, { f2: 150, glide: 0.06, v: v * 0.8, dur: 0.07 }); },
-  roll: (t, sp, n, v = 0.05) => { for (let i = 0; i < n; i++) P.snare(t + i * sp / 2, v * (0.5 + 0.5 * i / n)); },
-  crash: (t, v = 0.06) => vNoise(SND.music, t, { type: 'highpass', f: 5000, v, dur: 1.1, send: 0.3 }),
-  tamb: (t, v = 0.035) => { vNoise(SND.music, t, { type: 'highpass', f: 7500, v, dur: 0.07 }); vTone(SND.music, t, 5200, { v: v * 0.25, dur: 0.04 }); },
-  oomKick: (t, v = 0.2) => vTone(SND.music, t, 110, { f2: 50, glide: 0.12, v, dur: 0.18 }),
-};
 // a phrase table: { step: [midi, length in steps] } per bar
 const ph = (...bars) => bars.map(b => Object.fromEntries(b.map(([s, m, l = 2]) => [s, [m, l]])));
-// chord name -> [root (tuba), offbeat chord voicing]
-const CH = {
-  Am: [45, [64, 69, 72]], Dm: [38, [62, 65, 69]], E7: [40, [62, 64, 68, 71]], F: [41, [60, 65, 69]], C: [36, [60, 64, 67]], G: [43, [62, 67, 71]],
-  Gm: [43, [62, 67, 70]], A7: [45, [61, 64, 67]], Bb: [46, [62, 65, 70]], Em: [40, [64, 67, 71]], B7: [47, [63, 66, 69, 71]], Cm: [48, [63, 67, 72]],
+// the score's orchestra: a sustained string ensemble, a horn, spiccato cellos, a pulsing synth bass, timpani, low toms
+// and a celesta, all warm and dark (nothing bright up top), with plenty of hall
+const O = {
+  strings: (t, ms, dur, v = 0.03, lp = 1700) => {
+    const c = SND.ctx, g = c.createGain(), fl = c.createBiquadFilter();
+    fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = 0.5; fl.connect(g);
+    for (const m of ms) for (const d of [-9, 0, 9]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mf(m); o.detune.value = d + (Math.random() - 0.5) * 4; o.connect(fl); o.start(t); o.stop(t + dur + 0.6); }
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + Math.min(0.35, dur * 0.3)); g.gain.setValueAtTime(v, t + dur * 0.85); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.5);
+    g.connect(SND.music); const sg = c.createGain(); sg.gain.value = 0.7; g.connect(sg); sg.connect(SND.verbIn);
+  },
+  horn: (t, m, dur, v = 0.075) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v, dur, a: 0.08, lp: 1100, q: 0.7, vib: [4.8, f * 0.006], vibAt: 0.3, curve: 'lin', send: 0.45 }); vTone(SND.music, t, f, { v: v * 0.6, dur, a: 0.06, curve: 'lin', send: 0.3 }); vTone(SND.music, t, f * 0.5, { type: 'triangle', v: v * 0.25, dur, a: 0.1, curve: 'lin' }); },
+  lead: (t, m, dur, v = 0.05) => { const f = mf(m); for (const d of [-6, 6]) vTone(SND.music, t, f * Math.pow(2, d / 1200), { type: 'sawtooth', v, dur, a: 0.12, lp: 2200, q: 0.5, vib: [5.2, f * 0.008], vibAt: 0.35, curve: 'lin', send: 0.55 }); },
+  cello: (t, m, v = 0.05) => vTone(SND.music, t, mf(m), { type: 'sawtooth', v, dur: 0.11, a: 0.008, lp: 1400, lp2: 600, q: 1, send: 0.25 }),
+  bass: (t, m, v = 0.14, dur = 0.12) => { const f = mf(m); vTone(SND.music, t, f, { type: 'sawtooth', v: v * 0.6, dur, a: 0.006, lp: 900, lp2: 220, q: 2.5 }); vTone(SND.music, t, f, { v, dur: dur * 1.3, a: 0.006 }); },
+  timp: (t, m, v = 0.2) => { vTone(SND.music, t, mf(m), { f2: mf(m) * 0.94, glide: 0.5, v, dur: 0.9, send: 0.5 }); vNoise(SND.music, t, { type: 'lowpass', f: 500, v: v * 0.25, dur: 0.1 }); },
+  roll: (t, m, sp, steps, v = 0.12) => { for (let i = 0; i < steps * 2; i++) vTone(SND.music, t + i * sp / 2, mf(m), { v: v * (0.35 + 0.65 * i / (steps * 2)), dur: 0.25, send: 0.4 }); },
+  taiko: (t, v = 0.25) => { vTone(SND.music, t, 78, { f2: 46, glide: 0.3, v, dur: 0.5, send: 0.35 }); vNoise(SND.music, t, { type: 'lowpass', f: 700, v: v * 0.35, dur: 0.12 }); },
+  celesta: (t, m, v = 0.035) => { const f = mf(m); vTone(SND.music, t, f, { v, dur: 1.4, send: 0.85 }); vTone(SND.music, t, f * 4, { v: v * 0.15, dur: 0.35, send: 0.85 }); },
+  brass: (t, ms, v = 0.035) => { for (const m of ms) vTone(SND.music, t, mf(m), { type: 'sawtooth', v, dur: 0.22, a: 0.02, lp: 1600, lp2: 600, q: 1, send: 0.35 }); },
 };
-const POLKA = {
-  // the jungle tune: A minor, accordion up front (A), the clarinet answering with the accordion on the pahs (B)
-  jungle: { ch: ['Am', 'Am', 'Dm', 'E7', 'Am', 'F', 'E7', 'Am', 'C', 'G', 'Am', 'E7', 'F', 'G', 'E7', 'Am'],
-    acc: ph([[0, 76], [2, 76, 1], [3, 77, 1], [4, 76], [6, 74], [8, 72], [10, 71], [12, 69], [14, 72]],
-            [[0, 76], [4, 81, 2], [6, 80], [8, 81, 4], [12, 76, 4]],
-            [[0, 77], [2, 77, 1], [3, 79, 1], [4, 77], [6, 76], [8, 74], [10, 72], [12, 74], [14, 77]],
-            [[0, 76, 4], [4, 74], [6, 71], [8, 68], [10, 71], [12, 74], [14, 76]],
-            [[0, 76], [2, 76, 1], [3, 77, 1], [4, 76], [6, 74], [8, 72], [10, 71], [12, 69], [14, 72]],
-            [[0, 77], [2, 81], [4, 84], [6, 81], [8, 77], [10, 76], [12, 77], [14, 81]],
-            [[0, 80, 4], [4, 83], [6, 80], [8, 76], [10, 74], [12, 71], [14, 68]],
-            [[0, 69, 4], [4, 76, 4], [8, 81, 6]]),
-    cla: ph([[0, 79, 4], [4, 76], [6, 77], [8, 79, 6], [14, 81]], [[0, 83, 4], [4, 79, 4], [8, 74, 8]],
-            [[0, 81, 4], [4, 76], [6, 77], [8, 81, 4], [12, 84, 4]], [[0, 83, 6], [6, 80], [8, 76, 8]],
-            [[0, 77, 4], [4, 81, 4], [8, 84, 4], [12, 81, 4]], [[0, 79, 4], [4, 83, 4], [8, 86, 8]],
-            [[0, 88, 4], [4, 86], [6, 83], [8, 80, 4], [12, 76, 4]], [[0, 81, 8]]) },
-  // the caves: D minor, half the drive, a plucked bass, the clarinet alone and echoing
-  caves: { ch: ['Dm', 'Dm', 'Gm', 'A7', 'Dm', 'Bb', 'Gm', 'A7'],
-    cla: ph([[0, 69, 6], [6, 70], [8, 69, 4], [12, 67, 4]], [[0, 65, 8], [8, 62, 8]], [[0, 67, 6], [6, 69], [8, 70, 4], [12, 72, 4]], [[0, 73, 8], [8, 69, 8]],
-            [[0, 74, 6], [6, 72], [8, 70, 4], [12, 69, 4]], [[0, 70, 8], [8, 65, 8]], [[0, 67, 4], [4, 70, 4], [8, 74, 4], [12, 73, 4]], [[0, 69, 16]]) },
-  // the magma core: E minor with a raised seventh, flat out, the accordion running 16ths over pounding drums
-  magma: { ch: ['Em', 'Em', 'Am', 'B7', 'Em', 'C', 'B7', 'Em'],
-    acc: ph([[0, 76, 1], [1, 77, 1], [2, 79, 1], [3, 77, 1], [4, 76], [6, 76, 1], [7, 77, 1], [8, 79], [10, 83], [12, 79], [14, 77]],
-            [[0, 76], [2, 75], [4, 76], [6, 79], [8, 83, 4], [12, 71, 4]],
-            [[0, 81, 1], [1, 83, 1], [2, 84, 1], [3, 83, 1], [4, 81], [6, 81, 1], [7, 83, 1], [8, 84], [10, 88], [12, 84], [14, 83]],
-            [[0, 81], [2, 78], [4, 75], [6, 78], [8, 83, 4], [12, 81], [14, 78]],
-            [[0, 76, 1], [1, 77, 1], [2, 79, 1], [3, 77, 1], [4, 76], [6, 76, 1], [7, 77, 1], [8, 79], [10, 83], [12, 79], [14, 77]],
-            [[0, 76], [2, 79], [4, 84], [6, 79], [8, 76], [10, 72], [12, 76], [14, 79]],
-            [[0, 78], [2, 81], [4, 83], [6, 87], [8, 86], [10, 83], [12, 81], [14, 78]],
-            [[0, 76, 4], [4, 71], [6, 75], [8, 76, 8]]) },
+// the score (concert pitch for the jungle; the other places transpose it): bass roots and string voicings per bar. The A
+// section rocks between a bright Lydian bar pair on C and a dark Phrygian pair on F#, a tritone apart; the B section
+// climbs through E minor to a big B major turnaround.
+const SCORE = {
+  roots: [36, 36, 42, 42, 36, 36, 42, 42, 40, 40, 36, 38, 40, 45, 35, 35],
+  voice: [[52, 55, 59, 66], [52, 55, 59, 66], [54, 57, 61, 67], [54, 57, 61, 67], [52, 55, 59, 66], [52, 55, 59, 66], [54, 57, 61, 67], [54, 57, 61, 67],
+          [52, 55, 59, 64], [52, 55, 59, 64], [52, 55, 60, 64], [54, 57, 62, 66], [52, 55, 59, 64], [52, 57, 60, 64], [52, 54, 59, 64], [51, 54, 59, 63]],
+  // the bass ostinato: a 16th pulse (octave and fifth leaps), leaning on the last 16th before each beat
+  ost: [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 0, 12, 7, 12],
+  acc: [1, 0.5, 0.6, 0.85, 0.75, 0.5, 0.6, 0.85, 0.9, 0.5, 0.6, 0.85, 0.75, 0.5, 0.65, 0.9],
+  horn: ph([[0, 67, 6], [6, 69, 2], [8, 71, 8]], [[0, 66, 12], [12, 64, 4]], [[0, 69, 6], [6, 67, 2], [8, 66, 8]], [[0, 64, 4], [4, 66, 4], [8, 67, 8]],
+           [[0, 67, 4], [4, 71, 4], [8, 74, 8]], [[0, 76, 6], [6, 74, 2], [8, 71, 8]], [[0, 69, 4], [4, 73, 4], [8, 74, 6], [14, 73, 2]], [[0, 69, 8], [8, 67, 8]]),
+  lead: ph([[0, 71, 8], [8, 76, 8]], [[0, 74, 4], [4, 76, 4], [8, 79, 8]], [[0, 76, 8], [8, 79, 4], [12, 78, 4]], [[0, 78, 8], [8, 74, 8]],
+           [[0, 71, 6], [6, 72, 2], [8, 74, 8]], [[0, 76, 8], [8, 72, 8]], [[0, 76, 16]], [[0, 75, 8], [8, 78, 8]]),
+  // celesta glints on the A section's bright bars
+  cel: { 0: [[4, 79], [10, 83]], 4: [[4, 83], [12, 86]] },
 };
-// one bar of oom-pah: tuba on the beats (root, then fifth), the chord on the offbeats
-function oomPah(t, s, sp, name, o = {}) {
-  const [root, chord] = CH[name];
-  // (the tuba plays the root on the first beat, the fifth below on the second)
-  if (s % 4 === 0) { P.tuba(t, s % 8 === 4 ? root - 5 : root, o.tuba ?? 0.2, sp * 1.6); if (o.kick !== false) P.oomKick(t, o.kick ?? 0.16); }
-  if (s % 4 === 2) { P.pah(t, chord, o.pah ?? 0.02); if (o.snare !== false) P.snare(t, o.snare ?? 0.05); }
+// one arrangement, scored per place: tr transposes, and each layer can be dropped or scaled
+function epicBar(t, b, s, sp, o) {
+  const tr = o.tr || 0, root = SCORE.roots[b] + tr, vc = SCORE.voice[b].map(m => m + tr);
+  if (s === 0) O.strings(t, vc, sp * 16, o.str ?? 0.026, o.lp ?? 1700);
+  if (o.bass !== false) { const k = o.half ? s % 2 === 0 : true; if (k) O.bass(t, root + SCORE.ost[s], (o.bass ?? 0.13) * SCORE.acc[s], o.half ? sp * 1.6 : sp * 0.85); }
+  if (o.cello && s % 2 === 0) O.cello(t, vc[[0, 1, 2, 3, 2, 1, 2, 3][s / 2]], o.cello);   // (8th-note arpeggio through the chord)
+  if (o.drums !== false) {
+    if (s === 0) O.timp(t, root + 12, 0.18 * (o.drums ?? 1));
+    if (s === 10 || (s === 6 && b % 2)) O.taiko(t, 0.16 * (o.drums ?? 1));
+    if (s % 4 === 3) I.tom(t, b % 2 ? 98 : 110, 0.07 * (o.drums ?? 1));
+    if ((b === 7 || b === 15) && s >= 8) O.roll(t, root + 12, sp, 1, 0.1 * (o.drums ?? 1));
+  }
+  if (o.brass && (s === 0 || s === 3 || s === 11) && b % 2 === 0) O.brass(t, vc.map(m => m + 12), o.brass);
+  const A = b < 8;
+  if (A) { const n = SCORE.horn[b][s]; if (n && o.horn !== false) (o.hornFn || O.horn)(t, n[0] + tr, n[1] * sp * 0.95, o.horn ?? 0.075); }
+  else { const n = SCORE.lead[b - 8][s]; if (n && o.lead !== false) O.lead(t, n[0] + tr, n[1] * sp * 0.95, o.lead ?? 0.045); }
+  if (o.cel !== false && A && SCORE.cel[b % 8]) for (const [st, m] of SCORE.cel[b % 8]) if (st === s) O.celesta(t, m + tr, o.cel ?? 0.03);
 }
-function playLine(t, line, s, sp, fn) { const n = line && line[s]; if (n) fn(t, n[0], n[1] * sp * 0.92); }
 const TRACKS = {
-  // the menu: the jungle tune taken easy, the accordion alone with the tuba and a tambourine
-  menu: { bpm: 128, bars: 8, vol: 0.5, play(t, b, s, sp) {
-    const T = POLKA.jungle, name = T.ch[b];
-    oomPah(t, s, sp, name, { tuba: 0.15, pah: 0.016, kick: false, snare: false });
-    if (s % 4 === 2) P.tamb(t, 0.022);
-    playLine(t, T.acc[b], s, sp, (tt, m, d) => P.accordion(tt, m - 12, d, 0.04, 0.3));
-  } },
-  jungle: { bpm: 160, bars: 16, vol: 0.5, play(t, b, s, sp) {
-    const T = POLKA.jungle, name = T.ch[b];
-    oomPah(t, s, sp, name);
-    if (s % 2 === 1) P.tamb(t, s % 4 === 3 ? 0.03 : 0.018);
-    if (s === 0 && (b === 0 || b === 8)) P.crash(t);
-    if (b < 8) playLine(t, T.acc[b], s, sp, (tt, m, d) => P.accordion(tt, m, d, 0.05));
-    else { playLine(t, T.cla[b - 8], s, sp, (tt, m, d) => P.clarinet(tt, m, d, 0.075)); if (s % 4 === 2) P.pah(t, CH[name][1].map(m => m + 12), 0.012); }
-    if (b === 15 && s >= 8) { P.roll(t, sp, 2, 0.06); if (s === 14) P.pah(t, [69, 73, 76], 0.035); }
-  } },
-  caves: { bpm: 112, bars: 8, vol: 0.55, play(t, b, s, sp) {
-    const T = POLKA.caves, name = T.ch[b], [root, chord] = CH[name];
-    if (s === 0 || s === 8) P.pluck(t, root + (s === 8 ? 7 : 0) + 12, 0.13);
-    if (s === 4 || s === 12) for (const m of chord) P.pluck(t, m, 0.035);
-    if (s === 0) I.pad(t, chord, sp * 16, 0.014, 900);
-    playLine(t, T.cla[b], s, sp, (tt, m, d) => { P.clarinet(tt, m, d, 0.065); P.clarinet(tt + sp * 3, m, d * 0.6, 0.018); });
-    if (s % 8 === 6) I.hat(t, 0.012);
+  // the menu: the theme at rest, strings and the horn on a soft half-time pulse, no drums
+  menu: { bpm: 96, bars: 16, vol: 0.55, play(t, b, s, sp) { epicBar(t, b, s, sp, { half: true, bass: 0.09, drums: false, str: 0.022, horn: 0.06, lead: 0.035, cel: 0.03 }); } },
+  // the jungle run: the full theme at the reference tempo
+  jungle: { bpm: 111, bars: 16, vol: 0.55, play(t, b, s, sp) { epicBar(t, b, s, sp, { cello: 0.032 }); } },
+  // the basalt caves: down a minor third, slower and sparser, an echoing celesta, soft drums and water drips
+  caves: { bpm: 96, bars: 16, vol: 0.6, play(t, b, s, sp) {
+    epicBar(t, b, s, sp, { tr: -3, half: true, bass: 0.1, drums: 0.5, str: 0.024, lp: 1300, cel: 0.04, hornFn: (tt, m, d, v) => { O.horn(tt, m, d, v); O.horn(tt + sp * 3, m, d * 0.7, v * 0.25); } });
     if (Math.random() < 0.03) I.drip(t, 0.03);
   } },
-  magma: { bpm: 176, bars: 8, vol: 0.48, play(t, b, s, sp) {
-    const T = POLKA.magma, name = T.ch[b];
-    oomPah(t, s, sp, name, { kick: 0.22, snare: 0.065, tuba: 0.22, pah: 0.024 });
-    if (s === 6 || s === 14) I.tom(t, b % 2 ? 120 : 140, 0.15);
-    if (s % 2 === 1) I.hat(t, 0.03);
-    if (s === 0 && b % 4 === 0) P.crash(t, 0.07);
-    playLine(t, T.acc[b], s, sp, (tt, m, d) => P.accordion(tt, m, d, 0.048));
-    if (b === 7 && s >= 12) P.roll(t, sp, 2, 0.07);
+  // the magma core: up a semitone and faster, taiko and brass stabs driving it
+  magma: { bpm: 126, bars: 16, vol: 0.5, play(t, b, s, sp) {
+    epicBar(t, b, s, sp, { tr: 1, cello: 0.036, drums: 1.35, brass: 0.03, str: 0.028, cel: false });
+    if (s === 4 || s === 12) O.taiko(t, 0.2);
   } },
 };
 // the danger layer over any run track: fast low toms and a pulsing low note, louder the closer the monster
