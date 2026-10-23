@@ -3904,28 +3904,54 @@ function sfxCoco(t, chain, gold) {
   vTone(out, t + 0.02, f1 * 0.75, { type: 'triangle', v: 0.018, dur: 0.5, a: 0.06, curve: 'lin' });
   vNoise(out, t + 0.04, { f: 3000, f2: 7500, q: 1.2, v: 0.02, dur: 0.7, a: 0.12 });
 }
-// A chili shot landing on the monster: five layers, a little different every time (pitch and pan wander) so a volley
-// never sounds like one sample on repeat. A deep body thud with a sub tail, a wet fleshy squelch (resonant noise
-// sweeping down), the fire bursting (a hiss that flares and dies, with crackles), the monster's grunt (two detuned saws
-// through an 'uh' vowel, falling) and a short room echo; spread across the stereo field.
+// A chili shot landing on the monster, to match what you see (a fireball bursting on its head in a white flash and a
+// ring of flame, seeds and scraps flung out, the head knocked down): a sharp shock crack, the fireball's gritty
+// whoomp (noise through a closing filter and a dropping body, driven into soft saturation), a meaty smack on the
+// hide, a deep body hit, the monster's pained roar (a rough, jittering voice through vowel formants sliding from 'ah'
+// to 'oh', with a growl flutter and breath), the seeds and scraps pattering down and the fire crackling as it dies.
+// Each hit varies (pitch, pan, roar length and vowel) and the roar's pitch follows the monster, so no two sound alike.
+let hitCurve = null;
 function sfxHit(t) {
-  const c = SND.ctx, B = SND.sfx, r = 0.92 + Math.random() * 0.16, pan = (Math.random() - 0.5) * 0.5;
-  const out = c.createStereoPanner ? c.createStereoPanner() : c.createGain(); if (out.pan) out.pan.value = pan; out.connect(B);
-  const room = c.createGain(); room.gain.value = 0.12; out.connect(room); room.connect(SND.verbIn);
-  // the thud: a deep sine knocked down in pitch, and a sub tail under it
-  vTone(out, t, 105 * r, { f2: 38, glide: 0.22, v: 0.13, dur: 0.32 });
-  vTone(out, t + 0.005, 52 * r, { f2: 30, glide: 0.4, v: 0.09, dur: 0.5, a: 0.01 });
-  // the squelch: resonant band-passed noise sweeping down, with a short click on the front
-  vNoise(out, t, { f: 1400 * r, f2: 280, q: 4, v: 0.08, dur: 0.16 });
-  vNoise(out, t, { type: 'highpass', f: 2500, v: 0.035, dur: 0.012 });
-  // the fire: a hiss that flares and dies away, and a few crackles of the chili popping
-  vNoise(out, t + 0.01, { type: 'highpass', f: 3200, f2: 1600, v: 0.04, dur: 0.38, a: 0.03 });
-  for (let i = 0; i < 4; i++) vNoise(out, t + 0.04 + Math.random() * 0.22, { f: 2500 + Math.random() * 3000, q: 6, v: 0.025, dur: 0.012 });
-  // the grunt: two detuned saws through an 'uh' vowel, falling as it's knocked back
-  const g = c.createGain(), src = c.createGain(), f0 = 120 * r;
-  for (const d of [-14, 14]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t + 0.02); o.frequency.exponentialRampToValueAtTime(f0 * 0.62, t + 0.3); o.detune.value = d; o.connect(src); o.start(t + 0.02); o.stop(t + 0.36); }
-  for (const [f, q, lv] of [[520, 6, 1], [900, 7, 0.5], [2400, 9, 0.15]]) { const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * r; bp.Q.value = q; const bg = c.createGain(); bg.gain.value = lv; src.connect(bp); bp.connect(bg); bg.connect(g); }
-  g.gain.setValueAtTime(0.0001, t + 0.02); g.gain.linearRampToValueAtTime(0.11, t + 0.06); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34); g.connect(out);
+  const c = SND.ctx, mn = monster(), seed = [...mn.id].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  const r = 0.93 + Math.random() * 0.14, voice = (0.8 + (seed % 7) * 0.07) * r, pan = (Math.random() - 0.5) * 0.4;
+  if (!hitCurve) { hitCurve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; hitCurve[i] = Math.tanh(x * 2.6) / Math.tanh(2.6); } }
+  // the strip: everything into a soft saturator (grit), panned, with a generous hall send
+  const drive = c.createWaveShaper(); drive.curve = hitCurve; drive.oversample = '2x';
+  const pre = c.createGain(); pre.gain.value = 1.6; pre.connect(drive);
+  const out = sfxOut(pan, 0.28, 0.17); drive.connect(out);
+  const dry = sfxOut(pan, 0.15, 0.34);   // (the bits that stay clean)
+  // the shock: a sharp crack on the front
+  vNoise(dry, t, { type: 'highpass', f: 2800, v: 0.07, dur: 0.018 });
+  vNoise(dry, t, { f: 1800, q: 1.2, v: 0.05, dur: 0.03 });
+  // the fireball: a whoomp of noise through a closing filter, a dropping body under it, both driven
+  vNoise(pre, t + 0.004, { type: 'lowpass', f: 5200, f2: 380, v: 0.22, dur: 0.32, a: 0.004 });
+  vNoise(pre, t + 0.004, { f: 260, f2: 90, q: 1.4, v: 0.2, dur: 0.28 });
+  // the smack: fire on thick hide
+  vNoise(pre, t, { f: 1100, q: 1.1, v: 0.12, dur: 0.035 });
+  vTone(pre, t, 230 * r, { f2: 95, glide: 0.04, v: 0.12, dur: 0.06 });
+  // the body hit: deep and short, felt more than heard
+  vTone(dry, t, 72 * r, { f2: 34, glide: 0.25, v: 0.16, dur: 0.36 });
+  // the roar: a rough voice (two detuned saws whose pitch jitters), through vowel formants sliding 'ah' to 'oh', with
+  // a growl flutter on its level and a breath of noise through the same mouth
+  const len = 0.32 + Math.random() * 0.14, t0 = t + 0.035, f0 = 92 * voice, mouth = c.createGain(), lvl = c.createGain(), flutter = c.createOscillator(), fg = c.createGain();
+  for (const d of [-18, 16]) {
+    const o = c.createOscillator(), jit = c.createOscillator(), jg = c.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * 1.12, t0); o.frequency.linearRampToValueAtTime(f0 * 1.2, t0 + 0.06); o.frequency.exponentialRampToValueAtTime(f0 * 0.66, t0 + len);
+    o.detune.value = d; jit.type = 'square'; jit.frequency.value = 23 + Math.random() * 9; jg.gain.value = f0 * 0.05; jit.connect(jg); jg.connect(o.frequency);
+    o.connect(mouth); o.start(t0); jit.start(t0); o.stop(t0 + len + 0.05); jit.stop(t0 + len + 0.05);
+  }
+  const br = c.createBufferSource(), bf = c.createBiquadFilter(), bg = c.createGain(); br.buffer = SND.noise; bf.type = 'highpass'; bf.frequency.value = 600; bg.gain.value = 0.35; br.connect(bf); bf.connect(bg); bg.connect(mouth); br.start(t0, Math.random()); br.stop(t0 + len + 0.05);
+  const ah = Math.random() < 0.5 ? 1 : 0.92;
+  for (const [fa, fo, q, l] of [[760 * ah, 480, 5, 1], [1180 * ah, 820, 6, 0.55], [2500, 2300, 8, 0.18]]) {
+    const bp = c.createBiquadFilter(), g = c.createGain(); bp.type = 'bandpass'; bp.Q.value = q; bp.frequency.setValueAtTime(fa * voice ** 0.3, t0); bp.frequency.linearRampToValueAtTime(fo * voice ** 0.3, t0 + len);
+    g.gain.value = l; mouth.connect(bp); bp.connect(g); g.connect(lvl);
+  }
+  flutter.frequency.value = 31 + Math.random() * 8; fg.gain.value = 0.045; flutter.connect(fg); fg.connect(lvl.gain);
+  lvl.gain.setValueAtTime(0.0001, t0); lvl.gain.linearRampToValueAtTime(0.11, t0 + 0.05); lvl.gain.setValueAtTime(0.1, t0 + len * 0.45); lvl.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+  flutter.start(t0); flutter.stop(t0 + len + 0.05); lvl.connect(pre);
+  // the seeds and scraps pattering down, and the fire crackling out
+  for (let i = 0; i < 7; i++) { const tt = t + 0.06 + Math.random() * 0.4; vNoise(dry, tt, { f: 1500 + Math.random() * 3500, q: 5, v: 0.012 + Math.random() * 0.012, dur: 0.01 + Math.random() * 0.012 }); }
+  vNoise(dry, t + 0.05, { type: 'highpass', f: 3500, f2: 2000, v: 0.018, dur: 0.45, a: 0.06 });
 }
 function sfx(name, o = {}) {
   const c = SND.ctx;
