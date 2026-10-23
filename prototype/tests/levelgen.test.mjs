@@ -174,7 +174,7 @@ for (const sp of BEATS.flat()) if (new Set(sp.steps.map(([t]) => t).filter(t => 
 // reach the next one; and the hunger is real: even flat out at top speed it catches you within 12 s.
 const CLEAR = PILOT_W / 2 + 15 + RULES.pickup.r;   // a pickup's clearance from every hazard hitbox (pilot half-width, 15, the largest pickup radius)
 const ammoStats = {};
-{
+if (RULES.chili.endless) {
   const D = DEFAULTS, v = D.wormBase + 60, gap = RULES.chili.gap;
   // shots per second auto-fire spends on a pilot climbing steadily at pv, the monster (base speed `base`) chasing at
   // leash `target`: it fires while the monster is in range, shots fly down at AMMO.speed, a hit knocks it back (over a
@@ -214,6 +214,8 @@ const ammoStats = {};
   if (ammoStats.climb * 1.2 > ammoStats.caught) fail('the longest climb without a chili is inside the time from empty to caught (20% margin)', `${ammoStats.climb.toFixed(2)} s vs ${ammoStats.caught.toFixed(2)} s`);
   if (ammoStats.caughtFlat > 12) fail('out of ammo the monster catches even a flat-out pilot', `${ammoStats.caughtFlat.toFixed(1)} s`);
   if (AMMO.start > AMMO.max || AMMO.per < 1 || AMMO.range <= D.chase) fail('ammo numbers are sane (start <= max, the leash is in range)', '');
+}
+{
   if (RULES.pickup.clear < CLEAR || RULES.fruitHug < CLEAR) fail('pickups keep the widest pilot half-width plus 15 plus their radius from hazards', `${RULES.pickup.clear} vs ${CLEAR.toFixed(1)}`);
   if (Math.max(CHILI_R, COCO_R, GOLD_R) !== PICK_R || RULES.pickup.r !== PICK_R) fail('the pickup clearance uses the largest pickup radius', '');
 }
@@ -348,7 +350,8 @@ for (const cfg of CONFIGS) {
       if (per < 2.0) fail('hazards stay dense after 300 m', `${tag}: ${per.toFixed(2)} per 100 m`);
     }
     if (k < 100 && cfg.density === 1 && cfg.intro === 300) { zoneMix.intro = zoneMix.intro || new Set(); zoneMix.intro.add(hz.slice(0, 3).map(h => `${h.type}${h.side}:${Math.round(h.lo / 60)}`).join(' ')); }
-    if (fruit.filter(f => f.kind === 'chili').length < HEIGHT / RULES.chili.gap) fail('shaft has a chili line', `${tag}: only ${fruit.filter(f => f.kind === 'chili').length}`);
+    if (RULES.chili.endless && fruit.filter(f => f.kind === 'chili').length < HEIGHT / RULES.chili.gap) fail('shaft has a chili line', `${tag}: only ${fruit.filter(f => f.kind === 'chili').length}`);
+    if (!RULES.chili.endless && fruit.some(f => f.kind === 'chili')) fail('endless shafts hold no chilies (the blaster is Adventure only)', tag);
     for (const f of fruit) if (!['chili', 'coco', 'gold'].includes(f.kind)) { fail('every pickup is a chili, a coconut or a golden coconut', `${tag}: ${f.kind}`); break; }
     for (const f of fruit) if (f.kind === 'chili' && !f.fill) { fail('only the guaranteed line holds chilies', tag); break; }
     // coconuts are plentiful (counted over the first 500 m after the launch, value with golden ones at COCO_GOLD)
@@ -514,7 +517,7 @@ for (const cfg of CONFIGS) {
 
     // the chili line: along the shaft there is never a longer climb than RULES.chili.gap without a chili (the ammo
     // fairness above is computed from that gap)
-    {
+    if (RULES.chili.endless) {
       const alts = fruit.filter(f => f.kind === 'chili').map(f => f.alt).sort((x, y) => x - y);
       let prev = 58, worst = 0;
       for (const a of alts) { if (a > HEIGHT - 800) break; worst = Math.max(worst, a - prev); prev = a; }
@@ -881,7 +884,7 @@ if (popChecked < 1000) fail('pickup pop-in is checked', `${popChecked}`);
   b.fill(20000 + 1700, hb, fb);
   const cut = f => f.alt < 19000, key = f => `${f.kind}:${f.x.toFixed(2)}:${f.alt.toFixed(2)}`;
   if (fa.filter(cut).map(key).sort().join() !== fb.filter(cut).map(key).sort().join()) fail('pickups do not depend on how the shaft is filled', '');
-  if (!fa.some(f => f.kind === 'chili') || !fa.some(f => f.kind === 'coco') || !fa.some(f => f.kind === 'gold')) fail('every pickup kind shows up', '');
+  if ((RULES.chili.endless && !fa.some(f => f.kind === 'chili')) || !fa.some(f => f.kind === 'coco') || !fa.some(f => f.kind === 'gold')) fail('every pickup kind shows up', '');
 }
 if (zoneMix.gold && zoneMix.goldH) {
   zoneMix.per150 = zoneMix.gold / (zoneMix.goldH / 1500);
@@ -1029,7 +1032,7 @@ const dens = zoneMix.dens || [0];
 console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every layout rule (widest pilot hitbox ${PILOT_W.toFixed(1)}, lanes ≥ ${RULES.minLane}, crusher slot ${RULES.crusher.slot}; ${gateSims} gates and ${crusherSims} crushers flown at 32 phases × 5 approaches; density after 300 m ${Math.min(...dens).toFixed(2)}–${Math.max(...dens).toFixed(2)} per 100 m, avg ${(dens.reduce((a, b) => a + b) / dens.length).toFixed(2)})`);
 {
   const cv = zoneMix.coco || [0], cn = zoneMix.cocoN || [0], avg = a => (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1);
-  console.log(`PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo auto-fire spends at the tightest leash (${ammoStats.spend.toFixed(2)} shots/s); flat out at the calm leash it fires ${ammoStats.flatSpend.toFixed(2)} shots/s, ${Math.round(ammoStats.flat * 100)}% of the chili line's supply; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
+  console.log(RULES.chili.endless ? `PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo auto-fire spends at the tightest leash (${ammoStats.spend.toFixed(2)} shots/s); flat out at the calm leash it fires ${ammoStats.flatSpend.toFixed(2)} shots/s, ${Math.round(ammoStats.flat * 100)}% of the chili line's supply; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m` : `PASS: no chilies or blaster in endless (Adventure only); first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 console.log(advSummary());
