@@ -3600,10 +3600,16 @@ function audioInit() {
 function kickAudio() { try { const c = SND.ctx, b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } catch {} }
 // the first gesture anywhere starts (or resumes) the audio
 for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown']) document.addEventListener(ev, audioInit, { capture: true, passive: true });
-document.addEventListener('visibilitychange', () => {
+// quiet whenever the game can't be seen or isn't in use: a hidden page, one being closed, or a window that lost focus
+// (a preview pane that's hidden or a click into another app doesn't hide the page, so focus counts too)
+function audioAway(away) {
   if (!SND.ctx) return;
-  if (document.hidden) { SND.ctx.suspend(); if (silentEl) silentEl.pause(); } else { SND.ctx.resume().catch(() => {}); }
-});
+  if (away) { SND.ctx.suspend(); if (silentEl) silentEl.pause(); } else if (!document.hidden && document.hasFocus()) SND.ctx.resume().catch(() => {});
+}
+document.addEventListener('visibilitychange', () => audioAway(document.hidden));
+window.addEventListener('pagehide', () => audioAway(true));
+window.addEventListener('blur', () => audioAway(true));
+window.addEventListener('focus', () => audioAway(false));
 function applyAudioSettings() {
   if (!SND.ctx) return;
   const t = SND.ctx.currentTime;
