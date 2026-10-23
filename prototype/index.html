@@ -3480,15 +3480,15 @@ function puff(x, alt, vx, vy, life, size, kind, ex) {
 // Everything is synthesised with Web Audio (no sound files): a music bus and an effects bus into a soft compressor,
 // each switched by its own setting (settings.music / settings.sfx). The context starts on the first touch or key (iOS
 // needs a gesture) and is suspended while the page is hidden.
-// Music: an original long-form cinematic score in the spirit of the wintry-ruins music of the jungle platformers, built
-// to grow: an intro (strings, harp, a muffled pulse), the theme (a 16th-note bass engine under a horn melody, strings
-// rocking between a bright Lydian and a dark Phrygian chord a tritone apart), the theme again bigger (choir, a violin
-// counter-line, taiko, blooming brass), a heroic D minor climax (strings and horns in octaves, brass stabs, full choir,
-// taiko and snare, crashes and booms), a breakdown and a build (rolls, a riser, the filters opening) back into the
-// theme. Every voice sits in the stereo field with a hall send. Scored per place on a 16th-note grid with a look-ahead
-// scheduler: 'menu' (at rest), 'jungle' (the whole piece, 111 bpm), 'caves' (lower, slower, no climax) and 'magma'
-// (higher, faster, straight into the big sections). audioTick() picks the track from the game state every frame,
-// crossfades on a change, muffles it while paused and adds a danger layer while the monster is close or hungry.
+// Music: an original heroic score with a jungle heart, epic from the first bar. A 3-3-2 drive ('ONE two three ONE two
+// three ONE two': spiccato strings, taiko and brass stabs), a 36-bar form: an intro (the drive and a horn call), the
+// theme (a horn section with violins an octave up), the lift (a soaring violin line, choir, low brass, stabs), the
+// climax (the theme a tone higher, everything, crashes, booms and tom fills), a breather (choir and the call) and a
+// build (a long snare roll and a riser) back into the theme; congas, shaker and log drum underneath. Every voice sits in
+// the stereo field with a hall send. Scored per place on a 16th-note grid with a look-ahead scheduler: 'menu' (the
+// drive pulled back), 'jungle' (the whole piece, 120 bpm), 'caves' (a tone down, slower, no climax) and 'magma' (up,
+// faster, the lift and the climax). audioTick() picks the track from the game state every frame, the tracks crossfade
+// on a bar line, it is muffled while paused, and a danger layer comes in while the monster is close.
 const SND = { ctx: null, out: null, music: null, musicLp: null, sfx: null, verb: null, noise: null,
   track: null, want: null, players: [], timer: 0, danger: 0, resumeStep: 0, bus: null, vsend: null };
 const mf = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -3671,145 +3671,128 @@ const J = {
     src.start(t, Math.random()); am.start(t); src.stop(t + dur + 0.1); am.stop(t + dur + 0.1); },
 };
 // ---- the score ----
-// chords: bass root, the string voicing, the choir's and the brass section's
+// the epic section of the band: a horn section (three detuned voices, a brassy bloom on the attack, a late vibrato),
+// spiccato strings (short bowed notes, desks left and right), low brass (warm trombones) and their stabs
+const E = {
+  horns: (t, m, dur, v = 0.05, pan = -0.2) => {
+    const c = SND.ctx, f = mf(m), g = c.createGain(), fl = c.createBiquadFilter(), vib = c.createOscillator(), vg = c.createGain();
+    fl.type = 'lowpass'; fl.Q.value = 0.8; fl.frequency.setValueAtTime(500, t); fl.frequency.linearRampToValueAtTime(2300, t + 0.07); fl.frequency.linearRampToValueAtTime(1500, t + 0.3); fl.connect(g);
+    vib.frequency.value = 5; vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.006, t + Math.min(0.5, dur)); vib.connect(vg);
+    for (const d of [-9, 0, 9]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = d; vg.connect(o.frequency); o.connect(fl); o.start(t); o.stop(t + dur + 0.25); }
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.05); g.gain.setValueAtTime(v * 0.85, t + Math.max(0.06, dur - 0.06)); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.2);
+    g.connect(mPan(pan)); mSend(g, 0.5); vib.start(t); vib.stop(t + dur + 0.25);
+  },
+  spic: (t, m, v = 0.03, pan = 0) => { const f = mf(m), bus = mPan(pan); vTone(bus, t, f, { type: 'sawtooth', v, dur: 0.11, a: 0.006, lp: 2600, lp2: 900, lpT: 0.1, q: 0.7, send: 0.3 }); vTone(bus, t, f * 1.004, { type: 'sawtooth', v: v * 0.7, dur: 0.1, a: 0.008, lp: 2200, q: 0.5 }); },
+  lowBrass: (t, ms, dur, v = 0.03) => { const bus = mPan(0.15); for (const m of ms) vTone(bus, t, mf(m), { type: 'sawtooth', v, dur, a: 0.12, lp: 650, lp2: 1100, lpT: 0.25, q: 0.8, curve: 'lin', send: 0.4 }); },
+  stab: (t, ms, v = 0.035) => { const bus = mPan(-0.05); for (const m of ms) for (const d of [-8, 8]) vTone(bus, t, mf(m) * Math.pow(2, d / 1200), { type: 'sawtooth', v, dur: 0.2, a: 0.01, lp: 3200, lp2: 600, lpT: 0.18, q: 1.2, send: 0.4 }); },
+};
+// chords: bass root, a string voicing, the choir's and the brass section's (D minor; the climax plays a tone higher)
 const EC = {
-  BbL: { r: 34, s: [50, 53, 57, 64], ch: [62, 65, 69], br: [58, 62, 65] },   // Bb Lydian: bright, the E natural floating on top
-  EP:  { r: 40, s: [52, 55, 59, 65], ch: [64, 67, 71], br: [52, 59, 64] },   // E Phrygian: dark, the F rubbing against the root
-  Dm:  { r: 38, s: [50, 57, 62, 65], ch: [62, 65, 69], br: [50, 57, 62] },
-  Bb:  { r: 34, s: [50, 53, 58, 62], ch: [62, 65, 70], br: [46, 53, 58] },
-  F:   { r: 41, s: [53, 57, 60, 65], ch: [60, 65, 69], br: [53, 57, 60] },
-  C:   { r: 36, s: [52, 55, 60, 64], ch: [60, 64, 67], br: [48, 55, 60] },
-  Gm:  { r: 43, s: [50, 55, 58, 62], ch: [62, 67, 70], br: [55, 58, 62] },
-  Eb:  { r: 39, s: [51, 55, 58, 63], ch: [63, 67, 70], br: [51, 58, 63] },
-  As:  { r: 45, s: [52, 57, 62, 64], ch: [62, 64, 69], br: [57, 62, 64] },
-  A:   { r: 45, s: [52, 57, 61, 64], ch: [61, 64, 69], br: [57, 61, 64] },
+  Dm: { r: 38, s: [50, 57, 62, 65], ch: [62, 65, 69], br: [50, 57, 62] },
+  Bb: { r: 34, s: [50, 53, 58, 62], ch: [62, 65, 70], br: [46, 53, 58] },
+  F:  { r: 41, s: [53, 57, 60, 65], ch: [60, 65, 69], br: [53, 57, 60] },
+  C:  { r: 36, s: [52, 55, 60, 64], ch: [60, 64, 67], br: [48, 55, 60] },
+  Gm: { r: 43, s: [50, 55, 58, 62], ch: [62, 67, 70], br: [55, 58, 62] },
+  Eb: { r: 39, s: [51, 55, 58, 63], ch: [63, 67, 70], br: [51, 58, 63] },
+  A:  { r: 45, s: [52, 57, 61, 64], ch: [61, 64, 69], br: [57, 61, 64] },
 };
-// the sections: one chord per bar. The second theme turns through G minor to A at its end, so the climax arrives on
-// D minor as a resolution, not a jump; the climax ends on A and resolves into the breakdown's D minor.
+// the form: intro, the theme, the lift, the climax (the theme a tone up), a breather and a build
 const SEC = {
-  intro: { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'EP', 'EP'] },
-  A1:    { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'EP', 'EP'] },
-  A2:    { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'Gm', 'A'] },
-  climax:{ ch: ['Dm', 'Bb', 'F', 'C', 'Gm', 'Bb', 'As', 'A', 'Dm', 'Bb', 'F', 'C', 'Gm', 'Eb', 'As', 'A'] },
-  break: { ch: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'Bb', 'Gm', 'A'] },
-  build: { ch: ['BbL', 'BbL', 'EP', 'EP', 'BbL', 'BbL', 'As', 'A'] },
+  intro:  { ch: ['Dm', 'Dm', 'Bb', 'A'] },
+  A:      { ch: ['Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A'] },
+  B:      { ch: ['Gm', 'Eb', 'Bb', 'F', 'Gm', 'Eb', 'C', 'A'] },
+  climax: { ch: ['Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A'], up: 2 },
+  break:  { ch: ['Dm', 'Bb', 'Gm', 'A'] },
+  build:  { ch: ['Gm', 'Bb', 'C', 'A'] },
 };
-// the theme (pan flute, then pan flute and horn), a high violin line against it, and the heroic climax theme
-const THEME = ph([[0, 65, 6], [6, 67, 2], [8, 69, 8]], [[0, 69, 8], [8, 67, 4], [12, 64, 4]], [[0, 65, 8], [8, 64, 4], [12, 67, 4]], [[0, 69, 6], [6, 71, 2], [8, 72, 8]],
-                 [[0, 74, 6], [6, 72, 2], [8, 69, 8]], [[0, 67, 4], [4, 69, 4], [8, 76, 8]], [[0, 77, 6], [6, 76, 2], [8, 74, 4], [12, 72, 4]], [[0, 71, 16]]);
-const THEME_TURN = ph([[0, 77, 6], [6, 74, 2], [8, 70, 4], [12, 74, 4]], [[0, 73, 8], [8, 76, 8]]);   // the A2 ending over G minor and A
-const COUNTER = ph([[0, 74, 16]], [[0, 76, 16]], [[0, 72, 16]], [[0, 71, 8], [8, 72, 8]], [[0, 77, 16]], [[0, 76, 8], [8, 79, 8]], [[0, 79, 16]], [[0, 79, 8], [8, 81, 8]]);
-const HERO = ph([[0, 74, 4], [4, 76], [6, 77], [8, 81, 8]], [[0, 79, 4], [4, 77, 4], [8, 74, 8]], [[0, 72, 4], [4, 74], [6, 77], [8, 81, 6], [14, 84]], [[0, 79, 12], [12, 76, 4]],
-                [[0, 74, 4], [4, 79, 4], [8, 82, 8]], [[0, 81, 4], [4, 79, 4], [8, 77, 4], [12, 74, 4]], [[0, 76, 8], [8, 74, 8]], [[0, 73, 16]],
-                [[0, 74, 4], [4, 76], [6, 77], [8, 81, 8]], [[0, 79, 4], [4, 77, 4], [8, 74, 8]], [[0, 72, 4], [4, 74], [6, 77], [8, 81, 6], [14, 84]], [[0, 79, 12], [12, 76, 4]],
-                [[0, 74, 4], [4, 79, 4], [8, 82, 8]], [[0, 79, 4], [4, 82, 4], [8, 79, 4], [12, 75, 4]], [[0, 76, 8], [8, 79, 8]], [[0, 81, 16]]);
+// the heroic theme (horns, violins an octave up), the lift's soaring line, and the horn call that opens it all
+const THEME_A = ph([[0, 74, 6], [6, 72, 2], [8, 74, 2], [10, 76, 2], [12, 77, 4]], [[0, 74, 8], [8, 70, 4], [12, 72, 4]], [[0, 72, 6], [6, 69, 2], [8, 72, 2], [10, 74, 2], [12, 76, 4]], [[0, 72, 8], [8, 67, 8]],
+                   [[0, 74, 6], [6, 72, 2], [8, 74, 2], [10, 76, 2], [12, 77, 4]], [[0, 79, 6], [6, 77, 2], [8, 74, 4], [12, 77, 4]], [[0, 79, 4], [4, 77, 4], [8, 74, 4], [12, 72, 4]], [[0, 73, 8], [8, 76, 4], [12, 81, 4]]);
+const THEME_B = ph([[0, 79, 8], [8, 82, 8]], [[0, 82, 4], [4, 79, 4], [8, 75, 8]], [[0, 77, 8], [8, 82, 8]], [[0, 81, 12], [12, 77, 4]],
+                   [[0, 79, 8], [8, 82, 8]], [[0, 84, 6], [6, 82, 2], [8, 79, 8]], [[0, 79, 4], [4, 81, 4], [8, 84, 8]], [[0, 85, 16]]);
+const CALL = ph([[0, 62, 6], [6, 69, 2], [8, 74, 8]], [[0, 72, 4], [4, 69, 4], [8, 74, 8]], [[0, 70, 6], [6, 74, 2], [8, 77, 8]], [[0, 76, 8], [8, 73, 8]]);
+// the 3-3-2 drive: where the accents fall in a bar of 16ths (the epic 'ONE two three ONE two three ONE two')
+const ACC = [1, 0.45, 0.55, 0.9, 0.45, 0.55, 0.95, 0.5, 1, 0.45, 0.55, 0.9, 0.45, 0.55, 0.95, 0.6];
+const OSTN = [0, 0, 12, 0, 7, 0, 12, 7, 0, 0, 12, 0, 7, 0, 12, 7];       // the spiccato line, from the chord's root
 const DMIN = [62, 64, 65, 67, 69, 70, 72, 74, 76, 77, 79, 81, 82, 84];
-// the engine: a 16th pulse (bass roots with octave and fifth leaps, marimba and kalimba on the chord), leaning on the
-// last 16th before each beat; and the hand-drum groove, with the same push
-const OST = [0, 0, 12, 0, 0, 12, 0, 7, 0, 0, 12, 0, 0, 12, 7, 12], OSTV = [1, 0.5, 0.6, 0.85, 0.75, 0.5, 0.6, 0.85, 0.9, 0.5, 0.6, 0.85, 0.75, 0.5, 0.65, 0.9];
-const MAR = [0, -1, 1, 2, -1, 1, 0, 2, 1, -1, 2, 1, -1, 0, 2, 1];   // which chord tone the marimba hits (-1: rest)
-const GROOVE = { 0: 'low', 3: 'open', 6: 'slap', 7: 'mute', 10: 'low', 11: 'open', 14: 'slap', 15: 'open' }, BONGO = [2, 5, 9, 13];
+const GROOVE = { 0: 'low', 3: 'open', 6: 'slap', 8: 'low', 11: 'open', 14: 'slap', 15: 'mute' };
 // a track's form: [section, bars] in order; the bar map says, for every bar, its section, its bar within it and its chord
 function formMap(form) { const out = []; for (const [sec, n] of form) for (let i = 0; i < n; i++) out.push({ sec, i, n, ch: SEC[sec].ch[i % SEC[sec].ch.length] }); return out; }
-// one 16th of the score. `lv` is how far the hand drums have come in (they arrive layer by layer in the intro and build)
+// one 16th of the score
 function epicStep(t, bar, s, sp, map, k, o) {
-  const B = map[bar], next = map[(bar + 1) % map.length], tr = o.tr || 0, C = EC[B.ch], root = C.r + tr, T = m => m + tr;
-  const sec = B.sec, prog = (B.i + s / 16) / B.n, last = B.i === B.n - 1, D = o.drums ?? 1, H = o.hands ?? 1;
-  const lead2 = s >= 8 && last && next.sec !== sec;   // the second half of a section's last bar: the lead-in to the next
-  const outro = sec === 'climax' && last && s >= 8;   // the climax's last half bar thins out into the breakdown
-  const grooveIn = { intro: B.i < 2 ? 0 : B.i < 4 ? 1 : B.i < 6 ? 2 : 3, A1: 3, A2: 3, climax: 4, break: 1, build: B.i < 2 ? 1 : B.i < 4 ? 2 : B.i < 6 ? 3 : 4 }[sec];
-  // the jungle itself in the quiet places
-  if (o.amb === 'jungle' && (sec === 'intro' || sec === 'break' || sec === 'A1')) {
-    if (s === 0 && sec !== 'A1') J.insects(t, sp * 16, 0.007);
-    if (Math.random() < (sec === 'A1' ? 0.012 : 0.03)) J.bird(t, 0.02);
-    if (sec !== 'A1' && s === 9 && Math.random() < 0.3) J.frog(t, 0.025);
+  const B = map[bar], next = map[(bar + 1) % map.length], sec = B.sec, up = (SEC[sec].up || 0) + (o.tr || 0), C = EC[B.ch], root = C.r + up, T = m => m + up;
+  const prog = (B.i + s / 16) / B.n, last = B.i === B.n - 1, lead2 = last && s >= 8 && next.sec !== sec, D = o.drums ?? 1, H = o.hands ?? 1;
+  const big = sec === 'climax', lift = sec === 'B' || big, calm = sec === 'break';
+  // strings: a sustained chord each bar (and an octave above it at the climax)
+  if (s === 0 && k.str) {
+    const lv = { intro: 0.014 + 0.004 * B.i, A: 0.018, B: 0.028, climax: 0.04, break: 0.016, build: 0.016 + 0.006 * B.i }[sec];
+    O.strings(t, C.s.map(T), sp * 16, lv * k.str, calm ? 900 : big ? 2800 : 1900, calm ? 900 : big ? 3200 : 2200, 0.25);
+    if (big) O.strings(t, C.s.slice(1).map(m => T(m) + 12), sp * 16, 0.02 * k.str, 2800, 3200, 0.25, 0.8);
   }
-  if (o.amb === 'cave' && Math.random() < 0.03) I.drip(t, 0.03);
-  // the didgeridoo drone under the intro and breakdown
-  if (k.didg && s === 0 && (sec === 'intro' && B.i < 4 || sec === 'break') && B.i % 2 === 0) J.didg(t, root + 12, sp * 32, 0.03 * k.didg);
-  // strings: one sustained chord per bar, opening up through a build
-  if (s === 0) {
-    const lv = { intro: [0.006 + 0.002 * B.i, 450, 800], A1: [0.018, 1100, 1400], A2: [0.025, 1600, 2000], climax: [0.04, 2700, 3200], break: [0.014, 750, 900], build: [0.014 + 0.024 * B.i / B.n, 900 + 1900 * B.i / B.n, 900 + 1900 * (B.i + 1) / B.n] }[sec];
-    O.strings(t, C.s.map(T), sp * 16, lv[0] * k.str, lv[1], lv[2], sec === 'intro' ? 1.2 : 0.4);
-    if (sec === 'climax') O.strings(t, C.s.slice(1).map(m => T(m) + 12), sp * 16, 0.026 * k.str, 2600, 3200, 0.25, 0.8);
+  // the choir on the lift and the climax, and softly in the breather
+  if (s === 0 && k.choir && (lift || calm || (sec === 'build' && B.i >= 2))) O.choir(t, C.ch.map(T), sp * 16, (big ? 0.05 : calm ? 0.024 : sec === 'build' ? 0.028 : 0.04) * k.choir);
+  // the drive: spiccato strings on the 3-3-2, the bass under them pumping octaves at the climax
+  if (k.spic && !calm) {
+    const lv = sec === 'intro' ? 0.012 + 0.006 * B.i + 0.006 * (s / 16) : sec === 'build' ? 0.014 + 0.012 * prog : big ? 0.034 : sec === 'B' ? 0.028 : 0.022;
+    E.spic(t, T(C.r + 12 + OSTN[s]), lv * ACC[s] * k.spic, s % 2 ? 0.45 : -0.45);
+    if (lift && s % 2 === 0) E.spic(t, T(C.r + 24 + OSTN[s]), lv * 0.55 * ACC[s] * k.spic, s % 4 ? -0.3 : 0.3);
   }
-  if (s === 0 && k.choir && (sec === 'A2' || sec === 'climax' || sec === 'break' || (sec === 'build' && B.i >= 4)))
-    O.choir(t, C.ch.map(T), sp * 16, (sec === 'climax' ? 0.042 : sec === 'break' ? 0.02 : sec === 'build' ? 0.02 + 0.026 * prog : 0.022) * k.choir);
-  // the engine: bass and tuned wood
-  if (k.bass && sec !== 'break' && !outro) {
-    if (sec === 'intro') { if (B.i >= 4 && s % 4 === 0) O.bass(t, root, 0.05 * k.bass, sp * 3); }
-    else if (sec === 'climax') { if (s % 2 === 0) O.bass(t, root + (s % 4 === 2 ? 12 : 0), 0.16 * k.bass * (s % 8 === 0 ? 1 : 0.8), sp * 1.6); }
-    else O.bass(t, root + OST[s], 0.11 * k.bass * OSTV[s] * (sec === 'build' ? 0.5 + 0.6 * prog : 1), sp * 0.85);
+  if (k.bass && !calm) {
+    if (big) { if (s % 2 === 0) O.bass(t, root + (s % 4 === 2 ? 12 : 0), 0.15 * k.bass * ACC[s], sp * 1.7); }
+    else if (ACC[s] > 0.85) O.bass(t, root, (sec === 'intro' ? 0.07 : 0.12) * k.bass * ACC[s], sp * 2.4);
   }
-  if (k.wood && !outro) {
-    const tone = MAR[s], ch = C.ch.map(T);
-    const kal = sec === 'intro' ? B.i >= 2 : sec === 'break' || sec === 'build' && B.i < 4;
-    if (kal && tone >= 0) J.kalimba(t, ch[tone] + 12, (sec === 'intro' ? 0.03 + 0.006 * B.i : 0.04) * k.wood);
-    if ((sec === 'A1' || sec === 'A2' || sec === 'build' && B.i >= 4) && tone >= 0) J.marimba(t, ch[tone], 0.055 * k.wood * OSTV[s]);
-    if (sec === 'climax' && s % 2 === 0) J.marimba(t, ch[(s / 2) % 3] + 12, 0.04 * k.wood);
+  if (k.lowBrass && s === 0 && (lift || sec === 'build' && B.i >= 2)) E.lowBrass(t, [root + 12, root + 19], sp * 15, (big ? 0.036 : 0.03) * k.lowBrass);
+  // brass stabs on the 3-3-2 at the lift and the climax
+  if (k.brass && lift && (s === 0 || s === 3 || s === 6 || (big && (s === 10 || s === 14)))) E.stab(t, C.br.map(m => T(m) + 12), (big ? 0.036 : 0.03) * k.brass * ACC[s]);
+  // the tunes
+  if (sec === 'intro' || calm) { const n = CALL[B.i][s]; if (n && k.horns) E.horns(t, T(n[0]), n[1] * sp * 0.95, (calm ? 0.04 : 0.05) * k.horns, -0.15); }
+  if (sec === 'A' || big) {
+    const n = THEME_A[B.i][s];
+    if (n) { if (k.horns) E.horns(t, T(n[0]), n[1] * sp * 0.95, (big ? 0.07 : 0.05) * k.horns, -0.2); if (k.violin) O.violin(t, T(n[0]) + 12, n[1] * sp * 0.96, (big ? 0.04 : 0.028) * k.violin, 0.25);
+      if (big && k.horns) E.horns(t, T(n[0]) - 12, n[1] * sp * 0.95, 0.035 * k.horns, 0.15); }
   }
-  // the hand drums, layer by layer: log drum, then shaker and bongos, then the congas, then everything doubled up
-  if (H && !outro) {
-    const g = grooveIn;
-    if (g >= 1 && (s === 0 || s === 10 || s === 7 && B.i % 2)) J.log(t, T(s === 7 ? 57 : s === 10 ? 50 : 45), 0.08 * H);
-    if (g >= 2) { J.shaker(t, (s % 2 ? 0.03 : 0.016) * H, s % 4 < 2 ? 0.5 : 0.35); if (BONGO.includes(s)) J.bongo(t, s % 4 === 1, 0.07 * H); }
-    if (g >= 3 && GROOVE[s]) J.conga(t, GROOVE[s], 0.11 * H);
-    if (g >= 4 && s % 2 === 1 && !GROOVE[s]) J.conga(t, 'mute', 0.06 * H, 0.3);
+  if (sec === 'B') { const n = THEME_B[B.i][s]; if (n) { if (k.violin) O.violin(t, n[0], n[1] * sp * 0.96, 0.042 * k.violin, 0.2); if (k.horns) E.horns(t, n[0] - 12, n[1] * sp * 0.95, 0.05 * k.horns, -0.25); } }
+  // the jungle under it all: congas, shaker and a log drum on the 3-3-2
+  if (H && !calm) {
+    if (GROOVE[s] && (sec !== 'intro' || B.i >= 2)) J.conga(t, GROOVE[s], 0.1 * H);
+    if (sec !== 'intro' || B.i >= 1) J.shaker(t, (s % 2 ? 0.026 : 0.014) * H, s % 4 < 2 ? 0.5 : 0.35);
+    if (s === 6 || s === 14) J.log(t, T(s === 6 ? 50 : 57), 0.06 * H);
   }
-  // tunes
-  if (sec === 'A1' || sec === 'A2') {
-    const turn = sec === 'A2' && B.i >= 6, n = turn ? THEME_TURN[B.i - 6][s] : THEME[B.i][s];
-    if (n && k.flute) J.flute(t, T(n[0]), n[1] * sp * 0.96, (sec === 'A2' ? 0.07 : 0.075) * k.flute);
-    if (n && sec === 'A2' && k.horn) O.horn(t, T(n[0]) - 12, n[1] * sp * 0.96, 0.06 * k.horn);
-    if (sec === 'A2' && k.violin) { const c2 = COUNTER[B.i][s]; if (c2) O.violin(t, T(c2[0]), c2[1] * sp * 0.97, 0.028 * k.violin); }
-    if (o.echo && n) J.flute(t + sp * 3, T(n[0]), n[1] * sp * 0.7, 0.02 * k.flute, 0.4);
-  }
-  if (sec === 'climax') { const n = HERO[B.i][s]; if (n) { if (k.violin) O.violin(t, T(n[0]), n[1] * sp * 0.97, 0.055 * k.violin, 0.15); if (k.horn) { O.horn(t, T(n[0]) - 12, n[1] * sp * 0.96, 0.085 * k.horn, -0.25); vTone(mPan(0.1), t, mf(T(n[0]) - 24), { type: 'sawtooth', v: 0.045 * k.horn, dur: n[1] * sp * 0.96, a: 0.09, lp: 900, curve: 'lin', send: 0.4 }); } } }
-  if (sec === 'break' && B.i >= 4 && k.flute) { const n = THEME[B.i - 4][s]; if (n) J.flute(t, T(n[0]), n[1] * sp * 0.96, 0.06 * k.flute, 0.1); }
-  // brass
-  if (k.brass && !outro) {
-    if (sec === 'A2' && s === 0 && B.i % 2 === 0) O.brassSwell(t, C.br.map(T), sp * 14, 0.02 * k.brass);
-    if (sec === 'A2' && B.i === 7 && s === 0) O.brassSwell(t, C.br.map(T), sp * 16, 0.034 * k.brass);
-    if (sec === 'climax') { if (s === 0) O.brassSwell(t, C.br.map(T), sp * 6, 0.038 * k.brass); if (s === 6 || s === 10 || (s === 14 && B.i % 2)) O.brassStab(t, C.br.map(T), 0.042 * k.brass); }
-    if (sec === 'build' && B.i >= 5 && s === 0) O.brassSwell(t, C.br.map(T), sp * 16, (0.02 + 0.02 * prog) * k.brass);
-  }
-  // big drums
+  // big drums: taiko on the 3-3-2, timpani on the downbeats, snare on the backbeat when it lifts, fills and hits
   if (D) {
-    if (sec === 'A1' && s === 0 && B.i % 2 === 0) O.timp(t, root + 12, 0.12 * D);
-    if (sec === 'A2') { if (s === 0) O.timp(t, root + 12, 0.15 * D); if (s === 6 || s === 10) O.taiko(t, 0.13 * D, s === 6 ? -0.3 : 0.3); }
-    if (sec === 'climax' && !outro) {
-      if (s === 0 || s === 10) O.taiko(t, 0.3 * D); if (s === 3 || s === 6 || s === 14) O.taiko(t, 0.18 * D, s === 6 ? -0.35 : 0.35);
-      if (s === 4 || s === 12) O.snare(t, 0.06 * D);
-      if (s === 0 && (B.i === 0 || B.i === 8)) { O.crash(t, 0.075 * D); O.boom(t, 0.28 * D); }
-    }
-    if (outro && s === 8) { O.taiko(t, 0.3 * D); O.timp(t, root + 12, 0.2 * D); O.crash(t, 0.04 * D); }
-    if (sec === 'break' && (s === 0 || s === 3)) O.taiko(t, (s === 0 ? 0.08 : 0.05) * D);
-    if (sec === 'build') { if (s === 0) O.timp(t, root + 12, (0.07 + 0.12 * prog) * D); if (B.i >= 4 && s % 4 === 0) O.taiko(t, (0.07 + 0.15 * prog) * D); if (B.i >= 6 && s % 2 === 0) O.taiko(t, 0.11 * prog * D, s % 4 ? 0.3 : -0.3); }
-    // the lead-ins: a timpani roll into the theme; into the climax a snare roll, a conga roll and a string run
-    if (sec === 'intro' && last && s === 8) O.timpRoll(t, root + 12, sp, 8, 0.03 * D, 0.13 * D);
-    if (lead2 && s === 8 && sec === 'A2') { O.snareRoll(t, sp, 8, 0.02 * D, 0.08 * D); O.run(t, sp, DMIN.slice(0, 8).map(T), 0.03 * k.str); for (let i = 0; i < 8; i++) J.conga(t + i * sp, i % 2 ? 'open' : 'low', (0.05 + 0.01 * i) * H); }
-    if (sec === 'build' && B.i === B.n - 2 && s === 0) O.snareRoll(t, sp, 32, 0.01 * D, 0.085 * D);
-    if (sec === 'A2' && B.i === 0 && s === 0 && o.crashA2 !== false) { O.crash(t, 0.045 * D); O.boom(t, 0.16 * D); }
+    const tk = sec === 'intro' ? 0.1 + 0.03 * B.i : big ? 0.34 : sec === 'B' ? 0.27 : sec === 'build' ? 0.12 + 0.12 * prog : calm ? 0.08 : 0.16;
+    if (!calm) { if (s === 0 || s === 6) O.taiko(t, tk * D); if (s === 3 || s === 11) O.taiko(t, tk * 0.55 * D, s === 3 ? -0.3 : 0.3); if (s === 8 && sec !== 'intro') O.taiko(t, tk * 0.8 * D); }
+    else if (s === 0 || s === 3) O.taiko(t, (s ? 0.05 : 0.09) * D);
+    if (s === 0 && !calm) O.timp(t, root + 12, (big ? 0.2 : 0.14) * D);
+    if (lift && (s === 4 || s === 12)) O.snare(t, (big ? 0.06 : 0.045) * D);
+    if (big && B.i % 4 === 3 && s >= 12) I.tom(t, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 135, 115, 95][s], 0.14 * D);   // tom fills every four bars
+    if (s === 0 && B.i === 0 && (lift || sec === 'A')) { O.crash(t, (big ? 0.08 : 0.05) * D); if (big || sec === 'B') O.boom(t, (big ? 0.3 : 0.18) * D); }
+    if (lead2 && s === 8 && (sec === 'B' || sec === 'A')) { O.snareRoll(t, sp, 8, 0.02 * D, 0.08 * D); O.run(t, sp, DMIN.slice(sec === 'B' ? 4 : 0, (sec === 'B' ? 4 : 0) + 8).map(T), 0.028 * k.str); }
+    if (sec === 'intro' && last && s === 8) O.timpRoll(t, root + 12, sp, 8, 0.04 * D, 0.16 * D);
+    if (sec === 'build' && B.i === 0 && s === 0) O.snareRoll(t, sp, 64, 0.008 * D, 0.09 * D);
+    if (big && last && s === 8) { O.taiko(t, 0.3 * D); O.crash(t, 0.04 * D); }
   }
-  // risers and the reverse cymbal land on the downbeats of the big moments
+  // risers into the big downbeats
   if (k.fx && s === 0) {
-    if ((sec === 'intro' || sec === 'build') && B.i === B.n - 2) O.riser(t, sp * 32, 0.04 * k.fx);
-    if (sec === 'A2' && B.i === B.n - 1) O.swell(t, sp * 16, 0.055 * k.fx);
+    if ((sec === 'intro' || sec === 'build') && B.i === B.n - 2) O.riser(t, sp * 32, 0.045 * k.fx);
+    if (sec === 'B' && last) O.swell(t, sp * 16, 0.06 * k.fx);
   }
+  if (o.amb === 'cave' && Math.random() < 0.025) I.drip(t, 0.03);
+  if (o.amb === 'jungle' && calm && Math.random() < 0.03) J.bird(t, 0.018);
 }
-// a track: its form, tempo, transposition, how loud each layer is (0 drops it), where it loops back to and where it
-// joins when it follows another run track (at its main theme, not its intro)
-const FULL = { str: 1, choir: 1, bass: 1, wood: 1, flute: 1, horn: 1, violin: 1, brass: 1, fx: 1, didg: 1 };
+// a track: its form, tempo, transposition, how loud each layer is (0 drops it), where it loops back to, and where it
+// joins when it follows another run track
+const FULL = { str: 1, choir: 1, spic: 1, bass: 1, lowBrass: 1, brass: 1, horns: 1, violin: 1, fx: 1 };
 const mkTrack = (form, bpm, vol, o, k, loopAt = 0, join = 0) => { const map = formMap(form); return { bpm, vol, bars: map.length, loop: loopAt, join, play: (t, b, s, sp) => epicStep(t, b, s, sp, map, { ...FULL, ...k }, o) }; };
 const TRACKS = {
-  // the menu: the jungle waking up, the theme, and the breakdown; hand drums but no big drums, brass or climax
-  menu: mkTrack([['intro', 8], ['A1', 8], ['break', 8]], 104, 0.55, { drums: 0, hands: 0.8, amb: 'jungle' }, { brass: 0, fx: 0, bass: 0.7 }, 0),
-  // the jungle run: the whole piece, looping back to the second theme after the build
-  jungle: mkTrack([['intro', 8], ['A1', 8], ['A2', 8], ['climax', 16], ['break', 8], ['build', 8]], 111, 0.5, { amb: 'jungle' }, {}, 16, 8),
-  // the basalt caves: down a tone, slower and darker, an echoing flute and drips, no climax
-  caves: mkTrack([['intro', 8], ['A1', 8], ['A2', 8], ['break', 8], ['build', 8]], 100, 0.55, { tr: -2, drums: 0.55, hands: 0.7, echo: true, amb: 'cave' }, { brass: 0.5 }, 8, 8),
-  // the magma core: up a semitone, faster, straight into the big sections
-  magma: mkTrack([['A2', 8], ['climax', 16], ['build', 8]], 124, 0.46, { tr: 1, drums: 1.25, hands: 1.1 }, { didg: 0 }, 0, 0),
+  // the menu: the theme with the drive pulled back (no big drums, no climax), the call, the breather
+  menu: mkTrack([['intro', 4], ['A', 8], ['break', 4]], 104, 0.5, { drums: 0.3, hands: 0.7, amb: 'jungle' }, { brass: 0, lowBrass: 0, fx: 0, spic: 0.6, bass: 0.6 }, 0),
+  // the jungle run: the whole piece, looping back to the theme after the build
+  jungle: mkTrack([['intro', 4], ['A', 8], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], 120, 0.46, { amb: 'jungle' }, {}, 4, 4),
+  // the basalt caves: down a tone, a little slower, darker, no climax, drips
+  caves: mkTrack([['intro', 4], ['A', 8], ['B', 8], ['break', 4], ['build', 4]], 112, 0.5, { tr: -2, drums: 0.7, hands: 0.6, amb: 'cave' }, { brass: 0.6 }, 4, 4),
+  // the magma core: up a semitone, faster, the lift and the climax
+  magma: mkTrack([['B', 8], ['climax', 8], ['build', 4]], 132, 0.44, { tr: 1, drums: 1.2, hands: 1.1 }, {}, 0, 0),
 };
 // the danger layer over any run track: fast low toms and a pulsing low note, louder the closer the monster
 function dangerLayer(t, s, sp) {
