@@ -3871,18 +3871,26 @@ function dangerLayer(t, s, sp) {
 // AAC files may carry a few ms of encoder priming at the start, so each buffer's true start is found (every render
 // opens on a hit at 0) and the loop points are shifted by it.
 const MUSIC_DIR = 'audio/music/';
-const MF = { info: null, failed: false, bufs: {}, off: {}, busy: {} };
+// tracks.json is always re-checked with the server and each track carries a version stamp that goes on its file
+// addresses, so a re-rendered track is never played from an old cache. The menu's file is downloaded as soon as the
+// page opens (no sound may start before the first tap, but then it can start at once); decoding waits for the audio.
+const MF = { info: null, failed: false, bufs: {}, off: {}, busy: {}, raw: {} };
 function mfInfo() {
   if (MF.info || MF.failed || MF.busy.info) return;
   MF.busy.info = true;
-  fetch(MUSIC_DIR + 'tracks.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(j => { MF.info = j; }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
+  fetch(MUSIC_DIR + 'tracks.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(j => { MF.info = j; mfGet('menu'); }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
+}
+const mfUrl = (name, file) => `${MUSIC_DIR}${file}.mp4${MF.info && MF.info[name] && MF.info[name].v ? `?v=${MF.info[name].v}` : ''}`;
+function mfFetch(url, key) {
+  return MF.raw[key] || (MF.raw[key] = fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }));
 }
 function mfLoad(name, url, key) {
   if (MF.bufs[key] || MF.busy[key] || MF.failed) return;
-  MF.busy[key] = true;
   const c = SND.ctx;
-  fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+  if (!c) { mfFetch(url, key).catch(() => { delete MF.raw[key]; }); return; }   // (no audio yet: just download it)
+  MF.busy[key] = true;
+  mfFetch(url, key).finally(() => { delete MF.raw[key]; })   // (decoding uses the bytes up)
     .then(ab => new Promise((res, rej) => c.decodeAudioData(ab, res, rej)))
     .then(buf => {
       const d = buf.getChannelData(0), lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.12)); let i = 0;
@@ -3894,13 +3902,14 @@ function mfLoad(name, url, key) {
 }
 // a track's file for the lead instrument picked in the music lab: the brass mix (<track>) or the piano mix
 const mfKey = name => settings.lead === 'piano' ? `${name}-pianomix` : name;
-const mfGet = name => mfLoad(name, `${MUSIC_DIR}${mfKey(name)}.mp4`, mfKey(name));
+const mfGet = name => { if (MF.info) mfLoad(name, mfUrl(name, mfKey(name)), mfKey(name)); };
 // keep decoded only what's needed: the track playing, the menu, and the next zone's (fetched ahead)
 function mfKeep(want) {
   const nextZone = { jungle: 'caves', caves: 'magma' }[want], keep = new Set(['menu', want, nextZone].filter(Boolean).map(mfKey));
   for (const k of Object.keys(MF.bufs)) if (!keep.has(k) && !SND.players.some(p => p.key === k && p.src)) delete MF.bufs[k];
   if (want) mfGet(want); if (nextZone) mfGet(nextZone);
 }
+mfInfo();   // (fetch the track list, and with it the menu's file, as the page opens)
 // The scheduler runs one player per track that is sounding. A change of track never cuts: the new track starts on the
 // old one's next bar line (at its intro from silence or the menu, at its main theme when it follows another run
 // track) and the two crossfade over a few seconds, each with its own fader on its dry sound and its reverb send.
@@ -29511,7 +29520,7 @@ function labStart(from) {
 function labGains() { for (const st of Object.keys(LAB_STEMS)) { const g = LAB.gains[st]; if (g) g.gain.value = LAB.solo ? (LAB.solo === st ? 1 : 0) : LAB.mute[st] || labOut(st) ? 0 : 1; } }
 function labLoad() {   // the selected track's stems
   const fi = labInfo(); if (!fi) return;
-  for (const st of fi.stems) mfLoad(LAB.track, `${MUSIC_DIR}${labKey(st)}.mp4`, labKey(st));
+  for (const st of fi.stems) mfLoad(LAB.track, mfUrl(LAB.track, labKey(st)), labKey(st));
 }
 const labReady = () => { const fi = labInfo(); return !!fi && fi.stems.every(st => MF.bufs[labKey(st)]); };
 function labRender() {

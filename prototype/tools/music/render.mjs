@@ -337,12 +337,14 @@ function render(name) {
         if (!calm) {
           if (s === 0 || s === 6) note(bufs, 'perc', 'bdrum', null, t, { vel: Math.min(1, tk), pan: 0, filter: /^bdrum(3)?_(p|mp|f|ff|fff)_/, dur: 2.5, rel: 0.5, gain: 0.9 });
           if (s === 3 || s === 11 || (s === 8 && sec !== 'intro')) note(bufs, 'perc', 'tenorLo', null, t, { vel: Math.min(1, tk * 0.8), pan: s === 3 ? -0.3 : 0.3, dur: 1, rel: 0.3 });
-          if (s === 0) note(bufs, 'perc', 'timp', null, t, { vel: big ? 0.9 : 0.6, pan: -0.15, filter: /Timpani[12]_Hit/, dur: 2.5, rel: 0.6, gain: 0.8 * D });
+          if (s === 0) note(bufs, 'perc', 'timp', null, t, { vel: big ? 0.75 : 0.6, pan: -0.15, filter: /Timpani[12]_Hit/, dur: 2.5, rel: 0.6, gain: 0.8 * D });
         } else if (s === 0 || s === 3) note(bufs, 'perc', 'bdrum', null, t, { vel: s ? 0.25 : 0.4, filter: /^bdrum_(ppp|pp|p)_/, dur: 2, rel: 0.4 });
         if (lift && (s === 4 || s === 12)) note(bufs, 'perc', 'snare', null, t, { vel: big ? 0.8 : 0.6, pan: 0.1, filter: /^snare1_(mp|f|ff|fff)_/, dur: 1, rel: 0.2, gain: D });
         if (big && B.i % 4 === 3 && s >= 12) note(bufs, 'perc', s % 2 ? 'tenorLo' : 'tenorHi', null, t, { vel: 0.8, pan: (s - 13.5) * 0.25, dur: 0.8, rel: 0.2, gain: D });
         // crashes on the big downbeats, a reversed cymbal roll swelling into them
-        if (s === 0 && B.i === 0 && (lift || sec === 'A')) { note(bufs, 'perc', 'cym', null, t, { vel: 0.9, pan: 0.3, filter: /hit_(hardmall|metal_2)_(ff|fff)/, dur: 4, rel: 1, gain: big ? 1 : 0.7 }); if (lift) note(bufs, 'perc', 'bdrum', null, t, { vel: 1, filter: /^bdrum_fff_/, dur: 3, rel: 0.6, gain: 1.1 }); }
+        // (one mallet crash on the bass drum already there: a metal-sheet crash and a second, fff bass drum on top made the
+        // climax's downbeat jump out)
+        if (s === 0 && B.i === 0 && (lift || sec === 'A')) note(bufs, 'perc', 'cym', null, t, { vel: 0.8, pan: 0.3, filter: /hit_hardmall_(f|fff)$/, dur: 4, rel: 1, gain: big ? 0.75 : 0.6 });
         if (s === 0 && intoNew && (sec === 'A' || sec === 'B' || sec === 'intro' || sec === 'build') && K.swell) reversed(bufs, 'perc', 'cym', /softmall_roll(2_cresc|3_ff)/, t0 + bar, { len: bar * (sec === 'build' ? 1 : 0.75), gain: 0.8 });
         // rolls into the next section: timpani out of the intro and the build, snare and a string run out of the theme
         if (s === 8 && intoNew && (sec === 'intro' || sec === 'build')) note(bufs, 'perc', 'timpRoll', null, t, { vel: 1, filter: /Timpani[12]_Roll_v5/, dur: sp * 8, rel: 0.05, gain: 0.8 });
@@ -387,7 +389,10 @@ function render(name) {
   for (const k of STEMS) writeWav(join(OUT, `${name}-${k}.wav`), stems[k].L, stems[k].R, SR);
   // sections for the music lab: name, start (s)
   const sections = []; map.forEach((B, b) => { if (B.i === 0) sections.push({ name: B.sec, at: +(b * bar).toFixed(4) }); });
-  const info = { bpm: T.bpm, bars: map.length, loopStart: +loopStart.toFixed(4), loopEnd: +loopEnd.toFixed(4), join: +(T.join * bar).toFixed(4), sections, stems: STEMS, mixes: { brass: name, piano: `${name}-pianomix` } };
+  // a version stamp from the audio itself (the game asks for <file>.mp4?v=<stamp>, so a changed track is never served
+  // from an old cache, and an unchanged one stays cached)
+  let h = 0; for (const A of [mixL, mixes.piano.L, ...STEMS.map(k => stems[k].L)]) for (let i = 0; i < A.length; i += 499) h = (Math.imul(h, 31) + Math.round(A[i] * 1e6)) | 0;
+  const info = { v: (h >>> 0).toString(36), bpm: T.bpm, bars: map.length, loopStart: +loopStart.toFixed(4), loopEnd: +loopEnd.toFixed(4), join: +(T.join * bar).toFixed(4), sections, stems: STEMS, mixes: { brass: name, piano: `${name}-pianomix` } };
   console.log(`${name}: ${loopEnd.toFixed(1)} s, loop from ${loopStart.toFixed(1)} s, pre-limit peak ${peak.toFixed(2)}, RMS ${(10 * Math.log10(sum / (2 * L))).toFixed(1)} dBFS (piano mix ${(10 * Math.log10(psum / (2 * L))).toFixed(1)})`);
   return info;
 }
