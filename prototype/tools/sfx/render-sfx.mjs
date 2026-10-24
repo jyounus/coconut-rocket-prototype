@@ -358,6 +358,15 @@ FX.revive = { peak: 0.6, tonal: true, len: 3.4, make(S) {
   noise(S, 0, { f: 400, f2: 5000, q: 0.8, v: 0.18, dur: 0.6, a: 0.25 });
 } };
 
+// ---------- the kit: single notes for effects the game builds live (the coconut, tuned in the debug effects lab) ----------
+// Each is one instrument's note at its own pitch, dry, trimmed and normalised; the game pitches them by playback rate.
+const KIT = [['glock', 79], ['glock', 84], ['glock', 91], ['glock', 96], ['xylo', 72], ['xylo', 79], ['xylo', 84], ['xylo', 91], ['xylo', 96],
+  ['marimba', 72], ['marimba', 79], ['marimba', 89], ['tbell', 72], ['claves', null], ['logHi', null], ['tri', null], ['cowbell', null]];
+for (const [inst, m] of KIT) FX[`kit_${inst}${m ?? ''}`] = { kit: { inst, midi: m }, peak: 0.8, len: 1.6, make(S) {
+  if (m != null) { const best = Math.min(...list(inst).map(x => Math.abs(x.midi - m))); if (best) throw new Error(`kit ${inst} ${m}: nearest sample is ${best} semitones off`); }
+  samp(S, inst, m, 0, { vel: 0.8, gain: 1, verb: 0, dur: 1.3, rel: 0.25 });
+} };
+
 // ---------- render ----------
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(FX);
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -370,7 +379,7 @@ for (const n of names) {
   writeWav(join(OUT, `${n}.wav`), L, R, SR);
   // a version stamp from the audio (so the game never plays an old cached file)
   let h = 0; for (let i = 0; i < L.length; i += 97) h = (Math.imul(h, 31) + Math.round(L[i] * 1e6)) | 0;
-  man[n] = { dur: +(L.length / SR).toFixed(3), tonal: !!E.tonal, v: (h >>> 0).toString(36) };
+  man[n] = { dur: +(L.length / SR).toFixed(3), tonal: !!E.tonal, v: (h >>> 0).toString(36), ...(E.kit ? { kit: E.kit } : {}) };
   console.log(`${n.padEnd(11)} ${(L.length / SR).toFixed(2)} s`);
 }
 for (const k of Object.keys(man)) if (!FX[k]) delete man[k];
