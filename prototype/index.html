@@ -4292,40 +4292,48 @@ function sfxFile(name, o, t) {
   src.connect(strip.inp); src.start(t, SF.off[f] || 0);
   return true;
 }
-// ---- the rocket's thrust: a low whoosh for as long as the rocket burns (built live, so it holds and stops at once) ----
-// Deep brown noise through a low band-pass (the body), a little hiss an octave or three up (the air), a sine rumble under
-// it and a quick flutter on the band. It fades in on a press and out on letting go; shaped in the effects lab.
-const THRUST_DEFAULT = { vol: 0.3, low: 160, rumble: 0.4, air: 0.25, flutter: 0.3, attack: 0.06, release: 0.22 };
+// ---- the rocket's thrust: an electric hum, like an electric car or a flying saucer (built live, so it holds and stops) ----
+// Two slightly detuned saws through a resonant low-pass (the hum), a quiet sine three octaves up (the motor's whine),
+// a slow warble on all of it and a breath of air. The pitch climbs with the rocket's speed, so it spools up on a press
+// and sinks as it slows; it fades in on a press and out on letting go. Shaped in the effects lab (Rocket thrust).
+const THRUST_DEFAULT = { vol: 0.22, pitch: 70, whine: 0.35, rise: 7, warble: 0.4, speed: 5, shimmer: 0.4, tone: 0.35, air: 0.1, attack: 0.08, release: 0.3 };
 const thrustOf = () => ({ ...THRUST_DEFAULT, ...(settings.thrust || {}) });
-const THR = { n: null, on: false, dirty: false, lab: 0 };
+const THR = { n: null, on: false, dirty: false, lab: 0, labAt: 0 };
 function thrustBuild() {
-  const c = SND.ctx, n = {}, b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0);
-  let w = 0; for (let i = 0; i < d.length; i++) { w = (w + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = w * 3.5; }
-  n.src = c.createBufferSource(); n.src.buffer = b; n.src.loop = true;
+  const c = SND.ctx, n = {};
+  n.o1 = c.createOscillator(); n.o1.type = 'sawtooth'; n.o2 = c.createOscillator(); n.o2.type = 'sawtooth';
+  n.wh = c.createOscillator(); n.whG = c.createGain();
+  n.lp = c.createBiquadFilter(); n.lp.type = 'lowpass'; n.lp.Q.value = 6; n.hum = c.createGain(); n.hum.gain.value = 0.35;
   n.hiss = c.createBufferSource(); n.hiss.buffer = SND.noise; n.hiss.loop = true;
-  n.band = c.createBiquadFilter(); n.band.type = 'bandpass'; n.band.Q.value = 0.9; n.body = c.createGain();
-  n.airF = c.createBiquadFilter(); n.airF.type = 'bandpass'; n.airF.Q.value = 0.7; n.air = c.createGain();
-  n.sub = c.createOscillator(); n.subG = c.createGain();
-  n.lfo = c.createOscillator(); n.lfo.frequency.value = 7; n.lfoAmt = c.createGain();
+  n.airF = c.createBiquadFilter(); n.airF.type = 'bandpass'; n.airF.Q.value = 1.2; n.air = c.createGain();
+  n.lfo = c.createOscillator(); n.lfoAmt = c.createGain();
   n.out = c.createGain(); n.out.gain.value = 0;
-  n.src.connect(n.band); n.band.connect(n.body); n.body.connect(n.out);
+  n.o1.connect(n.lp); n.o2.connect(n.lp); n.lp.connect(n.hum); n.hum.connect(n.out);
+  n.wh.connect(n.whG); n.whG.connect(n.out);
   n.hiss.connect(n.airF); n.airF.connect(n.air); n.air.connect(n.out);
-  n.sub.connect(n.subG); n.subG.connect(n.out);
-  n.lfo.connect(n.lfoAmt); n.lfoAmt.connect(n.band.frequency);
+  n.lfo.connect(n.lfoAmt); for (const o of [n.o1, n.o2, n.wh]) n.lfoAmt.connect(o.detune);
   n.out.connect(SND.sfx);
-  for (const x of [n.src, n.hiss, n.sub, n.lfo]) x.start();
+  for (const x of [n.o1, n.o2, n.wh, n.hiss, n.lfo]) x.start();
   return n;
 }
-// every frame: burning (or the lab trying it) fades it in, otherwise out; a change in the lab is heard straight away
+// every frame: burning (or the lab trying it) fades it in, otherwise out; while it sounds, its pitch follows the speed
 function thrustTick() {
   const c = SND.ctx; if (!c || c.state !== 'running') return;
-  const t = c.currentTime, on = !!(G && G.thrust && G.state === 'play' && currentScreen === null && !paused && !(G.resumeT > 0)) || THR.lab > t;   // (silent through the resume countdown)
+  const t = c.currentTime, lab = THR.lab > t, on = !!(G && G.thrust && G.state === 'play' && currentScreen === null && !paused && !(G.resumeT > 0)) || lab;   // (silent through the resume countdown)
   if (on && !THR.n) THR.n = thrustBuild();
-  if (!THR.n || (on === THR.on && !THR.dirty)) return;
-  const R = thrustOf(), n = THR.n, set = (prm, v) => prm.setTargetAtTime(v, t, 0.04);
+  if (!THR.n) return;
+  const R = thrustOf(), n = THR.n, set = (prm, v, k = 0.04) => prm.setTargetAtTime(v, t, k);
+  // how fast it's climbing, 0..1 (the lab spools up over its one-second press)
+  const sp = lab ? clamp((t - THR.labAt) / 0.6, 0, 1) : G && G.state === 'play' ? clamp(G.p.vy / cfg.maxUp, 0, 1) : 0;
+  if (on || THR.on) {
+    const f = R.pitch * Math.pow(2, sp * R.rise / 12), lpf = f * (2 + R.tone * 14);
+    set(n.o1.frequency, f, 0.08); set(n.o2.frequency, f * Math.pow(2, R.shimmer * 25 / 1200), 0.08); set(n.wh.frequency, f * 8, 0.08);
+    set(n.lp.frequency, Math.min(16000, lpf), 0.08); set(n.airF.frequency, Math.min(9000, f * 30), 0.08);
+  }
+  if (on === THR.on && !THR.dirty) return;
   THR.on = on; THR.dirty = false;
-  set(n.band.frequency, R.low); set(n.airF.frequency, R.low * 8); set(n.sub.frequency, Math.max(28, R.low * 0.3));
-  set(n.body.gain, 1); set(n.air.gain, R.air * 0.4); set(n.subG.gain, R.rumble * 0.3); set(n.lfoAmt.gain, R.low * 0.35 * R.flutter);
+  set(n.whG.gain, R.whine * 0.06); set(n.air.gain, R.air * 0.5);
+  set(n.lfo.frequency, R.speed); set(n.lfoAmt.gain, R.warble * 60);
   const g = n.out.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(on ? R.vol : 0, t, (on ? R.attack : R.release) / 3);
 }
 // ---- the coconut, built live from single notes (so every layer can be tuned in the effects lab) ----
@@ -29919,8 +29927,9 @@ const COCO_NOTES_UI = [['base', 'First note', 0, 10, 1, v => noteName(COCO_PENT[
   ['gap', 'Gap', 0, 0.25, 0.005, secs], ['step', 'Chain climb', 0, 2, 0.5, v => v ? `${v} step${v === 1 ? '' : 's'}` : 'none']];
 const COCO_LAYER_UI = { shell: ['Shell tok', 'A wooden knock (claves)'], xylo: ['Xylophone', 'Bright and woody'], glock: ['Glockenspiel', 'The ringing coin note'], marimba: ['Marimba', 'Warm and round'],
   bell: ['Bell', 'A tubular bell'], shimmer: ['Shimmer', 'Glockenspiel an octave up'], sparkle: ['Sparkle', 'A triangle'] };
-const THRUST_UI = [['vol', 'Volume', 0, 1.5, 0.02, pct], ['low', 'Pitch', 60, 600, 5, v => `${v} Hz`], ['rumble', 'Rumble', 0, 1, 0.02, pct], ['air', 'Air hiss', 0, 1, 0.02, pct],
-  ['flutter', 'Flutter', 0, 1, 0.02, pct], ['attack', 'Fade in', 0.01, 0.5, 0.01, secs], ['release', 'Fade out', 0.02, 1, 0.01, secs]];
+const THRUST_UI = [['vol', 'Volume', 0, 1.5, 0.02, pct], ['pitch', 'Pitch', 30, 300, 1, v => `${v} Hz`], ['rise', 'Rise with speed', 0, 24, 0.5, v => `${semis(v)} st`],
+  ['tone', 'Brightness', 0, 1, 0.02, pct], ['shimmer', 'Shimmer', 0, 1, 0.02, pct], ['whine', 'Motor whine', 0, 1, 0.02, pct], ['warble', 'Warble', 0, 1, 0.02, pct],
+  ['speed', 'Warble speed', 0.5, 14, 0.25, v => `${v} /s`], ['air', 'Air', 0, 1, 0.02, pct], ['attack', 'Fade in', 0.01, 0.5, 0.01, secs], ['release', 'Fade out', 0.02, 1, 0.01, secs]];
 const PART_UI = [['vol', 'Volume', 0, 2, 0.05, pct], ['pitch', 'Pitch', -12, 12, 0.5, v => `${semis(v)} st`], ['delay', 'Timing', -0.3, 0.6, 0.01, v => v ? `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 1000)} ms` : 'as made'],
   ['len', 'Length', 0, 4, 0.05, v => v > 0 ? `${v.toFixed(2)} s` : 'full'], ['bright', 'Brightness', 0, 1, 0.02, v => v >= 1 ? 'open' : pct(v)]];
 // the file whose layers the lab lists for an effect (the takes of one effect share their layers)
@@ -29933,7 +29942,7 @@ function sfxLabRender() {
   const thr = SFXLAB.pick === 'thrust';
   $('sfxCocoGroup').hidden = !coco; $('sfxLayersGroup').hidden = coco; sfxLoopUi();
   $('sfxLayersHead').textContent = thr ? 'Thrust' : 'Layers'; $('sfxShape').hidden = $('sfxShapeHead').hidden = thr;
-  if (thr) { const R = thrustOf(); $('sfxLayers').innerHTML = `<p class="labsub">Played as a press held for a second; in the game it lasts as long as the rocket burns.</p><div class="fxrow plain">${THRUST_UI.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, R[k], 'data-thrust')).join('')}</div>`; }
+  if (thr) { const R = thrustOf(); $('sfxLayers').innerHTML = `<p class="labsub">Played as a press held for a second, spooling up as it would from a standstill; in the game it lasts as long as the rocket burns and its pitch follows the speed.</p><div class="fxrow plain">${THRUST_UI.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, R[k], 'data-thrust')).join('')}</div>`; }
   else if (!coco) {
     const ps = SF.parts[labFileOf(SFXLAB.pick)];
     $('sfxLayers').innerHTML = !SF.info ? `<p class="labsub">${SF.failed ? 'The recorded effects are not available here' : 'Loading the layers'}</p>`
@@ -29958,7 +29967,7 @@ function sfxLabRender() {
 }
 function sfxLabPlay(chain) {
   audioInit(); const k = SFXLAB.pick;
-  if (k === 'thrust') { if (SND.ctx) { THR.lab = SND.ctx.currentTime + 1; THR.dirty = true; } }
+  if (k === 'thrust') { if (SND.ctx) { THR.labAt = SND.ctx.currentTime; THR.lab = THR.labAt + 1; THR.dirty = true; } }
   else if (k === 'swishClose') sfx('swish', { close: true }); else sfx(k, { chain });
 }
 function sfxSave() { store.set('cr-settings', settings); }
@@ -29970,7 +29979,7 @@ const sfxLabel = k => { const e = LAB_SFX.find(([n]) => n === k); return e ? `${
 function sfxSettingsText() {
   const lines = [], tw = settings.sfxTweak || {};
   if (settings.coco) lines.push(`- ${sfxLabel('coco')}: ${JSON.stringify(cocoOf())}`);
-  if (settings.thrust) { const R = thrustOf(), d = Object.entries(R).filter(([k, v]) => v !== THRUST_DEFAULT[k]); if (d.length) lines.push(`- ${sfxLabel('thrust')}: ${d.map(([k, v]) => `${k} ${v}`).join(', ')}`); }
+  if (settings.thrust) { const R = thrustOf(), d = Object.entries(R).filter(([k, v]) => k in THRUST_DEFAULT && v !== THRUST_DEFAULT[k]); if (d.length) lines.push(`- ${sfxLabel('thrust')}: ${d.map(([k, v]) => `${k} ${v}`).join(', ')}`); }
   for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${sfxLabel(k)} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
   for (const [k, ps] of Object.entries(settings.sfxParts || {})) {
     const d = Object.entries(ps).map(([pk, P]) => { const b = { ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[k] || {})[pk] || {}) }, ch = Object.entries(P).filter(([f, v]) => v !== b[f]); return !ch.length ? '' : P.on === false ? `${pk} off` : `${pk} ${ch.map(([f, v]) => `${f} ${v}`).join(' ')}`; }).filter(Boolean);
