@@ -13,7 +13,8 @@ mkdir -p dist
   cat index.html
   printf '\n</body>\n</html>\n'
 } > dist/index.html
-# the soundtrack (rendered by tools/music) ships next to the page
-rm -rf dist/audio
+# the soundtrack and effects (rendered by tools/music and tools/sfx) and the art (tools/coin) ship next to the page
+rm -rf dist/audio dist/art
 if [ -d audio ]; then cp -R audio dist/audio; fi
-echo "Built dist/index.html (and dist/audio)"
+if [ -d art ]; then cp -R art dist/art; fi
+echo "Built dist/index.html (and dist/audio, dist/art)"
