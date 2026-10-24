@@ -1226,6 +1226,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .sfxnow b { font: 400 18px/1.1 var(--font-display); letter-spacing: .02em; color: var(--cream); }
 .sfxnow span { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,226,190,.6); }
 .sfxnow span.on { color: var(--go-hi); }
+.sfxbar .labtransport:has(#sfxChain[hidden]) #sfxPlay { grid-column: 1 / -1; }
 #sfxPlay[aria-pressed="true"], #sfxChain[aria-pressed="true"] { color: #ffd8c8; background: linear-gradient(#b8462e, #8a3424); box-shadow: 0 3px 0 #5e2216; }
 .volrow { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; align-items: center; gap: 10px; padding: 6px 14px 10px; }
 .volrow label { font-size: 14px; font-weight: 800; color: var(--cream); }
@@ -1387,6 +1388,10 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <div class="labsub">Start from</div>
       <div class="lablead labsrc" id="sfxPresets" role="radiogroup" aria-label="Starting point"></div>
       <div id="sfxCoco"></div>
+    </section>
+    <section class="group" id="sfxLayersGroup">
+      <div class="ghead">Layers</div>
+      <div id="sfxLayers"></div>
     </section>
     <section class="group">
       <div class="ghead">Shape</div>
@@ -4201,13 +4206,18 @@ function sfxHit(t) {
 // effects follow the key of the music playing (each zone is a step deeper), the rest vary a hair in pitch so repeats
 // never sound identical. An effect with no file (or no files at all) uses the synthesised one below.
 const SFX_DIR = 'audio/sfx/';
-const SF = { info: null, failed: false, bufs: {}, off: {}, raw: {}, busy: {} };
+const SF = { info: null, parts: {}, failed: false, bufs: {}, off: {}, raw: {}, busy: {} };
 const KEY_TR = { menu: 0, jungle: 0, caves: -2, magma: -4 };   // (each track's key against the jungle's, as rendered)
 function sfInfo() {
   if (SF.info || SF.failed || SF.busy.info) return;
   SF.busy.info = true;
   fetch(SFX_DIR + 'sfx.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(j => { SF.info = j; for (const n of Object.keys(j)) sfFetch(n); sfDecode(); }).catch(() => { SF.failed = true; }).finally(() => { SF.busy.info = false; });
+    .then(j => {
+      SF.info = j; SF.parts = {};
+      for (const [n, e] of Object.entries(j)) if (e.part) (SF.parts[e.part.of] || (SF.parts[e.part.of] = [])).push(n);
+      for (const n of Object.keys(j)) sfFetch(n);
+      sfDecode(); if (currentScreen === 'sfxLab') sfxLabRender();
+    }).catch(() => { SF.failed = true; }).finally(() => { SF.busy.info = false; });
 }
 function sfFetch(n) { return SF.raw[n] || (SF.raw[n] = fetch(`${SFX_DIR}${n}.mp4?v=${SF.info[n].v}`).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })); }
 function sfDecode() {
@@ -4218,7 +4228,7 @@ function sfDecode() {
     sfFetch(n).then(ab => new Promise((res, rej) => c.decodeAudioData(ab.slice(0), res, rej))).then(buf => {
       const d = buf.getChannelData(0), lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.1)); let i = 0;
       while (i < lim && Math.abs(d[i]) < 0.001) i++;
-      SF.off[n] = i < lim ? Math.max(0, i - 8) / buf.sampleRate : 0; SF.bufs[n] = buf;
+      SF.off[n] = i < lim && !SF.info[n].part ? Math.max(0, i - 8) / buf.sampleRate : 0; SF.bufs[n] = buf;   // (a layer starts exactly at its time; a quiet start is part of it)
     }).catch(() => {}).finally(() => { SF.busy[n] = false; });
   }
 }
@@ -4264,11 +4274,33 @@ function sfxStrip(name, t, o) {
   setTimeout(() => { inp.disconnect(); g.disconnect(); for (const x of extra) x.disconnect(); }, ((w.len || 6) + 4) * 1000);
   return { inp, rate: Math.pow(2, w.pitch / 12) };
 }
+// Every other effect is mixed live from its layers (each rendered alone as <name>__<part>, with its start time), so
+// each layer can be shaped in the effects lab: on or off, volume, pitch, a nudge earlier or later, a length (a fade
+// out) and brightness. The pre-mixed file plays until the layers have loaded.
+const PART_DEFAULT = { on: true, vol: 1, pitch: 0, delay: 0, len: 0, bright: 1 };
+const layerOf = (name, k) => ({ ...PART_DEFAULT, ...(((settings.sfxParts || {})[name] || {})[k] || {}) });
+const tweakName = (name, o) => name === 'swish' && o.close ? 'swishClose' : name;   // (the lab shapes the two sheet swishes apart)
 function sfxFile(name, o, t) {
   if (name === 'coco' && cocoLive(t, o)) return true;
   const f = sfFile(name, o), buf = SF.bufs[f]; if (!buf) { if (SF.info && !SF.failed) sfDecode(); return false; }
-  const c = SND.ctx, src = c.createBufferSource(), strip = sfxStrip(name, t, o);
-  src.buffer = buf; src.playbackRate.value = (SF.info[f].tonal ? sfKeyRate(o) : 0.97 + Math.random() * 0.06) * strip.rate;
+  const c = SND.ctx, tn = tweakName(name, o), strip = sfxStrip(tn, t, o), rate = (SF.info[f].tonal ? sfKeyRate(o) : 0.97 + Math.random() * 0.06) * strip.rate;
+  const ps = SF.parts[f];
+  if (ps && ps.every(p => SF.bufs[p])) {
+    for (const p of ps) {
+      const e = SF.info[p].part, P = layerOf(tn, e.k); if (!P.on || P.vol <= 0) continue;
+      const src = c.createBufferSource(), g = c.createGain(), st = t + Math.max(0, e.at / rate + P.delay);
+      let head = g;
+      if (P.bright < 1) { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300 * Math.pow(20000 / 300, P.bright); lp.connect(g); head = lp; }
+      src.buffer = SF.bufs[p]; src.playbackRate.value = rate * Math.pow(2, P.pitch / 12);
+      g.gain.value = P.vol; src.connect(head); g.connect(strip.inp);
+      if (P.len > 0) { g.gain.setValueAtTime(P.vol, st + P.len * 0.7); g.gain.linearRampToValueAtTime(0, st + P.len); }
+      src.onended = () => { src.disconnect(); if (head !== g) head.disconnect(); g.disconnect(); };
+      src.start(st, SF.off[p] || 0); if (P.len > 0) src.stop(st + P.len + 0.05);
+    }
+    return true;
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf; src.playbackRate.value = rate;
   src.connect(strip.inp); src.start(t, SF.off[f] || 0);
   return true;
 }
@@ -29916,11 +29948,25 @@ const COCO_NOTES_UI = [['base', 'First note', 0, 10, 1, v => noteName(COCO_PENT[
   ['gap', 'Gap', 0, 0.25, 0.005, secs], ['step', 'Chain climb', 0, 2, 0.5, v => v ? `${v} step${v === 1 ? '' : 's'}` : 'none']];
 const COCO_LAYER_UI = { shell: ['Shell tok', 'A wooden knock (claves)'], xylo: ['Xylophone', 'Bright and woody'], glock: ['Glockenspiel', 'The ringing coin note'], marimba: ['Marimba', 'Warm and round'],
   bell: ['Bell', 'A tubular bell'], shimmer: ['Shimmer', 'Glockenspiel an octave up'], sparkle: ['Sparkle', 'A triangle'] };
+const PART_UI = [['vol', 'Volume', 0, 2, 0.05, pct], ['pitch', 'Pitch', -12, 12, 0.5, v => `${semis(v)} st`], ['delay', 'Timing', -0.3, 0.6, 0.01, v => v ? `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 1000)} ms` : 'as made'],
+  ['len', 'Length', 0, 4, 0.05, v => v > 0 ? `${v.toFixed(2)} s` : 'full'], ['bright', 'Brightness', 0, 1, 0.02, v => v >= 1 ? 'open' : pct(v)]];
+// the file whose layers the lab lists for an effect (the takes of one effect share their layers)
+const labFileOf = k => ({ close: 'close1', tap: 'tap1', swish: 'swishOpen' })[k] || k;
+function partSet(k, field, v) { const all = settings.sfxParts || (settings.sfxParts = {}), e = all[SFXLAB.pick] || (all[SFXLAB.pick] = {}); e[k] = { ...layerOf(SFXLAB.pick, k), [field]: v }; sfxSave(); }
 const sliderRow = (k, nm, mn, mx, st, fmt, v, attr) => `<label class="fxsl"><span>${nm}</span><input type="range" ${attr}="${k}" min="${mn}" max="${mx}" step="${st}" value="${v}"><output>${fmt(v)}</output></label>`;
 function sfxLabRender() {
   $('sfxPick').innerHTML = LAB_SFX.map(([k, nm]) => `<button role="tab" aria-selected="${k === SFXLAB.pick}" data-sfx="${k}">${nm}</button>`).join('');
   const coco = SFXLAB.pick === 'coco', w = tweakOf(SFXLAB.pick);
-  $('sfxCocoGroup').hidden = !coco; sfxLoopUi();
+  $('sfxCocoGroup').hidden = !coco; $('sfxLayersGroup').hidden = coco; sfxLoopUi();
+  if (!coco) {
+    const ps = SF.parts[labFileOf(SFXLAB.pick)];
+    $('sfxLayers').innerHTML = !SF.info ? `<p class="labsub">${SF.failed ? 'The recorded effects are not available here' : 'Loading the layers'}</p>`
+      : !ps ? '<p class="labsub">This one is a single layer: shape it with the sliders below.</p>'
+      : ps.map(p => {
+        const e = SF.info[p].part, P = layerOf(SFXLAB.pick, e.k);
+        return `<div class="fxrow${P.on ? '' : ' off'}"><label class="fxhead"><span><b>${e.label}</b><small>${e.at > 0.005 ? `comes in at ${Math.round(e.at * 1000)} ms` : 'from the start'}</small></span><input type="checkbox" class="switch" data-part-on="${e.k}"${P.on ? ' checked' : ''}></label>${PART_UI.map(([k, nm, mn, mx, st, fmt]) => sliderRow(`${e.k}.${k}`, nm, mn, mx, st, fmt, P[k], 'data-part')).join('')}</div>`;
+      }).join('');
+  }
   if (coco) {
     const R = cocoOf(), cur = Object.entries(COCO_PRESETS).find(([, p]) => JSON.stringify(cocoMerge(p.r)) === JSON.stringify(R));
     $('sfxPresets').innerHTML = Object.entries(COCO_PRESETS).map(([k, p]) => `<button role="radio" aria-checked="${!!cur && cur[0] === k}" data-preset="${k}">${p.name}</button>`).join('');
@@ -29946,6 +29992,10 @@ function sfxSettingsText() {
   const lines = [], tw = settings.sfxTweak || {};
   if (settings.coco) lines.push(`- coconut: ${JSON.stringify(cocoOf())}`);
   for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${k} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
+  for (const [k, ps] of Object.entries(settings.sfxParts || {})) {
+    const d = Object.entries(ps).map(([pk, P]) => { const ch = Object.entries(P).filter(([f, v]) => v !== PART_DEFAULT[f]); return !ch.length ? '' : P.on === false ? `${pk} off` : `${pk} ${ch.map(([f, v]) => `${f} ${v}`).join(' ')}`; }).filter(Boolean);
+    if (d.length) lines.push(`- ${k} layers: ${d.join('; ')}`);
+  }
   return lines.length ? `Effects lab settings:\n${lines.join('\n')}` : '';
 }
 const sfxCopyText = txt => (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied'), () => { $('sfxNoteText').value = txt; toast('Select the text to copy it'); });
@@ -29962,7 +30012,11 @@ function sfxLabLen() {   // how long one play of the picked effect lasts (s)
   const k = SFXLAB.pick, w = tweakOf(k), rate = Math.pow(2, w.pitch / 12);
   let d;
   if (k === 'coco') { const R = cocoOf(); d = Math.max(0.15, ...Object.values(R.layers).filter(L => L.on).map(L => L.decay + R.gap)) / rate; }
-  else { const f = sfFile(k === 'swishClose' ? 'swish' : k, { close: k === 'swishClose', chain: 1 }); d = (SF.info && SF.info[f] ? SF.info[f].dur : 1) / rate; }
+  else {
+    const f = labFileOf(k), ps = SF.parts[f];
+    d = ps ? Math.max(0.15, ...ps.map(p => { const e = SF.info[p], P = layerOf(k, e.part.k), r = rate * Math.pow(2, P.pitch / 12); return P.on ? Math.max(0, e.part.at / rate + P.delay) + (P.len > 0 ? Math.min(P.len, e.dur / r) : e.dur / r) : 0; }))
+      : (SF.info && SF.info[f] ? SF.info[f].dur : 1) / rate;
+  }
   if (w.len > 0) d = Math.min(d, w.len);
   return clamp(d, 0.2, 5);
 }
@@ -29986,22 +30040,25 @@ function sfxLoopUi() {
 $('sfxPlay').addEventListener('click', () => { audioInit(); if (SFXLAB.loop && !SFXLAB.loop.chain) sfxLoopStop(); else sfxLoopStart(false); });
 $('sfxChain').addEventListener('click', () => { audioInit(); if (SFXLAB.loop && SFXLAB.loop.chain) sfxLoopStop(); else sfxLoopStart(true); });
 $('sfxPresets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings.coco = cocoMerge(COCO_PRESETS[b.dataset.preset].r); sfxSave(); sfxLabRender(); if (!SFXLAB.loop) sfxLabPlay(1); });
-for (const id of ['sfxCoco', 'sfxShape']) {
+for (const id of ['sfxCoco', 'sfxLayers', 'sfxShape']) {
   $(id).addEventListener('input', e => {
     const el = e.target, v = +el.value, out = el.nextElementSibling;
     if (el.dataset.coco) { const f = COCO_NOTES_UI.find(x => x[0] === el.dataset.coco); out.textContent = f[5](v); cocoSet(R => { R[el.dataset.coco] = v; }); }
     else if (el.dataset.layer) { const [lk, k] = el.dataset.layer.split('.'), f = { vol: pct, decay: secs, pitch: x => `${semis(x)} st`, oct: semis, note: x => ['', 'first note', 'second note', 'both notes'][x] }[k]; out.textContent = f(v); cocoSet(R => { R.layers[lk][k] = v; }); }
+    else if (el.dataset.part) { const [pk, k] = el.dataset.part.split('.'), f = PART_UI.find(x => x[0] === k); out.textContent = f[5](v); partSet(pk, k, v); }
     else if (el.dataset.tweak) { const f = SHAPE_UI.find(x => x[0] === el.dataset.tweak); out.textContent = f[5](v); tweakSet(el.dataset.tweak, v); }
   });
   // play it again when a slider is let go (so each change is heard)
   $(id).addEventListener('change', e => {
+    if (e.target.dataset.partOn) { partSet(e.target.dataset.partOn, 'on', e.target.checked); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); }
     if (e.target.dataset.layerOn) { cocoSet(R => { R.layers[e.target.dataset.layerOn].on = e.target.checked; }); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); }
-    if (e.target.type === 'range' || e.target.dataset.layerOn) { if (!SFXLAB.loop) sfxLabPlay(1); if (e.target.dataset.coco || e.target.dataset.layer || e.target.dataset.layerOn) sfxLabRender(); }
+    if (e.target.type === 'range' || e.target.dataset.layerOn || e.target.dataset.partOn) { if (!SFXLAB.loop) sfxLabPlay(1); if (e.target.dataset.coco || e.target.dataset.layer || e.target.dataset.layerOn) sfxLabRender(); }
   });
 }
 $('sfxReset').addEventListener('click', () => {
   if (SFXLAB.pick === 'coco') delete settings.coco;
   if (settings.sfxTweak) delete settings.sfxTweak[SFXLAB.pick];
+  if (settings.sfxParts) delete settings.sfxParts[SFXLAB.pick];
   sfxSave(); sfxLabRender(); toast('Effect reset');
 });
 $('sfxCopy').addEventListener('click', () => { const txt = sfxSettingsText(); if (!txt) return toast('Nothing changed yet'); sfxCopyText(txt); });

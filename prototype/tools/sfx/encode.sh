@@ -1,6 +1,7 @@
 #!/bin/sh
 # Encodes the sound effects (out/*.wav) to AAC (in an MPEG-4 container, .mp4, which every host serves) at 128 kbps into
-# prototype/audio/sfx/, with sfx.json (each effect's length, whether it follows the zone's key, a version stamp).
+# prototype/audio/sfx/, with sfx.json (each effect's length, whether it follows the zone's key, a version stamp, and for
+# a layer (<name>__<part>) which effect it belongs to, its name and when it starts).
 set -e
 cd "$(dirname "$0")"
 DEST=../../audio/sfx

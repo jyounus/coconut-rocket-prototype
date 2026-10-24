@@ -2,14 +2,15 @@
 // library, CC0, in music-samples/ at the repo root: glockenspiel, xylophone, marimba, bells, triangle, cymbals, drums,
 // woods, brass and strings) and a little synthesis (whooshes, a growl, a slide whistle), the way game effects are made:
 // a sharp attack, a pitched body, a sparkle on top and a short room tail. Writes out/<name>.wav and out/sfx.json; then
-// encode.sh turns them into prototype/audio/sfx/*.mp4.
+// encode.sh turns them into prototype/audio/sfx/*.mp4. Each effect's layers (part(S, key, label) below) are also
+// written alone as <name>__<part>.wav, so the game mixes them live and the effects lab can shape each layer.
 //
 // Inspired by the classics: Mario's coin (a quick two-note ding, the second a fourth up), Donkey Kong Country's banana
 // and coin chimes (bright mallet runs with a shimmer), Rayman's lums and Mario's chain stomps (each pickup in a chain a
 // step higher), and the orchestral stings of modern platformers for the big moments.
 //
 //   node render-sfx.mjs [name ...]      (all of them when no name is given)
-import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWav, writeWav } from '../music/wav.mjs';
@@ -83,12 +84,19 @@ function pickSample(id, midi, vel) {
 }
 
 // ---------- a sound: a stereo buffer and a reverb send ----------
-function sound(len) { const n = Math.ceil(len * SR); return { L: new Float32Array(n), R: new Float32Array(n), vL: new Float32Array(n), vR: new Float32Array(n), n }; }
+// a sound is made of named parts (layers), each with its own dry and reverb-send buffers: the full mix is their sum,
+// and each part is also written alone so the game can mix them live (and the effects lab can shape each one)
+function sound(len) { const S = { n: Math.ceil(len * SR), parts: {}, order: [] }; part(S, 'main', 'All'); return S; }
+function part(S, key, label) {
+  const n = S.n;
+  if (!S.parts[key]) { S.parts[key] = { key, label, L: new Float32Array(n), R: new Float32Array(n), vL: new Float32Array(n), vR: new Float32Array(n) }; S.order.push(key); }
+  S.cur = S.parts[key];
+}
 const panLR = p => [Math.cos((p + 1) * Math.PI / 4) * Math.SQRT2, Math.sin((p + 1) * Math.PI / 4) * Math.SQRT2];
 // write a mono or stereo signal into the sound with pan, gain and a reverb send
 function put(S, i0, l, r, g, pan, verb) {
-  const [gl, gr] = panLR(pan);
-  for (let i = 0; i < l.length; i++) { const j = i0 + i; if (j < 0) continue; if (j >= S.n) break; const a = l[i] * g * gl, b = r[i] * g * gr; S.L[j] += a; S.R[j] += b; S.vL[j] += a * verb; S.vR[j] += b * verb; }
+  const [gl, gr] = panLR(pan), C = S.cur;
+  for (let i = 0; i < l.length; i++) { const j = i0 + i; if (j < 0) continue; if (j >= S.n) break; const a = l[i] * g * gl, b = r[i] * g * gr; C.L[j] += a; C.R[j] += b; C.vL[j] += a * verb; C.vR[j] += b * verb; }
 }
 // play a sample: pitched (midi) or a hit; o: vel, gain, pan, verb (send), dur/rel (a fade out), tune (cents), rate
 // (unpitched speed), bend (semitones over the note: a slide), rev (played backwards, ending at t), lp (a gentle low-pass)
@@ -167,19 +175,35 @@ function freeverb(inL, inR, room = 0.8, damp = 0.4) {
   side(inL, outL, 0); side(inR, outR, 23);
   return { L: outL, R: outR };
 }
-// finish: the room, a 30 Hz high-pass, scaled to the effect's peak, softly limited, the silent end trimmed and faded
+// finish: the room, a 30 Hz high-pass, scaled to the effect's peak, softly limited, the silent end trimmed and faded.
+// Each part gets the same room, high-pass and gain (all linear, so the parts add up to the mix), unlimited, with its
+// silent start trimmed too (its start time is kept as `at`).
 function finish(S, peak, room = 0.75) {
-  const v = freeverb(S.vL, S.vR, room), L = new Float32Array(S.n), R = new Float32Array(S.n);
-  for (let i = 0; i < S.n; i++) { L[i] = S.L[i] + v.L[i] * 2.2; R[i] = S.R[i] + v.R[i] * 2.2; }
   const hp = x => { const a = Math.exp(-2 * Math.PI * 30 / SR); let px = 0, py = 0; for (let i = 0; i < x.length; i++) { const y = a * (py + x[i] - px); px = x[i]; py = y; x[i] = y; } };
-  hp(L); hp(R);
+  const parts = S.order.map(k => S.parts[k]).filter(P => P.L.some(x => x) || P.vL.some(x => x));
+  const L = new Float32Array(S.n), R = new Float32Array(S.n);
+  for (const P of parts) {
+    const v = freeverb(P.vL, P.vR, room);
+    for (let i = 0; i < S.n; i++) { P.L[i] += v.L[i] * 2.2; P.R[i] += v.R[i] * 2.2; }
+    hp(P.L); hp(P.R);
+    for (let i = 0; i < S.n; i++) { L[i] += P.L[i]; R[i] += P.R[i]; }
+  }
   let pk = 0; for (let i = 0; i < S.n; i++) pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
   const g = peak / (pk || 1), lim = x => { const a = Math.abs(x); return a < 0.8 ? x : Math.sign(x) * (0.8 + 0.2 * Math.tanh((a - 0.8) / 0.2)); };
   let end = S.n; const th = peak * 0.001; while (end > SR * 0.05 && Math.abs(L[end - 1] * g) < th && Math.abs(R[end - 1] * g) < th) end--;
   end = Math.min(S.n, end + Math.round(SR * 0.02));
   const fade = Math.round(SR * 0.03), oL = new Float32Array(end), oR = new Float32Array(end);
   for (let i = 0; i < end; i++) { const e = i > end - fade ? (end - i) / fade : 1; oL[i] = lim(L[i] * g) * e; oR[i] = lim(R[i] * g) * e; }
-  return { L: oL, R: oR };
+  const out = parts.length < 2 ? [] : parts.map(P => {
+    let a = 0; while (a < S.n && Math.abs(P.L[a] * g) < th && Math.abs(P.R[a] * g) < th) a++;
+    a = Math.max(0, a - 8);
+    let b = S.n; while (b > a + SR * 0.05 && Math.abs(P.L[b - 1] * g) < th && Math.abs(P.R[b - 1] * g) < th) b--;
+    b = Math.min(S.n, b + Math.round(SR * 0.02));
+    const pL = new Float32Array(b - a), pR = new Float32Array(b - a), f = Math.min(fade, b - a);
+    for (let i = a; i < b; i++) { const e = i > b - f ? (b - i) / f : 1; pL[i - a] = P.L[i] * g * e; pR[i - a] = P.R[i] * g * e; }
+    return { key: P.key, label: P.label, at: a / SR, L: pL, R: pR };
+  });
+  return { L: oL, R: oR, parts: out };
 }
 
 // ---------- the effects ----------
@@ -200,51 +224,72 @@ for (let c = 1; c <= 8; c++) FX[`coco${c}`] = { peak: 0.42, tonal: true, len: 1.
 // a golden coconut: a fast glittering run up (Donkey Kong coins), a tubular bell under its top note, a bell tree's
 // shimmer and sleigh bells, in a bigger room
 FX.gold = { peak: 0.55, tonal: true, len: 2.4, make(S) {
-  [74, 77, 81, 86, 89, 93].forEach((m, i) => { samp(S, 'glock', m, i * 0.035, { vel: 0.75 + i * 0.04, gain: 0.8, pan: -0.4 + i * 0.16, dur: i === 5 ? 1.2 : 0.3, rel: 0.4, verb: 0.35 }); if (i < 3) samp(S, 'xylo', m, i * 0.035, { vel: 0.7, gain: 0.45, pan: -0.3 + i * 0.1, dur: 0.1, rel: 0.1 }); });
-  samp(S, 'tbell', 74, 0.17, { vel: 0.6, gain: 0.5, dur: 1.4, rel: 0.6, verb: 0.4 });
-  samp(S, 'belltree', null, 0.02, { vel: 0.7, gain: 0.35, pan: 0.3, verb: 0.4 });
+  [74, 77, 81, 86, 89, 93].forEach((m, i) => { part(S, 'run', 'Glockenspiel run'); samp(S, 'glock', m, i * 0.035, { vel: 0.75 + i * 0.04, gain: 0.8, pan: -0.4 + i * 0.16, dur: i === 5 ? 1.2 : 0.3, rel: 0.4, verb: 0.35 }); if (i < 3) { part(S, 'xylo', 'Xylophone'); samp(S, 'xylo', m, i * 0.035, { vel: 0.7, gain: 0.45, pan: -0.3 + i * 0.1, dur: 0.1, rel: 0.1 }); } });
+  part(S, 'bell', 'Tubular bell'); samp(S, 'tbell', 74, 0.17, { vel: 0.6, gain: 0.5, dur: 1.4, rel: 0.6, verb: 0.4 });
+  part(S, 'belltree', 'Bell tree');   samp(S, 'belltree', null, 0.02, { vel: 0.7, gain: 0.35, pan: 0.3, verb: 0.4 });
+  part(S, 'sleigh', 'Sleigh bells');
   samp(S, 'sleigh', null, 0.17, { vel: 0.5, gain: 0.25, pan: -0.3, dur: 0.6, rel: 0.3 });
+  part(S, 'tri', 'Triangle');
   samp(S, 'tri', null, 0.2, { vel: 0.6, gain: 0.18, pan: 0.5, dur: 1.2, rel: 0.4, verb: 0.4 });
 } };
 // a close call: a whoosh past one ear and out of the other, then a bright "nice!" ding-ding
 for (const [k, from, to] of [['close1', -0.9, 0.9], ['close2', 0.9, -0.9]]) FX[k] = { peak: 0.45, tonal: true, len: 1.4, make(S) {
+  part(S, 'whoosh', 'Whoosh');
   noise(S, 0, { f: 500, f2: 3200, q: 1.3, v: 0.5, dur: 0.32, a: 0.12, pan: from, pan2: to, verb: 0.1 });
   noise(S, 0.02, { f: 220, f2: 900, q: 0.8, v: 0.3, dur: 0.28, a: 0.1, pan: from * 0.6, pan2: to * 0.6, verb: 0.05 });
+  part(S, 'ding', 'Ding-ding');
   samp(S, 'glock', 89, 0.16, { vel: 0.8, gain: 0.7, pan: to * 0.3, dur: 0.15, rel: 0.15, verb: 0.3 });
   samp(S, 'glock', 96, 0.24, { vel: 0.85, gain: 0.75, pan: to * 0.4, dur: 0.6, rel: 0.3, verb: 0.35 });
+  part(S, 'tri', 'Triangle');
   samp(S, 'triM', null, 0.24, { vel: 0.5, gain: 0.12, pan: to * 0.5, dur: 0.5, rel: 0.2 });
 } };
 // a crash into a hazard: a heavy cartoon impact (a big drum, a short crash, a clank of metal), bits of wood flying
 // off, rattling parts, a slide whistle spinning down, and little dizzy tweets circling
 FX.crash = { peak: 0.8, len: 3.4, make(S) {
+  part(S, 'boom', 'Boom (drums)');
   samp(S, 'bdrumBig', null, 0, { dur: 1.1, rel: 0.6, vel: 1, gain: 1.1, verb: 0.1 });
   samp(S, 'timp', null, 0, { dur: 1.1, rel: 0.6, vel: 0.8, gain: 0.7, verb: 0.15 });
+  part(S, 'cymbal', 'Crash cymbal');
   samp(S, 'crashShort', null, 0.005, { vel: 0.8, gain: 0.55, pan: 0.2, verb: 0.15 });
+  part(S, 'anvil', 'Anvil clank');
   samp(S, 'anvil', null, 0, { vel: 0.5, gain: 0.3, rate: 0.8, pan: -0.2, verb: 0.15 });
+  part(S, 'thud', 'Thud');
   noise(S, 0, { type: 'lowpass', f: 3000, f2: 200, v: 0.5, dur: 0.35, a: 0.002, verb: 0.1 });
+  part(S, 'bits', 'Flying bits');
   for (let i = 0; i < 7; i++) samp(S, i % 2 ? 'claves' : 'logHi', null, 0.06 + i * 0.05 + rnd() * 0.03, { vel: 0.5 - i * 0.04, gain: 0.35, rate: 0.8 + rnd() * 0.7, pan: (rnd() - 0.5) * 1.6, verb: 0.2 });
+  part(S, 'rattle', 'Rattle');
   samp(S, 'ratchetSlow', null, 0.1, { vel: 0.5, gain: 0.25, dur: 0.45, rel: 0.2, pan: 0.3 });
+  part(S, 'whistle', 'Slide whistle');
   tone(S, 0.12, 1400, { f2: 260, glide: 0.75, dur: 0.75, type: 'sine', v: 0.09, decay: 1.2, vib: 0.03, vibF: 9, pan: -0.2, verb: 0.2 });
+  part(S, 'tweets', 'Dizzy tweets');
   [100, 96, 100, 96, 100].forEach((m, i) => samp(S, 'glock', m - 12, 0.85 + i * 0.13, { vel: 0.5, gain: 0.25, pan: Math.sin(i * 1.6) * 0.7, dur: 0.08, rel: 0.1, verb: 0.35 }));
 } };
 // caught by the monster: a deep timpani and gong, a dark swell
 FX.caught = { peak: 0.75, len: 3.4, make(S) {
+  part(S, 'drums', 'Timpani and drum');
   samp(S, 'timp', null, 0, { dur: 1.1, rel: 0.6, vel: 1, gain: 0.9, verb: 0.2 });
   samp(S, 'bdrumBig', null, 0, { dur: 1.1, rel: 0.6, vel: 1, gain: 0.8 });
+  part(S, 'gong', 'Gong');
   samp(S, 'gong', null, 0.02, { vel: 0.7, gain: 0.6, rate: 0.75, verb: 0.3 });
+  part(S, 'trombone', 'Trombone');
   samp(S, 'tbnSus', 38, 0, { vel: 0.9, gain: 0.5, dur: 0.9, rel: 0.4, bend: -2, verb: 0.2 });
+  part(S, 'rumble', 'Dark swell');
   noise(S, 0, { type: 'lowpass', f: 900, f2: 150, v: 0.35, dur: 0.8, a: 0.05 });
 } };
 // the bite: two crunching chomps of the jaws, then a short sad tag falling away (the run is over)
 FX.bite = { peak: 0.8, len: 3.6, make(S) {
+  part(S, 'chomp', 'Chomps');
   for (const dt of [0, 0.12]) {
     samp(S, 'bdrumBig', null, dt, { dur: 1.1, rel: 0.6, vel: 0.9, gain: 0.8, verb: 0.05 });
     samp(S, 'conga', null, dt, { vel: 0.9, gain: 0.6, rate: 0.6, verb: 0.05 });
     samp(S, 'claves', null, dt + 0.005, { vel: 0.9, gain: 0.45, rate: 0.55 });
     noise(S, dt, { type: 'lowpass', f: 2500, f2: 300, q: 0.7, v: 0.5, dur: 0.12, a: 0.002, verb: 0.05 });
   }
+  part(S, 'tag', 'Sad marimba');
   [74, 72, 69, 65].forEach((m, i) => samp(S, 'marimba', m, 0.45 + i * 0.18, { vel: 0.7, gain: 0.6, pan: 0.2 - i * 0.12, dur: 0.2, rel: 0.15, verb: 0.25 }));
+  part(S, 'horn', 'Horn sigh');
   samp(S, 'hnSus', 62, 1.17, { vel: 0.55, gain: 0.55, dur: 0.6, rel: 0.4, bend: -1.5, bendT: 0.6, verb: 0.3 });
+  part(S, 'cello', 'Cello');
   samp(S, 'vcSpic', 50, 1.17, { vel: 0.6, gain: 0.5, verb: 0.2 });
 } };
 // the monster's roar as it lunges: a rough growl (a jittering, buzzing voice through vowel formants), a scraped gong
@@ -256,59 +301,88 @@ FX.roar = { peak: 0.65, len: 2.0, make(S) {
   const band = (x, f, q) => { const y = new Float32Array(x.length); let a1, a2, b0, b2, x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { if (i % 64 === 0) { const fc = typeof f === 'function' ? f(i / SR) : f, w = 2 * Math.PI * fc / SR, al = Math.sin(w) / (2 * q), a0 = 1 + al; b0 = al / a0; b2 = -al / a0; a1 = -2 * Math.cos(w) / a0; a2 = (1 - al) / a0; } const v = b0 * x[i] + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; } return y; };
   const f1 = band(out, x => 750 - 300 * Math.min(1, x / 1.2), 4), f2 = band(out, x => 1200 - 450 * Math.min(1, x / 1.2), 6), f0 = band(out, 160, 1);
   const v = new Float32Array(n); for (let i = 0; i < n; i++) v[i] = f1[i] * 2.2 + f2[i] * 1.2 + f0[i] * 1.4;
+  part(S, 'growl', 'Growl');
   put(S, 0, v, v, 0.5, -0.1, 0.25);
+  part(S, 'gong', 'Scraped gong');
   samp(S, 'gongScrape', null, 0, { vel: 0.8, gain: 0.5, rate: 0.6, dur: 1.2, rel: 0.4, verb: 0.3 });
+  part(S, 'roll', 'Timpani roll');
   samp(S, 'timpRoll', null, 0, { vel: 0.8, gain: 0.45, dur: 1.0, rel: 0.4 });
+  part(S, 'rumble', 'Rumble');
   noise(S, 0, { type: 'lowpass', f: 600, v: 0.25, dur: 1.2, a: 0.15 });
 } };
 // lift-off: a deep boom, the burn whooshing up as a whistle rises, and sparks crackling
 FX.launch = { peak: 0.6, len: 2.4, make(S) {
+  part(S, 'boom', 'Boom (drums)');
   samp(S, 'bdrumBig', null, 0, { dur: 1.1, rel: 0.6, vel: 0.9, gain: 0.8, verb: 0.15 });
   samp(S, 'timp', null, 0, { dur: 1.1, rel: 0.6, vel: 0.6, gain: 0.4 });
+  part(S, 'whoosh', 'Whoosh up');
   noise(S, 0, { f: 250, f2: 4500, q: 0.9, v: 0.45, dur: 0.9, a: 0.05, shape: 1.2, verb: 0.15 });
+  part(S, 'burn', 'Low burn');
   noise(S, 0, { type: 'lowpass', f: 400, v: 0.35, dur: 0.8, a: 0.02 });
+  part(S, 'whistle', 'Rising whistle');
   tone(S, 0.05, 320, { f2: 1500, glide: 0.7, dur: 0.75, type: 'triangle', v: 0.06, curve: 'lin', verb: 0.2 });
+  part(S, 'sparks', 'Sparks');
   for (let i = 0; i < 14; i++) { const t = 0.05 + rnd() * 0.7; noise(S, t, { type: 'highpass', f: 5000, v: 0.12 * rnd(), dur: 0.012, a: 0.001, pan: (rnd() - 0.5) * 1.4, verb: 0.1 }); }
 } };
 // a new zone: a cymbal swells up into a hit of bells, glockenspiel and timpani under a crash
 FX.zone = { peak: 0.65, tonal: true, len: 4.6, make(S) {
   const T = 0.9;
+  part(S, 'swell', 'Cymbal swell');
   samp(S, 'swellMed', null, 0, { vel: 0.7, gain: 0.5, peakAt: T, verb: 0.25 });
+  part(S, 'roll', 'Timpani roll');
   samp(S, 'timpRoll', null, 0.2, { vel: 0.5, gain: 0.35, dur: T - 0.2, rel: 0.05 });
+  part(S, 'hit', 'Drum hit');
   samp(S, 'timp', null, T, { dur: 1.1, rel: 0.6, vel: 0.9, gain: 0.8 }); samp(S, 'bdrum', null, T, { dur: 1.1, rel: 0.6, vel: 0.8, gain: 0.6 });
+  part(S, 'cymbal', 'Crash cymbal');
   samp(S, 'crash', null, T, { vel: 0.7, gain: 0.45, verb: 0.3 });
+  part(S, 'bell', 'Tubular bell');
   samp(S, 'tbell', 74, T, { vel: 0.8, gain: 0.6, dur: 2, rel: 0.6, verb: 0.4 });
+  part(S, 'glock', 'Glockenspiel');
   [74, 77, 81, 86].forEach((m, i) => samp(S, 'glock', m, T + i * 0.04, { vel: 0.8, gain: 0.6, pan: -0.3 + i * 0.2, dur: 1.2, rel: 0.5, verb: 0.35 }));
+  part(S, 'brass', 'Brass chord');
   for (const [m, id] of [[62, 'hnSus'], [65, 'hnSus'], [69, 'tptSus']]) samp(S, id, m, T, { vel: 0.7, gain: 0.45, dur: 0.9, rel: 0.5, verb: 0.3 });
 } };
 // every hundred metres: a bell and a two-note glockenspiel chime
 FX.milestone = { peak: 0.42, tonal: true, len: 2.0, make(S) {
+  part(S, 'bell', 'Tubular bell');
   samp(S, 'tbell', 74, 0, { vel: 0.5, gain: 0.45, dur: 1, rel: 0.5, verb: 0.35 });
+  part(S, 'chime', 'Glockenspiel chime');
   samp(S, 'glock', 86, 0, { vel: 0.7, gain: 0.6, dur: 0.2, rel: 0.2, pan: -0.2 });
   samp(S, 'glock', 93, 0.09, { vel: 0.75, gain: 0.65, dur: 0.7, rel: 0.3, pan: 0.2, verb: 0.35 });
 } };
 // a crusher slamming shut: a big drum, an anvil's clank and a brake drum, with dust
 FX.slam = { peak: 0.65, len: 2.0, make(S) {
+  part(S, 'boom', 'Boom (drums)');
   samp(S, 'bdrumBig', null, 0, { dur: 1.1, rel: 0.6, vel: 1, gain: 0.9 }); samp(S, 'timp', null, 0, { dur: 1.1, rel: 0.6, vel: 0.7, gain: 0.5 });
+  part(S, 'anvil', 'Anvil clank');
   samp(S, 'anvil', null, 0, { vel: 0.7, gain: 0.45, rate: 0.7, pan: 0.15, verb: 0.2 });
+  part(S, 'brake', 'Brake drum');
   samp(S, 'brake', null, 0.005, { vel: 0.7, gain: 0.35, rate: 0.6, pan: -0.15 });
+  part(S, 'dust', 'Dust');
   noise(S, 0.01, { type: 'lowpass', f: 1800, f2: 200, v: 0.35, dur: 0.4, a: 0.003 });
 } };
 // a boulder working loose: a low rumble and a timpani roll
 FX.rumble = { peak: 0.45, len: 1.8, make(S) {
+  part(S, 'roll', 'Timpani roll');
   samp(S, 'timpRoll', null, 0, { vel: 0.6, gain: 0.6, dur: 1.1, rel: 0.4, rate: 0.8 });
+  part(S, 'rumble', 'Low rumble');
   noise(S, 0, { type: 'lowpass', f: 220, v: 0.6, dur: 1.3, a: 0.3, shape: 1 });
+  part(S, 'knocks', 'Rock knocks');
   for (let i = 0; i < 5; i++) samp(S, 'logLo', null, 0.2 + i * 0.18 + rnd() * 0.05, { vel: 0.3, gain: 0.25, rate: 0.5 + rnd() * 0.3, pan: (rnd() - 0.5) });
 } };
 // the resume countdown: a woodblock tick, then a bright "go!"
-FX.tick = { peak: 0.32, len: 0.5, make(S) { samp(S, 'logHi', null, 0, { vel: 0.7, gain: 0.8, rate: 1.2 }); samp(S, 'claves', null, 0, { vel: 0.4, gain: 0.25, rate: 1.4 }); } };
+FX.tick = { peak: 0.32, len: 0.5, make(S) { part(S, 'block', 'Woodblock'); samp(S, 'logHi', null, 0, { vel: 0.7, gain: 0.8, rate: 1.2 }); part(S, 'claves', 'Claves'); samp(S, 'claves', null, 0, { vel: 0.4, gain: 0.25, rate: 1.4 }); } };
 FX.go = { peak: 0.45, tonal: true, len: 1.4, make(S) {
-  samp(S, 'glock', 86, 0, { vel: 0.85, gain: 0.7, dur: 0.6, rel: 0.3, verb: 0.3 }); samp(S, 'xylo', 74, 0, { vel: 0.8, gain: 0.5, dur: 0.1, rel: 0.1 });
-  samp(S, 'glock', 93, 0, { vel: 0.6, gain: 0.35, dur: 0.6, rel: 0.3, verb: 0.3 }); samp(S, 'tri', null, 0, { vel: 0.6, gain: 0.15, dur: 0.6, rel: 0.3 });
+  part(S, 'glock', 'Glockenspiel'); samp(S, 'glock', 86, 0, { vel: 0.85, gain: 0.7, dur: 0.6, rel: 0.3, verb: 0.3 });
+  part(S, 'xylo', 'Xylophone'); samp(S, 'xylo', 74, 0, { vel: 0.8, gain: 0.5, dur: 0.1, rel: 0.1 });
+  part(S, 'high', 'High glockenspiel'); samp(S, 'glock', 93, 0, { vel: 0.6, gain: 0.35, dur: 0.6, rel: 0.3, verb: 0.3 });
+  part(S, 'tri', 'Triangle'); samp(S, 'tri', null, 0, { vel: 0.6, gain: 0.15, dur: 0.6, rel: 0.3 });
 } };
 // buttons: a soft wooden click (three takes, so presses don't all sound the same)
 for (let i = 1; i <= 3; i++) FX[`tap${i}`] = { peak: 0.2, len: 0.3, make(S) {
+  part(S, 'click', 'Wood click');
   samp(S, 'claves', null, 0, { vel: 0.35, gain: 0.6, rate: [1.5, 1.6, 1.42][i - 1], verb: 0.03 });
+  part(S, 'marimba', 'Marimba');
   samp(S, 'marimba', [86, 89, 84][i - 1], 0, { vel: 0.3, gain: 0.25, dur: 0.04, rel: 0.05, verb: 0.03 });
 } };
 // a sheet sliding open (an airy rise) and away (falling)
@@ -317,44 +391,63 @@ FX.swishClose = { peak: 0.22, len: 0.5, make(S) { noise(S, 0, { f: 2600, f2: 600
 // an unlock bought: coins tumbling (a quick fall of bright mallet notes and sleigh bells), then a ka-ching of two
 // glockenspiel notes with a triangle
 FX.buy = { peak: 0.55, tonal: true, len: 2.2, make(S) {
+  part(S, 'coins', 'Tumbling coins');
   for (let i = 0; i < 9; i++) samp(S, i % 2 ? 'xylo' : 'glock', PENT[13 - i] , i * 0.032 + rnd() * 0.01, { vel: 0.6, gain: 0.4, pan: (rnd() - 0.5) * 1.2, dur: 0.12, rel: 0.12, verb: 0.2 });
+  part(S, 'sleigh', 'Sleigh bells');
   samp(S, 'sleigh', null, 0, { vel: 0.6, gain: 0.3, dur: 0.4, rel: 0.2 });
+  part(S, 'cowbell', 'Cowbell');
   samp(S, 'cowbell', null, 0.33, { vel: 0.4, gain: 0.12, rate: 1.5 });
+  part(S, 'kaching', 'Ka-ching');
   samp(S, 'glock', 86, 0.33, { vel: 0.85, gain: 0.75, dur: 0.15, rel: 0.12, pan: -0.15 });
   samp(S, 'glock', 93, 0.42, { vel: 0.9, gain: 0.8, dur: 1, rel: 0.4, pan: 0.15, verb: 0.35 });
+  part(S, 'tri', 'Triangle');
   samp(S, 'tri', null, 0.42, { vel: 0.7, gain: 0.2, dur: 1, rel: 0.4, verb: 0.3 });
 } };
 // a mission done: a quick brass fanfare (horns and a trumpet, D F A then a held D) with timpani, glockenspiel and a crash
 FX.mission = { peak: 0.6, tonal: true, len: 3.4, make(S) {
   const sp = 0.09;
-  [[62, 0], [65, 1], [69, 2]].forEach(([m, i]) => { samp(S, 'hnStac', m, i * sp, { vel: 0.75, gain: 0.7, pan: -0.2 }); samp(S, 'tptStac', m + 12, i * sp, { vel: 0.65, gain: 0.45, pan: 0.2 }); samp(S, 'xylo', m + 12, i * sp, { vel: 0.6, gain: 0.35, dur: 0.08, rel: 0.1 }); });
+  [[62, 0], [65, 1], [69, 2]].forEach(([m, i]) => { part(S, 'call', 'Brass call'); samp(S, 'hnStac', m, i * sp, { vel: 0.75, gain: 0.7, pan: -0.2 }); samp(S, 'tptStac', m + 12, i * sp, { vel: 0.65, gain: 0.45, pan: 0.2 }); part(S, 'xylo', 'Xylophone'); samp(S, 'xylo', m + 12, i * sp, { vel: 0.6, gain: 0.35, dur: 0.08, rel: 0.1 }); });
   const T = 3 * sp;
+  part(S, 'chord', 'Brass chord');
   for (const [m, id, g] of [[62, 'hnSus', 0.6], [66, 'hnSus', 0.5], [69, 'hnSus', 0.5], [74, 'tptSus', 0.5]]) samp(S, id, m, T, { vel: 0.8, gain: g, dur: 0.75, rel: 0.45, verb: 0.3 });
-  samp(S, 'timp', null, T, { dur: 1.1, rel: 0.6, vel: 0.8, gain: 0.6 }); samp(S, 'crashSoft', null, T, { vel: 0.7, gain: 0.35, verb: 0.3 });
+  part(S, 'timp', 'Timpani'); samp(S, 'timp', null, T, { dur: 1.1, rel: 0.6, vel: 0.8, gain: 0.6 }); part(S, 'cymbal', 'Cymbal'); samp(S, 'crashSoft', null, T, { vel: 0.7, gain: 0.35, verb: 0.3 });
+  part(S, 'glock', 'Glockenspiel');
   [86, 90, 93, 98].forEach((m, i) => samp(S, 'glock', m, T + i * 0.035, { vel: 0.7, gain: 0.45, pan: -0.3 + i * 0.2, dur: 0.7, rel: 0.4, verb: 0.35 }));
 } };
 // a new best: a bigger fanfare: a timpani roll into trumpets and horns (a rising call, then a big held chord) over
 // strings, a crash, a glockenspiel run and the bell
 FX.best = { peak: 0.7, tonal: true, len: 4.8, make(S) {
-  samp(S, 'timpRoll', null, 0, { vel: 0.6, gain: 0.45, dur: 0.42, rel: 0.05 }); samp(S, 'snareRoll', null, 0, { vel: 0.5, gain: 0.25, dur: 0.42, rel: 0.05 });
+  part(S, 'rolls', 'Drum rolls'); samp(S, 'timpRoll', null, 0, { vel: 0.6, gain: 0.45, dur: 0.42, rel: 0.05 }); samp(S, 'snareRoll', null, 0, { vel: 0.5, gain: 0.25, dur: 0.42, rel: 0.05 });
   const sp = 0.11;
+  part(S, 'call', 'Brass call');
   [[69, 0], [74, 1], [77, 2], [81, 3]].forEach(([m, i]) => { samp(S, 'tptStac', m, 0.1 + i * sp, { vel: 0.8, gain: 0.55, pan: 0.15 }); samp(S, 'hnStac', m - 12, 0.1 + i * sp, { vel: 0.7, gain: 0.55, pan: -0.2 }); });
   const T = 0.1 + 4 * sp + 0.02;
+  part(S, 'chord', 'Brass chord');
   for (const [m, id, g] of [[74, 'tptSus', 0.55], [78, 'tptSus', 0.4], [62, 'hnSus', 0.6], [66, 'hnSus', 0.5], [69, 'hnSus', 0.5], [50, 'tbnSus', 0.5]]) samp(S, id, m, T, { vel: 0.85, gain: g, dur: 1.4, rel: 0.6, verb: 0.3 });
+  part(S, 'strings', 'Strings');
   for (const [m, id] of [[50, 'vcSus'], [57, 'vlaSus'], [66, 'vlnSus'], [74, 'vlnSus']]) samp(S, id, m, T, { vel: 0.7, gain: 0.4, dur: 1.5, rel: 0.6, verb: 0.35 });
-  samp(S, 'timp', null, T, { dur: 1.1, rel: 0.6, vel: 1, gain: 0.8 }); samp(S, 'bdrum', null, T, { dur: 1.1, rel: 0.6, vel: 0.9, gain: 0.6 }); samp(S, 'crash', null, T, { vel: 0.8, gain: 0.5, verb: 0.35 });
+  part(S, 'hit', 'Drum hit'); samp(S, 'timp', null, T, { dur: 1.1, rel: 0.6, vel: 1, gain: 0.8 }); samp(S, 'bdrum', null, T, { dur: 1.1, rel: 0.6, vel: 0.9, gain: 0.6 }); part(S, 'cymbal', 'Crash cymbal'); samp(S, 'crash', null, T, { vel: 0.8, gain: 0.5, verb: 0.35 });
+  part(S, 'bell', 'Tubular bell');
   samp(S, 'tbell', 74, T, { vel: 0.7, gain: 0.45, dur: 2, rel: 0.6, verb: 0.4 });
+  part(S, 'glock', 'Glockenspiel run');
   [74, 78, 81, 86, 90, 93, 98].forEach((m, i) => samp(S, 'glock', m, T + 0.05 + i * 0.04, { vel: 0.7, gain: 0.4, pan: -0.45 + i * 0.15, dur: 0.8, rel: 0.4, verb: 0.35 }));
+  part(S, 'belltree', 'Bell tree');
   samp(S, 'belltree', null, T + 0.05, { vel: 0.6, gain: 0.25, verb: 0.4 });
 } };
 // back in the run (a rewarded revive): a magical rising run of glockenspiel and xylophone, a bell tree, and a warm
 // string chord swelling in, on a vibraphone ring
 FX.revive = { peak: 0.6, tonal: true, len: 3.4, make(S) {
+  part(S, 'run', 'Mallet run');
   PENT.slice(2, 14).forEach((m, i) => samp(S, i % 3 === 2 ? 'xylo' : 'glock', m, i * 0.04, { vel: 0.55 + i * 0.03, gain: 0.45, pan: -0.5 + i * 0.09, dur: 0.25, rel: 0.25, verb: 0.35 }));
+  part(S, 'belltree', 'Bell tree');
   samp(S, 'belltree', null, 0.05, { vel: 0.6, gain: 0.3, pan: 0.3, verb: 0.4 });
+  part(S, 'strings', 'Strings');
   for (const [m, id] of [[50, 'vcSus'], [62, 'vlaSus'], [66, 'vlnSus'], [69, 'vlnSus']]) samp(S, id, m, 0.15, { vel: 0.6, gain: 0.4, dur: 1.4, rel: 0.6, verb: 0.4 });
+  part(S, 'vibes', 'Vibraphone ring');
   samp(S, 'vibraring', null, 0.48, { vel: 0.6, gain: 0.3, verb: 0.4 });
+  part(S, 'glock', 'High glockenspiel');
   samp(S, 'glock', 98, 0.5, { vel: 0.75, gain: 0.55, dur: 1.2, rel: 0.5, verb: 0.4 });
+  part(S, 'air', 'Rising air');
   noise(S, 0, { f: 400, f2: 5000, q: 0.8, v: 0.18, dur: 0.6, a: 0.25 });
 } };
 
@@ -375,12 +468,19 @@ for (const n of names) {
   const E = FX[n]; if (!E) throw new Error(`no effect ${n}`);
   seed = 7 + [...n].reduce((a, ch) => a + ch.charCodeAt(0), 0);
   const S = sound(E.len); E.make(S);
-  const { L, R } = finish(S, E.peak, E.room);
+  const { L, R, parts } = finish(S, E.peak, E.room);
   writeWav(join(OUT, `${n}.wav`), L, R, SR);
   // a version stamp from the audio (so the game never plays an old cached file)
-  let h = 0; for (let i = 0; i < L.length; i += 97) h = (Math.imul(h, 31) + Math.round(L[i] * 1e6)) | 0;
-  man[n] = { dur: +(L.length / SR).toFixed(3), tonal: !!E.tonal, v: (h >>> 0).toString(36), ...(E.kit ? { kit: E.kit } : {}) };
-  console.log(`${n.padEnd(11)} ${(L.length / SR).toFixed(2)} s`);
+  const stamp = x => { let h = 0; for (let i = 0; i < x.length; i += 97) h = (Math.imul(h, 31) + Math.round(x[i] * 1e6)) | 0; return (h >>> 0).toString(36); };
+  man[n] = { dur: +(L.length / SR).toFixed(3), tonal: !!E.tonal, v: stamp(L), ...(E.kit ? { kit: E.kit } : {}) };
+  // its parts, alone: <name>__<part>.wav, listed with what they are and when they start
+  for (const k of Object.keys(man)) if (k.startsWith(`${n}__`)) delete man[k];
+  for (const f of readdirSync(OUT)) if (f.startsWith(`${n}__`)) unlinkSync(join(OUT, f));
+  for (const P of parts) {
+    writeWav(join(OUT, `${n}__${P.key}.wav`), P.L, P.R, SR);
+    man[`${n}__${P.key}`] = { dur: +(P.L.length / SR).toFixed(3), tonal: !!E.tonal, v: stamp(P.L), part: { of: n, k: P.key, label: P.label, at: +P.at.toFixed(6) } };
+  }
+  console.log(`${n.padEnd(11)} ${(L.length / SR).toFixed(2)} s${parts.length ? `  ${parts.length} parts` : ''}`);
 }
-for (const k of Object.keys(man)) if (!FX[k]) delete man[k];
+for (const k of Object.keys(man)) if (!FX[k.split('__')[0]]) delete man[k];
 writeFileSync(manPath, JSON.stringify(man, null, 1));
