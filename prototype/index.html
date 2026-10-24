@@ -1214,6 +1214,9 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .labmarks button.on { color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid)); }
 .labtransport { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .labtransport .btn { min-height: 46px; }
+.labsfx { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.labsfx button { min-height: 40px; padding: 6px 8px; border: 0; border-radius: 12px; font: 800 13px/1.15 var(--font-body); color: var(--cream); background: rgba(255,226,190,.1); cursor: pointer; }
+.labsfx button:active { background: rgba(255,226,190,.22); }
 .labsub { font-size: 13px; font-weight: 800; color: rgba(255,226,190,.7); margin: 4px 2px 6px; }
 .labsrc { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .labsrc button { font-size: 15px; min-height: 40px; }
@@ -1344,6 +1347,11 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <div class="lablead labsrc" id="labSrc" role="radiogroup" aria-label="Music source"></div>
       <div id="labFx"></div>
       <div class="labtransport"><button class="btn alt" id="labDry" aria-pressed="false">Compare: effects off</button><button class="btn alt" id="labFxReset">Reset this track</button></div>
+    </section>
+    <section class="group">
+      <div class="ghead">Sound effects</div>
+      <p class="devnote">Tap one to hear it (in the key of the track picked above). A note added just after names it.</p>
+      <div class="labsfx" id="labSfx"></div>
     </section>
     <section class="group">
       <div class="ghead">Notes</div>
@@ -3615,6 +3623,7 @@ function audioInit() {
   SND.bus = SND.music; SND.vsend = SND.verbIn;
   SND.timer = setInterval(schedMusic, 25);
   kickAudio();
+  sfDecode();
 }
 // the classic WebKit unlock: start a one-sample silent buffer inside the gesture
 function kickAudio() { try { const c = SND.ctx, b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } catch {} }
@@ -4141,10 +4150,64 @@ function sfxHit(t) {
   // the smoulder: a low, soft roll of the flames settling
   vNoise(dry, t + 0.12, { type: 'lowpass', f: 900, f2: 300, v: 0.02, dur: 0.5, a: 0.1 });
 }
+// ---- the sound effects as recorded files ----
+// Rendered offline like the music (prototype/tools/sfx: layered from real instruments, glockenspiel, xylophone, bells,
+// drums, brass and strings, plus a little synthesis) to audio/sfx/<name>.mp4, with sfx.json giving each one's length,
+// whether it's tonal and a version stamp. All are fetched as the page opens and decoded once the audio starts. Tonal
+// effects follow the key of the music playing (each zone is a step deeper), the rest vary a hair in pitch so repeats
+// never sound identical. An effect with no file (or no files at all) uses the synthesised one below.
+const SFX_DIR = 'audio/sfx/';
+const SF = { info: null, failed: false, bufs: {}, off: {}, raw: {}, busy: {} };
+const KEY_TR = { menu: 0, jungle: 0, caves: -2, magma: -4 };   // (each track's key against the jungle's, as rendered)
+function sfInfo() {
+  if (SF.info || SF.failed || SF.busy.info) return;
+  SF.busy.info = true;
+  fetch(SFX_DIR + 'sfx.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(j => { SF.info = j; for (const n of Object.keys(j)) sfFetch(n); sfDecode(); }).catch(() => { SF.failed = true; }).finally(() => { SF.busy.info = false; });
+}
+function sfFetch(n) { return SF.raw[n] || (SF.raw[n] = fetch(`${SFX_DIR}${n}.mp4?v=${SF.info[n].v}`).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })); }
+function sfDecode() {
+  const c = SND.ctx; if (!c || !SF.info) return;
+  for (const n of Object.keys(SF.info)) {
+    if (SF.bufs[n] || SF.busy[n]) continue;
+    SF.busy[n] = true;
+    sfFetch(n).then(ab => new Promise((res, rej) => c.decodeAudioData(ab.slice(0), res, rej))).then(buf => {
+      const d = buf.getChannelData(0), lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.1)); let i = 0;
+      while (i < lim && Math.abs(d[i]) < 0.001) i++;
+      SF.off[n] = i < lim ? Math.max(0, i - 8) / buf.sampleRate : 0; SF.bufs[n] = buf;
+    }).catch(() => {}).finally(() => { SF.busy[n] = false; });
+  }
+}
+sfInfo();
+// which file an effect plays (a coconut chain climbs eight steps; a few have takes picked at random)
+function sfFile(name, o) {
+  switch (name) {
+    case 'coco': return `coco${clamp(o.chain || 1, 1, 8)}`;
+    case 'close': return Math.random() < 0.5 ? 'close1' : 'close2';
+    case 'tap': return `tap${1 + Math.floor(Math.random() * 3)}`;
+    case 'swish': return o.close ? 'swishClose' : 'swishOpen';
+    default: return name;
+  }
+}
+// the key the music is in now (or the zone being entered), as a playback rate
+function sfKeyRate(o) {
+  const tr = o.track || (o.z != null ? ['jungle', 'caves', 'magma'][o.z] : SND.track || 'menu'), from = srcOf(tr);
+  return Math.pow(2, (KEY_TR[from] || 0) / 12) * fxRate(fxOf(tr));
+}
+function sfxFile(name, o, t) {
+  const f = sfFile(name, o), buf = SF.bufs[f]; if (!buf) { if (SF.info && !SF.failed) sfDecode(); return false; }
+  const c = SND.ctx, src = c.createBufferSource(), g = c.createGain();
+  src.buffer = buf; src.playbackRate.value = SF.info[f].tonal ? sfKeyRate(o) : 0.97 + Math.random() * 0.06;
+  g.gain.value = (o.v ?? 1) * ((settings.sfxVol || {})[name] ?? 1);
+  src.connect(g); g.connect(SND.sfx); src.start(t, SF.off[f] || 0);
+  src.onended = () => g.disconnect();
+  return true;
+}
 function sfx(name, o = {}) {
   const c = SND.ctx;
   if (!c || c.state !== 'running' || settings.sfx === false) return;
   const t = c.currentTime + 0.005, B = SND.sfx;
+  if (sfxFile(name, o, t)) return;
   switch (name) {
     case 'tap': vTone(B, t, 900, { f2: 620, glide: 0.04, v: 0.09, dur: 0.05 }); vNoise(B, t, { f: 2500, q: 3, v: 0.03, dur: 0.015 }); break;
     case 'swish': vNoise(B, t, { f: o.close ? 2400 : 700, f2: o.close ? 700 : 2400, q: 1.4, v: 0.07, dur: 0.22, a: 0.04 }); break;
@@ -29467,7 +29530,7 @@ function closeMissions(now) {
   const m = $('missionSheet'); if (m.hidden) return;
   revealTimers.forEach(clearTimeout); revealTimers = []; refreshMeta();
   if (now || matchMedia('(prefers-reduced-motion: reduce)').matches) { m.hidden = true; m.classList.remove('closing'); return; }
-  m.classList.add('closing'); setTimeout(() => { if (m.classList.contains('closing')) { m.hidden = true; m.classList.remove('closing'); } }, 190);
+  m.classList.add('closing'); sfx('swish', { close: true }); setTimeout(() => { if (m.classList.contains('closing')) { m.hidden = true; m.classList.remove('closing'); } }, 190);
 }
 tap($('openMissions'), openMissions);
 // the streak disc opens the same sheet, scrolled to the week of streak days
@@ -29663,6 +29726,18 @@ $('labFx').addEventListener('input', e => {
   e.target.nextElementSibling.textContent = f[5](v);
   labSetFx(r => { r[k] = v; });
 });
+// the sound effects, to audition (a coconut chain plays all eight steps)
+const LAB_SFX = [['coco', 'Coconut'], ['chain', 'Coconut chain'], ['gold', 'Golden coconut'], ['close', 'Close call'], ['milestone', '100 m'], ['zone', 'New zone'],
+  ['launch', 'Lift-off'], ['crash', 'Crash'], ['caught', 'Caught'], ['bite', 'Bite'], ['roar', 'Roar'], ['slam', 'Crusher'], ['rumble', 'Rumble'],
+  ['tick', 'Countdown'], ['go', 'Go'], ['revive', 'Revive'], ['mission', 'Mission done'], ['best', 'New best'], ['buy', 'Unlock'], ['tap', 'Button'], ['swish', 'Sheet open'], ['swishClose', 'Sheet close']];
+$('labSfx').innerHTML = LAB_SFX.map(([k, nm]) => `<button data-sfx="${k}">${nm}</button>`).join('');
+$('labSfx').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; const k = b.dataset.sfx, o = { track: LAB.track };
+  LAB.lastSfx = { name: b.textContent, at: performance.now() };
+  if (k === 'chain') { for (let i = 1; i <= 8; i++) setTimeout(() => sfx('coco', { ...o, chain: i }), (i - 1) * 170); }
+  else if (k === 'swishClose') sfx('swish', { ...o, close: true });
+  else sfx(k, o);
+});
 $('labDry').addEventListener('click', () => { LAB.dry = !LAB.dry; labFxLive(); labFxRender(); });
 $('labFxReset').addEventListener('click', () => {
   const was = srcOf(LAB.track);
@@ -29701,8 +29776,8 @@ $('labStems').addEventListener('click', e => {
 $('labAddNote').addEventListener('click', () => {
   const text = $('labNoteText').value.trim(); if (!text) return;
   const x = labPos(), w = labWhere(x), heard = LAB.solo ? ` (solo ${LAB_STEMS[LAB.solo]})` : Object.keys(LAB.mute).some(k => LAB.mute[k]) ? ` (muted: ${Object.keys(LAB.mute).filter(k => LAB.mute[k]).map(k => LAB_STEMS[k]).join(', ')})` : '';
-  const fxs = fxSummary(LAB.track);
-  LAB.notes.push({ where: `${LAB.track} ${labClock(x)} · ${w.text}${heard}${fxs !== 'no effects' ? ` [sound: ${fxs}]` : ''}`, text }); $('labNoteText').value = ''; labRender();
+  const fxs = fxSummary(LAB.track), fresh = LAB.lastSfx && performance.now() - LAB.lastSfx.at < 20000;
+  LAB.notes.push({ where: `${LAB.track} ${labClock(x)} · ${w.text}${heard}${fxs !== 'no effects' ? ` [sound: ${fxs}]` : ''}${fresh ? ` [effect: ${LAB.lastSfx.name}]` : ''}`, text }); $('labNoteText').value = ''; labRender();
 });
 $('labCopy').addEventListener('click', () => {
   const set = Object.keys(settings.musicFx || {}), head = set.length ? `Sound settings:\n${set.map(n => `- ${n}: ${fxSummary(n)}`).join('\n')}\n\n` : '';
@@ -31154,7 +31229,7 @@ try { if (sessionStorage.getItem('cr-after-reset')) { sessionStorage.removeItem(
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
