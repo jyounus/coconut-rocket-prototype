@@ -4264,7 +4264,7 @@ function sfxStrip(name, t, o) {
 // out) and brightness. The pre-mixed file plays until the layers have loaded.
 const PART_DEFAULT = { on: true, vol: 1, pitch: 0, delay: 0, len: 0, bright: 1 };
 // the owner's picks from the effects lab (2026-10-24): each effect's own starting layers, where they aren't the plain ones
-const PART_DEFAULTS_FOR = { gold: { bell: { on: false }, run: { delay: -0.06 }, xylo: { pitch: -0.5, delay: -0.26 } } };
+const PART_DEFAULTS_FOR = { launch: { whoosh: { pitch: 8 }, whistle: { pitch: 1 } }, gold: { bell: { on: false }, run: { delay: -0.06 }, xylo: { pitch: -0.5, delay: -0.26 } } };
 const layerOf = (name, k) => ({ ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[name] || {})[k] || {}), ...(((settings.sfxParts || {})[name] || {})[k] || {}) });
 const tweakName = (name, o) => name === 'swish' && o.close ? 'swishClose' : name;   // (the lab shapes the two sheet swishes apart)
 function sfxFile(name, o, t) {
@@ -29922,13 +29922,15 @@ function sfxSave() { store.set('cr-settings', settings); }
 function cocoSet(change) { const R = cocoOf(); change(R); settings.coco = R; sfxSave(); }
 function tweakSet(k, v) { const all = settings.sfxTweak || (settings.sfxTweak = {}), name = SFXLAB.pick; all[name] = { ...tweakOf(name), [k]: v }; sfxSave(); }
 // what's been changed, in words a person can read and numbers exact enough to rebuild it
+// each line says which sound it is as the lab names it, with the game's own name after it (and if it's gone from the game)
+const sfxLabel = k => { const e = LAB_SFX.find(([n]) => n === k); return e ? `${e[1]} (${k})` : `${k} (no longer in the game)`; };
 function sfxSettingsText() {
   const lines = [], tw = settings.sfxTweak || {};
-  if (settings.coco) lines.push(`- coconut: ${JSON.stringify(cocoOf())}`);
-  for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${k} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
+  if (settings.coco) lines.push(`- ${sfxLabel('coco')}: ${JSON.stringify(cocoOf())}`);
+  for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${sfxLabel(k)} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
   for (const [k, ps] of Object.entries(settings.sfxParts || {})) {
     const d = Object.entries(ps).map(([pk, P]) => { const b = { ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[k] || {})[pk] || {}) }, ch = Object.entries(P).filter(([f, v]) => v !== b[f]); return !ch.length ? '' : P.on === false ? `${pk} off` : `${pk} ${ch.map(([f, v]) => `${f} ${v}`).join(' ')}`; }).filter(Boolean);
-    if (d.length) lines.push(`- ${k} layers: ${d.join('; ')}`);
+    if (d.length) lines.push(`- ${sfxLabel(k)} layers: ${d.join('; ')}`);
   }
   return lines.length ? `Effects lab settings:\n${lines.join('\n')}` : '';
 }
