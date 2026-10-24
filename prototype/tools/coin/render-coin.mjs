@@ -23,7 +23,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import { cpus } from 'node:os';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '../../art');
-const FRAMES = 32, COLS = 8, CELL = 128, SPAN = 29;   // a cell spans SPAN world units (the coin is 26 across)
+const FRAMES = 96, COLS = 16, CELL = 112, SPAN = 29;   // a cell spans SPAN world units (the coin is 26 across)
 const ICON = 64;
 const SS = 3;                                        // supersampling per axis
 const TILT = 10 * Math.PI / 180;                     // seen this far from above
@@ -111,30 +111,48 @@ function sdf(p) {
   return Math.min(Math.max(qx, qz), 0) + Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) - RB;
 }
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const KEY = norm([-0.55, 0.62, 0.56]), STRIP = norm([0.9, 0.1, 0.42]), FILL = norm([0.1, 0.45, 0.88]);
-// the studio, as seen in a reflection (camera space: x right, y up, z towards the viewer): a dark warm room with a big
-// soft key at the upper left, a warm fill from the front, a thin strip light at the right
+// The studio the gold reflects (camera space: x right, y up, z towards the viewer). Metal is only what it reflects, so the
+// room has real contrast: a near-black floor, a bright horizon line, a dim sky, two sharp softboxes (a big one up at
+// the left, a smaller one low in front), a hot strip light at the right and a dark flag at the left.
+const ang = d => [Math.atan2(d[0], d[2]), Math.asin(Math.max(-1, Math.min(1, d[1])))];   // azimuth (0 = towards us), elevation
+const box = (az, el, a0, a1, e0, e1, soft) => smoothstep(a0 - soft, a0, az) * (1 - smoothstep(a1, a1 + soft, az)) * smoothstep(e0 - soft, e0, el) * (1 - smoothstep(e1, e1 + soft, el));
 function env(d) {
-  const y = d[1], t = smoothstep(-0.5, 0.9, y);
-  const base = [0.07 + 0.34 * t, 0.04 + 0.23 * t, 0.015 + 0.11 * t];
-  const k = Math.max(0, dot(d, KEY)), f = Math.max(0, dot(d, FILL)), s = Math.max(0, dot(d, STRIP));
-  const key = Math.pow(k, 14) * 4 + Math.pow(k, 3) * 0.3, fill = Math.pow(f, 8) * 0.75, strip = Math.pow(s, 60) * 4;
-  return base.map(v => v + key + fill + strip);
+  const [az, el] = ang(d);
+  const floor = 0.03 + 0.06 * smoothstep(-1.2, -0.05, el), sky = 0.22 + 0.16 * smoothstep(0.1, 1.2, el);
+  let L = el < 0 ? floor : sky;
+  L += Math.exp(-(((el - 0.04) / 0.06) ** 2)) * 0.7;                                            // the horizon line
+  L += box(az, el, -1.25, -0.35, 0.45, 1.05, 0.06) * 3.2;                                     // the big key softbox
+  L += box(az, el, -0.45, 0.5, 0.08, 0.5, 0.08) * 1.0;                                       // the front softbox
+  L += box(az, el, 0.95, 1.1, -0.35, 0.8, 0.03) * 2.6;                                         // the strip light
+  L *= 1 - 0.7 * box(az, el, -2.2, -1.5, -0.2, 0.9, 0.12);                                   // a black flag
+  return [L * 1.0, L * 0.9, L * 0.74];   // (the lights a touch warm)
 }
-const GOLD = [1.0, 0.63, 0.15];
-// gold: a mirror where polished (the field), satin where frosted (the relief), its reflections tinted gold and
-// whitening at grazing angles
+// gold's reflectance (linear; a little richer than measured, as gold reads in photographs, where its own
+// reflections in its relief deepen it): every colour it shows is the room, tinted
+const GOLD = [1.0, 0.6, 0.14];
+// a fixed spread of directions for blurred (frosted) reflections
+const SPREAD = Array.from({ length: 16 }, (_, i) => { const z = 1 - (i + 0.5) / 16, r = Math.sqrt(1 - z * z), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r, z]; });
+// pure metal: no diffuse at all. A mirror where polished; where frosted, the reflection blurred over a cone
+// (rough = its width). Fresnel lifts it towards white at grazing angles.
 function shadeMetal(n, v, rough, ao) {
   const dn = dot(n, v), rv = norm([2 * dn * n[0] - v[0], 2 * dn * n[1] - v[1], 2 * dn * n[2] - v[2]]);
+  let e = [0, 0, 0];
+  if (rough < 0.02) e = env(rv);
+  else {
+    const tx = norm(Math.abs(rv[1]) < 0.9 ? [rv[2], 0, -rv[0]] : [1, 0, 0]), ty = [rv[1] * tx[2] - rv[2] * tx[1], rv[2] * tx[0] - rv[0] * tx[2], rv[0] * tx[1] - rv[1] * tx[0]];
+    let w = 0;
+    for (const [sx, sy, sz] of SPREAD) {
+      const dd = norm([rv[0] * sz + (tx[0] * sx + ty[0] * sy) * rough, rv[1] * sz + (tx[1] * sx + ty[1] * sy) * rough, rv[2] * sz + (tx[2] * sx + ty[2] * sy) * rough]);
+      if (dot(dd, n) <= 0) continue;
+      const c = env(dd); e = [e[0] + c[0], e[1] + c[1], e[2] + c[2]]; w++;
+    }
+    e = e.map(x => x / (w || 1));
+  }
   const fr = Math.pow(1 - Math.max(0, dn), 5);
-  const sharp = env(rv), blur = env(norm([rv[0] * 0.35 + n[0] * 0.65, rv[1] * 0.35 + n[1] * 0.65, rv[2] * 0.35 + n[2] * 0.65]));
-  const lam = Math.max(0, dot(n, KEY)) * 0.9 + Math.max(0, dot(n, FILL)) * 0.35 + 0.06;
-  return GOLD.map((g, i) => {
-    const F0 = g + (1 - g) * fr, spec = sharp[i] * (1 - rough) + blur[i] * rough * 0.8;
-    return (F0 * spec + g * g * lam * rough * 0.9) * ao;
-  });
+  return GOLD.map((g, i) => (g + (1 - g) * fr) * e[i] * ao);
 }
-const tone = x => Math.pow(1 - Math.exp(-x * 1.7), 1 / 2.2);
+// film-like: highlights burn towards white, shadows stay rich (ACES fit), then to sRGB
+const tone = x => { const y = x * 0.75, m = (y * (2.51 * y + 0.03)) / (y * (2.43 * y + 0.59) + 0.14); return Math.pow(Math.max(0, Math.min(1, m)), 1 / 2.2); };
 
 function renderCell(hm, theta, size, span, tilt = TILT) {
   const out = new Uint8ClampedArray(size * size * 4), V = [0, 0, 1];
@@ -162,7 +180,7 @@ function renderCell(hm, theta, size, span, tilt = TILT) {
         const hx = (sample(hm.H, u + dHdu, v) - sample(hm.H, u - dHdu, v)) / (2 * dHdu), hy = (sample(hm.H, u, v + dHdu) - sample(hm.H, u, v - dHdu)) / (2 * dHdu);
         const nu = -hx, nv = -hy;   // in (u, v) face coords, v down
         n = norm([front ? nu : -nu, -nv, front ? 1 : -1]);
-        const rel = sample(hm.relief, u, v); rough = Math.hypot(u, v) < F ? 0.06 + 0.6 * rel : 0.18;
+        const rel = sample(hm.relief, u, v); rough = Math.hypot(u, v) < F ? 0.01 + 0.32 * rel : 0.05;
         ao = sample(hm.ao, u, v);
       } else {
         // the edge and its rounding: the shape's own normal, the side reeded
@@ -170,7 +188,7 @@ function renderCell(hm, theta, size, span, tilt = TILT) {
         n = norm(g);
         const side = Math.abs(p[2]) < T / 2 - RB, phi = Math.atan2(p[1], p[0]);
         if (side) { const w = Math.sin(phi * 96) * 0.32; n = norm([n[0] - Math.sin(phi) * w, n[1] + Math.cos(phi) * w, n[2]]); ao = 0.82 + 0.18 * Math.abs(Math.cos(phi * 96)); }
-        rough = side ? 0.3 : 0.15;
+        rough = side ? 0.12 : 0.04;
       }
       const c = shadeMetal(norm(toCam(n)), V, rough, ao);
       cr += tone(c[0]); cg += tone(c[1]); cb += tone(c[2]); ca += 1;
@@ -195,7 +213,7 @@ function png(w, h, rgba) {
 const thetaOf = f => f / FRAMES * 2 * Math.PI;
 const PREVIEW = process.env.PREVIEW;   // a path: render a few frames large there instead (to look at the coin closely)
 if (isMainThread && PREVIEW) {
-  const fr = [0, 3, 13, 14], P = 320, out = new Uint8ClampedArray(P * fr.length * P * 4), hm = heightMap(false);
+  const fr = [0, 9, 39, 42], P = 320, out = new Uint8ClampedArray(P * fr.length * P * 4), hm = heightMap(false);
   fr.forEach((f, i) => { const c = renderCell(hm, thetaOf(f), P, SPAN); for (let y = 0; y < P; y++) out.set(c.subarray(y * P * 4, (y + 1) * P * 4), (y * P * fr.length + i * P) * 4); });
   writeFileSync(PREVIEW, png(P * fr.length, P, out)); process.exit(0);
 }
