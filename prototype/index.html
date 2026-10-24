@@ -4260,7 +4260,9 @@ function sfxStrip(name, t, o) {
 // each layer can be shaped in the effects lab: on or off, volume, pitch, a nudge earlier or later, a length (a fade
 // out) and brightness. The pre-mixed file plays until the layers have loaded.
 const PART_DEFAULT = { on: true, vol: 1, pitch: 0, delay: 0, len: 0, bright: 1 };
-const layerOf = (name, k) => ({ ...PART_DEFAULT, ...(((settings.sfxParts || {})[name] || {})[k] || {}) });
+// the owner's picks from the effects lab (2026-10-24): layers that start switched off
+const PART_DEFAULTS_FOR = { milestone: { bell: { on: false } }, gold: { bell: { on: false } } };
+const layerOf = (name, k) => ({ ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[name] || {})[k] || {}), ...(((settings.sfxParts || {})[name] || {})[k] || {}) });
 const tweakName = (name, o) => name === 'swish' && o.close ? 'swishClose' : name;   // (the lab shapes the two sheet swishes apart)
 function sfxFile(name, o, t) {
   if (name === 'coco' && cocoLive(t, o)) return true;
@@ -4293,10 +4295,10 @@ function sfxFile(name, o, t) {
 const COCO_PENT = [62, 65, 67, 69, 72, 74, 77, 79, 81, 84, 86, 89, 91, 93, 96, 98, 101];
 const COCO_LAYERS = { shell: 'claves', xylo: 'xylo', glock: 'glock', marimba: 'marimba', bell: 'tbell', shimmer: 'glock', sparkle: 'tri' };
 // the owner's pick from the effects lab (2026-10-24), played 9.5 semitones up and a little dulled (TWEAK_FOR.coco)
-const COCO_DEFAULT = { base: 10, interval: 7, gap: 0.07, step: 1, layers: {
+const COCO_DEFAULT = { base: 9, interval: 7, gap: 0.07, step: 1, layers: {
   shell: { on: true, vol: 0.22, pitch: 2, decay: 0.06 },
   xylo: { on: true, vol: 0.6, decay: 0.08, oct: 0, note: 2 },
-  glock: { on: true, vol: 0.6, decay: 0.38, oct: 0, note: 3 },
+  glock: { on: true, vol: 0.4, decay: 0.38, oct: 0, note: 3 },
   marimba: { on: false, vol: 0.4, decay: 0.12, oct: -1, note: 1 },
   bell: { on: false, vol: 0.3, decay: 0.6, oct: -1, note: 2 },
   shimmer: { on: false, vol: 0.16, decay: 0.22, oct: 1, note: 2 },
@@ -29923,7 +29925,7 @@ function sfxSettingsText() {
   if (settings.coco) lines.push(`- coconut: ${JSON.stringify(cocoOf())}`);
   for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${k} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
   for (const [k, ps] of Object.entries(settings.sfxParts || {})) {
-    const d = Object.entries(ps).map(([pk, P]) => { const ch = Object.entries(P).filter(([f, v]) => v !== PART_DEFAULT[f]); return !ch.length ? '' : P.on === false ? `${pk} off` : `${pk} ${ch.map(([f, v]) => `${f} ${v}`).join(' ')}`; }).filter(Boolean);
+    const d = Object.entries(ps).map(([pk, P]) => { const b = { ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[k] || {})[pk] || {}) }, ch = Object.entries(P).filter(([f, v]) => v !== b[f]); return !ch.length ? '' : P.on === false ? `${pk} off` : `${pk} ${ch.map(([f, v]) => `${f} ${v}`).join(' ')}`; }).filter(Boolean);
     if (d.length) lines.push(`- ${k} layers: ${d.join('; ')}`);
   }
   return lines.length ? `Effects lab settings:\n${lines.join('\n')}` : '';
