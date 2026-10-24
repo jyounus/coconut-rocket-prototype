@@ -152,6 +152,24 @@ function shadeMetal(n, v, rough, ao) {
   return GOLD.map((g, i) => (g + (1 - g) * fr) * e[i] * ao);
 }
 // film-like: highlights burn towards white, shadows stay rich (ACES fit), then to sRGB
+// The cel look: flat bands of the game's own coin golds instead of reflections, so the
+// spinning 3D coin reads as drawn art. Darker golds stand in for any outline (never black).
+const PAL = [[100, 58, 8], [136, 80, 12], [176, 108, 20], [234, 170, 40], [255, 222, 96], [255, 250, 214]].map(c => c.map(x => x / 255));
+const LIGHT = norm([-0.5, 0.6, 0.65]), HALF = norm([LIGHT[0], LIGHT[1], LIGHT[2] + 1]);
+function shadeToon(n, v, kind, ao, u, w) {
+  const d = dot(n, LIGHT);
+  let lv = d < 0 ? 1 : d < 0.35 ? 2 : d < 0.88 ? 3 : 4;
+  if (kind === 'relief' || kind === 'rim') lv = Math.min(lv + 1, 4); else if (kind === 'field') lv = Math.min(lv, 3);   // the palm always a step above its field
+  if (ao < 0.78) lv--;
+  if (dot(n, HALF) > 0.985) lv = 5;
+  if (kind === 'field' && d > 0.3) {
+    // a painted shine streak across the face, turning with it
+    const s = (u - w) * 0.7071;
+    if (Math.abs(s + 4.2) < 1.3 || Math.abs(s + 7.4) < 0.45) lv = Math.min(lv + 1, 4);
+  }
+  if (dot(n, v) < 0.28) lv -= 2;   // the turned-away bevel: a dark-gold contour
+  return PAL[Math.max(0, Math.min(5, lv))];
+}
 const tone = x => { const y = x * 0.75, m = (y * (2.51 * y + 0.03)) / (y * (2.43 * y + 0.59) + 0.14); return Math.pow(Math.max(0, Math.min(1, m)), 1 / 2.2); };
 
 function renderCell(hm, theta, size, span, tilt = TILT) {
@@ -173,7 +191,7 @@ function renderCell(hm, theta, size, span, tilt = TILT) {
       for (let it = 0; it < 96 && t < 40; it++) { p = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t]; const s = sdf(p); if (s < 0.002) { hit = true; break; } t += s; }
       if (!hit) continue;
       const rr = Math.hypot(p[0], p[1]);
-      let n, rough, ao = 1;
+      let n, rough, ao = 1, kind = 'side', fu = 0, fv = 0;
       if (Math.abs(p[2]) > T / 2 - 0.02 && rr < R - RB) {
         // a face: its relief from the height map (the back face read mirrored, so the palm faces the same way)
         const front = p[2] > 0, u = front ? p[0] : -p[0], v = -p[1];
@@ -181,6 +199,7 @@ function renderCell(hm, theta, size, span, tilt = TILT) {
         const nu = -hx, nv = -hy;   // in (u, v) face coords, v down
         n = norm([front ? nu : -nu, -nv, front ? 1 : -1]);
         const rel = sample(hm.relief, u, v); rough = Math.hypot(u, v) < F ? 0.01 + 0.32 * rel : 0.05;
+        kind = Math.hypot(u, v) >= F ? 'rim' : rel > 0.5 ? 'relief' : 'field'; fu = u; fv = v;
         ao = sample(hm.ao, u, v);
       } else {
         // the edge and its rounding: the shape's own normal, the side reeded
@@ -188,10 +207,10 @@ function renderCell(hm, theta, size, span, tilt = TILT) {
         n = norm(g);
         const side = Math.abs(p[2]) < T / 2 - RB, phi = Math.atan2(p[1], p[0]);
         if (side) { const w = Math.sin(phi * 96) * 0.32; n = norm([n[0] - Math.sin(phi) * w, n[1] + Math.cos(phi) * w, n[2]]); ao = 0.82 + 0.18 * Math.abs(Math.cos(phi * 96)); }
-        rough = side ? 0.12 : 0.04;
+        rough = side ? 0.12 : 0.04; kind = side ? 'side' : 'bevel';
       }
-      const c = shadeMetal(norm(toCam(n)), V, rough, ao);
-      cr += tone(c[0]); cg += tone(c[1]); cb += tone(c[2]); ca += 1;
+      const c = shadeToon(norm(toCam(n)), V, kind, ao, fu, fv);
+      cr += c[0]; cg += c[1]; cb += c[2]; ca += 1;
     }
     const n2 = SS * SS, k = (py * size + pxl) * 4;
     if (ca) { out[k] = cr / ca * 255; out[k + 1] = cg / ca * 255; out[k + 2] = cb / ca * 255; out[k + 3] = ca / n2 * 255; }
