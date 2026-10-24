@@ -4224,7 +4224,6 @@ function sfFile(name, o) {
   switch (name) {
     case 'coco': return `coco${clamp(o.chain || 1, 1, 8)}`;
     case 'close': return Math.random() < 0.5 ? 'close1' : 'close2';
-    case 'tap': return `tap${1 + Math.floor(Math.random() * 3)}`;
     case 'swish': return o.close ? 'swishClose' : 'swishOpen';
     default: return name;
   }
@@ -4350,7 +4349,6 @@ function sfx(name, o = {}) {
   const t = c.currentTime + 0.005, B = SND.sfx;
   if (sfxFile(name, o, t)) return;
   switch (name) {
-    case 'tap': vTone(B, t, 900, { f2: 620, glide: 0.04, v: 0.09, dur: 0.05 }); vNoise(B, t, { f: 2500, q: 3, v: 0.03, dur: 0.015 }); break;
     case 'swish': vNoise(B, t, { f: o.close ? 2400 : 700, f2: o.close ? 700 : 2400, q: 1.4, v: 0.07, dur: 0.22, a: 0.04 }); break;
     case 'launch': vNoise(B, t, { f: 400, f2: 2600, q: 0.8, v: 0.18, dur: 0.5, a: 0.02 }); vTone(B, t, 90, { f2: 45, glide: 0.4, v: 0.25, dur: 0.45 }); break;
     case 'coco': sfxCoco(t, o.chain || 1, false); break;
@@ -4380,8 +4378,8 @@ function sfx(name, o = {}) {
 }
 // ?audiodbg: a corner readout of the audio state (for checking the unlock on phones)
 if (/[?&]audiodbg\b/.test(location.search)) { const el = document.createElement('div'); el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;font:700 12px monospace;color:#fff;background:rgba(0,0,0,.7);padding:4px 6px;border-radius:6px;pointer-events:none'; document.documentElement.appendChild(el); setInterval(() => { el.textContent = `audio: ${SND.ctx ? SND.ctx.state : 'none'} · ${SND.track || '-'} · music ${settings.music !== false ? 'on' : 'off'} · el ${silentEl ? (silentEl.paused ? 'paused' : 'playing') : '-'}`; }, 400); }
-// every button press clicks (the canvas and the pause button's own path excepted)
-document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button, .srow, .pcard, [role="tab"]')) { audioInit(); sfx('tap'); } }, true);
+// any button press wakes the audio (silently: buttons make no click)
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button, .srow, .pcard, [role="tab"]')) audioInit(); }, true);
 
 // ---------- input ----------
 // `pressed` latches any press until the next update, so a tap shorter than one frame still fires.
@@ -29720,7 +29718,7 @@ for (const [id, k] of [['volMusic', 'volMusic'], ['volSfx', 'volSfx']]) {
   $(id).addEventListener('input', () => { settings[k] = +$(id).value; $(`${id}Out`).textContent = pct(settings[k]); applyAudioSettings(); });
   $(id).addEventListener('change', () => { store.set('cr-settings', settings); if (k === 'volSfx') { audioInit(); sfx('coco', { chain: 3 }); } });
 }
-for (const [id, k] of [['optMusic', 'music'], ['optSfx', 'sfx']]) $(id).addEventListener('change', () => { settings[k] = $(id).checked; store.set('cr-settings', settings); applyAudioSettings(); syncSettings(); if (k === 'sfx') sfx('tap'); });
+for (const [id, k] of [['optMusic', 'music'], ['optSfx', 'sfx']]) $(id).addEventListener('change', () => { settings[k] = $(id).checked; store.set('cr-settings', settings); applyAudioSettings(); syncSettings(); });
 $('optVibrate').addEventListener('change', () => { settings.vibrate = $('optVibrate').checked; store.set('cr-settings', settings); vibrate(20); });
 tap($('openDebug'), () => { refreshDebug(); show('debugScreen'); });
 tap($('debugBack'), () => { disarmReset(); syncSettings(); show('settingsScreen'); });
@@ -29825,7 +29823,7 @@ $('labFx').addEventListener('input', e => {
 // the sound effects, to audition (a coconut chain plays all eight steps)
 const LAB_SFX = [['coco', 'Coconut'], ['gold', 'Big coin'], ['close', 'Close call'], ['zone', 'New zone'],
   ['launch', 'Lift-off'], ['crash', 'Crash'], ['caught', 'Caught'], ['bite', 'Bite'], ['roar', 'Roar'], ['slam', 'Crusher'], ['rumble', 'Rumble'],
-  ['tick', 'Countdown'], ['go', 'Go'], ['revive', 'Revive'], ['mission', 'Mission done'], ['best', 'New best'], ['buy', 'Unlock'], ['tap', 'Button'], ['swish', 'Sheet open'], ['swishClose', 'Sheet close']];
+  ['tick', 'Countdown'], ['go', 'Go'], ['revive', 'Revive'], ['mission', 'Mission done'], ['best', 'New best'], ['buy', 'Unlock'], ['swish', 'Sheet open'], ['swishClose', 'Sheet close']];
 $('labDry').addEventListener('click', () => { LAB.dry = !LAB.dry; labFxLive(); labFxRender(); });
 $('labFxReset').addEventListener('click', () => {
   const was = srcOf(LAB.track);
