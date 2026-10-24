@@ -1343,7 +1343,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
     <section class="group">
       <div class="ghead">Sound</div>
       <p class="devnote">For the track picked above, here and in the game. Switch an effect on, then shape it.</p>
-      <div class="labsub">Plays the music of</div>
+      <div class="labsub" id="labSrcHead">Plays the music of</div>
       <div class="lablead labsrc" id="labSrc" role="radiogroup" aria-label="Music source"></div>
       <div id="labFx"></div>
       <div class="labtransport"><button class="btn alt" id="labDry" aria-pressed="false">Compare: effects off</button><button class="btn alt" id="labFxReset">Reset this track</button></div>
@@ -3940,7 +3940,7 @@ const MUSIC_DIR = 'audio/music/';
 // tracks.json is always re-checked with the server and each track carries a version stamp that goes on its file
 // addresses, so a re-rendered track is never played from an old cache. The menu's file is downloaded as soon as the
 // page opens (no sound may start before the first tap, but then it can start at once); decoding waits for the audio.
-const MF = { info: null, failed: false, bufs: {}, off: {}, busy: {}, raw: {} };
+const MF = { info: null, failed: false, bufs: {}, off: {}, busy: {}, raw: {}, tries: {} };
 function mfInfo() {
   if (MF.info || MF.failed || MF.busy.info) return;
   MF.busy.info = true;
@@ -3952,7 +3952,7 @@ function mfFetch(url, key) {
   return MF.raw[key] || (MF.raw[key] = fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }));
 }
 function mfLoad(name, url, key) {
-  if (MF.bufs[key] || MF.busy[key] || MF.failed) return;
+  if (MF.bufs[key] || MF.busy[key] || MF.failed || MF.tries[key] >= 4) return;
   const c = SND.ctx;
   if (!c) { mfFetch(url, key).catch(() => { delete MF.raw[key]; }); return; }   // (no audio yet: just download it)
   MF.busy[key] = true;
@@ -3963,8 +3963,11 @@ function mfLoad(name, url, key) {
       while (i < lim && Math.abs(d[i]) < 0.002) i++;
       MF.off[key] = i < lim ? i / buf.sampleRate : 0; MF.bufs[key] = buf;
     })
-    .catch(() => { if (key === mfKey(name)) MF.failed = true; })
-    .finally(() => { MF.busy[key] = false; });
+    .catch(() => {   // a dropped download is tried again a few times; only a track that never arrives falls back to the synth score
+      MF.tries[key] = (MF.tries[key] || 0) + 1;
+      if (MF.tries[key] < 4) setTimeout(() => { MF.busy[key] = false; }, 1500 * MF.tries[key]); else MF.busy[key] = false;
+    })
+    .then(() => { if (MF.bufs[key]) MF.busy[key] = false; });
 }
 // a track's file for the lead instrument picked in the music lab: the brass mix (<track>) or the piano mix
 const mfKey = name => settings.lead === 'piano' ? `${name}-pianomix` : name;
@@ -3989,7 +3992,8 @@ const FX_TRACK = {   // each track's own starting point (the lower zones: a touc
 };
 function fxBase(name) { const t = FX_TRACK[name] || {}; return { ...FX_DEFAULT, ...t, on: { ...FX_DEFAULT.on, ...(t.on || {}) } }; }
 function fxOf(name) { const b = fxBase(name), u = (settings.musicFx || {})[name] || {}; return { ...b, ...u, on: { ...b.on, ...(u.on || {}) } }; }
-const srcOf = name => { const r = fxOf(name).src; return r && r !== name && (!MF.info || MF.info[r]) ? r : name; };
+// (the menu always plays its own loop: a source left over from the lab never swaps it for a run track)
+const srcOf = name => { if (name === 'menu') return name; const r = fxOf(name).src; return r && r !== name && (!MF.info || MF.info[r]) ? r : name; };
 const fxRate = r => r.on.pitch ? Math.pow(2, r.pitch / 12) : 1;
 function makeFx(c, dest) {
   const n = { in: c.createGain(), shaper: c.createWaveShaper(), low: c.createBiquadFilter(), high: c.createBiquadFilter(), lp: c.createBiquadFilter(), out: c.createGain(),
@@ -4041,7 +4045,7 @@ function schedMusic() {
   if (!c || c.state !== 'running') return;
   const now = c.currentTime, cur = SND.players.find(p => !p.dies), want = settings.music === false ? null : SND.want;
   if (!MF.failed) { mfInfo(); if (want) mfKeep(want); }
-  const waiting = want && !MF.failed && !(MF.info && MF.bufs[mfKey(srcOf(want))]);   // (the recorded track isn't decoded yet)
+  const wk = mfKey(srcOf(want)), waiting = want && !MF.failed && !(MF.info && MF.bufs[wk]) && !(MF.tries[wk] >= 4);   // (the recorded track isn't decoded yet)
   if ((cur ? cur.name : null) !== want && !waiting) {
     const runs = n => n === 'jungle' || n === 'caves' || n === 'magma';
     let at = now + 0.05, X = 2.4;
@@ -4054,7 +4058,7 @@ function schedMusic() {
       cur.dies = (want ? at : now) + X;
     }
     if (want) {
-      const from = srcOf(want), key = mfKey(from), fi = MF.info && MF.info[from], buf = MF.bufs[key], synth = TRACKS[want], fx = fxOf(want), rate = fi ? fxRate(fx) : 1;
+      const from = srcOf(want), key = mfKey(from), buf = MF.bufs[key], fi = buf && MF.info && MF.info[from], synth = TRACKS[want], fx = fxOf(want), rate = fi ? fxRate(fx) : 1;
       const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
       const chain = makeFx(c, SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
@@ -29789,6 +29793,7 @@ const FX_UI = [
 const TRACK_NAMES = { menu: 'Menu', jungle: 'Jungle', caves: 'Caves', magma: 'Magma' };
 function labFxRender() {
   const r = fxOf(LAB.track), src = srcOf(LAB.track);
+  $('labSrc').hidden = $('labSrcHead').hidden = LAB.track === 'menu';
   $('labSrc').innerHTML = [LAB.track, ...Object.keys(TRACK_NAMES).filter(n => n !== LAB.track && n !== 'menu')].slice(0, 4).map(n => `<button role="radio" aria-checked="${src === n}" data-src="${n === LAB.track ? '' : n}">${n === LAB.track ? 'Its own' : TRACK_NAMES[n]}</button>`).join('');
   $('labFx').innerHTML = FX_UI.map(f => `<div class="fxrow${r.on[f.k] ? '' : ' off'}"><label class="fxhead"><span><b>${f.name}</b><small>${f.sub}</small></span><input type="checkbox" class="switch" data-on="${f.k}"${r.on[f.k] ? ' checked' : ''}></label>${f.sl.map(([k, nm, mn, mx, st, fmt]) => `<label class="fxsl"><span>${nm}</span><input type="range" data-k="${k}" min="${mn}" max="${mx}" step="${st}" value="${r[k]}"><output>${fmt(r[k])}</output></label>`).join('')}</div>`).join('');
   $('labDry').setAttribute('aria-pressed', LAB.dry);
