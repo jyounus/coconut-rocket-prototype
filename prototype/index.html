@@ -4241,7 +4241,9 @@ function sfKeyRate(o) {
 // Each effect can be shaped in the debug effects lab (saved in the settings, used in the game): its volume, pitch,
 // brightness (a low-pass), bass cut (a high-pass), room (the hall), echo and length (a fade out).
 const TWEAK_DEFAULT = { vol: 1, pitch: 0, bright: 1, bass: 0, room: 0, echo: 0, len: 0 };
-const tweakOf = name => ({ ...TWEAK_DEFAULT, ...((settings.sfxTweak || {})[name] || {}) });
+const TWEAK_FOR = { coco: { pitch: 9.5, bright: 0.5 } };   // an effect's own starting shape, where it isn't the plain one
+const tweakBase = name => ({ ...TWEAK_DEFAULT, ...(TWEAK_FOR[name] || {}) });
+const tweakOf = name => ({ ...tweakBase(name), ...((settings.sfxTweak || {})[name] || {}) });
 function sfxEchoIn() {
   if (SND.sfxEcho) return SND.sfxEcho;
   const c = SND.ctx, d = c.createDelay(1), fb = c.createGain(), lp = c.createBiquadFilter();
@@ -4276,14 +4278,15 @@ function sfxFile(name, o, t) {
 // in a chain starts a step higher up the pentatonic scale (D minor, moved with the zone's key like the music).
 const COCO_PENT = [62, 65, 67, 69, 72, 74, 77, 79, 81, 84, 86, 89, 91, 93, 96, 98, 101];
 const COCO_LAYERS = { shell: 'claves', xylo: 'xylo', glock: 'glock', marimba: 'marimba', bell: 'tbell', shimmer: 'glock', sparkle: 'tri' };
-const COCO_DEFAULT = { base: 4, interval: 5, gap: 0.07, step: 1, layers: {
+// the owner's pick from the effects lab (2026-10-24), played 9.5 semitones up and a little dulled (TWEAK_FOR.coco)
+const COCO_DEFAULT = { base: 10, interval: 7, gap: 0.07, step: 1, layers: {
   shell: { on: true, vol: 0.22, pitch: 2, decay: 0.06 },
-  xylo: { on: true, vol: 0.6, decay: 0.08, oct: 0, note: 1 },
-  glock: { on: true, vol: 0.75, decay: 0.38, oct: 0, note: 2 },
+  xylo: { on: true, vol: 0.6, decay: 0.08, oct: 0, note: 2 },
+  glock: { on: true, vol: 0.6, decay: 0.38, oct: 0, note: 3 },
   marimba: { on: false, vol: 0.4, decay: 0.12, oct: -1, note: 1 },
   bell: { on: false, vol: 0.3, decay: 0.6, oct: -1, note: 2 },
-  shimmer: { on: true, vol: 0.16, decay: 0.22, oct: 1, note: 2 },
-  sparkle: { on: true, vol: 0.07, pitch: 0, decay: 0.3 },
+  shimmer: { on: false, vol: 0.16, decay: 0.22, oct: 1, note: 2 },
+  sparkle: { on: false, vol: 0.51, pitch: -2, decay: 0.3 },
 } };
 const COCO_PRESETS = {
   coin: { name: 'Coin', r: COCO_DEFAULT },
@@ -29942,7 +29945,7 @@ function tweakSet(k, v) { const all = settings.sfxTweak || (settings.sfxTweak = 
 function sfxSettingsText() {
   const lines = [], tw = settings.sfxTweak || {};
   if (settings.coco) lines.push(`- coconut: ${JSON.stringify(cocoOf())}`);
-  for (const [k, w] of Object.entries(tw)) { const d = Object.entries(w).filter(([kk, v]) => v !== TWEAK_DEFAULT[kk]); if (d.length) lines.push(`- ${k} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
+  for (const [k, w] of Object.entries(tw)) { const b = tweakBase(k), d = Object.entries(w).filter(([kk, v]) => v !== b[kk]); if (d.length) lines.push(`- ${k} shape: ${d.map(([kk, v]) => `${kk} ${v}`).join(', ')}`); }
   return lines.length ? `Effects lab settings:\n${lines.join('\n')}` : '';
 }
 const sfxCopyText = txt => (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied'), () => { $('sfxNoteText').value = txt; toast('Select the text to copy it'); });
