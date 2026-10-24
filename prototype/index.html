@@ -1220,6 +1220,13 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .labsfx button[aria-selected="true"] { color: var(--go-ink); background: linear-gradient(var(--go-hi), var(--go-mid) 60%, var(--go-lo)); box-shadow: 0 3px 0 var(--go-lip); }
 .fxrow.plain .fxsl:first-of-type { margin-top: 0; }
 #sfxPick { margin-bottom: 8px; }
+#sfxLab { align-items: flex-start; }   /* the column grows with its content so the play bar can stay pinned the whole way down */
+.sfxbar { position: sticky; top: -12px; z-index: 3; margin: -12px -8px 0; padding: 20px 8px 10px; border-radius: 0 0 16px 16px; background: rgba(18,11,16,.97); box-shadow: 0 8px 14px -8px rgba(0,0,0,.6); }
+.sfxnow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 2px 8px; }
+.sfxnow b { font: 400 18px/1.1 var(--font-display); letter-spacing: .02em; color: var(--cream); }
+.sfxnow span { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,226,190,.6); }
+.sfxnow span.on { color: var(--go-hi); }
+#sfxPlay[aria-pressed="true"], #sfxChain[aria-pressed="true"] { color: #ffd8c8; background: linear-gradient(#b8462e, #8a3424); box-shadow: 0 3px 0 #5e2216; }
 .volrow { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; align-items: center; gap: 10px; padding: 6px 14px 10px; }
 .volrow label { font-size: 14px; font-weight: 800; color: var(--cream); }
 .volrow input { width: 100%; margin: 0; height: 28px; accent-color: var(--ember); }
@@ -1369,9 +1376,12 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 <div class="screen sheet" id="sfxLab" hidden>
   <div class="sheetwrap">
     <header class="sheethead"><button class="roundbtn" id="sfxBack" aria-label="Back to debug"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Effects lab <span class="devtag">Dev only</span></h2><span class="headspace"></span></header>
-    <p class="devnote">Pick an effect, play it, and shape it. Changes save as you go and the game uses them. Copy the settings (and any notes) and send them over.</p>
+    <p class="devnote">Pick an effect, set it repeating, and shape it while it plays: each change is heard on the next go. Changes save and the game uses them. Copy the settings (and any notes) and send them over.</p>
     <div class="labsfx" id="sfxPick" role="tablist" aria-label="Effect"></div>
-    <div class="labtransport"><button class="btn go" id="sfxPlay">Play</button><button class="btn alt" id="sfxChain">Play a chain</button></div>
+    <div class="sfxbar">
+      <div class="sfxnow"><b id="sfxNow">Coconut</b><span id="sfxState">Stopped</span></div>
+      <div class="labtransport"><button class="btn go" id="sfxPlay" aria-pressed="false">Play on repeat</button><button class="btn alt" id="sfxChain" aria-pressed="false">Repeat a chain</button></div>
+    </div>
     <section class="group" id="sfxCocoGroup">
       <div class="ghead">Coconut</div>
       <div class="labsub">Start from</div>
@@ -29907,7 +29917,7 @@ const sliderRow = (k, nm, mn, mx, st, fmt, v, attr) => `<label class="fxsl"><spa
 function sfxLabRender() {
   $('sfxPick').innerHTML = LAB_SFX.map(([k, nm]) => `<button role="tab" aria-selected="${k === SFXLAB.pick}" data-sfx="${k}">${nm}</button>`).join('');
   const coco = SFXLAB.pick === 'coco', w = tweakOf(SFXLAB.pick);
-  $('sfxCocoGroup').hidden = !coco; $('sfxChain').hidden = !coco;
+  $('sfxCocoGroup').hidden = !coco; sfxLoopUi();
   if (coco) {
     const R = cocoOf(), cur = Object.entries(COCO_PRESETS).find(([, p]) => JSON.stringify(cocoMerge(p.r)) === JSON.stringify(R));
     $('sfxPresets').innerHTML = Object.entries(COCO_PRESETS).map(([k, p]) => `<button role="radio" aria-checked="${!!cur && cur[0] === k}" data-preset="${k}">${p.name}</button>`).join('');
@@ -29937,11 +29947,42 @@ function sfxSettingsText() {
 }
 const sfxCopyText = txt => (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied'), () => { $('sfxNoteText').value = txt; toast('Select the text to copy it'); });
 tap($('openSfxLab'), () => { audioInit(); sfInfo(); show('sfxLab'); sfxLabRender(); });
-tap($('sfxBack'), () => show('debugScreen'));
-$('sfxPick').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; SFXLAB.pick = b.dataset.sfx; sfxLabRender(); sfxLabPlay(1); });
-$('sfxPlay').addEventListener('click', () => sfxLabPlay(1));
-$('sfxChain').addEventListener('click', () => { for (let i = 1; i <= 8; i++) setTimeout(() => sfxLabPlay(i), (i - 1) * 170); });
-$('sfxPresets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings.coco = cocoMerge(COCO_PRESETS[b.dataset.preset].r); sfxSave(); sfxLabRender(); sfxLabPlay(1); });
+tap($('sfxBack'), () => { sfxLoopStop(); show('debugScreen'); });
+$('sfxPick').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; SFXLAB.pick = b.dataset.sfx;
+  if (SFXLAB.loop && SFXLAB.loop.chain && SFXLAB.pick !== 'coco') SFXLAB.loop.chain = false;
+  sfxLabRender(); if (!SFXLAB.loop) sfxLabPlay(1);
+});
+// on repeat: the effect plays again and again (a chain: eight coconuts, a breath, again), each time with the settings
+// as they are then, so a change is heard on the next go; it stops on Stop or on leaving the lab
+function sfxLabLen() {   // how long one play of the picked effect lasts (s)
+  const k = SFXLAB.pick, w = tweakOf(k), rate = Math.pow(2, w.pitch / 12);
+  let d;
+  if (k === 'coco') { const R = cocoOf(); d = Math.max(0.15, ...Object.values(R.layers).filter(L => L.on).map(L => L.decay + R.gap)) / rate; }
+  else { const f = sfFile(k === 'swishClose' ? 'swish' : k, { close: k === 'swishClose', chain: 1 }); d = (SF.info && SF.info[f] ? SF.info[f].dur : 1) / rate; }
+  if (w.len > 0) d = Math.min(d, w.len);
+  return clamp(d, 0.2, 5);
+}
+function sfxLoopStop() { clearTimeout(SFXLAB.timer); SFXLAB.loop = null; sfxLoopUi(); }
+function sfxLoopStart(chain) { sfxLoopStop(); SFXLAB.loop = { chain, i: 0 }; sfxLoopUi(); sfxLoopTick(); }
+function sfxLoopTick() {
+  const L = SFXLAB.loop; if (!L || currentScreen !== 'sfxLab') return sfxLoopStop();
+  let wait;
+  if (L.chain && SFXLAB.pick === 'coco') { L.i = L.i % 8 + 1; sfxLabPlay(L.i); wait = L.i < 8 ? 0.17 : sfxLabLen() + 0.6; }
+  else { sfxLabPlay(1); wait = sfxLabLen() + 0.35; }
+  SFXLAB.timer = setTimeout(sfxLoopTick, wait * 1000);
+}
+function sfxLoopUi() {
+  const L = SFXLAB.loop, coco = SFXLAB.pick === 'coco';
+  $('sfxPlay').setAttribute('aria-pressed', !!L && !L.chain); $('sfxPlay').textContent = L && !L.chain ? 'Stop' : 'Play on repeat';
+  $('sfxChain').setAttribute('aria-pressed', !!L && L.chain); $('sfxChain').textContent = L && L.chain ? 'Stop' : 'Repeat a chain';
+  $('sfxChain').hidden = !coco;
+  $('sfxNow').textContent = (LAB_SFX.find(x => x[0] === SFXLAB.pick) || [, SFXLAB.pick])[1];
+  $('sfxState').textContent = L ? (L.chain ? 'Repeating a chain' : 'Repeating') : 'Stopped'; $('sfxState').classList.toggle('on', !!L);
+}
+$('sfxPlay').addEventListener('click', () => { audioInit(); if (SFXLAB.loop && !SFXLAB.loop.chain) sfxLoopStop(); else sfxLoopStart(false); });
+$('sfxChain').addEventListener('click', () => { audioInit(); if (SFXLAB.loop && SFXLAB.loop.chain) sfxLoopStop(); else sfxLoopStart(true); });
+$('sfxPresets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings.coco = cocoMerge(COCO_PRESETS[b.dataset.preset].r); sfxSave(); sfxLabRender(); if (!SFXLAB.loop) sfxLabPlay(1); });
 for (const id of ['sfxCoco', 'sfxShape']) {
   $(id).addEventListener('input', e => {
     const el = e.target, v = +el.value, out = el.nextElementSibling;
@@ -29952,7 +29993,7 @@ for (const id of ['sfxCoco', 'sfxShape']) {
   // play it again when a slider is let go (so each change is heard)
   $(id).addEventListener('change', e => {
     if (e.target.dataset.layerOn) { cocoSet(R => { R.layers[e.target.dataset.layerOn].on = e.target.checked; }); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); }
-    if (e.target.type === 'range' || e.target.dataset.layerOn) { sfxLabPlay(1); if (e.target.dataset.coco || e.target.dataset.layer || e.target.dataset.layerOn) sfxLabRender(); }
+    if (e.target.type === 'range' || e.target.dataset.layerOn) { if (!SFXLAB.loop) sfxLabPlay(1); if (e.target.dataset.coco || e.target.dataset.layer || e.target.dataset.layerOn) sfxLabRender(); }
   });
 }
 $('sfxReset').addEventListener('click', () => {
