@@ -4091,6 +4091,7 @@ function schedMusic() {
   const top = SND.players.find(p => !p.dies); SND.track = top ? top.name : null;
 }
 // every frame: which track, how muffled, the danger level and the resume count
+const DEATH_MUFFLE = 1.2;   // seconds the music takes to muffle away on a death
 function audioTick(dt) {
   const c = SND.ctx;
   if (!c) return;
@@ -4098,10 +4099,24 @@ function audioTick(dt) {
   if (G && currentScreen === null && !homeScene()) want = G.state === 'dead' ? null : ['jungle', 'caves', 'magma'][G.zone || 0];
   else if (currentScreen === 'pause' && G) want = ['jungle', 'caves', 'magma'][G.zone || 0];
   else if (currentScreen === 'ad' || currentScreen === 'musicLab' || currentScreen === 'sfxLab') want = null;
+  // on a death, whatever is playing muffles right down, then stops, and the menu's music fades in from its start
+  const t = c.currentTime, dying = G && G.state === 'dead' && G.launchT != null && currentScreen !== 'musicLab' && currentScreen !== 'sfxLab';
+  if (!dying) SND.deadAt = null; else if (SND.deadAt == null) { SND.deadAt = t; SND.deadCut = false; }
+  const dk = dying ? t - SND.deadAt : -1;
+  if (dk >= 0 && dk < DEATH_MUFFLE) want = SND.track;   // (no crossfade while it muffles)
+  else if (dk >= DEATH_MUFFLE) {
+    if (!SND.deadCut) {   // fully muffled: cut it, open the filter again for what comes next
+      SND.deadCut = true;
+      for (const p of SND.players) { for (const g of [p.bus.gain, p.send.gain]) { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(0, t, 0.02); } p.dies = Math.min(p.dies || Infinity, t + 0.1); }   // (any still fading out too)
+      SND.musicLp.frequency.cancelScheduledValues(t); SND.musicLp.frequency.setValueAtTime(18000, t + 0.12);
+    }
+    want = currentScreen === 'ad' ? null : 'menu';
+  }
   SND.want = settings.music === false ? null : want;
   thrustTick();
-  const t = c.currentTime, muffle = currentScreen === 'pause' || currentScreen === 'ad';
-  SND.musicLp.frequency.setTargetAtTime(muffle ? 650 : 18000, t, 0.12);
+  const muffle = currentScreen === 'pause' || currentScreen === 'ad';
+  if (dk >= 0 && dk < DEATH_MUFFLE) SND.musicLp.frequency.setTargetAtTime(60, t, DEATH_MUFFLE / 6);
+  else if (!(dk >= DEATH_MUFFLE && dk < DEATH_MUFFLE + 0.2)) SND.musicLp.frequency.setTargetAtTime(muffle ? 650 : 18000, t, 0.12);
   const gap = G && G.state === 'play' ? monsterGap() : 9999;
   SND.danger = G && G.state === 'play' ? Math.max(clamp(1 - (gap - 120) / 380, 0, 1), G.hunger || 0) : 0;
   // the resume countdown: a wood-block tick on each number, a higher one on go
@@ -4240,7 +4255,7 @@ function sfKeyRate(o) {
 // Each effect can be shaped in the debug effects lab (saved in the settings, used in the game): its volume, pitch,
 // brightness (a low-pass), bass cut (a high-pass), room (the hall), echo and length (a fade out).
 const TWEAK_DEFAULT = { vol: 1, pitch: 0, bright: 1, bass: 0, room: 0, echo: 0, len: 0 };
-const TWEAK_FOR = { coco: { pitch: 9.5, bright: 0.5 }, zone: { vol: 0.65, pitch: 1 } };   // an effect's own starting shape, where it isn't the plain one
+const TWEAK_FOR = { coco: { pitch: 9.5, bright: 0.5 }, zone: { vol: 0.65, pitch: 1 }, tick: { vol: 1.4, room: 0.14 } };   // an effect's own starting shape, where it isn't the plain one
 const tweakBase = name => ({ ...TWEAK_DEFAULT, ...(TWEAK_FOR[name] || {}) });
 const tweakOf = name => ({ ...tweakBase(name), ...((settings.sfxTweak || {})[name] || {}) });
 function sfxEchoIn() {
@@ -4268,7 +4283,7 @@ function sfxStrip(name, t, o) {
 // out) and brightness. The pre-mixed file plays until the layers have loaded.
 const PART_DEFAULT = { on: true, vol: 1, pitch: 0, delay: 0, len: 0, bright: 1 };
 // the owner's picks from the effects lab (2026-10-24): each effect's own starting layers, where they aren't the plain ones
-const PART_DEFAULTS_FOR = { launch: { whoosh: { pitch: 8 }, whistle: { pitch: 1 } }, gold: { bell: { on: false }, run: { delay: -0.06 }, xylo: { pitch: -0.5, delay: -0.26 } } };
+const PART_DEFAULTS_FOR = { tick: { block: { on: false } }, go: { xylo: { vol: 0.5 } }, revive: { air: { pitch: -6.5 } }, launch: { whoosh: { pitch: 8 }, whistle: { pitch: 1 } }, gold: { bell: { on: false }, run: { delay: -0.06 }, xylo: { pitch: -0.5, delay: -0.26 } } };
 const layerOf = (name, k) => ({ ...PART_DEFAULT, ...((PART_DEFAULTS_FOR[name] || {})[k] || {}), ...(((settings.sfxParts || {})[name] || {})[k] || {}) });
 const tweakName = (name, o) => name === 'swish' && o.close ? 'swishClose' : name;   // (the lab shapes the two sheet swishes apart)
 function sfxFile(name, o, t) {
@@ -4295,48 +4310,47 @@ function sfxFile(name, o, t) {
   src.connect(strip.inp); src.start(t, SF.off[f] || 0);
   return true;
 }
-// ---- the rocket's thrust: an electric hum, like an electric car or a flying saucer (built live, so it holds and stops) ----
-// Two slightly detuned saws through a resonant low-pass (the hum), a quiet sine three octaves up (the motor's whine),
-// a slow warble on all of it and a breath of air. The pitch climbs with the rocket's speed, so it spools up on a press
-// and sinks as it slows; it fades in on a press and out on letting go. Shaped in the effects lab (Rocket thrust).
-const THRUST_DEFAULT = { vol: 0.22, pitch: 70, whine: 0.35, rise: 7, warble: 0.4, speed: 5, shimmer: 0.4, tone: 0.35, air: 0.1, attack: 0.08, release: 0.3 };
+// ---- the rocket's thrust: a rocket's roar with the revive's rising air in it (built live, so it holds and stops) ----
+// White noise through a band-pass that sweeps up on a press (the revive's Rising air, held), climbing further with the
+// rocket's speed; under it a deep roar (brown noise, low-passed) that crackles (slow random flicker on its level). It
+// fades in on a press, and on letting go the air sinks back down as it all fades. Shaped in the effects lab.
+const THRUST_DEFAULT = { vol: 0.3, from: 400, to: 3200, sweep: 0.45, width: 0.8, air: 0.6, roar: 0.6, roarTone: 260, crackle: 0.35, attack: 0.08, release: 0.35 };
 const thrustOf = () => ({ ...THRUST_DEFAULT, ...(settings.thrust || {}) });
 const THR = { n: null, on: false, dirty: false, lab: 0, labAt: 0 };
 function thrustBuild() {
-  const c = SND.ctx, n = {};
-  n.o1 = c.createOscillator(); n.o1.type = 'sawtooth'; n.o2 = c.createOscillator(); n.o2.type = 'sawtooth';
-  n.wh = c.createOscillator(); n.whG = c.createGain();
-  n.lp = c.createBiquadFilter(); n.lp.type = 'lowpass'; n.lp.Q.value = 6; n.hum = c.createGain(); n.hum.gain.value = 0.35;
+  const c = SND.ctx, n = {}, b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0);
+  let w = 0; for (let i = 0; i < d.length; i++) { w = (w + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = w * 3.5; }
+  n.rum = c.createBufferSource(); n.rum.buffer = b; n.rum.loop = true;
+  n.roarF = c.createBiquadFilter(); n.roarF.type = 'lowpass'; n.roarF.Q.value = 0.7; n.roar = c.createGain();
   n.hiss = c.createBufferSource(); n.hiss.buffer = SND.noise; n.hiss.loop = true;
-  n.airF = c.createBiquadFilter(); n.airF.type = 'bandpass'; n.airF.Q.value = 1.2; n.air = c.createGain();
-  n.lfo = c.createOscillator(); n.lfoAmt = c.createGain();
+  n.band = c.createBiquadFilter(); n.band.type = 'bandpass'; n.air = c.createGain();
+  // the crackle: the noise buffer played very slowly and low-passed, wobbling the roar's level
+  n.crk = c.createBufferSource(); n.crk.buffer = SND.noise; n.crk.loop = true; n.crk.playbackRate.value = 0.02;
+  n.crkF = c.createBiquadFilter(); n.crkF.type = 'lowpass'; n.crkF.frequency.value = 40; n.crkAmt = c.createGain();
   n.out = c.createGain(); n.out.gain.value = 0;
-  n.o1.connect(n.lp); n.o2.connect(n.lp); n.lp.connect(n.hum); n.hum.connect(n.out);
-  n.wh.connect(n.whG); n.whG.connect(n.out);
-  n.hiss.connect(n.airF); n.airF.connect(n.air); n.air.connect(n.out);
-  n.lfo.connect(n.lfoAmt); for (const o of [n.o1, n.o2, n.wh]) n.lfoAmt.connect(o.detune);
+  n.rum.connect(n.roarF); n.roarF.connect(n.roar); n.roar.connect(n.out);
+  n.hiss.connect(n.band); n.band.connect(n.air); n.air.connect(n.out);
+  n.crk.connect(n.crkF); n.crkF.connect(n.crkAmt); n.crkAmt.connect(n.roar.gain);
   n.out.connect(SND.sfx);
-  for (const x of [n.o1, n.o2, n.wh, n.hiss, n.lfo]) x.start();
+  for (const x of [n.rum, n.hiss, n.crk]) x.start();
   return n;
 }
-// every frame: burning (or the lab trying it) fades it in, otherwise out; while it sounds, its pitch follows the speed
+// every frame: burning (or the lab trying it) fades it in, otherwise out; while it burns the air climbs with the speed
 function thrustTick() {
   const c = SND.ctx; if (!c || c.state !== 'running') return;
   const t = c.currentTime, lab = THR.lab > t, on = !!(G && G.thrust && G.state === 'play' && currentScreen === null && !paused && !(G.resumeT > 0)) || lab;   // (silent through the resume countdown)
   if (on && !THR.n) THR.n = thrustBuild();
   if (!THR.n) return;
   const R = thrustOf(), n = THR.n, set = (prm, v, k = 0.04) => prm.setTargetAtTime(v, t, k);
-  // how fast it's climbing, 0..1 (the lab spools up over its one-second press)
-  const sp = lab ? clamp((t - THR.labAt) / 0.6, 0, 1) : G && G.state === 'play' ? clamp(G.p.vy / cfg.maxUp, 0, 1) : 0;
-  if (on || THR.on) {
-    const f = R.pitch * Math.pow(2, sp * R.rise / 12), lpf = f * (2 + R.tone * 14);
-    set(n.o1.frequency, f, 0.08); set(n.o2.frequency, f * Math.pow(2, R.shimmer * 25 / 1200), 0.08); set(n.wh.frequency, f * 8, 0.08);
-    set(n.lp.frequency, Math.min(16000, lpf), 0.08); set(n.airF.frequency, Math.min(9000, f * 30), 0.08);
-  }
+  const sp = lab ? clamp((t - THR.labAt) / 0.6, 0, 1) : G && G.state === 'play' ? clamp(G.p.vy / cfg.maxUp, 0, 1) : 0;   // how fast it's climbing, 0..1
+  if (on && THR.on && !THR.dirty) { set(n.band.frequency, R.from * Math.pow(R.to / R.from, 0.55 + 0.45 * sp), R.sweep / 3); return; }
   if (on === THR.on && !THR.dirty) return;
-  THR.on = on; THR.dirty = false;
-  set(n.whG.gain, R.whine * 0.06); set(n.air.gain, R.air * 0.5);
-  set(n.lfo.frequency, R.speed); set(n.lfoAmt.gain, R.warble * 60);
+  const started = on && !THR.on; THR.on = on; THR.dirty = false;
+  set(n.roarF.frequency, R.roarTone); set(n.roar.gain, R.roar * 0.9); set(n.crkAmt.gain, R.roar * R.crackle * 6);
+  set(n.air.gain, R.air * 0.9); n.band.Q.setTargetAtTime(R.width > 0 ? 1.6 - R.width * 1.4 : 1.6, t, 0.04);
+  const bf = n.band.frequency; bf.cancelScheduledValues(t);
+  if (started) bf.setValueAtTime(R.from, t);   // each press: the air rises from the bottom again
+  bf.setTargetAtTime(on ? R.from * Math.pow(R.to / R.from, 0.55 + 0.45 * sp) : R.from, t, (on ? R.sweep : R.release) / 3);
   const g = n.out.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.setTargetAtTime(on ? R.vol : 0, t, (on ? R.attack : R.release) / 3);
 }
 // ---- the coconut, built live from single notes (so every layer can be tuned in the effects lab) ----
@@ -4410,7 +4424,6 @@ function sfx(name, o = {}) {
     case 'caught': vTone(B, t, 70, { f2: 52, glide: 0.6, type: 'sawtooth', v: 0.12, dur: 0.7, lp: 500 }); vNoise(B, t, { type: 'lowpass', f: 700, v: 0.12, dur: 0.6, a: 0.08 }); break;
     case 'bite': for (const dt of [0, 0.11]) { vNoise(B, t + dt, { type: 'lowpass', f: 1400, f2: 250, v: 0.3, dur: 0.12 }); vTone(B, t + dt, 160, { f2: 60, glide: 0.1, v: 0.22, dur: 0.12 }); }
       [60, 56, 53, 48].forEach((m, i) => vTone(B, t + 0.4 + i * 0.17, mf(m), { type: 'square', v: 0.04, dur: 0.2, lp: 1600 })); break;
-    case 'roar': vTone(B, t, 68, { f2: 92, glide: 0.4, type: 'sawtooth', v: 0.14, dur: 0.9, lp: 700, a: 0.08 }); vTone(B, t, 71, { f2: 88, glide: 0.4, type: 'sawtooth', v: 0.1, dur: 0.9, lp: 500, a: 0.08 }); vNoise(B, t, { type: 'lowpass', f: 500, v: 0.1, dur: 0.8, a: 0.1 }); break;
     case 'empty': [880, 660, 880, 660].forEach((f, i) => vTone(B, t + i * 0.11, f, { type: 'square', v: 0.045, dur: 0.08, lp: 3000 })); break;
     case 'low': vTone(B, t, 760, { type: 'square', v: 0.035, dur: 0.07, lp: 2500 }); break;
     case 'zone': vNoise(B, t, { f: 300, f2: 4000, q: 0.7, v: 0.12, dur: 0.8, a: 0.1 }); [0, 4, 7, 12].forEach((d, i) => vTone(B, t + 0.2 + i * 0.09, mf(72 + d + (o.z === 2 ? -1 : 0)), { type: 'triangle', v: 0.08, dur: 0.5 })); break;
@@ -5305,7 +5318,7 @@ function update(rawDt) {
   // the shaft that pulls its chase gap in to about CHASE.surgeTo for a moment before it releases.
   // Never while a gate is just above you, during a zone reveal, or right after a revive.
   const W = G.worm;
-  if (W.crouch > 0) { W.crouch -= dt; if (W.crouch <= 0) { W.crouch = 0; W.surge = 1; W.beat = CHASE.beatLen; G.calm = 0; G.shake = Math.max(G.shake, 9); vibrate(25); wallBreak(10, true); sfx('roar'); } }
+  if (W.crouch > 0) { W.crouch -= dt; if (W.crouch <= 0) { W.crouch = 0; W.surge = 1; W.beat = CHASE.beatLen; G.calm = 0; G.shake = Math.max(G.shake, 9); vibrate(25); wallBreak(10, true); } }
   W.surge = Math.max(0, W.surge - dt * 2.4);
   W.beat = Math.max(0, (W.beat || 0) - dt);
   W.snap = Math.max(0, W.snap - dt * 3);
@@ -29870,7 +29883,7 @@ $('labFx').addEventListener('input', e => {
 });
 // the sound effects, to audition (a coconut chain plays all eight steps)
 const LAB_SFX = [['coco', 'Coconut'], ['gold', 'Big coin'], ['close', 'Close call'], ['zone', 'New zone'],
-  ['launch', 'Lift-off'], ['thrust', 'Rocket thrust'], ['crash', 'Crash'], ['caught', 'Caught'], ['bite', 'Bite'], ['roar', 'Roar'], ['slam', 'Crusher'], ['rumble', 'Rumble'],
+  ['launch', 'Lift-off'], ['thrust', 'Rocket thrust'], ['crash', 'Crash'], ['caught', 'Caught'], ['bite', 'Bite'], ['slam', 'Crusher'], ['rumble', 'Rumble'],
   ['tick', 'Countdown'], ['go', 'Go'], ['revive', 'Revive'], ['mission', 'Mission done'], ['best', 'New best'], ['buy', 'Unlock'], ['swish', 'Sheet open'], ['swishClose', 'Sheet close']];
 $('labDry').addEventListener('click', () => { LAB.dry = !LAB.dry; labFxLive(); labFxRender(); });
 $('labFxReset').addEventListener('click', () => {
@@ -29930,9 +29943,9 @@ const COCO_NOTES_UI = [['base', 'First note', 0, 10, 1, v => noteName(COCO_PENT[
   ['gap', 'Gap', 0, 0.25, 0.005, secs], ['step', 'Chain climb', 0, 2, 0.5, v => v ? `${v} step${v === 1 ? '' : 's'}` : 'none']];
 const COCO_LAYER_UI = { shell: ['Shell tok', 'A wooden knock (claves)'], xylo: ['Xylophone', 'Bright and woody'], glock: ['Glockenspiel', 'The ringing coin note'], marimba: ['Marimba', 'Warm and round'],
   bell: ['Bell', 'A tubular bell'], shimmer: ['Shimmer', 'Glockenspiel an octave up'], sparkle: ['Sparkle', 'A triangle'] };
-const THRUST_UI = [['vol', 'Volume', 0, 1.5, 0.02, pct], ['pitch', 'Pitch', 30, 300, 1, v => `${v} Hz`], ['rise', 'Rise with speed', 0, 24, 0.5, v => `${semis(v)} st`],
-  ['tone', 'Brightness', 0, 1, 0.02, pct], ['shimmer', 'Shimmer', 0, 1, 0.02, pct], ['whine', 'Motor whine', 0, 1, 0.02, pct], ['warble', 'Warble', 0, 1, 0.02, pct],
-  ['speed', 'Warble speed', 0.5, 14, 0.25, v => `${v} /s`], ['air', 'Air', 0, 1, 0.02, pct], ['attack', 'Fade in', 0.01, 0.5, 0.01, secs], ['release', 'Fade out', 0.02, 1, 0.01, secs]];
+const THRUST_UI = [['vol', 'Volume', 0, 1.5, 0.02, pct], ['air', 'Rising air', 0, 1, 0.02, pct], ['from', 'Air starts at', 100, 2000, 10, v => `${v} Hz`], ['to', 'Air climbs to', 500, 9000, 50, v => `${v} Hz`],
+  ['sweep', 'Rise time', 0.05, 1.5, 0.05, secs], ['width', 'Air width', 0, 1, 0.02, pct], ['roar', 'Roar', 0, 1, 0.02, pct], ['roarTone', 'Roar depth', 60, 1200, 10, v => `${v} Hz`],
+  ['crackle', 'Crackle', 0, 1, 0.02, pct], ['attack', 'Fade in', 0.01, 0.5, 0.01, secs], ['release', 'Fade out', 0.02, 1.5, 0.01, secs]];
 const PART_UI = [['vol', 'Volume', 0, 2, 0.05, pct], ['pitch', 'Pitch', -12, 12, 0.5, v => `${semis(v)} st`], ['delay', 'Timing', -0.3, 0.6, 0.01, v => v ? `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 1000)} ms` : 'as made'],
   ['len', 'Length', 0, 4, 0.05, v => v > 0 ? `${v.toFixed(2)} s` : 'full'], ['bright', 'Brightness', 0, 1, 0.02, v => v >= 1 ? 'open' : pct(v)]];
 // the file whose layers the lab lists for an effect (the takes of one effect share their layers)
@@ -29945,7 +29958,7 @@ function sfxLabRender() {
   const thr = SFXLAB.pick === 'thrust';
   $('sfxCocoGroup').hidden = !coco; $('sfxLayersGroup').hidden = coco; sfxLoopUi();
   $('sfxLayersHead').textContent = thr ? 'Thrust' : 'Layers'; $('sfxShape').hidden = $('sfxShapeHead').hidden = thr;
-  if (thr) { const R = thrustOf(); $('sfxLayers').innerHTML = `<p class="labsub">Played as a press held for a second, spooling up as it would from a standstill; in the game it lasts as long as the rocket burns and its pitch follows the speed.</p><div class="fxrow plain">${THRUST_UI.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, R[k], 'data-thrust')).join('')}</div>`; }
+  if (thr) { const R = thrustOf(); $('sfxLayers').innerHTML = `<p class="labsub">Played as a press held for a second, rising as it would from a standstill; in the game it lasts as long as the rocket burns and the air climbs with the speed.</p><div class="fxrow plain">${THRUST_UI.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, R[k], 'data-thrust')).join('')}</div>`; }
   else if (!coco) {
     const ps = SF.parts[labFileOf(SFXLAB.pick)];
     $('sfxLayers').innerHTML = !SF.info ? `<p class="labsub">${SF.failed ? 'The recorded effects are not available here' : 'Loading the layers'}</p>`
