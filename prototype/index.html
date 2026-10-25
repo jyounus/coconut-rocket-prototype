@@ -4372,15 +4372,17 @@ function schedMusic() {
       at = Math.max(now + 0.05, cur.next + toBar * sp);
       if (at - now > 2.2) at = Math.max(now + 0.05, cur.next + ((4 - cur.step % 4) % 4) * sp);   // (no more than a beat or two late)
       X = !want ? 1.4 : runs(cur.name) && runs(want) ? 4 : 2.6;
+      if (SND.quick) { at = now + 0.03; X = 0.85; }   // (from the score card to the menu: at once, done within a second of the tap)
       for (const g of [cur.bus.gain, cur.send.gain]) { g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.setValueAtTime(g.value, want ? at : now); g.linearRampToValueAtTime(0.0001, (want ? at : now) + X); }
       cur.dies = (want ? at : now) + X;
     }
+    SND.quick = false;
     if (want) {
       const from = srcOf(want), keys = voiceKeys(want), fi = MF.info && keys.every(k => MF.bufs[k]) && MF.info[from], synth = TRACKS[want], fx = fxOf(want), rate = fi ? fxRate(fx) : 1;
       const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
       const chain = makeFx(c, SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
-      for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? 0.85 : 0.5)); }
+      for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? (X <= 1 ? 1 : 0.85) : 0.5)); }
       const p = { name: want, keys, tr, bus, send, fx: chain, base: fi ? fi.bpm : 0, step: joinBars * 16, next: at };
       if (fi) { p.v = trackVoice(want, at, joinBars * 240 / fi.bpm, rate, bus, send); p.src = p.v.srcs[0]; }   // the recorded track looping from its join point (the danger layer still follows its beat)
       SND.players.push(p);
@@ -4404,6 +4406,12 @@ function schedMusic() {
 }
 // every frame: which track, how muffled, the danger level and the resume count
 const DEATH_MUFFLE = 1.2, DIM_LP = 420, DIM_VOL = 0.8;   // dead or paused: how fast a death muffles (s), how muffled it gets (Hz), how much quieter
+// leaving the score card: the muffle opens and the level comes back over a second (the filter swept evenly by ear)
+function musicOpen(t) {
+  const f = SND.musicLp.frequency, g = SND.music.gain; SND.openTill = t + 1;
+  f.cancelScheduledValues(t); f.setValueAtTime(Math.max(40, f.value), t); f.exponentialRampToValueAtTime(18000, t + 1);
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(musicLevel(), t + 1);
+}
 function audioTick(dt) {
   const c = SND.ctx;
   if (!c) return;
@@ -4417,13 +4425,20 @@ function audioTick(dt) {
   // straight back, the menu button crossfades to the menu's music
   const t = c.currentTime, dying = G && G.state === 'dead' && G.launchT != null && (currentScreen === null || currentScreen === 'over' || currentScreen === 'ad');
   if (dying) { if (SND.deadAt == null) { SND.deadAt = t; SND.deadTrack = SND.track; } if (currentScreen !== 'ad') want = SND.deadTrack; }
-  else if (SND.deadAt != null) { SND.deadAt = null; if (G && currentScreen === null && SND.deadTrack) { SND.keep = SND.deadTrack; SND.keepZone = G.zone || 0; want = SND.keep; } }
+  else if (SND.deadAt != null) {
+    SND.deadAt = null;
+    if (G && currentScreen === null && SND.deadTrack) {   // a restart: the same track plays on and opens up over a second
+      SND.keep = SND.deadTrack; SND.keepZone = G.zone || 0; want = SND.keep; musicOpen(t);
+    } else if (currentScreen === 'menu') { SND.quick = true; musicOpen(t); }   // the menu: its music crossfades in over a second as it opens
+  }
   SND.want = settings.music === false ? null : want;
   thrustTick();
   // muffled and 20% quieter while dead or paused, back as it was the moment play resumes
   const dim = (dying && currentScreen !== 'ad') || currentScreen === 'pause';
-  SND.musicLp.frequency.setTargetAtTime(dim ? DIM_LP : currentScreen === 'ad' ? 650 : 18000, t, dim ? (dying ? DEATH_MUFFLE / 4 : 0.1) : 0.04);
-  SND.music.gain.setTargetAtTime(musicLevel() * (dim ? DIM_VOL : 1), t, dim ? (dying ? DEATH_MUFFLE / 4 : 0.1) : 0.04);
+  if (dim || t >= (SND.openTill || 0)) {   // (not while it opens up after a death)
+    SND.musicLp.frequency.setTargetAtTime(dim ? DIM_LP : currentScreen === 'ad' ? 650 : 18000, t, dim ? (dying ? DEATH_MUFFLE / 4 : 0.1) : 0.04);
+    SND.music.gain.setTargetAtTime(musicLevel() * (dim ? DIM_VOL : 1), t, dim ? (dying ? DEATH_MUFFLE / 4 : 0.1) : 0.04);
+  }
   const gap = G && G.state === 'play' ? monsterGap() : 9999;
   SND.danger = G && G.state === 'play' ? Math.max(clamp(1 - (gap - 120) / 380, 0, 1), G.hunger || 0) : 0;
   // the resume countdown: a wood-block tick on each number, a higher one on go
@@ -5278,6 +5293,7 @@ function confetti() {
 // The score card's wallet: it shows what you had, then once the card has landed a few coconuts fly from the earned total
 // into it and it counts up to the new balance.
 let walletTimers = [];
+function clearWalletBeat() { try { walletTimers.forEach(clearTimeout); walletTimers = []; } catch {} document.querySelectorAll('.flyco').forEach(c => c.remove()); }   // (leaving the card: no coins left flying)
 function walletBeat(from, to, delay = 1750) {
   walletTimers.forEach(clearTimeout); walletTimers = [];
   const el = $('overWallet'), set = v => { el.innerHTML = coinHTML + fmtN(Math.round(v)); };
@@ -29816,6 +29832,7 @@ function show(id) {
   currentScreen = id;
   if (id !== 'menu') closeMissions(true); else checkNewDay();
   $('hud').hidden = id !== null;   // (hidden on pause too: the pause card shows the score and height)
+  if (id !== 'over') clearWalletBeat();
 }
 // Shrink a single-line element's font until it fits its box (no wrapping anywhere in the UI).
 function fitText(el, min = 10) {
