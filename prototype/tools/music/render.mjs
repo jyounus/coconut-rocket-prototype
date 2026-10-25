@@ -376,7 +376,7 @@ function render(name) {
     if (k === 'brass' && !K.brass) { stems[k].L.fill(0); stems[k].R.fill(0); }   // (a track can leave the brass out)
   }
   const mixOf = parts => { const mL = new Float32Array(L), mR = new Float32Array(L); for (const k of parts) for (let i = 0; i < L; i++) { mL[i] += stems[k].L[i]; mR[i] += stems[k].R[i]; } return { L: mL, R: mR }; };
-  const mixes = { brass: mixOf(K.brass ? MIXES.brass : MIXES.piano), piano: mixOf(MIXES.piano) },   // (no brass: both picks get the piano)
+  const mixes = { brass: mixOf(MIXES.brass), piano: mixOf(MIXES.piano) },   // (no brass part: the brass pick is the track without a lead, as the lab plays it)
     mixL = mixes.brass.L, mixR = mixes.brass.R;
   // a soft limiter: transparent below 0.7, rounding peaks off above it (applied the same way to the stems)
   const lim = x => { const a = Math.abs(x); return a < 0.7 ? x : Math.sign(x) * (0.7 + 0.28 * Math.tanh((a - 0.7) / 0.28)); };
