@@ -2046,6 +2046,7 @@ let G = null;
 const CHILI_R = 18, COCO_R = 15, GOLD_R = 32, SHOT_R = 8;
 const PICK_R = Math.max(CHILI_R, COCO_R, GOLD_R);
 const pickR = f => f.kind === 'chili' ? CHILI_R : f.kind === 'gold' ? GOLD_R : COCO_R;
+const PICK_GAP = 4;   // pickups never overlap: at least this between any two circles
 // Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m, and the widest
 // pilot hitbox at full tilt is about 70 across (pilotMaxSize). Every hazard must pass these before
 // it is placed, so a layout can be hard but never impossible. Everything is measured in height, never time,
@@ -2910,24 +2911,32 @@ function createLevel(seed, opts) {
     return d;
   }
   // the nearest x to `x` at height a that keeps the clearance (inside the walls' fruit margin), or null; with
-  // `avoid` (settled pickups) it also keeps off them
-  function pickupSpot(x, a, out, avoid) {
-    const [l, r] = walls(a), M = RULES.fruitMargin, C = RULES.pickup.clear, D = 2 * PICK_R + 8;
+  // `avoid` (settled pickups) it also keeps off them, by both pickups' sizes (`pr`: this one's radius)
+  function pickupSpot(x, a, out, avoid, pr = PICK_R) {
+    const [l, r] = walls(a), M = RULES.fruitMargin, C = RULES.pickup.clear, D = pr + GOLD_R + PICK_GAP;
     const near = avoid && avoid.filter(f => Math.abs(f.alt - a) < D);
     const rock = pillars.filter(pl => a > pl.lo - 60 && a < pl.hi + 60);     // (adventure) a fork's pillar counts as a wall
     for (let d = 0; d <= r - l; d += 4) for (const xx of d ? [x - d, x + d] : [x]) {
       if (xx < l + M || xx > r - M || clearance(xx, a, out) < C) continue;
       if (rock.length && rock.some(pl => pl.caps.some(q => shapeDist({ k: 's', ...q }, xx, a) < ADV.pickMargin))) continue;
-      if (near && near.some(f => Math.hypot(f.x - xx, f.alt - a) < D)) continue;
+      if (near && near.some(f => Math.hypot(f.x - xx, f.alt - a) < pr + pickR(f) + PICK_GAP)) continue;
       return xx;
     }
     return null;
   }
+  const overlap = (q, x, a, pr) => Math.hypot(q.x - x, q.alt - a) < pr + pickR(q) + PICK_GAP;
   function settlePickups(out, fruitOut, upTo) {
     pendFruit.sort((p, q) => p.alt - q.alt);
     while (pendFruit.length && pendFruit[0].alt < upTo) {
-      const f = pendFruit.shift(), x = pickupSpot(f.x, f.alt, out);
-      if (x != null) fruitOut.push({ ...f, x });
+      const f = pendFruit.shift(), pr = pickR(f), x0 = pickupSpot(f.x, f.alt, out);
+      if (x0 == null) continue;
+      // pickups never overlap: where lines cross, a big coin takes the plain coins' place; anything else steps aside a
+      // little, or is left out
+      const near = fruitOut.filter(q => Math.abs(q.alt - f.alt) < pr + GOLD_R + PICK_GAP), hit = near.filter(q => overlap(q, x0, f.alt, pr));
+      let x = x0;
+      if (hit.length && f.kind === 'gold' && hit.every(q => q.kind === 'coco')) for (const q of hit) fruitOut.splice(fruitOut.indexOf(q), 1);
+      else if (hit.length && ((x = pickupSpot(f.x, f.alt, out, near, pr)) == null || Math.abs(x - x0) > 2 * pr)) continue;
+      fruitOut.push({ ...f, x });
     }
     // the chili line: only chilies count toward the gap (an adventure stage may set its own gap and ends at its finish)
     if (endAt) { upTo = Math.min(upTo, endAt - 120); for (let i = fruitOut.length - 1; i >= 0 && fruitOut[i].alt > endAt - 60; i--) fruitOut.splice(i, 1); }
@@ -2940,6 +2949,7 @@ function createLevel(seed, opts) {
         for (; c > prev + 30; c -= 8) { const [l, r] = walls(c); if ((x = pickupSpot((l + r) / 2, c, out, recent)) != null) break; }
         if (x == null) for (c = prev + G - 30; c > prev + 30; c -= 8) { const [l, r] = walls(c); if ((x = pickupSpot((l + r) / 2, c, out)) != null) break; }   // (crowded by coconuts: sit beside them)
         if (x == null) { c = prev + G - 30; const [l, r] = walls(c); x = (l + r) / 2; }   // (never happens: hazards leave wide lanes)
+        for (let i = fruitOut.length - 1; i >= 0; i--) if (fruitOut[i].kind !== 'chili' && overlap(fruitOut[i], x, c, CHILI_R)) fruitOut.splice(i, 1);   // (a guaranteed chili clears the coins under it)
         const f = { x, alt: c, fill: true, kind: 'chili' };
         fruitOut.push(f); recent.push(f); prev = c;
       }

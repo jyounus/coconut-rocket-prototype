@@ -13,7 +13,10 @@ const { createLevel, RULES, WORLD_W, DEFAULTS, gateK, gateExt, crusherExt, gateW
 // The widest and tallest pilot hitbox at any tilt (every character in every vehicle it can ride, world units): every
 // lane is sized from these.
 const { w: PILOT_W, h: PILOT_H } = pilotMaxSize();
-const FRUIT_PAD = RULES.pickup.r + 2;       // the largest pickup radius (chili, coconut or golden coconut) plus a little
+const FRUIT_PAD = RULES.pickup.r + 2;
+// pickups never overlap: any two keep their radii plus a hair apart (sorted by height, so only neighbours are compared)
+const PICK_GAP = 2;
+function overlaps(fruit) { const fs = [...fruit].sort((a, b) => a.alt - b.alt), out = []; for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length && fs[j].alt - fs[i].alt < 2 * GOLD_R + PICK_GAP; j++) { const d = Math.hypot(fs[i].x - fs[j].x, fs[i].alt - fs[j].alt); if (d < pickR(fs[i]) + pickR(fs[j]) + PICK_GAP) out.push(`${fs[i].kind}/${fs[j].kind} ${d.toFixed(1)} apart at ${(fs[i].alt / 10).toFixed(0)} m`); } return out; }       // the largest pickup radius (chili, coconut or golden coconut) plus a little
 const HEIGHT = 25000;                       // check the first 2500 m of every shaft
 const SEEDS = 300;
 const CONFIGS = [
@@ -354,6 +357,7 @@ for (const cfg of CONFIGS) {
     if (!RULES.chili.endless && fruit.some(f => f.kind === 'chili')) fail('endless shafts hold no chilies (the blaster is Adventure only)', tag);
     for (const f of fruit) if (!['chili', 'coco', 'gold'].includes(f.kind)) { fail('every pickup is a chili, a coconut or a golden coconut', `${tag}: ${f.kind}`); break; }
     for (const f of fruit) if (f.kind === 'chili' && !f.fill) { fail('only the guaranteed line holds chilies', tag); break; }
+    { const o = overlaps(fruit); if (o.length) fail('pickups never overlap', `${tag}: ${o[0]}${o.length > 1 ? ` (+${o.length - 1})` : ''}`); }
     // coconuts are plentiful (counted over the first 500 m after the launch, value with golden ones at COCO_GOLD)
     if (cfg.density === 1) {
       const c5 = fruit.filter(f => f.alt < 5000 && f.kind !== 'chili'), val = c5.reduce((n, f) => n + (f.kind === 'gold' ? COCO_GOLD : 1), 0);
@@ -969,6 +973,7 @@ try {
         const low = h.type === 'boulder' ? h.alt - RULES.boulderFall : h.lo, top = h.type === 'pend' ? h.aAlt : h.hi;
         if (low < pl.hi + 40 && top > pl.lo - 40) fail('no hazard inside the fork', `${tag}: ${h.type} ${low | 0}-${top | 0} vs fork ${pl.lo | 0}-${pl.hi | 0}`);
       }
+      { const o = overlaps(fruit); if (o.length) fail('pickups never overlap', `${tag}: ${o[0]}`); }
       // pickups clear the pillar like a wall
       for (const f of fruit) {
         if (f.alt < pl.lo - 80 || f.alt > pl.hi + 80) continue;
