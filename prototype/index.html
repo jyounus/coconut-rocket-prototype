@@ -1333,6 +1333,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
     </section>
     <section class="group">
       <div class="ghead">Lead instrument</div>
+      <p class="devnote">For the track picked above, here and in the game.</p>
       <div class="lablead" id="labLead" role="radiogroup" aria-label="Lead instrument"></div>
       <p class="devnote">The tunes, stabs and low parts on brass or on piano. The game plays the one picked here.</p>
     </section>
@@ -3969,8 +3970,10 @@ function mfLoad(name, url, key) {
     })
     .then(() => { if (MF.bufs[key]) MF.busy[key] = false; });
 }
-// a track's file for the lead instrument picked in the music lab: the brass mix (<track>) or the piano mix
-const mfKey = name => settings.lead === 'piano' ? `${name}-pianomix` : name;
+// a track's file for the lead instrument picked for it in the music lab: the brass mix (<track>) or the piano mix.
+// Each track keeps its own pick; the menu is brass unless picked otherwise (the old one-for-all pick is the others' default)
+const leadOf = name => (settings.leads || {})[name] || (name === 'menu' ? 'brass' : settings.lead || 'brass');
+const mfKey = name => leadOf(name) === 'piano' ? `${name}-pianomix` : name;
 const mfGet = name => { if (MF.info) mfLoad(name, mfUrl(name, mfKey(name)), mfKey(name)); };
 // keep decoded only what's needed: the track playing, the menu, and the next zone's (fetched ahead)
 function mfKeep(want) {
@@ -29773,7 +29776,7 @@ tap($('debugBack'), () => { disarmReset(); syncSettings(); show('settingsScreen'
 // beat and the section, and copy as plain text.
 const LAB = { track: 'jungle', playing: false, t0: 0, from: 0, srcs: [], gains: {}, mute: {}, solo: null, notes: [], raf: 0, rate: 1, fx: null, dry: false };
 const LAB_STEMS = { strings: 'Strings', brass: 'Brass', piano: 'Piano', perc: 'Percussion', winds: 'Winds' };
-const labOut = st => (st === 'brass' || st === 'piano') && st !== settings.lead;   // the lead not picked stays silent
+const labOut = st => (st === 'brass' || st === 'piano') && st !== leadOf(LAB.track);   // the lead not picked stays silent
 const labInfo = () => MF.info && MF.info[srcOf(LAB.track)];   // (the recording the track plays: its own or another's)
 const labKey = (st) => `${srcOf(LAB.track)}-${st}`;
 function labPos() {   // where in the track we are (s), following the loop
@@ -29815,7 +29818,7 @@ function labRender() {
   $('labTracks').innerHTML = ['menu', 'jungle', 'caves', 'magma'].map(n => `<button role="tab" aria-selected="${n === LAB.track}" data-track="${n}">${{ menu: 'Menu', jungle: 'Jungle', caves: 'Caves', magma: 'Magma' }[n]}</button>`).join('');
   const names = { intro: 'Intro', A: 'Theme', B: 'Lift', climax: 'Climax', break: 'Breather', build: 'Build' };
   $('labMarks').innerHTML = fi ? fi.sections.map((sc, i) => `<button data-at="${sc.at}" data-i="${i}">${names[sc.name] || sc.name}</button>`).join('') : '';
-  $('labLead').innerHTML = ['brass', 'piano'].map(l => `<button role="radio" aria-checked="${settings.lead === l}" data-lead="${l}">${l === 'brass' ? 'Brass' : 'Piano'}</button>`).join('');
+  $('labLead').innerHTML = ['brass', 'piano'].map(l => `<button role="radio" aria-checked="${leadOf(LAB.track) === l}" data-lead="${l}">${l === 'brass' ? 'Brass' : 'Piano'}</button>`).join('');
   $('labStems').innerHTML = Object.entries(LAB_STEMS).filter(([st]) => !labOut(st)).map(([st, nm]) => `<div class="labstem"><b>${nm}</b><button class="mute" data-st="${st}" aria-pressed="${!!LAB.mute[st]}">Mute</button><button class="solo" data-st="${st}" aria-pressed="${LAB.solo === st}">Solo</button></div>`).join('');
   $('labNotes').innerHTML = LAB.notes.map(n => `<li><span>${n.where}</span> ${n.text.replace(/[<&]/g, ch => ch === '<' ? '&lt;' : '&amp;')}</li>`).join('');
   $('labPlay').textContent = LAB.playing ? 'Pause' : 'Play';
@@ -29894,8 +29897,8 @@ $('labBar').addEventListener('click', e => { const fi = labInfo(); if (!fi || !l
 $('labPlay').addEventListener('click', () => { if (!labReady()) return; if (LAB.playing) { LAB.from = labPos(); labStop(); LAB.playing = false; } else labStart(LAB.from); labRender(); });
 $('labRestart').addEventListener('click', () => { if (!labReady()) return; labStart(0); labRender(); });
 $('labLead').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b || settings.lead === b.dataset.lead) return;
-  settings.lead = b.dataset.lead; store.set('cr-settings', settings);
+  const b = e.target.closest('button'); if (!b || leadOf(LAB.track) === b.dataset.lead) return;
+  (settings.leads || (settings.leads = {}))[LAB.track] = b.dataset.lead; store.set('cr-settings', settings);
   if (LAB.solo && labOut(LAB.solo)) LAB.solo = null;
   labGains(); labRender();
 });
