@@ -397,6 +397,44 @@ function render(name) {
   console.log(`${name}: ${loopEnd.toFixed(1)} s, loop from ${loopStart.toFixed(1)} s, pre-limit peak ${peak.toFixed(2)}, RMS ${(10 * Math.log10(sum / (2 * L))).toFixed(1)} dBFS (piano mix ${(10 * Math.log10(psum / (2 * L))).toFixed(1)})`);
   return info;
 }
+// KIT=1: the browser's instrument kit for the sound studio: single dry notes from the same instruments (and the same
+// note() and levels) the score uses, every few semitones across each one's useful range, so the game can play added
+// parts live and pitch each note a little by playback rate. Writes out/kit/<id>_<midi>.wav and out/kit/kit.json.
+const KIT = [
+  // id, label, family, lowest, highest, step (semitones), how long a note is held (s)
+  ['piano', 'Piano', 'keys', 36, 84, 4, 2.2], ['marimba', 'Marimba', 'percussion', 48, 96, 6, 1.2],
+  ['vlnSus', 'Violins', 'strings', 55, 91, 6, 2.2], ['vlaSus', 'Violas', 'strings', 48, 79, 6, 2.2], ['vcSus', 'Cellos', 'strings', 36, 72, 6, 2.2], ['cbSus', 'Double bass', 'strings', 28, 55, 6, 2.2],
+  ['vlnSpic', 'Violins, short', 'strings', 55, 91, 6, 0.5], ['vcSpic', 'Cellos, short', 'strings', 36, 72, 6, 0.5], ['cbSpic', 'Double bass, short', 'strings', 28, 55, 6, 0.5],
+  ['flute', 'Flute', 'winds', 60, 96, 6, 2.2],
+  ['hnSus', 'French horn', 'brass', 41, 77, 6, 2.2], ['hnStac', 'French horn, short', 'brass', 41, 77, 6, 0.5], ['tptSus', 'Trumpet', 'brass', 55, 82, 6, 2.2], ['tptStac', 'Trumpet, short', 'brass', 55, 82, 6, 0.5],
+  ['tbnSus', 'Trombone', 'brass', 40, 72, 6, 2.2], ['tubaSus', 'Tuba', 'brass', 28, 55, 6, 2.2],
+  ['timp', 'Timpani', 'drums', null], ['bdrum', 'Bass drum', 'drums', null], ['snare', 'Snare', 'drums', null], ['tenorHi', 'Tom, high', 'drums', null], ['tenorLo', 'Tom, low', 'drums', null],
+  ['cym', 'Cymbal', 'drums', null], ['log', 'Log drum', 'drums', null], ['shaker', 'Shaker', 'drums', null],
+];
+if (process.env.KIT) {
+  const dir = join(OUT, 'kit'); if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const man = {};
+  for (const [id, label, family, lo, hi, step, hold] of KIT) {
+    const notes = lo == null ? [null] : Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
+    man[id] = { label, family, notes: lo == null ? [] : notes }; let h = 2166136261;
+    for (const m of notes) {
+      seed = 11 + (m ?? 0); const n = Math.round(((hold ?? 1.2) + 0.9) * SR), bufs = { k: { L: new Float32Array(n), R: new Float32Array(n) } };
+      note(bufs, 'k', id, m, 0.002, { dur: hold ?? 1.2, rel: 0.35, vel: 0.75 });
+      const L = bufs.k.L, R = bufs.k.R; let end = n; while (end > SR * 0.1 && Math.abs(L[end - 1]) < 1e-4 && Math.abs(R[end - 1]) < 1e-4) end--;
+      // even loudness across the kit (the samples' own layers differ by up to 20 dB): a held note to a set loudness over
+      // its first 0.6 s, a drum to a set peak, never past a peak of 0.7
+      let ss = 0, pk = 1e-6; const win = Math.min(end, Math.round(SR * 0.6));
+      for (let i = 0; i < end; i++) { const v = Math.max(Math.abs(L[i]), Math.abs(R[i])); if (v > pk) pk = v; if (i < win) ss += (L[i] * L[i] + R[i] * R[i]) / 2; }
+      const g = Math.min(0.7 / pk, lo == null ? 0.32 / pk : 0.07 / Math.sqrt(ss / win));
+      for (let i = 0; i < end; i += 97) h = Math.imul(h ^ Math.round(L[i] * g * 1e5), 16777619);   // (a version stamp for the files' addresses)
+      writeWav(join(dir, `${id}_${m ?? 'hit'}.wav`), L.slice(0, end).map(v => v * g), R.slice(0, end).map(v => v * g), SR);
+    }
+    man[id].v = (h >>> 0).toString(36);
+  }
+  writeFileSync(join(dir, 'kit.json'), JSON.stringify(man, null, 1));
+  console.log(`kit: ${Object.keys(man).length} instruments, ${Object.values(man).reduce((a, i) => a + Math.max(1, i.notes.length), 0)} notes`);
+  process.exit(0);
+}
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(TRACKS);
 const all = existsSync(join(OUT, 'tracks.json')) ? JSON.parse((await import('node:fs')).readFileSync(join(OUT, 'tracks.json'), 'utf8')) : {};
 for (const n of names) { const t0 = Date.now(); all[n] = render(n); console.log(`  (${((Date.now() - t0) / 1000).toFixed(1)} s)`); if (LOG) { console.log(LOG.out.sort().join('\n')); LOG.out.length = 0; } if (AUDIT) { clashReport(n); AUDIT.length = 0; } }

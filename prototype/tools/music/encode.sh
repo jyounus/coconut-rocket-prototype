@@ -12,3 +12,9 @@ for f in out/*.wav; do
 done
 cp out/tracks.json "$DEST/tracks.json"
 ls -la "$DEST"
+# The sound studio's instrument kit (KIT=1 node render.mjs): single notes at 96 kbps into prototype/audio/kit/.
+if [ -d out/kit ]; then
+  mkdir -p ../../audio/kit
+  for f in out/kit/*.wav; do afconvert -f m4af -d aac -b 96000 -q 127 "$f" "../../audio/kit/$(basename "$f" .wav).mp4"; done
+  cp out/kit/kit.json ../../audio/kit/kit.json
+fi
