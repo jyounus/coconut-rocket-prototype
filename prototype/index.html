@@ -1298,6 +1298,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .stzonebar > span { font-size: 13px; font-weight: 900; color: var(--cream); opacity: .8; }
 .stzonebar .seg { flex: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stzonefx { background: rgba(255,170,80,.09); margin-bottom: 8px; }
+.stzhead { margin: 14px 4px 6px; }
 .stdanger { color: #ffd8c8 !important; }
 /* the effects' timeline */
 .sttl { position: relative; padding: 6px 0 8px; border-radius: 14px; background: rgba(0,0,0,.3); }
@@ -4217,8 +4218,17 @@ const fxRate = r => r.on.pitch ? Math.pow(2, r.pitch / 12) : 1;
 // pitch (the tempo kept), and its own added instruments (an added part of the gameplay track with zone: 'caves' plays
 // only there). A zone's recipe: the track recipe's effects plus tempo (percent faster or slower).
 const GAME_TRACK = 'jungle', ZONES = ['jungle', 'caves', 'magma'], ZONE_LABEL = { jungle: 'Jungle', caves: 'Caves', magma: 'Magma' };
-const ZONE_DEFAULT = { ...FX_DEFAULT, tempo: 0, pitch: 0, on: { ...FX_DEFAULT.on, tempo: false } };
-function zoneOf(z) { const u = (z && audGet('musicZones', z)) || {}; return { ...ZONE_DEFAULT, ...u, on: { ...ZONE_DEFAULT.on, ...(u.on || {}) } }; }
+// (beyond the track's effects a zone has: bass cut, a focus band, a filter sweep, phaser, flanger, ring mod, lo-fi,
+// tremolo, auto-pan, stereo width, its own reverb, a pump and a stutter on the beat, background beds (rumble, air,
+// drips), a mix of the recorded instruments, a muffle that closes as the monster nears, and how fast it glides in)
+const ZONE_EXTRA = { cut: 0.3, focus: 6, focusAt: 0.5, sweep: 0.6, sweepEvery: 4, phaser: 0.5, phaserEvery: 8, flanger: 0.4, flangerEvery: 8,
+  ring: 0.3, ringHz: 220, lofi: 0.4, trem: 0.5, tremEvery: 0.5, pan: 0.6, panEvery: 8, width: 1.6, space: 0.35, spaceSize: 3, spaceDark: 0.6,
+  pump: 0.5, stutter: 0.7, stutterGrid: 2, rumble: 0.4, air: 0.3, drips: 0.4, tension: 0.6, glide: 1, mix: {} };
+const ZONE_DEFAULT = { ...FX_DEFAULT, tempo: 0, pitch: 0, ...ZONE_EXTRA,
+  on: { ...FX_DEFAULT.on, tempo: false, ...Object.fromEntries(['cut', 'focus', 'sweep', 'phaser', 'flanger', 'ring', 'lofi', 'trem', 'pan', 'width', 'space', 'pump', 'stutter', 'rumble', 'air', 'drips', 'tension', 'glide'].map(k => [k, false])) } };
+function zoneOf(z) { const u = (z && audGet('musicZones', z)) || {}; return { ...ZONE_DEFAULT, ...u, on: { ...ZONE_DEFAULT.on, ...(u.on || {}) }, mix: { ...(u.mix || {}) } }; }
+const zoneGlide = r => r.on.glide ? r.glide : 1;   // (seconds a zone's sound takes to come in)
+const zoneMix = (r, st) => ({ vol: 1, tone: 1, ...((r && r.mix && r.mix[st]) || {}) });
 const zoneTempo = r => r.on.tempo ? 1 + r.tempo / 100 : 1;
 const zoneShift = (r, tempo = zoneTempo(r)) => (r.on.pitch ? r.pitch : 0) - 12 * Math.log2(tempo);   // (the tempo's own change of pitch taken back out)
 // a pitch shift that keeps the tempo: two taps on a short delay whose length sweeps (how fast sets the shift), each
@@ -4254,6 +4264,92 @@ function shiftSet(S, semis, t) {
   if (!dir !== !S.dir) { S.dry.gain.setTargetAtTime(dir ? 0 : 1, t, 0.01); S.wet.gain.setTargetAtTime(dir ? 1 : 0, t, 0.01); }
   S.semis = semis; S.dir = dir;
 }
+// a zone's chain: the track's effects (with the pitch shift), then the zone's own, in a line: bass cut, focus band,
+// filter sweep, phaser, flanger, ring mod, lo-fi, tremolo, the beat gate (pump and stutter), the danger muffle,
+// auto-pan and width, with its reverb and background beds alongside. Everything off is a plain pass-through.
+function makeZoneFx(c, dest) {
+  const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; }, bq = (type, f, q = 0.7) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; return n; };
+  const lfo = (dest2, amt = 0) => { const o = c.createOscillator(), a = g(amt); o.frequency.value = 0.5; o.connect(a); a.connect(dest2); o.start(); return { o, a }; };
+  const Z = { c, dest, oscs: [], srcs: [] };
+  Z.top = g(); Z.fx = makeFx(c, Z.top); Z.in = Z.fx.in; Z.shift = Z.fx.shift;
+  Z.hp = bq('highpass', 10); Z.peak = bq('peaking', 1000, 1.2); Z.peak.gain.value = 0;
+  Z.sweep = bq('lowpass', 20000, 3); Z.sweepL = lfo(Z.sweep.frequency);
+  // phaser: four all-passes swept together, mixed back with the dry sound
+  Z.phIn = g(); Z.phDry = g(); Z.phWet = g(0); Z.phOut = g(); Z.ph = [0, 1, 2, 3].map(() => bq('allpass', 900, 0.6));
+  Z.phIn.connect(Z.phDry); Z.phDry.connect(Z.phOut); Z.phIn.connect(Z.ph[0]); for (let i = 1; i < 4; i++) Z.ph[i - 1].connect(Z.ph[i]); Z.ph[3].connect(Z.phWet); Z.phWet.connect(Z.phOut);
+  Z.phL = lfo(g()); for (const a of Z.ph) Z.phL.a.connect(a.frequency);
+  // flanger: a very short swept delay fed back on itself
+  Z.flIn = g(); Z.flOut = g(); Z.flDel = c.createDelay(0.05); Z.flDel.delayTime.value = 0.004; Z.flFb = g(0); Z.flWet = g(0);
+  Z.flIn.connect(Z.flOut); Z.flIn.connect(Z.flDel); Z.flDel.connect(Z.flFb); Z.flFb.connect(Z.flDel); Z.flDel.connect(Z.flWet); Z.flWet.connect(Z.flOut); Z.flL = lfo(Z.flDel.delayTime);
+  // ring mod: the sound times a tone (a gain whose level is the tone)
+  Z.rgIn = g(); Z.rgDry = g(); Z.rgMul = g(0); Z.rgWet = g(0); Z.rgOut = g(); Z.rgOsc = c.createOscillator(); Z.rgOsc.start(); Z.rgOsc.connect(Z.rgMul.gain);
+  Z.rgIn.connect(Z.rgDry); Z.rgDry.connect(Z.rgOut); Z.rgIn.connect(Z.rgMul); Z.rgMul.connect(Z.rgWet); Z.rgWet.connect(Z.rgOut);
+  // lo-fi: fewer bits and a dull top
+  Z.lfIn = g(); Z.lfDry = g(); Z.lfWet = g(0); Z.lfOut = g(); Z.lfSh = c.createWaveShaper(); Z.lfLp = bq('lowpass', 20000);
+  Z.lfIn.connect(Z.lfDry); Z.lfDry.connect(Z.lfOut); Z.lfIn.connect(Z.lfSh); Z.lfSh.connect(Z.lfLp); Z.lfLp.connect(Z.lfWet); Z.lfWet.connect(Z.lfOut);
+  Z.trem = g(); Z.tremL = lfo(Z.trem.gain); Z.beat = g(); Z.tense = bq('lowpass', 20000, 0.5);
+  Z.pan = c.createStereoPanner(); Z.panL = lfo(Z.pan.pan);
+  // width: each side mixed with the other (0 is mono, 1 as it was, 2 twice as wide)
+  Z.split = c.createChannelSplitter(2); Z.merge = c.createChannelMerger(2); Z.wSame = [g(), g()]; Z.wCross = [g(0), g(0)];
+  Z.pan.connect(Z.split); for (const i of [0, 1]) { Z.split.connect(Z.wSame[i], i); Z.split.connect(Z.wCross[i], i); Z.wSame[i].connect(Z.merge, 0, i); Z.wCross[i].connect(Z.merge, 0, 1 - i); }
+  Z.out = g(); Z.merge.connect(Z.out); Z.out.connect(dest);
+  // the line
+  const line = [Z.top, Z.hp, Z.peak, Z.sweep, Z.phIn], link = (a, b) => a.connect(b);
+  for (let i = 1; i < line.length; i++) link(line[i - 1], line[i]);
+  link(Z.phOut, Z.flIn); link(Z.flOut, Z.rgIn); link(Z.rgOut, Z.lfIn); link(Z.lfOut, Z.trem); link(Z.trem, Z.beat); link(Z.beat, Z.tense); link(Z.tense, Z.pan);
+  // its reverb (made for it: a noise tail, longer or darker) and the background beds, into the same output
+  Z.spSend = g(0); Z.spOut = g(); Z.tense.connect(Z.spSend); Z.spOut.connect(Z.pan); Z.sp = null; Z.spKey = '';   // (the room panned and widened with the rest)
+  Z.bedOut = g(); Z.bedOut.connect(Z.tense);
+  const bed = (f, type, q) => { const s2 = c.createBufferSource(); s2.buffer = SND.noise; s2.loop = true; const f2 = bq(type, f, q), a = g(0); s2.connect(f2); f2.connect(a); a.connect(Z.bedOut); s2.start(c.currentTime, Math.random()); Z.srcs.push(s2); return a; };
+  Z.rumble = bed(80, 'lowpass', 1.5); Z.air = bed(6500, 'bandpass', 0.6);
+  Z.oscs.push(Z.sweepL.o, Z.phL.o, Z.flL.o, Z.rgOsc, Z.tremL.o, Z.panL.o);
+  return Z;
+}
+const lofiCurves = {};
+const lofiCurve = bits => lofiCurves[bits] || (lofiCurves[bits] = Float32Array.from({ length: 8192 }, (_, i) => { const x = i / 4095.5 - 1, q = 2 ** (bits - 1); return Math.round(x * q) / q; }));
+const spaceIRs = {};
+function spaceIR(c, size, dark) {   // a reverb's tail: decaying noise, smoothed for a darker room
+  const k = `${c.sampleRate}|${size.toFixed(1)}|${dark.toFixed(2)}`; if (spaceIRs[k]) return spaceIRs[k];
+  const n = Math.round(c.sampleRate * size), b = c.createBuffer(2, n, c.sampleRate), a = 1 - dark * 0.94;
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; for (let i = 0; i < n; i++) { lp += (Math.random() * 2 - 1 - lp) * a; d[i] = lp * (1 - i / n) ** 2.4; } }
+  return spaceIRs[k] = b;
+}
+function zoneApply(Z, r, bpm, at = Z.c.currentTime, tc = 0.03) {
+  fxApply(Z.fx, r, bpm, at, tc);
+  const c = Z.c, on = r.on, set = (prm, v) => prm.setTargetAtTime(v, at, tc), cyc = beats => bpm / 60 / Math.max(0.05, beats);
+  const lfoSet = (L, beats, amt) => { L.o.frequency.setValueAtTime(cyc(beats), at); set(L.a.gain, amt); };
+  set(Z.hp.frequency, on.cut ? 30 * Math.pow(40, r.cut) : 10);
+  set(Z.peak.frequency, 200 * Math.pow(25, r.focusAt)); set(Z.peak.gain, on.focus ? r.focus : 0);
+  { const lo = 5000 * Math.pow(150 / 5000, r.sweep), hi = 5000; set(Z.sweep.frequency, on.sweep ? (lo + hi) / 2 : 20000); set(Z.sweep.Q, on.sweep ? 3 : 0.7); lfoSet(Z.sweepL, r.sweepEvery, on.sweep ? (hi - lo) / 2 : 0); }
+  set(Z.phWet.gain, on.phaser ? r.phaser * 0.8 : 0); set(Z.phDry.gain, on.phaser ? 1 - r.phaser * 0.3 : 1); for (const a of Z.ph) set(a.frequency, 900); lfoSet(Z.phL, r.phaserEvery, on.phaser ? 700 : 0);
+  set(Z.flWet.gain, on.flanger ? r.flanger * 0.7 : 0); set(Z.flFb.gain, on.flanger ? r.flanger * 0.6 : 0); lfoSet(Z.flL, r.flangerEvery, on.flanger ? 0.003 : 0);
+  Z.rgOsc.frequency.setValueAtTime(r.ringHz, at); set(Z.rgWet.gain, on.ring ? r.ring : 0); set(Z.rgDry.gain, on.ring ? 1 - r.ring * 0.7 : 1);
+  if (on.lofi) Z.lfSh.curve = lofiCurve(Math.round(14 - r.lofi * 10));
+  set(Z.lfLp.frequency, on.lofi ? 20000 * Math.pow(2500 / 20000, r.lofi) : 20000); set(Z.lfWet.gain, on.lofi ? 1 : 0); set(Z.lfDry.gain, on.lofi ? 0 : 1);
+  set(Z.trem.gain, on.trem ? 1 - r.trem / 2 : 1); lfoSet(Z.tremL, r.tremEvery, on.trem ? r.trem / 2 : 0);
+  lfoSet(Z.panL, r.panEvery, on.pan ? r.pan : 0);
+  { const w = on.width ? r.width : 1; for (const i of [0, 1]) { set(Z.wSame[i].gain, (1 + w) / 2); set(Z.wCross[i].gain, (1 - w) / 2); } }
+  if (on.space) {
+    const key = `${r.spaceSize.toFixed(1)}|${r.spaceDark.toFixed(2)}`;
+    if (key !== Z.spKey) { const old = Z.sp; Z.sp = c.createConvolver(); Z.sp.buffer = spaceIR(c, r.spaceSize, r.spaceDark); Z.spSend.connect(Z.sp); Z.sp.connect(Z.spOut); Z.spKey = key; if (old) setTimeout(() => { try { Z.spSend.disconnect(old); old.disconnect(); } catch {} }, 60); }
+  }
+  set(Z.spSend.gain, on.space ? r.space * 0.9 : 0);
+  set(Z.rumble.gain, on.rumble ? r.rumble * 0.9 : 0); set(Z.air.gain, on.air ? r.air * 0.12 : 0);
+  Z.r = r;
+}
+// on every step of the beat: the pump (a dip on each beat), the stutter (the back of each slice cut) and the drips
+function zoneBeat(Z, s, t, sp) {
+  const r = Z.r; if (!r) return; const on = r.on, c = Z.c;
+  if (on.pump && s % 4 === 0) { const b = Z.beat.gain, beat = sp * 4; b.cancelScheduledValues(t); b.setValueAtTime(1 - r.pump * 0.85, t); b.setTargetAtTime(1, t + 0.01, beat * 0.25); }
+  else if (on.stutter) { const shut = r.stutterGrid >= 2 ? s % 2 === 1 : s % 4 >= 2; Z.beat.gain.setTargetAtTime(shut ? 1 - r.stutter : 1, t, 0.004); }
+  else if (!on.pump) Z.beat.gain.setTargetAtTime(1, t, 0.02);
+  if (on.drips && Math.random() < r.drips * 0.18) {   // a drop: a quick rising blip, somewhere in the room
+    const o = c.createOscillator(), a = c.createGain(), pn = c.createStereoPanner(), f = 700 + Math.random() * 900, at = t + Math.random() * sp;
+    o.frequency.setValueAtTime(f, at); o.frequency.exponentialRampToValueAtTime(f * 2.6, at + 0.05); a.gain.setValueAtTime(0, at); a.gain.linearRampToValueAtTime(0.09, at + 0.004); a.gain.exponentialRampToValueAtTime(0.0005, at + 0.09);
+    pn.pan.value = Math.random() * 1.6 - 0.8; o.connect(a); a.connect(pn); pn.connect(Z.in); o.start(at); o.stop(at + 0.12);
+  }
+}
+function zoneDispose(Z) { fxDispose(Z.fx); for (const o of [...Z.oscs, ...Z.srcs]) try { o.stop(); } catch {} try { Z.out.disconnect(); Z.bedOut.disconnect(); } catch {} }
 function makeFx(c, dest) {
   const n = { in: c.createGain(), shaper: c.createWaveShaper(), low: c.createBiquadFilter(), high: c.createBiquadFilter(), lp: c.createBiquadFilter(), out: c.createGain(),
     chorus: c.createDelay(0.1), chorusMix: c.createGain(), lfo: c.createOscillator(), lfoAmt: c.createGain(),
@@ -4309,6 +4405,7 @@ const stMix = (name, st) => { const e = studioOf(name); return { ...mixBase(name
 const stOff = (e, st, b) => !!(e && e.off && e.off[st] && e.off[st].includes(b));
 // the stems play (in place of the mix) once the studio has changed which instruments play, where, or how
 function stemsNeeded(name) {
+  if (name === GAME_TRACK && ZONES.some(z => { const u = audGet('musicZones', z); return u && u.mix && Object.values(u.mix).some(m => (m.vol ?? 1) !== 1 || (m.tone ?? 1) !== 1); })) return true;   // (a zone's own mix needs the parts apart)
   const e = studioOf(name); if (!e) return false;
   return ST_STEMS.some(st => { const m = stMix(name, st), d = mixBase(name, st); return Object.keys(d).some(k => m[k] !== d[k]) || !!(e.off && e.off[st] && e.off[st].length); });
 }
@@ -4339,11 +4436,12 @@ function stemStrip(c, bus, send) {
   S.arr.connect(S.lp); S.lp.connect(S.pan); S.pan.connect(S.vol); S.vol.connect(bus); S.vol.connect(S.room); S.room.connect(send);
   return S;
 }
-function voiceMix(V, t) {   // each stem's level, brightness, pan and hall (and whether it's heard at all)
+function voiceMix(V, t, tc = 0.02) {   // each stem's level, brightness, pan and hall (and whether it's heard at all), with the zone's mix over it
   if (!V.stems) return;
+  const zr = V.zone && V.name === GAME_TRACK ? zoneOf(V.zone) : null;
   for (const [st, S] of Object.entries(V.stems)) {
-    const m = stMix(V.name, st), heard = m.on && (!V.solo || V.solo === st);
-    S.vol.gain.setTargetAtTime(heard ? m.vol : 0, t, 0.02); S.lp.frequency.setTargetAtTime(toneHz(m.tone), t, 0.02);
+    const m = stMix(V.name, st), zm = zoneMix(zr, st), heard = m.on && (!V.solo || V.solo === st);
+    S.vol.gain.setTargetAtTime(heard ? m.vol * zm.vol : 0, t, tc); S.lp.frequency.setTargetAtTime(toneHz(Math.min(m.tone, zm.tone)), t, tc);
     S.pan.pan.setTargetAtTime(m.pan, t, 0.02); S.room.gain.setTargetAtTime(m.room * 0.8, t, 0.02);
   }
 }
@@ -4427,7 +4525,7 @@ function schedMusic() {
       X = !want ? 1.4 : runs(cur.name) && runs(want) ? 4 : 2.6;
       if (SND.quick) { at = now + 0.03; X = 0.85; }   // (from the score card to the menu: at once, done within a second of the tap)
       for (const g of [cur.bus.gain, cur.send.gain]) { g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.setValueAtTime(g.value, want ? at : now); g.linearRampToValueAtTime(0.0001, (want ? at : now) + X); }
-      cur.dies = (want ? at : now) + X;
+      cur.dies = (want ? at : now) + X; if (cur.zfx) cur.zfx.bedOut.gain.setTargetAtTime(0.0001, want ? at : now, X / 3);   // (the zone's beds go with it)
     }
     SND.quick = false;
     if (want) {
@@ -4435,11 +4533,11 @@ function schedMusic() {
       const zr = want === GAME_TRACK ? zoneOf(SND.zone) : null, zt = fi && zr ? zoneTempo(zr) : 1, rate = fi ? fxRate(fx) * zt : 1;
       const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
-      const zfx = zr ? makeFx(c, SND.music) : null, chain = makeFx(c, zfx ? zfx.in : SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
-      if (zfx) { fxApply(zfx, zr, tr.bpm, at); shiftSet(zfx.shift, zoneShift(zr, zt), at); }   // (the gameplay track: the zone's sound over it)
+      const zfx = zr ? makeZoneFx(c, SND.music) : null, chain = makeFx(c, zfx ? zfx.in : SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
+      if (zfx) { zoneApply(zfx, zr, tr.bpm, at); shiftSet(zfx.shift, zoneShift(zr, zt), at); }   // (the gameplay track: the zone's sound over it)
       for (const g of [bus.gain, send.gain]) { g.setValueAtTime(0.0001, now); g.setValueAtTime(0.0001, at); g.linearRampToValueAtTime(tr.vol, at + X * (cur ? (X <= 1 ? 1 : 0.85) : 0.5)); }
       const p = { name: want, keys, tr, bus, send, fx: chain, zfx, zone: zr ? SND.zone : null, zt, zr: zt, r0: fi ? fxRate(fx) : 1, base: fi ? fi.bpm : 0, step: joinBars * 16, next: at };
-      if (fi) { p.v = trackVoice(want, at, joinBars * 240 / fi.bpm, rate, bus, send); p.v.zone = p.zone; p.src = p.v.srcs[0]; }   // the recorded track looping from its join point (the danger layer still follows its beat)
+      if (fi) { p.v = trackVoice(want, at, joinBars * 240 / fi.bpm, rate, bus, send); p.v.zone = p.zone; voiceMix(p.v, at); p.src = p.v.srcs[0]; }   // the recorded track looping from its join point (the danger layer still follows its beat)
       SND.players.push(p);
     }
   }
@@ -4448,7 +4546,9 @@ function schedMusic() {
     SND.bus = p.bus; SND.vsend = p.send;
     while (p.next < now + 0.12 && (!p.dies || p.next < p.dies)) {
       if (p.zfx && !p.dies) zoneStep(p, now);
-      const sp = 60 / tr.bpm / 4, s = p.step % 16, bn = p.step / 16 | 0, lp = tr.loop || 0, b = bn < tr.bars ? bn : lp + (bn - tr.bars) % (tr.bars - lp);
+      const sp = 60 / tr.bpm / 4, s = p.step % 16;
+      if (p.zfx && !p.dies) zoneBeat(p.zfx, s, p.next, sp);
+      const bn = p.step / 16 | 0, lp = tr.loop || 0, b = bn < tr.bars ? bn : lp + (bn - tr.bars) % (tr.bars - lp);
       if (!p.src) tr.play(p.next, b, s, sp);
       else if (p.v) { const fb = fileBar(p.v.fi, bn); if (s === 0) voiceBar(p.v, fb, p.next); voiceStep(p.v, fb, s, p.next, sp); }   // (the studio's arrangement and added notes)
       if (!p.dies && p.name !== 'menu') dangerLayer(p.next, s, sp);
@@ -4457,18 +4557,19 @@ function schedMusic() {
   }
   SND.bus = SND.music; SND.vsend = SND.verbIn;
   // a faded player is let go once its tails have rung out
-  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { for (const s2 of p.v ? p.v.srcs : p.src ? [p.src] : []) try { s2.stop(); } catch {} p.bus.disconnect(); p.send.disconnect(); if (p.fx) fxDispose(p.fx); if (p.zfx) fxDispose(p.zfx); return false; } return true; });
+  SND.players = SND.players.filter(p => { if (p.dies && now > p.dies + 3) { for (const s2 of p.v ? p.v.srcs : p.src ? [p.src] : []) try { s2.stop(); } catch {} p.bus.disconnect(); p.send.disconnect(); if (p.fx) fxDispose(p.fx); if (p.zfx) zoneDispose(p.zfx); return false; } return true; });
   const top = SND.players.find(p => !p.dies); SND.track = top ? top.name : null;
 }
-// the gameplay track following the zone the player is in, a step at a time: a new zone's effects glide in over about a
-// second, its tempo eases there a little each step (changed only on the steps of the beat, so the recording, the added
+// the gameplay track following the zone the player is in, a step at a time: a new zone's effects and instrument mix
+// glide in (over a second, or the zone's own glide), its tempo eases there a little each step (changed only on the steps of the beat, so the recording, the added
 // notes and the danger layer stay together) with the pitch shift following, and its own added instruments come in
 function zoneStep(p, now) {
   const z = SND.zone || ZONES[0], at = Math.max(p.next, now);
-  if (p.zone !== z) { const r = zoneOf(z); p.zone = z; p.zt = p.v ? zoneTempo(r) : 1; p.zp = r.on.pitch ? r.pitch : 0; fxApply(p.zfx, r, p.tr.bpm, at, 0.35); if (p.v) p.v.zone = z; }
+  if (p.zone !== z) { const r = zoneOf(z), gl = zoneGlide(r); p.zone = z; p.zt = p.v ? zoneTempo(r) : 1; p.zp = r.on.pitch ? r.pitch : 0; p.zg = gl; zoneApply(p.zfx, r, p.tr.bpm, at, Math.max(0.01, gl / 3)); if (p.v) { p.v.zone = z; voiceMix(p.v, at, Math.max(0.01, gl / 3)); } }
   if (p.zp == null) { const r = zoneOf(z); p.zp = r.on.pitch ? r.pitch : 0; }
   if (p.zr !== p.zt) {
-    p.zr = Math.abs(p.zt - p.zr) <= 0.01 ? p.zt : p.zr + Math.sign(p.zt - p.zr) * 0.01;   // (1% a step: 10% in a little over a second)
+    const stp = 0.0125 / Math.max(0.05, p.zg ?? 1);   // (a 10% change over the zone's glide, a step at a time)
+    p.zr = Math.abs(p.zt - p.zr) <= stp ? p.zt : p.zr + Math.sign(p.zt - p.zr) * stp;
     const rate = p.r0 * p.zr; for (const s2 of p.v.srcs) s2.playbackRate.setValueAtTime(rate, at); p.v.rate = rate; p.tr.bpm = p.base * rate;
   }
   shiftSet(p.zfx.shift, p.zp - 12 * Math.log2(p.zr), at);
@@ -4511,6 +4612,7 @@ function audioTick(dt) {
   }
   const gap = G && G.state === 'play' ? monsterGap() : 9999;
   SND.danger = G && G.state === 'play' ? Math.max(clamp(1 - (gap - 120) / 380, 0, 1), G.hunger || 0) : 0;
+  for (const p of SND.players) if (p.zfx && p.zfx.r && !p.dies) { const r = p.zfx.r; p.zfx.tense.frequency.setTargetAtTime(r.on.tension ? 20000 * Math.pow(350 / 20000, SND.danger * r.tension) : 20000, t, 0.25); }   // (the zone's tension: muffled as the monster nears)
   // the resume countdown: a wood-block tick on each number, a higher one on go
   if (G && G.resumeT > 0) { const n = Math.ceil(G.resumeT / RESUME_STEP); if (n !== SND.resumeStep) { SND.resumeStep = n; sfx('tick'); } }
   else if (SND.resumeStep) { SND.resumeStep = 0; if (G && G.state === 'play') sfx('go'); }
@@ -30253,12 +30355,44 @@ const FX_UI = [
   { k: 'drive', name: 'Drive', sub: 'Grit and warmth', sl: [['drive', 'Amount', 0, 1, 0.05, pct]] },
 ];
 const TRACK_NAMES = { menu: 'Menu', jungle: 'Gameplay' };   // (the gameplay track keeps its old name, jungle, in the settings)
-// a zone's sound: tempo and pitch each kept apart from the other, then the track's own effects
+// a zone's sound, in groups: tempo and pitch (each kept apart from the other), tone, movement, space, texture, the
+// beat, background beds and how it behaves (the instrument mix is drawn after it)
+const beatsTxt = v => `${v} beat${v === 1 ? '' : 's'}`, FX_OF = k => FX_UI.find(f => f.k === k);
 const ZONE_UI = [
+  { head: 'Speed and pitch' },
   { k: 'tempo', name: 'Tempo', sub: 'Faster or slower, at the same pitch', sl: [['tempo', 'Speed', -25, 25, 1, v => `${v > 0 ? '+' : ''}${v}%`]] },
   { k: 'pitch', name: 'Pitch', sub: 'Higher or deeper, at the same tempo', sl: [['pitch', 'Semitones', -6, 6, 0.5, v => `${v > 0 ? '+' : ''}${v}`]] },
-  ...FX_UI.filter(f => f.k !== 'pitch'),
+  { head: 'Tone' },
+  FX_OF('depth'), FX_OF('treble'), FX_OF('muffle'),
+  { k: 'cut', name: 'Bass cut', sub: 'Thinner and further away, like a radio', sl: [['cut', 'Amount', 0, 1, 0.05, v => `${Math.round(30 * Math.pow(40, v))} Hz`]] },
+  { k: 'focus', name: 'Focus', sub: 'Lift or scoop one band: boxy, nasal or hollow', sl: [['focusAt', 'Where', 0, 1, 0.02, v => `${Math.round(200 * Math.pow(25, v))} Hz`], ['focus', 'Boost', -12, 12, 1, sdb]] },
+  FX_OF('drive'),
+  { head: 'Movement' },
+  { k: 'sweep', name: 'Filter sweep', sub: 'The top opening and closing, breathing in time', sl: [['sweep', 'Depth', 0, 1, 0.05, pct], ['sweepEvery', 'Every', 1, 16, 1, beatsTxt]] },
+  { k: 'phaser', name: 'Phaser', sub: 'A slow swirl, like heat shimmer', sl: [['phaser', 'Amount', 0, 1, 0.05, pct], ['phaserEvery', 'Every', 1, 32, 1, beatsTxt]] },
+  { k: 'flanger', name: 'Flanger', sub: 'A metallic jet sweep', sl: [['flanger', 'Amount', 0, 1, 0.05, pct], ['flangerEvery', 'Every', 1, 32, 1, beatsTxt]] },
+  FX_OF('wobble'),
+  { k: 'trem', name: 'Tremolo', sub: 'The volume pulsing in time', sl: [['trem', 'Depth', 0, 1, 0.05, pct], ['tremEvery', 'Every', 0.25, 4, 0.25, beatsTxt]] },
+  { k: 'pan', name: 'Auto-pan', sub: 'Drifting from side to side', sl: [['pan', 'Depth', 0, 1, 0.05, pct], ['panEvery', 'Every', 1, 32, 1, beatsTxt]] },
+  { head: 'Space' },
+  FX_OF('echo'), FX_OF('hall'),
+  { k: 'space', name: 'Its own reverb', sub: 'A room just for this zone: a long dark cave, a short boomy chamber', sl: [['space', 'Amount', 0, 1, 0.05, pct], ['spaceSize', 'Size', 0.5, 6, 0.1, v => `${v.toFixed(1)} s`], ['spaceDark', 'Darkness', 0, 1, 0.05, pct]] },
+  { k: 'width', name: 'Width', sub: 'Narrower and closer, or wider and more open', sl: [['width', 'Width', 0, 2, 0.05, v => v < 0.03 ? 'mono' : pct(v)]] },
+  { head: 'Texture' },
+  { k: 'lofi', name: 'Lo-fi', sub: 'Crunchy and old, like a broken radio', sl: [['lofi', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'ring', name: 'Ring mod', sub: 'Eerie, metallic and bell-like', sl: [['ring', 'Amount', 0, 1, 0.05, pct], ['ringHz', 'Tone', 30, 1200, 10, v => `${v} Hz`]] },
+  { head: 'On the beat' },
+  { k: 'pump', name: 'Pump', sub: 'Ducking on every beat, a driving pulse', sl: [['pump', 'Depth', 0, 1, 0.05, pct]] },
+  { k: 'stutter', name: 'Stutter', sub: 'Chopped into slices, the back of each one cut', sl: [['stutter', 'Depth', 0, 1, 0.05, pct], ['stutterGrid', 'Slices', 1, 2, 1, v => v >= 2 ? '16ths' : '8ths']] },
+  { head: 'Background' },
+  { k: 'rumble', name: 'Rumble', sub: 'A low rumble under the music', sl: [['rumble', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'air', name: 'Air', sub: 'A soft hiss: wind, steam, lava', sl: [['air', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'drips', name: 'Drips', sub: 'Water dropping here and there', sl: [['drips', 'How many', 0, 1, 0.05, pct]] },
+  { head: 'Behaviour' },
+  { k: 'tension', name: 'Tension', sub: 'Muffling as the monster closes in (in the game)', sl: [['tension', 'Amount', 0, 1, 0.05, pct]] },
+  { k: 'glide', name: 'Glide', sub: 'How fast this zone comes in as the player reaches it (off: a second)', sl: [['glide', 'Time', 0, 4, 0.1, v => v < 0.05 ? 'at once' : `${v.toFixed(1)} s`]] },
 ];
+const ZM_UI = [['vol', 'Volume', 0, 1.5, 0.05, pct], ['tone', 'Brightness', 0.2, 1, 0.02, pct]];
 function labFxRender() {
   const r = fxOf(LAB.track), src = srcOf(LAB.track);
   $('labSrc').hidden = $('labSrcHead').hidden = LAB.track === 'menu';
@@ -30565,18 +30699,19 @@ function stPos() {
   return x;
 }
 const stCurBar = () => STU.focus ?? Math.floor(stPos() / stBarLen() + 1e-6);
-function stStop() { if (STU.v) { for (const s of STU.v.srcs) try { s.stop(); } catch {} STU.v = null; } clearInterval(STU.timer); STU.timer = 0; }
+function stStop() { if (STU.zfx) STU.zfx.bedOut.gain.setTargetAtTime(0, SND.ctx.currentTime, 0.05); if (STU.v) { for (const s of STU.v.srcs) try { s.stop(); } catch {} STU.v = null; } clearInterval(STU.timer); STU.timer = 0; }
 function stStart(from) {
   const fi = stInfo(), c = SND.ctx; if (!fi || !c || !stReady()) return;
   stStop();
   const fsp = 60 / fi.bpm / 4, [L0, L1] = stLoopSecs(fi);
   if (!(from >= 0) || from >= L1 - 0.01 || (STU.loop && from < L0)) from = STU.loop ? L0 : 0;
   STU.k0 = Math.round(from / fsp); from = STU.k0 * fsp;
-  if (!STU.fx) { STU.zfx = makeFx(c, SND.out); STU.fx = makeFx(c, STU.zfx.in); STU.bus = c.createGain(); STU.bus.gain.value = FILE_VOL; STU.bus.connect(STU.fx.in); STU.send = c.createGain(); STU.send.gain.value = FILE_VOL; STU.send.connect(SND.verbIn); }
+  if (!STU.fx) { STU.zfx = makeZoneFx(c, SND.out); STU.fx = makeFx(c, STU.zfx.in); STU.bus = c.createGain(); STU.bus.gain.value = FILE_VOL; STU.bus.connect(STU.fx.in); STU.send = c.createGain(); STU.send.gain.value = FILE_VOL; STU.send.connect(SND.verbIn); }
   const r = fxOf(STU.track), zr = zoneOf(stZone()), zt = zoneTempo(zr); STU.rate = fxRate(r) * zt;
-  fxApply(STU.fx, r, fi.bpm * STU.rate); fxApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr, zt), c.currentTime);
+  fxApply(STU.fx, r, fi.bpm * STU.rate); zoneApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr, zt), c.currentTime);
+  STU.zfx.bedOut.gain.setTargetAtTime(1, c.currentTime, 0.05);
   STU.t0 = c.currentTime + 0.06; STU.from = from; STU.k = 0; STU.playing = true;
-  STU.v = trackVoice(STU.track, STU.t0, from, STU.rate, STU.bus, STU.send, { stems: true, loop: [L0, L1], solo: STU.solo }); STU.v.zone = stZone();
+  STU.v = trackVoice(STU.track, STU.t0, from, STU.rate, STU.bus, STU.send, { stems: true, loop: [L0, L1], solo: STU.solo }); STU.v.zone = stZone(); voiceMix(STU.v, STU.t0);
   stSched(); STU.timer = setInterval(stSched, 25);
 }
 function stSched() {   // the bars' on and off, and the added notes, a little ahead
@@ -30586,7 +30721,7 @@ function stSched() {   // the bars' on and off, and the added notes, a little ah
     let kk = STU.k0 + STU.k; if (kk >= z) kk = a + (kk - a) % (z - a);
     const t = STU.t0 + STU.k * sp, b = kk / 16 | 0, s = kk % 16;
     if (s === 0 || STU.k === 0) voiceBar(STU.v, b, t);
-    voiceStep(STU.v, b, s, t, sp); STU.k++;
+    voiceStep(STU.v, b, s, t, sp); if (STU.zfx) zoneBeat(STU.zfx, s, t, sp); STU.k++;
   }
 }
 function stPause() { if (STU.playing) { STU.from = stPos(); STU.playing = false; stStop(); } }
@@ -30597,7 +30732,7 @@ function stLive(restart) {   // a change heard at once while it plays
   const c = SND.ctx, fi = stInfo(), r = fxOf(STU.track), zr = zoneOf(stZone());
   if (Math.abs(fxRate(r) * zoneTempo(zr) - STU.rate) > 1e-9) return stStart(stPos());
   STU.v.solo = STU.solo; STU.v.zone = stZone(); voiceMix(STU.v, c.currentTime); voiceBar(STU.v, Math.floor(stPos() / stBarLen() + 1e-6), c.currentTime);
-  fxApply(STU.fx, r, fi.bpm * STU.rate); fxApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr), c.currentTime);
+  fxApply(STU.fx, r, fi.bpm * STU.rate); zoneApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr), c.currentTime);
 }
 // ---- the music: drawing it ----
 function stRows() {   // the arrangement's rows: the recorded parts, then the added instruments
@@ -30659,11 +30794,14 @@ function stStripRender() {
       <div class="stbtns"><button class="go" data-pact="notes">Write notes${bi ? ` (bar ${stCurBar() + 1})` : ''}</button><button data-pact="dup">Duplicate</button><button data-pact="clear">Clear all notes</button><button class="danger" data-pact="del">Remove</button></div></div>`;
   }
 }
-const fxRowsHTML = (list, r) => list.map(f => `<div class="fxrow${r.on[f.k] ? '' : ' off'}"><label class="fxhead"><span><b>${f.name}</b><small>${f.sub}</small></span><input type="checkbox" class="switch" data-on="${f.k}"${r.on[f.k] ? ' checked' : ''}></label>${f.sl.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, r[k], 'data-k')).join('')}</div>`).join('');
+const fxRowsHTML = (list, r) => list.map(f => f.head ? `<div class="ghead stzhead">${f.head}</div>` : `<div class="fxrow${r.on[f.k] ? '' : ' off'}"><label class="fxhead"><span><b>${f.name}</b><small>${f.sub}</small></span><input type="checkbox" class="switch" data-on="${f.k}"${r.on[f.k] ? ' checked' : ''}></label>${f.sl.map(([k, nm, mn, mx, st, fmt]) => sliderRow(k, nm, mn, mx, st, fmt, r[k], 'data-k')).join('')}</div>`).join('');
 function stFxRender() {
   $('stFx').innerHTML = fxRowsHTML(FX_UI, fxOf(STU.track));
   const z = stZone(); $('stZoneBox').hidden = !z;
-  if (z) { $('stZoneSum').textContent = `${ZONE_LABEL[z]} sound, over the gameplay track`; $('stZoneFx').innerHTML = fxRowsHTML(ZONE_UI, zoneOf(z)); }
+  if (z) {
+    const r = zoneOf(z); $('stZoneSum').textContent = `${ZONE_LABEL[z]} sound, over the gameplay track`;
+    $('stZoneFx').innerHTML = fxRowsHTML(ZONE_UI, r) + `<div class="ghead stzhead">Instruments in this zone</div>` + ST_STEMS.map(st => { const m = zoneMix(r, st); return `<div class="fxrow stfam" style="--fam:var(--f-${ST_FAMILY[st]})"><div class="fxhead"><span><b>${ST_NAMES[st]}</b><small>How loud and bright here (over the track's own mix)</small></span></div>${ZM_UI.map(([k, nm, mn, mx, sp2, fmt]) => sliderRow(k, nm, mn, mx, sp2, fmt, m[k], `data-zm="${st}" data-k`)).join('')}</div>`; }).join('');
+  }
 }
 // ---- the music: changing it ----
 function stSetBars(st, bars, on) { stEdit(() => { const e = stTrackEdit(), L = new Set(e.off[st] || []); for (const b of bars) on ? L.delete(b) : L.add(b); e.off[st] = [...L].sort((a, b) => a - b); }, true); stLive(); }
@@ -30750,6 +30888,7 @@ const stZoneSet = fn => { const z = stZone(), r = zoneOf(z); fn(r); (settings.mu
 $('stZoneFx').addEventListener('change', e => { const k = e.target.dataset.on; if (!k) return; stEdit(() => stZoneSet(r => { r.on[k] = e.target.checked; }), true); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); stLive(); });
 $('stZoneFx').addEventListener('input', e => {
   const k = e.target.dataset.k; if (!k) return;
+  if (e.target.dataset.zm) { const st = e.target.dataset.zm, v = +e.target.value; e.target.nextElementSibling.textContent = ZM_UI.find(x => x[0] === k)[5](v); stEdit(() => stZoneSet(r => { r.mix[st] = { ...zoneMix(r, st), [k]: v }; })); return stLive(); }
   const v = +e.target.value, f = ZONE_UI.flatMap(x => x.sl).find(x => x[0] === k); e.target.nextElementSibling.textContent = f[5](v);
   stEdit(() => stZoneSet(r => { r[k] = v; })); stLive();
 });
@@ -31041,7 +31180,12 @@ function stSummary() {
     const fx = fxSummary(n); if (audGet('musicFx', n) && fx !== 'no effects') bits.push(`sound: ${fx}`);
     if (bits.length) lines.push(`<li><b>${TRACK_NAMES[n]} music</b> ${esc(bits.join('; '))}</li>`);
   }
-  for (const z of ZONES) { const t = audGet('musicZones', z) && fxSummary(null, zoneOf(z)); if (t && t !== 'no effects') lines.push(`<li><b>${ZONE_LABEL[z]} zone</b> ${esc(t)}</li>`); }
+  for (const z of ZONES) {
+    if (!audGet('musicZones', z)) continue; const r = zoneOf(z);
+    const bits = ZONE_UI.filter(f => f.k && r.on[f.k]).map(f => `${f.name.toLowerCase()} ${f.sl.map(x => x[5](r[x[0]])).join(' ')}`);
+    for (const st of ST_STEMS) { const m = zoneMix(r, st); if (m.vol !== 1 || m.tone !== 1) bits.push(`${ST_NAMES[st].toLowerCase()} ${pct(m.vol)}${m.tone !== 1 ? `, brightness ${pct(m.tone)}` : ''}`); }
+    if (bits.length) lines.push(`<li><b>${ZONE_LABEL[z]} zone</b> ${esc(bits.join('; '))}</li>`);
+  }
   const fxTxt = sfxSettingsText(); if (fxTxt) for (const l of fxTxt.split('\n').slice(1)) lines.push(`<li>${esc(l.replace(/^- /, ''))}</li>`);
   for (const [n, e] of Object.entries({ ...(AUDIO_BAKED.studioSfx || {}), ...(settings.studioSfx || {}) })) if (e && e.add && e.add.length) lines.push(`<li><b>${esc(sfxLabel(n))}</b> ${e.add.length} added layer${e.add.length > 1 ? 's' : ''}: ${esc(e.add.map(L => kitName(L.inst)).join(', '))}</li>`);
   return lines;
@@ -32541,7 +32685,7 @@ try { if (sessionStorage.getItem('cr-after-reset')) { sessionStorage.removeItem(
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF, THR, STU, KIT, studioOf, stemsNeeded, AUDIO_BAKED, stExport, makeShift, shiftSet, zoneOf, get MF() { return MF; } };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF, THR, STU, KIT, studioOf, stemsNeeded, AUDIO_BAKED, stExport, makeShift, shiftSet, zoneOf, makeZoneFx, zoneApply, zoneBeat, get MF() { return MF; } };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
