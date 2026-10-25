@@ -462,7 +462,8 @@ for (const cfg of CONFIGS) {
     for (const f of fruit) {
       const fw = `${tag} fruit at ${(f.alt / 10).toFixed(0)} m`;
       const [L, R] = level.walls(f.alt);
-      if (f.x - PAD < L || f.x + PAD > R) fail('fruit is inside the shaft', fw);
+      const fp = pickR(f) + 2;   // (each pickup by its own size)
+      if (f.x - fp < L || f.x + fp > R) fail('fruit is inside the shaft', fw);
       for (const h of hz) {
         const top = h.type === 'pend' ? h.aAlt : h.hi;
         if (f.alt < h.lo || f.alt > top) continue;

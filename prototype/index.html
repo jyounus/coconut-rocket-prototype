@@ -2043,7 +2043,7 @@ let G = null;
 // pilot capsule touching the circle picks it up, and the hitbox overlay draws exactly these circles. SHOT_R is a chili
 // shot's hit circle. PICK_R is the largest pickup circle: the generator keeps every pickup this far plus the pilot's
 // half-width plus 15 from any hazard (RULES.pickup.clear), whichever kind it is.
-const CHILI_R = 18, COCO_R = 15, GOLD_R = 18, SHOT_R = 8;
+const CHILI_R = 18, COCO_R = 15, GOLD_R = 32, SHOT_R = 8;
 const PICK_R = Math.max(CHILI_R, COCO_R, GOLD_R);
 const pickR = f => f.kind === 'chili' ? CHILI_R : f.kind === 'gold' ? GOLD_R : COCO_R;
 // Layout rules. Units are world units: the shaft is 400 wide, 10 units = 1 m, and the widest
@@ -2732,7 +2732,8 @@ function createLevel(seed, opts) {
   // its reach at its most dangerous height; or out beside a fire wheel's sweep, through a bat's path, or just
   // above a gate's meeting point. They are off the main line, so some (RULES.goldChance) are golden.
   function trail(h, out) {
-    const hug = RULES.fruitHug, kind = hash2(placed, seed + 77) < RULES.goldChance ? 'gold' : 'coco', add = (x, a) => out.push({ x, alt: a, bonus: true, kind });
+    const hug = RULES.fruitHug, kind = hash2(placed, seed + 77) < RULES.goldChance ? 'gold' : 'coco';
+    const add = (x, a) => { const [l, r] = walls(a), fits = x - GOLD_R - 2 >= l && x + GOLD_R + 2 <= r; out.push({ x, alt: a, bonus: true, kind: kind === 'gold' && !fits ? 'coco' : kind }); };   // (a big coin too near a wall stays a plain one)
     if (h.type === 'firebar') { const [L, R] = opening(h.lo, h.hi), side = h.cx - L > R - h.cx ? -1 : 1; add(h.cx + side * (h.len + h.br * 1.08 + hug), h.alt); return; }
     if (h.type === 'boulder') return;
     if (h.type === 'gate') { add(h.mid, h.hi + 40); return; }
@@ -6703,7 +6704,7 @@ function h3Glow(x, y, r, col, a) {   // an additive soft light
 // form from gradients, darker same-hue edges, lit tops, small highlights and additive light; nothing outlined in black.
 // Contract: the caller has translated to the item's centre and scaled world -> screen, so everything is drawn in world
 // units around (0, 0). Deterministic from t / ph / age / prog. Solid art (everything not drawn with 'lighter') stays
-// inside CHILI_R = 18, COCO_R = 15 (golden: GOLD_R = 18) and SHOT_R = 8, bob and sway included.
+// inside CHILI_R = 18, COCO_R = 15 (golden: GOLD_R = 32) and SHOT_R = 8, bob and sway included.
 
 // A red-hot chili: a glossy curled pod with a green cap and curly stem, licked by little flames and rising embers,
 // in a warm halo. It bobs and sways gently.
@@ -6799,7 +6800,7 @@ function drawChiliArt(c, t, ph) {
 }
 
 // A coconut coin: polished gold with a raised rim and a coconut palm struck on its face (coconuts under its crown),
-// spinning as it bobs in a warm halo. The big one (golden) is a touch bigger (GOLD_R / COCO_R),
+// spinning as it bobs in a warm halo. The big one (golden) is more than twice the size (GOLD_R / COCO_R),
 // with a beaded rim, slow rays round it, a sweep of shine and twinkling sparkles. Borderless: the rim and the struck
 // coconut are shaped by light and darker gold, never an outline.
 const COIN_R = 13.0, COIN_RIM = 2.2;   // face radius, rim width (as the 3D coin)
@@ -6902,7 +6903,7 @@ const COIN_SHEET = { img: null, ok: false, frames: 96, cols: 16, cell: 112, span
 (() => { const im = new Image(); im.onload = () => { COIN_SHEET.ok = true; }; im.src = 'art/coins.png?v=7b648003'; COIN_SHEET.img = im; })();
 const COIN_SPIN = 0.75;   // turns a second
 function drawCoconutArt(c, t, ph, golden) {
-  const bob = Math.sin(t * 3 + ph) * 0.8, k = golden ? 1.2 : 1, S = COIN_SHEET;
+  const bob = Math.sin(t * 3 + ph) * 0.8, k = golden ? 2.4 : 1, S = COIN_SHEET;   // (the big coin: twice the 1.2 it was, GOLD_R = 13 × 2.4 + its bob)
   c.save(); c.translate(0, bob); c.scale(k, k);
   coinHalo(c, t, ph, golden);
   if (S.ok) {
