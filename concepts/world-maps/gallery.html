@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>Map gallery</title>
+<style>body{margin:0;background:#151019;color:#eee;font:12px system-ui}#g{display:flex;flex-wrap:wrap;gap:10px;padding:10px;align-items:flex-start}figure{margin:0}figcaption{padding:4px}canvas{display:block;border-radius:8px}</style>
+<div id="g"></div>
+<script src="maps/kit.js"></script><script src="maps/levels.js"></script>
+<script>
+// ?only=key[,key]&t=0.5,3,6 renders the 360x720 phone view at each time; &full=1 renders the whole map once (t=first)
+const FILES = ['palm', 'island', 'strata', 'parchment', 'pages'];
+const q = new URLSearchParams(location.search), only = q.get('only'), T = (q.get('t') || '1').split(',').map(Number), full = q.get('full');
+let n = 0; for (const f of FILES) { const s = document.createElement('script'); s.src = 'maps/' + f + '.js'; s.onload = s.onerror = () => { if (++n === FILES.length) setTimeout(go, 300); }; document.head.appendChild(s); }
+function view(M, ctx, t, vw, vh) { const cam = M.camera(t); ctx.save(); ctx.beginPath(); ctx.rect(0, 0, vw, vh); ctx.clip(); ctx.translate(-cam.x, -cam.y); M.draw(ctx, t, { x: cam.x, y: cam.y, w: vw, h: vh }); ctx.restore(); }
+function go() {
+  for (const [k, M] of Object.entries(PV.maps)) {
+    if (only && !only.split(',').includes(k)) continue;
+    const list = full ? [T[0]] : T;
+    for (const t of list) {
+      const w = full ? M.W : 360, h = full ? M.H : 720, dpr = full ? 1 : 2, c = document.createElement('canvas');
+      c.width = w * dpr; c.height = h * dpr; c.style.width = w + 'px'; c.style.height = h + 'px';
+      const ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+      try { full ? M.draw(ctx, t, { x: 0, y: 0, w: M.W, h: M.H }) : view(M, ctx, t, w, h); } catch (e) { ctx.fillStyle = '#f33'; ctx.font = '16px monospace'; ctx.fillText(String(e.message).slice(0, 44), 8, 30); console.error(e); }
+      const fig = document.createElement('figure'); fig.append(c); const cap = document.createElement('figcaption'); cap.textContent = `${k} t=${t}${full ? ' full ' + M.W + 'x' + M.H : ''}`; fig.append(cap); g.append(fig);
+    }
+  }
+}
+</script>
