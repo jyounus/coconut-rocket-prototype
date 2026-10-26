@@ -4145,7 +4145,7 @@ const AUDIO_BAKED = {   // the owner's studio export of 2026-10-26
   thrust: {"vol":0.1,"from":400,"to":3200,"sweep":0.45,"width":0.4,"air":0.36,"roar":1,"roarTone":60,"crackle":0.38,"attack":0.08,"release":0.35},
 };
 // (2026-10-25: Caves and Magma stopped being tracks of their own: every zone plays the gameplay track with its own zone
-// sound over it, see zoneOf; their old edits saved on this device are dropped once)
+// sound over it, see zoneSound; their old edits saved on this device are dropped once)
 if (settings.cavesMagmaAsJungle !== 1) {
   for (const k of ['musicFx', 'studioMusic', 'leads']) if (settings[k]) { delete settings[k].caves; delete settings[k].magma; }
   settings.cavesMagmaAsJungle = 1; store.set('cr-settings', settings);
@@ -4201,7 +4201,7 @@ function mfKeep(want) {
   if (want) voiceLoad(want);
   if (want === 'menu' && voiceKeys('menu').every(k => MF.bufs[k])) { voiceLoad(GAME_TRACK); zoneWarm(); }
 }
-function zoneWarm() { const c = SND.ctx; for (const z of ZONES) { const r = zoneOf(z); if (r.on.space) spaceIR(c, r.spaceSize, r.spaceDark); } }
+function zoneWarm() { const c = SND.ctx; for (const z of ZONES) { const r = zoneSound(z); if (r.on.space) spaceIR(c, r.spaceSize, r.spaceDark); } }
 mfInfo();   // (fetch the track list, and with it the menu's file, as the page opens)
 // ---- the music's live effects (tuned per track in the music lab, and played the same way in the game) ----
 // Each track has a recipe: which recording it plays (its own, or another track's), a pitch shift and a few effects,
@@ -4232,7 +4232,7 @@ const ZONE_EXTRA = { cut: 0.3, focus: 6, focusAt: 0.5, sweep: 0.6, sweepEvery: 4
   pump: 0.5, stutter: 0.7, stutterGrid: 2, rumble: 0.4, air: 0.3, drips: 0.4, tension: 0.6, glide: 1, mix: {} };
 const ZONE_DEFAULT = { ...FX_DEFAULT, tempo: 0, pitch: 0, ...ZONE_EXTRA,
   on: { ...FX_DEFAULT.on, tempo: false, ...Object.fromEntries(['cut', 'focus', 'sweep', 'phaser', 'flanger', 'ring', 'lofi', 'trem', 'pan', 'width', 'space', 'pump', 'stutter', 'rumble', 'air', 'drips', 'tension', 'glide'].map(k => [k, false])) } };
-function zoneOf(z) { const u = (z && audGet('musicZones', z)) || {}; return { ...ZONE_DEFAULT, ...u, on: { ...ZONE_DEFAULT.on, ...(u.on || {}) }, mix: { ...(u.mix || {}) } }; }
+function zoneSound(z) { const u = (z && audGet('musicZones', z)) || {}; return { ...ZONE_DEFAULT, ...u, on: { ...ZONE_DEFAULT.on, ...(u.on || {}) }, mix: { ...(u.mix || {}) } }; }
 const zoneGlide = r => r.on.glide ? r.glide : 1;   // (seconds a zone's sound takes to come in)
 const zoneMix = (r, st) => ({ vol: 1, tone: 1, ...((r && r.mix && r.mix[st]) || {}) });
 const zoneTempo = r => r.on.tempo ? 1 + r.tempo / 100 : 1;
@@ -4445,7 +4445,7 @@ function stemStrip(c, bus, send) {
 }
 function voiceMix(V, t, tc = 0.02) {   // each stem's level, brightness, pan and hall (and whether it's heard at all), with the zone's mix over it
   if (!V.stems) return;
-  const zr = V.zone && V.name === GAME_TRACK ? zoneOf(V.zone) : null;
+  const zr = V.zone && V.name === GAME_TRACK ? zoneSound(V.zone) : null;
   for (const [st, S] of Object.entries(V.stems)) {
     const m = stMix(V.name, st), zm = zoneMix(zr, st), heard = m.on && (!V.solo || V.solo === st);
     S.vol.gain.setTargetAtTime(heard ? m.vol * zm.vol : 0, t, tc); S.lp.frequency.setTargetAtTime(toneHz(Math.min(m.tone, zm.tone)), t, tc);
@@ -4537,7 +4537,7 @@ function schedMusic() {
     SND.quick = false;
     if (want) {
       const from = srcOf(want), keys = voiceKeys(want), fi = MF.info && keys.every(k => MF.bufs[k]) && MF.info[from], synth = TRACKS[want], fx = fxOf(want);
-      const zr = want === GAME_TRACK ? zoneOf(SND.zone) : null, zt = fi && zr ? zoneTempo(zr) : 1, rate = fi ? fxRate(fx) * zt : 1;
+      const zr = want === GAME_TRACK ? zoneSound(SND.zone) : null, zt = fi && zr ? zoneTempo(zr) : 1, rate = fi ? fxRate(fx) * zt : 1;
       const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
       const zfx = zr ? makeZoneFx(c, SND.music) : null, chain = makeFx(c, zfx ? zfx.in : SND.music); fxApply(chain, fx, tr.bpm); bus.connect(chain.in); send.connect(SND.verbIn);
@@ -4572,8 +4572,8 @@ function schedMusic() {
 // notes and the danger layer stay together) with the pitch shift following, and its own added instruments come in
 function zoneStep(p, now) {
   const z = SND.zone || ZONES[0], at = Math.max(p.next, now);
-  if (p.zone !== z) { const r = zoneOf(z), gl = zoneGlide(r); p.zone = z; p.zt = p.v ? zoneTempo(r) : 1; p.zp = r.on.pitch ? r.pitch : 0; p.zg = gl; zoneApply(p.zfx, r, p.tr.bpm, at, Math.max(0.01, gl / 3)); if (p.v) { p.v.zone = z; voiceMix(p.v, at, Math.max(0.01, gl / 3)); } }
-  if (p.zp == null) { const r = zoneOf(z); p.zp = r.on.pitch ? r.pitch : 0; }
+  if (p.zone !== z) { const r = zoneSound(z), gl = zoneGlide(r); p.zone = z; p.zt = p.v ? zoneTempo(r) : 1; p.zp = r.on.pitch ? r.pitch : 0; p.zg = gl; zoneApply(p.zfx, r, p.tr.bpm, at, Math.max(0.01, gl / 3)); if (p.v) { p.v.zone = z; voiceMix(p.v, at, Math.max(0.01, gl / 3)); } }
+  if (p.zp == null) { const r = zoneSound(z); p.zp = r.on.pitch ? r.pitch : 0; }
   if (p.zr !== p.zt) {
     const stp = 0.0125 / Math.max(0.05, p.zg ?? 1);   // (a 10% change over the zone's glide, a step at a time)
     p.zr = Math.abs(p.zt - p.zr) <= stp ? p.zt : p.zr + Math.sign(p.zt - p.zr) * stp;
@@ -4751,7 +4751,7 @@ function sfFile(name, o) {
 // the key the music is in now (or the zone being entered), as a playback rate
 function sfKeyRate(o) {
   const tr = o.track || (o.z != null ? GAME_TRACK : SND.track || 'menu'), from = srcOf(tr);
-  const zr = tr === GAME_TRACK ? zoneOf(o.z != null ? ZONES[o.z] : SND.zone) : null;   // (a zone's pitch moves the key)
+  const zr = tr === GAME_TRACK ? zoneSound(o.z != null ? ZONES[o.z] : SND.zone) : null;   // (a zone's pitch moves the key)
   return Math.pow(2, ((KEY_TR[from] || 0) + (zr && zr.on.pitch ? zr.pitch : 0)) / 12) * fxRate(fxOf(tr));
 }
 // Each effect can be shaped in the debug effects lab (saved in the settings, used in the game): its volume, pitch,
@@ -29937,13 +29937,18 @@ let last = performance.now(), paused = false;
 // never freeze the game. dt is clamped to [0, 33 ms]: a timestamp that runs backwards (tab switches, some
 // browsers' first frame) never steps the clocks back.
 let frameErrs = 0;
+let PROF = null;   // (debug: each frame's update, audio and drawing times, ms)
 function frame(ts) {
   requestAnimationFrame(frame);
   const dt = clamp((ts - last) / 1000, 0, 0.033) || 0; last = Math.max(last, ts);
   try {
+    const p0 = PROF && performance.now();
     if (!paused) update(dt);
+    const p1 = PROF && performance.now();
     audioTick(dt);
+    const p2 = PROF && performance.now();
     draw();
+    if (PROF) { const p3 = performance.now(); PROF.push([Math.round(ts), +(p1 - p0).toFixed(1), +(p2 - p1).toFixed(1), +(p3 - p2).toFixed(1)]); }
     if (G && currentScreen === null) updateHud();
     const tt = Math.max(0, ts / 1000);
     if (currentScreen === 'pilotScreen') { const pv = $('pilotPreview'); if (fitCanvas(pv)) drawPilotThumb(pv, shownPair(), tt, true, { ax: 0.74, ay: 0.5, pad: 0.86 }); (pickTab === 'char' ? charCards : vehCards).forEach((cv, i) => drawPilotThumb(cv, cardPair(pickTab, i), tt + i * 0.37, false)); }
@@ -30714,7 +30719,7 @@ function stStart(from) {
   if (!(from >= 0) || from >= L1 - 0.01 || (STU.loop && from < L0)) from = STU.loop ? L0 : 0;
   STU.k0 = Math.round(from / fsp); from = STU.k0 * fsp;
   if (!STU.fx) { STU.zfx = makeZoneFx(c, SND.out); STU.fx = makeFx(c, STU.zfx.in); STU.bus = c.createGain(); STU.bus.gain.value = FILE_VOL; STU.bus.connect(STU.fx.in); STU.send = c.createGain(); STU.send.gain.value = FILE_VOL; STU.send.connect(SND.verbIn); }
-  const r = fxOf(STU.track), zr = zoneOf(stZone()), zt = zoneTempo(zr); STU.rate = fxRate(r) * zt;
+  const r = fxOf(STU.track), zr = zoneSound(stZone()), zt = zoneTempo(zr); STU.rate = fxRate(r) * zt;
   fxApply(STU.fx, r, fi.bpm * STU.rate); zoneApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr, zt), c.currentTime);
   STU.zfx.bedOut.gain.setTargetAtTime(1, c.currentTime, 0.05);
   STU.t0 = c.currentTime + 0.06; STU.from = from; STU.k = 0; STU.playing = true;
@@ -30736,7 +30741,7 @@ function stJump(sec) { if (STU.playing) stStart(sec); else STU.from = sec; }
 function stLive(restart) {   // a change heard at once while it plays
   if (!STU.v || !STU.playing) return;
   if (restart) return stStart(stPos());
-  const c = SND.ctx, fi = stInfo(), r = fxOf(STU.track), zr = zoneOf(stZone());
+  const c = SND.ctx, fi = stInfo(), r = fxOf(STU.track), zr = zoneSound(stZone());
   if (Math.abs(fxRate(r) * zoneTempo(zr) - STU.rate) > 1e-9) return stStart(stPos());
   STU.v.solo = STU.solo; STU.v.zone = stZone(); voiceMix(STU.v, c.currentTime); voiceBar(STU.v, Math.floor(stPos() / stBarLen() + 1e-6), c.currentTime);
   fxApply(STU.fx, r, fi.bpm * STU.rate); zoneApply(STU.zfx, zr, fi.bpm * STU.rate); shiftSet(STU.zfx.shift, zoneShift(zr), c.currentTime);
@@ -30806,7 +30811,7 @@ function stFxRender() {
   $('stFx').innerHTML = fxRowsHTML(FX_UI, fxOf(STU.track));
   const z = stZone(); $('stZoneBox').hidden = !z;
   if (z) {
-    const r = zoneOf(z); $('stZoneSum').textContent = `${ZONE_LABEL[z]} sound, over the gameplay track`;
+    const r = zoneSound(z); $('stZoneSum').textContent = `${ZONE_LABEL[z]} sound, over the gameplay track`;
     $('stZoneFx').innerHTML = fxRowsHTML(ZONE_UI, r) + `<div class="ghead stzhead">Instruments in this zone</div>` + ST_STEMS.map(st => { const m = zoneMix(r, st); return `<div class="fxrow stfam" style="--fam:var(--f-${ST_FAMILY[st]})"><div class="fxhead"><span><b>${ST_NAMES[st]}</b><small>How loud and bright here (over the track's own mix)</small></span></div>${ZM_UI.map(([k, nm, mn, mx, sp2, fmt]) => sliderRow(k, nm, mn, mx, sp2, fmt, m[k], `data-zm="${st}" data-k`)).join('')}</div>`; }).join('');
   }
 }
@@ -30891,7 +30896,7 @@ $('stZones').addEventListener('click', e => {
   const P = stPart(STU.sel); if (P && P.zone && P.zone !== STU.zone) STU.sel = 'strings';
   stLive(true); stMusicRender();
 });
-const stZoneSet = fn => { const z = stZone(), r = zoneOf(z); fn(r); (settings.musicZones || (settings.musicZones = {}))[z] = r; };
+const stZoneSet = fn => { const z = stZone(), r = zoneSound(z); fn(r); (settings.musicZones || (settings.musicZones = {}))[z] = r; };
 $('stZoneFx').addEventListener('change', e => { const k = e.target.dataset.on; if (!k) return; stEdit(() => stZoneSet(r => { r.on[k] = e.target.checked; }), true); e.target.closest('.fxrow').classList.toggle('off', !e.target.checked); stLive(); });
 $('stZoneFx').addEventListener('input', e => {
   const k = e.target.dataset.k; if (!k) return;
@@ -31188,7 +31193,7 @@ function stSummary() {
     if (bits.length) lines.push(`<li><b>${TRACK_NAMES[n]} music</b> ${esc(bits.join('; '))}</li>`);
   }
   for (const z of ZONES) {
-    if (!audGet('musicZones', z)) continue; const r = zoneOf(z);
+    if (!audGet('musicZones', z)) continue; const r = zoneSound(z);
     const bits = ZONE_UI.filter(f => f.k && r.on[f.k]).map(f => `${f.name.toLowerCase()} ${f.sl.map(x => x[5](r[x[0]])).join(' ')}`);
     for (const st of ST_STEMS) { const m = zoneMix(r, st); if (m.vol !== 1 || m.tone !== 1) bits.push(`${ST_NAMES[st].toLowerCase()} ${pct(m.vol)}${m.tone !== 1 ? `, brightness ${pct(m.tone)}` : ''}`); }
     if (bits.length) lines.push(`<li><b>${ZONE_LABEL[z]} zone</b> ${esc(bits.join('; '))}</li>`);
@@ -32692,7 +32697,7 @@ try { if (sessionStorage.getItem('cr-after-reset')) { sessionStorage.removeItem(
 newRun(true); G.state = 'ready';
 requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
-if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF, THR, STU, KIT, studioOf, stemsNeeded, AUDIO_BAKED, stExport, makeShift, shiftSet, zoneOf, makeZoneFx, zoneApply, zoneBeat, get MF() { return MF; } };
+if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF, THR, STU, KIT, studioOf, stemsNeeded, AUDIO_BAKED, stExport, makeShift, shiftSet, zoneSound, makeZoneFx, zoneApply, zoneBeat, startProf() { PROF = []; }, stopProf() { const p = PROF; PROF = null; return p; }, get MF() { return MF; } };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow };
 })();
 </script>
