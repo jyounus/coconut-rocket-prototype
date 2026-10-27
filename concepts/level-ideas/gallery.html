@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>Preview gallery</title>
+<style>body{margin:0;background:#151019;color:#eee;font:12px system-ui}#g{display:flex;flex-wrap:wrap;gap:10px;padding:10px}figure{margin:0}figcaption{padding:4px}canvas{display:block;border-radius:8px}</style>
+<div id="g"></div>
+<script src="previews/kit.js"></script>
+<script>
+const FILES = ['sea','machine','play','night','nature'];
+const q = new URLSearchParams(location.search), only = q.get('only'), T = q.get('t'), Z = +q.get('z') || 1;
+let loaded = 0;
+for (const f of FILES) { const s = document.createElement('script'); s.src = 'previews/' + f + '.js'; s.onload = s.onerror = () => { if (++loaded === FILES.length) go(); }; document.head.appendChild(s); }
+function go() {
+  const items = [...Object.entries(PV.sections).map(([k, fn]) => ['section', k, fn, 270, 480]), ]
+    .filter(([, k]) => !only || only.split(',').includes(k));
+  const live = [];
+  for (const [kind, k, fn, w, h] of items) {
+    const fig = document.createElement('figure'), c = document.createElement('canvas'), dpr = 2 * Z;
+    c.width = w * dpr; c.height = h * dpr; c.style.width = w * Z + 'px'; c.style.height = h * Z + 'px';
+    fig.append(c); const cap = document.createElement('figcaption'); cap.textContent = kind + ': ' + k; fig.append(cap); g.append(fig);
+    const ctx = c.getContext('2d');
+    const draw = t => { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); try { fn(ctx, w, h, t); } catch (e) { ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle = '#f33'; ctx.font = '24px monospace'; ctx.fillText(String(e.message).slice(0, 40), 10, 40); console.error(k, e); } };
+    if (T != null) T.split(',').forEach((tt, i) => { if (i === 0) draw(+tt); else { const c2 = c.cloneNode(); fig.insertBefore(c2, cap); const x2 = c2.getContext('2d'); x2.setTransform(dpr,0,0,dpr,0,0); fn(x2, w, h, +tt); } });
+    else live.push(draw);
+  }
+  if (live.length) { const t0 = performance.now(); const loop = n => { const t = (n - t0) / 1000; live.forEach(d => d(t)); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+}
+</script>
