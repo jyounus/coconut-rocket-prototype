@@ -1029,6 +1029,438 @@ for (const st of ADVENTURE.stages) if (!(st.reward > 0 && st.target > 0)) fail('
 if (ADVENTURE.stages.length !== 5 || !ADVENTURE.stages[4].boss) fail('World 1 has four stages and the boss', '');
 const advSummary = () => `PASS: adventure: ${advStats.levels} stage shafts (${ADVENTURE.stages.length} stages × 150 seeds) stay jungle, ${advStats.forks} forks: tight lane ${advStats.tightMin.toFixed(1)}+ and wide lane ${advStats.wideMin.toFixed(1)}+ (widest pilot ${PILOT_W.toFixed(1)} + grab band ${GRAB.band}), no hazard inside, pickups ${advStats.pickClear.toFixed(1)}+ from the pillar, limbs ${advStats.limbGap.toFixed(0)}+ from it; chili line in both lanes ${advStats.chiliGap.toFixed(0)} or less (boss shaft ${advStats.bossChiliGap.toFixed(0)}), coconut value tight ${advStats.tightVal} vs wide ${advStats.wideVal} with ${advStats.golds} golden; hazards end ${advStats.finishClear.toFixed(0)}+ below the finish. Real stages: ${advStats.real.join('; ')}`;
 
+// ---------- Adventure: the Sunken Temple (island level 4), an authored stage with its own traps ----------
+// Its own copy of the generator code, so its checks never disturb the shafts above. Every rule is checked on the
+// stage's layout as the game builds it (and on 12 other seeds, which only move phases and looks), then every trap and
+// every golden idol is flown by a time-space search for the widest pilot (a capsule as wide and as tall as the widest
+// pilot hitbox, plus a margin) on the traps' own clocks with no holds, from 6 start phases.
+const TM = new Function(regions.join('\n') + '\nreturn { createTempleLevel, templeShapes, templeDanger, templeEnd, TEMPLE, TEMPLE_STAGE, TEMPLE_TYPES, ADV_TEMPLE, RULES, advSeed, shapeDist, jetState, totemState, axeGeom, gateK, gatePhase, gatePeriod, laneSize, pickR, IDOL_R, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const templeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, idols: 0, pick: Infinity, bonus: Infinity, minW: Infinity, slope: 0, jetLane: Infinity, totemLane: Infinity, len: 0, kinds: {} };
+{
+  const T = TM.TEMPLE, R = TM.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, HUGc = Math.ceil(TM.laneSize().w / 2 + 6 + TM.COCO_R);
+  const st0 = TM.ADV_TEMPLE;
+  if (st0.theme !== 'temple' || !(st0.reward > 0)) fail('the Sunken Temple is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'idols' && g.n === 3)) fail('the temple has three missions: the treasure chamber, 3 golden idols and one more', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * TM.UNITS_PER_M - TM.templeEnd()) > 1e-6) fail('the temple stage length matches its layout', `${st0.len}`);
+  // the stage's order: every trap kind is taught alone (its first beat is a single trap, slower than any later one)
+  {
+    const firsts = {}, seenKinds = [];
+    for (const sec of TM.TEMPLE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const base = kind.replace(/Pair|Stack/, '');
+      if (!firsts[base]) { firsts[base] = { kind, o, sec: sec.name }; seenKinds.push(base); if (kind !== base) fail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else { const f = firsts[base].o, slower = base === 'axe' || base === 'jet' ? (o.P || 9) <= f.P : (o.open || 9) <= (f.open || 9); if (!slower) fail('a trap is never slower than its introduction', `${kind} in ${sec.name}`); }
+    }
+    if (seenKinds.join() !== 'axe,totem,jet,ram') fail('the temple teaches the axe, then darts, then jets, then rams', seenKinds.join());
+    if (!TM.TEMPLE_STAGE.some(sec => sec.calm && !sec.finish && sec !== TM.TEMPLE_STAGE[0])) fail('the temple has a breather chamber', '');
+    if (!TM.TEMPLE_STAGE[TM.TEMPLE_STAGE.length - 1].finish) fail('the temple ends in the treasure chamber', '');
+  }
+  const capHit = (S, x, a, m) => {   // the pilot capsule at (x, a) against shapes S
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (TM.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // A breadth-first search through (x, height, time): the pilot climbs at most 440, sinks at most 380 and slides at
+  // most 330 units per second, waiting where it likes. Reach `goal(x, a)` within 9 s, starting at x0, a0 at time t0.
+  function fly(level, traps, x0, a0, t0, goal, lo, hi) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 9 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) TM.templeShapes(h, t, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const xi = Math.floor(k / 1000), ai = k % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const key = nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 12; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = TM.createTempleLevel(TM.advSeed(st), st), hz = [], fr = [];
+    templeStats.seeds++;
+    // nothing pops in on screen: everything is handed over before it comes within a screen (1100) of the camera
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('temple traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('temple pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    templeStats.len = level.end / 10;
+    for (const h of hz) if (!TM.TEMPLE_TYPES.has(h.type)) fail('the temple only has its own traps (no jungle hazards)', h.type);
+    for (const h of hz) templeStats.kinds[h.type] = (templeStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    if (hz.some(h => h.hi > level.end - 320)) fail('the treasure chamber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    // the shaft: never narrower than minWidth, never stepping in faster than maxWallSlope
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      templeStats.minW = Math.min(templeStats.minW, r - l); templeStats.slope = Math.max(templeStats.slope, l2 - l, r - r2);
+    }
+    if (templeStats.minW < R.minWidth) fail('the temple shaft is never narrower than minWidth', templeStats.minW.toFixed(1));
+    if (templeStats.slope > R.maxWallSlope) fail('the temple walls never step in faster than maxWallSlope', templeStats.slope.toFixed(2));
+    // static lanes: a jet's flame and a totem's head always leave a lane of minLane; a ram leaves its slot
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt);
+      if (h.type === 'jet') { const lane = r - l - h.len; templeStats.jetLane = Math.min(templeStats.jetLane, lane); if (lane < R.minLane) fail('a fire jet leaves a lane of minLane', `${lane.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'totem') {
+        let L0 = l, R0 = r; for (const q of TM.templeShapes(h, 0, -999, []).slice(0, 4)) { const x0 = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, x1 = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; if (h.side > 0) L0 = Math.max(L0, x1); else R0 = Math.min(R0, x0); }
+        templeStats.totemLane = Math.min(templeStats.totemLane, R0 - L0); if (R0 - L0 < R.minLane) fail('a dart totem leaves a lane of minLane beside its head', `${(R0 - L0).toFixed(1)}`);
+        // its darts fly straight across at its own height (never from below), and stick in the far wall
+        for (let u = 0; u < 4; u += 0.05) for (const q of TM.totemState(h, u).darts) if (Math.abs(q.a - h.lane) > 8 || (h.side > 0 ? q.x > h.farX + 0.01 : q.x < h.farX - 0.01)) fail('totem darts fly straight across and stop at the far wall', `${q.a} ${q.x}`);
+      }
+      if (h.type === 'ram') { const S = TM.templeDanger(h), lft = Math.max(h.lb, ...S.filter(q => q.x0 < h.mid).map(q => q.x1)), rgt = Math.min(h.rb, ...S.filter(q => q.x1 > h.mid).map(q => q.x0)); if (rgt - lft < R.crusher.slot - 0.01) fail('a stone ram fully out always leaves the crusher slot', `${(rgt - lft).toFixed(1)}`); }
+    }
+    // facing jets alternate: never both alight at once
+    const jets = hz.filter(h => h.type === 'jet');
+    for (const a of jets) for (const b of jets) if (a !== b && a.side !== b.side && Math.abs(a.alt - b.alt) < 120) for (let t = 0; t < 2 * a.P; t += 0.02) if (TM.jetState(a, t).ext > 0 && TM.jetState(b, t).ext > 0) { fail('facing fire jets are never both alight', `${a.alt}/${b.alt} at ${t.toFixed(2)}`); break; }
+    // pickups: inside the walls, apart, and clear of every trap's whole reach (racing-line ones: the hug distance)
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = TM.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('temple pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.kind === 'idol') continue;
+      let d = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && (h.aAlt ?? h.hi) + 220 > f.alt) for (const q of TM.templeDanger(h)) d = Math.min(d, TM.shapeDist(q, f.x, f.alt));
+      if (f.bonus || f.kind === 'gold') { templeStats.bonus = Math.min(templeStats.bonus, d); if (d < HUGc - 0.5) fail('temple racing-line pickups keep the hug distance from every trap', `${f.kind} at ${f.alt | 0}: ${d.toFixed(1)}`); }
+      else { templeStats.pick = Math.min(templeStats.pick, d); if (d < R.pickup.clear - 0.5) fail('temple pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${d.toFixed(1)}`); }
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < TM.pickR(fr[i]) + TM.pickR(fr[j]) + TM.PICK_GAP - 0.01) fail('temple pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'idol').length !== 3) fail('the temple holds exactly 3 golden idols', `${fr.filter(f => f.kind === 'idol').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the temple keeps a chili line', `${gap | 0}`);
+    if (k > 3) continue;   // (the searches run on the stage itself and three more seeds)
+    // every beat flown by the widest pilot from below to above, from 6 start phases
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.aAlt ?? h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && (h.aAlt ?? h.hi) > lo - 60);
+      templeStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        templeStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every temple trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else templeStats.worst = Math.max(templeStats.worst, tm);
+      }
+    }
+    // every golden idol can be reached (touched) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'idol')) {
+      const lo = f.alt - 260, hi = f.alt + 160, traps = hz.filter(h => h.lo < hi + 60 && (h.aAlt ?? h.hi) > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        templeStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => Math.hypot(x - f.x, a - f.alt) < TM.IDOL_R + W / 2 - 4, lo, hi);
+        if (tm < 0) fail('every golden idol can be reached by the widest pilot', `idol at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      templeStats.idols++;
+    }
+  }
+}
+const templeSummary = () => `PASS: Sunken Temple: ${templeStats.seeds} layouts × ${templeStats.len} m, only its own traps (${Object.entries(templeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${templeStats.minW.toFixed(0)}+ wide with steps of slope ${templeStats.slope.toFixed(2)} (max ${TM.RULES.maxWallSlope}); jet lanes ${templeStats.jetLane.toFixed(0)}+, totem lanes ${templeStats.totemLane.toFixed(0)}+ (minLane ${TM.RULES.minLane}), facing jets never both alight, darts straight across; pickups ${templeStats.pick.toFixed(1)}+ from any trap's reach (racing line ${templeStats.bonus.toFixed(1)}+), nothing pops in; ${templeStats.traps} beats and ${templeStats.idols} idols flown by the widest pilot (${PILOT_W.toFixed(1)} × ${PILOT_H.toFixed(1)} + 4) in ${templeStats.searches} searches from 6 phases each, the slowest pass ${templeStats.worst.toFixed(1)} s`;
+
+
+// ---------- Adventure: the Honeycomb Hive (island level 5), an authored stage with its own traps ----------
+// As the temple's checks: every rule on the stage's layout as the game builds it (and on 12 other seeds), then every beat
+// flown by a time-space search for the widest pilot on the traps' own clocks with no holds, from 6 start phases: once
+// where only what kills blocks it (every beat passable), and once with the honey blocking too (the clean line of the
+// "never stuck in honey" mission always exists). Every golden honey pot is reached the same way.
+const HV = new Function(regions.join('\n') + '\nreturn { createHiveLevel, hiveShapes, hiveDanger, hiveEnd, HIVE, HIVE_STAGE, HIVE_TYPES, ADV_HIVE, RULES, advSeed, shapeDist, beeState, dripState, guardPos, beeLoop, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const hiveStats = { seeds: 0, traps: 0, searches: 0, worst: 0, clean: 0, pots: 0, pick: Infinity, bonus: Infinity, minW: Infinity, slope: 0, dripLane: Infinity, honeyLane: Infinity, len: 0, kinds: {} };
+{
+  const R = HV.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, HUGc = Math.ceil(HV.laneSize().w / 2 + 6 + HV.COCO_R);
+  const st0 = HV.ADV_HIVE;
+  if (st0.theme !== 'hive' || !(st0.reward > 0)) fail('the Honeycomb Hive is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'pots' && g.n === 3) || !st0.goals.some(g => g.k === 'noSticky')) fail('the hive has three missions: the royal chamber, 3 honey pots and never stuck in honey', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * HV.UNITS_PER_M - HV.hiveEnd()) > 1e-6) fail('the hive stage length matches its layout', `${st0.len}`);
+  // the stage's order: every trap kind is taught alone first (its first beat a single trap, slower than any later one)
+  {
+    const firsts = {}, seenKinds = [], base = k => k.startsWith('honey') ? 'honey' : k.replace(/Pair|Stack/, '');
+    const pace = (b, o) => b === 'drip' ? o.P : b === 'bees' ? o.open : b === 'guard' ? o.cross + o.rest : 0;
+    for (const sec of HV.HIVE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base(kind);
+      if (!firsts[b]) { firsts[b] = { kind, o }; seenKinds.push(b); if (kind !== b) fail('each hive trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (b !== 'honey' && pace(b, o) && pace(b, o) > pace(b, firsts[b].o)) fail('a hive trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seenKinds.join() !== 'drip,bees,honey,guard') fail('the hive teaches drips, then bees, then honey, then guards', seenKinds.join());
+    if (!HV.HIVE_STAGE.some(sec => sec.calm && !sec.finish && sec !== HV.HIVE_STAGE[0])) fail('the hive has a breather chamber', '');
+    if (!HV.HIVE_STAGE[HV.HIVE_STAGE.length - 1].finish) fail('the hive ends in the royal chamber', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (HV.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // the temple's search (see fly there), on the hive's shapes; soft: the honey blocks too
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, soft) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 9 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) HV.hiveShapes(h, t, t, S, soft);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const xi = Math.floor(k / 1000), ai = k % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const key = nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 12; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = HV.createHiveLevel(HV.advSeed(st), st), hz = [], fr = [];
+    hiveStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('hive traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('hive pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    hiveStats.len = level.end / 10;
+    for (const h of hz) if (!HV.HIVE_TYPES.has(h.type)) fail('the hive only has its own traps', h.type);
+    for (const h of hz) hiveStats.kinds[h.type] = (hiveStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    if (hz.some(h => h.hi > level.end - 320)) fail('the royal chamber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      hiveStats.minW = Math.min(hiveStats.minW, r - l); hiveStats.slope = Math.max(hiveStats.slope, l2 - l, r - r2);
+    }
+    if (hiveStats.minW < R.minWidth) fail('the hive shaft is never narrower than minWidth', hiveStats.minW.toFixed(1));
+    if (hiveStats.slope > R.maxWallSlope) fail('the comb walls never step in faster than maxWallSlope', hiveStats.slope.toFixed(2));
+    // static lanes: a drip's lobe and column, the honey's curtain each leave minLane to the other wall; a swarm's pod and
+    // a resting guard leave the rest of the shaft; drips fall straight down, never up
+    for (const h of hz) {
+      if (h.type === 'drip' || h.type === 'honey') {
+        const S = h.type === 'drip' ? HV.hiveDanger(h) : HV.hiveShapes(h, 0, 0, [], true);
+        for (let a = h.lo; a <= h.hi; a += 4) {
+          const [l, r] = level.walls(a); let L0 = l, R0 = r;
+          for (const q of S) {
+            const span = q.k === 'c' ? [q.a - q.r, q.a + q.r] : q.k === 'b' ? [q.a0, q.a1] : [Math.min(q.a0, q.a1) - q.r, Math.max(q.a0, q.a1) + q.r]; if (a < span[0] || a > span[1]) continue;
+            const x0 = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, x1 = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r;
+            if (h.side > 0) L0 = Math.max(L0, x1); else R0 = Math.min(R0, x0);
+          }
+          const lane = R0 - L0; if (h.type === 'drip') hiveStats.dripLane = Math.min(hiveStats.dripLane, lane); else hiveStats.honeyLane = Math.min(hiveStats.honeyLane, lane);
+          if (lane < R.minLane) { fail(`a ${h.type === 'drip' ? 'drip' : 'honey fall'} leaves a lane of minLane`, `${lane.toFixed(1)} at ${a | 0}`); break; }
+        }
+      }
+      if (h.type === 'drip') { let prev = Infinity; for (let u = 0; u < h.P; u += 0.02) { const g = HV.dripState(h, u - h.ph * h.P); if (g.fall >= 0) { if (g.a > prev + 0.01 || Math.abs(g.x - h.dx) > 0.01) fail('honey drips fall straight down', `${h.alt}`); prev = g.a; } else prev = Infinity; } }
+      if (h.type === 'bees') { const [l, r] = level.walls(h.mouthA); for (let v = 0; v <= 1; v += 0.01) { const [x] = HV.beeLoop(h, v); if (x - 23 < l || x + 23 > r) { fail('a swarm\'s loop stays inside the shaft', `${h.alt} v ${v.toFixed(2)}`); break; } } }
+    }
+    // pickups: inside the walls, apart, clear of every trap's whole reach (racing-line ones: the hug distance)
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = HV.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('hive pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.kind === 'pot') continue;
+      let d = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of HV.hiveDanger(h)) d = Math.min(d, HV.shapeDist(q, f.x, f.alt));
+      if (f.bonus || f.kind === 'gold') { hiveStats.bonus = Math.min(hiveStats.bonus, d); if (d < HUGc - 0.5) fail('hive racing-line pickups keep the hug distance from every trap', `${f.kind} at ${f.alt | 0}: ${d.toFixed(1)}`); }
+      else { hiveStats.pick = Math.min(hiveStats.pick, d); if (d < R.pickup.clear - 0.5) fail('hive pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${d.toFixed(1)}`); }
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < HV.pickR(fr[i]) + HV.pickR(fr[j]) + HV.PICK_GAP - 0.01) fail('hive pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'pot').length !== 3) fail('the hive holds exactly 3 golden honey pots', `${fr.filter(f => f.kind === 'pot').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the hive keeps a chili line', `${gap | 0}`);
+    if (k > 3) continue;
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      hiveStats.traps++;
+      for (const soft of [false, true]) for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37 + (soft ? 0.5 : 0), [l, r] = level.walls(lo + 40);
+        hiveStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20, soft);
+        if (tm < 0) fail(soft ? 'every hive beat has a clean line clear of the honey too, from any phase' : 'every hive trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else { hiveStats.worst = Math.max(hiveStats.worst, tm); if (soft) hiveStats.clean++; }
+      }
+    }
+    for (const f of fr.filter(f => f.kind === 'pot')) {
+      const lo = f.alt - 260, hi = f.alt + 160, traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        hiveStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => Math.hypot(x - f.x, a - f.alt) < HV.HIVE.potR + W / 2 - 4, lo, hi, true);
+        if (tm < 0) fail('every golden honey pot can be reached by the widest pilot (clear of the honey)', `pot at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      hiveStats.pots++;
+    }
+  }
+}
+const hiveSummary = () => `PASS: Honeycomb Hive: ${hiveStats.seeds} layouts × ${hiveStats.len} m, only its own traps (${Object.entries(hiveStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; comb shaft ${hiveStats.minW.toFixed(0)}+ wide with slopes ${hiveStats.slope.toFixed(2)} (max ${HV.RULES.maxWallSlope}); drip lanes ${hiveStats.dripLane.toFixed(0)}+, honey lanes ${hiveStats.honeyLane.toFixed(0)}+ (minLane ${HV.RULES.minLane}), drips straight down, swarm loops inside the shaft; pickups ${hiveStats.pick.toFixed(1)}+ from any trap's reach (racing line ${hiveStats.bonus.toFixed(1)}+), nothing pops in; ${hiveStats.traps} beats (each also flown clear of the honey: ${hiveStats.clean} clean passes) and ${hiveStats.pots} honey pots flown by the widest pilot in ${hiveStats.searches} searches from 6 phases each, the slowest pass ${hiveStats.worst.toFixed(1)} s`;
+
+
+// ---------- Adventure: the Glowshroom Grotto (island level 10), an authored stage with its own traps ----------
+// As the temple's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every glow pearl flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases (bounce caps count as solid here: the search never relies on a boing).
+const GR = new Function(regions.join('\n') + '\nreturn { createGrottoLevel, grottoShapes, grottoDanger, grottoEnd, grottoPuff, grottoCloud, grottoSnap, grottoSway, GROTTO, GROTTO_STAGE, GROTTO_TYPES, ADV_GROTTO, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const grottoStats = { seeds: 0, traps: 0, searches: 0, worst: 0, pearls: 0, pick: Infinity, minW: Infinity, slope: 0, puffLane: Infinity, snapLane: Infinity, capLane: Infinity, veil: Infinity, fling: 0, len: 0, kinds: {} };
+{
+  const R = GR.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = GR.ADV_GROTTO;
+  if (st0.theme !== 'grotto' || !(st0.reward > 0)) fail('the Glowshroom Grotto is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'pearls' && g.n === 3) || !st0.goals.some(g => g.k === 'time')) fail('the grotto has three missions: the Mother Mushroom, 3 glow pearls and a time', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * GR.UNITS_PER_M - GR.grottoEnd()) > 1e-6) fail('the grotto stage length matches its layout', `${st0.len}`);
+  // the stage's order: puffers, then bounce caps, then veils, then snap-caps, each taught alone (never slower later)
+  {
+    const firsts = {}, seen = [];
+    for (const sec of GR.GROTTO_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const base = kind.replace(/Pair|Stack|Ladder|Puff$/, '');
+      if (!firsts[base]) { firsts[base] = o; seen.push(base); if (kind !== base) fail('each grotto trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[base].P && o.P > firsts[base].P) fail('a grotto trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'puffer,bounce,curtain,snap') fail('the grotto teaches puffers, then bounce caps, then veils, then snap-caps', seen.join());
+    if (!GR.GROTTO_STAGE.some(sec => sec.calm && !sec.finish && sec !== GR.GROTTO_STAGE[0])) fail('the grotto has a breather cavern', '');
+    if (!GR.GROTTO_STAGE[GR.GROTTO_STAGE.length - 1].finish) fail('the grotto ends in the Mother Mushroom cavern', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (GR.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the temple's), with an optional waypoint: `via(x, a)` must be touched before the goal counts
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) GR.grottoShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = GR.createGrottoLevel(GR.advSeed(st), st), hz = [], fr = [];
+    grottoStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('grotto traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('grotto pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    grottoStats.len = level.end / 10;
+    for (const h of hz) if (!GR.GROTTO_TYPES.has(h.type)) fail('the grotto only has its own traps', h.type);
+    for (const h of hz) grottoStats.kinds[h.type] = (grottoStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); grottoStats.beatGap = Math.min(grottoStats.beatGap ?? Infinity, g); if (g < 0) fail('grotto beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Mother Mushroom cavern below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      grottoStats.minW = Math.min(grottoStats.minW, r - l); grottoStats.slope = Math.max(grottoStats.slope, l2 - l, r - r2);
+    }
+    if (grottoStats.minW < R.minWidth) fail('the grotto shaft is never narrower than minWidth', grottoStats.minW.toFixed(1));
+    if (grottoStats.slope > R.maxWallSlope) fail('the grotto walls never step in faster than maxWallSlope', grottoStats.slope.toFixed(2));
+    // static lanes: a puffer's biggest cloud, a bounce cap and a snap-cap's widest gape each leave a lane of minLane;
+    // a veil always leaves one gap the widest pilot fits with room to spare
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt), lane = S => { const [x0, x1] = ext(S); return h.side > 0 ? r - x1 : x0 - l; };
+      if (h.type === 'puffer') { let m = Infinity; for (let u = 0; u <= 1; u += 0.05) m = Math.min(m, lane([...GR.grottoShapes(h, 0, [], 'body'), ...GR.grottoCloud(h, u).map(([x, a, rr]) => ({ k: 'c', x, a, r: rr * 0.84 }))])); grottoStats.puffLane = Math.min(grottoStats.puffLane, m); if (m < R.minLane) fail('a puffer\'s biggest cloud leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'bounce') { const m = lane(GR.grottoShapes(h, 0, [])); grottoStats.capLane = Math.min(grottoStats.capLane, m); if (m < R.minLane) fail('a bounce cap leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'snap') { const m = lane(GR.grottoDanger(h)); grottoStats.snapLane = Math.min(grottoStats.snapLane, m); if (m < R.minLane) fail('a snap-cap leaves a lane of minLane past its tips', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'curtain') for (let t = 0; t < h.P; t += h.P / 40) {
+        // (each thread's sweep at this moment: its root at x, its tip swayed by sw, the worm's girth round both)
+        const iv2 = h.xs.map((x, i) => { const sw = GR.grottoSway(h, t, i), C = GR.GROTTO.curtain; return [Math.min(x, x + sw) - C.worm - 1, Math.max(x, x + sw * 1.08) + C.worm + 1]; }).sort((p, q) => p[0] - q[0]);
+        let best = 0, x = l; for (const [a, b] of iv2) { best = Math.max(best, a - x); x = Math.max(x, b); } best = Math.max(best, r - x);
+        grottoStats.veil = Math.min(grottoStats.veil, best); if (best < W + 2 * M + 30) fail('a glow-worm veil always leaves a gap the widest pilot fits with room', `${best.toFixed(1)} at ${h.alt}`);
+      }
+    }
+    // a boing's fling (the steering locked for lock seconds, thrown kick units across and lifted) never throws you into
+    // a lethal trap: the corridor it sweeps is clear of every other trap's whole reach
+    for (const h of hz.filter(h => h.type === 'bounce')) {
+      const B = GR.GROTTO.bounce, d = h.side, others = hz.filter(q => q.type !== 'bounce' && q.lo < h.alt + 500 && q.hi > h.alt - 200), S = []; for (const q of others) S.push(...GR.grottoDanger(q));
+      const [l, r] = level.walls(h.alt), xA = h.base + d * (B.out - 10), rise = B.lock * 440 * 1.15 + 60;
+      for (let u = 0; u <= 1; u += 0.05) {
+        const x = Math.min(r - W / 2 - 4, Math.max(l + W / 2 + 4, xA + d * B.kick * u)), a = h.alt + 10 + rise * u;
+        if (capHit(S, x, a, 0)) { fail('a bounce cap\'s fling never throws you into a trap', `cap at ${h.alt}, ${u.toFixed(2)}`); break; }
+      }
+      grottoStats.fling++;
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = GR.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('grotto pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: glow pearls, the gold in a snap-cap's mouth, the Moonpool ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(GR.laneSize().w / 2 + 6 + GR.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of GR.grottoDanger(h)) dd = Math.min(dd, GR.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) grottoStats.pick = Math.min(grottoStats.pick, dd);
+      if (dd < need - 0.5) fail('grotto pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < GR.pickR(fr[i]) + GR.pickR(fr[j]) + GR.PICK_GAP - 0.01) fail('grotto pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'pearl').length !== 3) fail('the grotto holds exactly 3 glow pearls', `${fr.filter(f => f.kind === 'pearl').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the grotto keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      grottoStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        grottoStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every grotto trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else grottoStats.worst = Math.max(grottoStats.worst, tm);
+      }
+    }
+    // every glow pearl can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'pearl')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        grottoStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < GR.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every glow pearl can be grabbed and escaped by the widest pilot', `pearl at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      grottoStats.pearls++;
+    }
+  }
+}
+const grottoSummary = () => `PASS: Glowshroom Grotto: ${grottoStats.seeds} layouts × ${grottoStats.len} m, only its own traps (${Object.entries(grottoStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${grottoStats.minW.toFixed(0)}+ wide, wall slope ${grottoStats.slope.toFixed(2)} (max ${GR.RULES.maxWallSlope}); lanes past puffer clouds ${grottoStats.puffLane.toFixed(0)}+, bounce caps ${grottoStats.capLane.toFixed(0)}+, snap-caps ${grottoStats.snapLane.toFixed(0)}+ (minLane ${GR.RULES.minLane}), veil gaps ${grottoStats.veil.toFixed(0)}+, beats ${grottoStats.beatGap.toFixed(0)}+ apart; ${grottoStats.fling} boing flings clear of every trap; pickups ${grottoStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${grottoStats.traps} beats and ${grottoStats.pearls} pearls (grab and escape) flown by the widest pilot in ${grottoStats.searches} searches from 6 phases each, the slowest pass ${grottoStats.worst.toFixed(1)} s`;
 if (failures.size) {
   console.log(`FAILED: ${failures.size} rule(s) broken across ${checked} shafts`);
   for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
@@ -1042,4 +1474,7 @@ console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every l
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 console.log(advSummary());
+console.log(templeSummary());
+console.log(hiveSummary());
+console.log(grottoSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
