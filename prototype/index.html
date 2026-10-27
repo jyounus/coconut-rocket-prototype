@@ -343,7 +343,8 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .lvselbtn { align-self: center; margin-top: 2px; padding: 7px 16px; border: 0; border-radius: 13px; cursor: pointer; font: 400 15px var(--font-display); letter-spacing: .02em;
   color: var(--gold-ink); background: linear-gradient(var(--gold-hi), var(--gold-mid) 55%, var(--gold-lo)); box-shadow: 0 3px 0 var(--gold-lip), inset 0 2px 0 rgba(255,255,255,.5); }
 .lvselbtn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--gold-lip), inset 0 2px 0 rgba(255,255,255,.5); }
-#advSelect .panel.lvsel { max-width: 460px; gap: 10px; padding: 14px 14px 16px; margin: 0 auto; }
+#advSelect { overflow-x: hidden; }   /* (scrolls up and down only) */
+#advSelect .panel.lvsel { box-sizing: border-box; min-width: 0; max-width: 460px; gap: 10px; padding: 14px 14px 16px; margin: 0 auto; }   /* (border-box and min-width 0: the padding and a long level name never push it past the screen) */
 .lvselhd { display: flex; align-items: center; gap: 10px; }
 .lvselhd .ttl { flex: 1; min-width: 0; }
 .lvselhd h2 { margin: 1px 0 0; font: 400 28px/1 var(--font-display); color: var(--cream); text-shadow: 0 2px 0 rgba(90,40,14,.8); }
@@ -362,12 +363,15 @@ canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 .lvrow .tx b { font: 400 17px/1.05 var(--font-display); color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lvrow .tx small { font: 800 11px/1.25 var(--font-body); color: var(--muted); }
 .lvrow .tx small.lock { color: #ffb27a; }
-.lvrow .stars { display: flex; gap: 2px; font-size: 15px; }
-.lvrow .best { font: 800 11px/1.3 var(--font-body); color: #ffe7b8; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lvrow .meta { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; }
+.lvrow .stars { flex: none; display: flex; gap: 2px; font-size: 15px; }
+.lvrow .best { min-width: 0; font: 800 11px/1.3 var(--font-body); color: #ffe7b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .lvrow .play { flex: none; min-width: 58px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 13px; cursor: pointer; font: 400 17px var(--font-display); color: var(--gold-ink);
   background: linear-gradient(var(--gold-hi), var(--gold-mid) 55%, var(--gold-lo)); box-shadow: 0 3px 0 var(--gold-lip), inset 0 2px 0 rgba(255,255,255,.5); }
-.lvrow .play.test { color: var(--cream); background: linear-gradient(var(--tile-hi), var(--tile-lo)); box-shadow: 0 3px 0 var(--tile-lip), var(--rim); font-size: 15px; }
 .lvrow .play:active { transform: translateY(2px); }
+/* a level that isn't built yet: greyed out, its button disabled */
+.lvrow.off { opacity: .42; filter: grayscale(1); }
+.lvrow .play:disabled { cursor: default; color: var(--cream); background: linear-gradient(var(--tile-hi), var(--tile-lo)); box-shadow: 0 3px 0 var(--tile-lip), var(--rim); font-size: 15px; transform: none; }
 #lvSelReset.armed { background: linear-gradient(#ff8a66, #c0361c); color: #fff1d6; }
 .advreward { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #ffd25e; }
 .advreward b { display: inline-flex; align-items: center; gap: 6px; font: 400 20px var(--font-display); letter-spacing: 0; color: #ffe7b8; text-transform: none; }
@@ -1818,7 +1822,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
       <div class="ttl"><div class="eyebrow">Coconut Island · test</div><h2>Level select</h2></div>
       <span class="islstars" id="lvSelTotal"></span>
     </header>
-    <p class="lvselnote">Plays any level, locked or not (the padlock shows the real lock). Unbuilt levels use a test stage.</p>
+    <p class="lvselnote">Plays any built level, locked or not (the padlock shows the real lock). Greyed-out levels aren't built yet.</p>
     <div class="lvsellist" id="lvSelList"></div>
     <div class="btnrow">
       <button class="btn alt" id="lvSelReset">Reset progress</button>
@@ -45440,8 +45444,9 @@ ADV_GOALS.mineOutrun = { text: () => 'Outrun every falling scaffold', done: r =>
 if (/[?&]debug\b/.test(location.search)) window.CRM = { MINE, MINE_STAGE, gatePhase, gatePeriod, mineShapes, mineDashState, mineTntState, mineScafPose, mineBuckets, mineCartAt, mineDanger, createMineLevel, mineDressing, scr: (x, a) => [sx(x), sy(a)], walls: a => walls(a), cssW: () => cssW };
 // ---------- the level selector (temporary, for testing) ----------
 // Every island level by region: its number, name, region, its three mission stars, best score and time, and Play. Play
-// ignores the locks (advFromSel) and an unbuilt level plays its test stage, but each row shows the real lock state and
-// why (a boss: "3 stars on level 6 or 8"). After a run from here Retry replays it and Back / Menu return here.
+// ignores the locks (advFromSel), but each row shows the real lock state and why (a boss: "3 stars on level 6 or 8").
+// A level without its own stage yet is greyed out and can't be played. After a run from here Retry replays it and
+// Back / Menu return here.
 function advSelOpen() {
   paused = false; $('hint').hidden = true;
   if (G && G.adv) { newRun(true); G.state = 'ready'; }
@@ -45458,16 +45463,18 @@ function advSelRender() {
     const id = lv.id, m = advStars(id), st = advStageOf(lv), built = lv.stage != null, open = advOpenReal(id), state = advState(id);
     const num = `<span class="islnum${lv.boss ? ' boss' : !open ? ' locked' : state === 'open' ? ' open' : ''}">${lv.boss ? `<b>${id}</b><i>BOSS</i>` : id}</span>`;
     const goals = advGoalList(lv, st), why = open ? '' : `Locked: 3 stars on level ${islNames(ISL_IN[id])}`;
-    const sub = `${lv.boss ? 'Boss · ' : ''}${built ? (st && st.theme ? 'Own stage' : 'Built') : 'Test stage'}${why ? '' : open && !advData.clears[id] && !m ? ' · open' : ''}`;
+    if (!built) return `<div class="lvrow off"><span>${num}</span><div class="tx"><b>${lv.name}</b><small>${lv.boss ? 'Boss · ' : ''}Not built yet</small></div>` +
+      `<button class="play" disabled aria-label="Level ${id}: ${lv.name} isn't built yet">Soon</button></div>`;
+    const sub = `${lv.boss ? 'Boss fight' : st && st.theme ? 'Own stage' : 'Jungle stage'}${why ? '' : open && !advData.clears[id] && !m ? ' · open' : ''}`;
     const stars = goals.map((g, k) => starHtml(m & (1 << k)).replace('aria-hidden="true"', `title="${advGoalText(g, lv).replace(/"/g, '')}"`)).join('');
-    const best = advData.score[id] || advData.time[id] ? `${fmtN(advData.score[id])} pts<br>${advData.time[id] ? fmtClock(advData.time[id] / 10) : '-'}` : '<span style="opacity:.5">no best</span>';
-    return `<div class="lvrow"><span>${num}</span><div class="tx"><b>${lv.name}</b><small>${sub}</small>${why ? `<small class="lock">${why}</small>` : ''}</div>` +
-      `<div><div class="stars" aria-label="${starCount(m)} of 3 stars">${stars}</div></div><div class="best">${best}</div>` +
-      `<button class="play${built ? '' : ' test'}" data-id="${id}" aria-label="Play level ${id}: ${lv.name}">${built ? 'Play' : 'Test'}</button></div>`;
+    const best = advData.score[id] || advData.time[id] ? `${fmtN(advData.score[id])} pts · ${advData.time[id] ? fmtClock(advData.time[id] / 10) : '-'}` : '<span style="opacity:.5">no best</span>';
+    return `<div class="lvrow"><span>${num}</span><div class="tx"><b>${lv.name}</b><small>${sub}</small>${why ? `<small class="lock">${why}</small>` : ''}` +
+      `<div class="meta"><div class="stars" aria-label="${starCount(m)} of 3 stars">${stars}</div><div class="best">${best}</div></div></div>` +
+      `<button class="play" data-id="${id}" aria-label="Play level ${id}: ${lv.name}">Play</button></div>`;
   }).join('')).join('');
 }
 $('lvSelList').addEventListener('click', e => {
-  const b = e.target.closest('button.play'); if (!b) return;
+  const b = e.target.closest('button.play'); if (!b || b.disabled) return;
   advFromSel = true; advStart(+b.dataset.id);
 });
 {
