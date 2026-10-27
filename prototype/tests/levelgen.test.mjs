@@ -1029,6 +1029,196 @@ for (const st of ADVENTURE.stages) if (!(st.reward > 0 && st.target > 0)) fail('
 if (ADVENTURE.stages.length !== 5 || !ADVENTURE.stages[4].boss) fail('World 1 has four stages and the boss', '');
 const advSummary = () => `PASS: adventure: ${advStats.levels} stage shafts (${ADVENTURE.stages.length} stages × 150 seeds) stay jungle, ${advStats.forks} forks: tight lane ${advStats.tightMin.toFixed(1)}+ and wide lane ${advStats.wideMin.toFixed(1)}+ (widest pilot ${PILOT_W.toFixed(1)} + grab band ${GRAB.band}), no hazard inside, pickups ${advStats.pickClear.toFixed(1)}+ from the pillar, limbs ${advStats.limbGap.toFixed(0)}+ from it; chili line in both lanes ${advStats.chiliGap.toFixed(0)} or less (boss shaft ${advStats.bossChiliGap.toFixed(0)}), coconut value tight ${advStats.tightVal} vs wide ${advStats.wideVal} with ${advStats.golds} golden; hazards end ${advStats.finishClear.toFixed(0)}+ below the finish. Real stages: ${advStats.real.join('; ')}`;
 
+// ---------- Adventure: the Old Gold Mine (island level 13), an authored stage with its own traps ----------
+// As the grotto's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat, every nugget and every scaffold's outrun flown by a time-space search for the
+// widest pilot. Crossings run free on their clocks (no holds), ropeways on theirs; a barrel's whole ring counts as
+// solid the whole time (so its far lane alone must carry you past; only a nugget's dare flies its real fuse, lit the
+// moment you reach its trigger line, with no hold); a scaffold's search starts on its trigger line the moment it starts
+// to creak, from three places across the shaft.
+const MN = new Function(regions.join('\n') + '\nreturn { createMineLevel, mineShapes, mineDanger, mineEnd, mineDashState, mineCartAt, mineBuckets, mineBucketShapes, mineScafPose, mineTntState, MINE, MINE_STAGE, MINE_TYPES, ADV_MINE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const mineStats = { seeds: 0, traps: 0, searches: 0, worst: 0, nuggets: 0, outrun: 0, outrunWorst: 0, pick: Infinity, minW: Infinity, slope: 0, gapLane: Infinity, ringLane: Infinity, towerLane: Infinity, bucketGap: Infinity, len: 0, kinds: {} };
+{
+  const R = MN.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, X = MN.MINE, st0 = MN.ADV_MINE;
+  if (st0.theme !== 'mine' || !(st0.reward > 0)) fail('the Old Gold Mine is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'mineNuggets' && g.n === 3) || !st0.goals.some(g => g.k === 'mineOutrun')) fail('the mine has three missions: the mother lode, 3 gold nuggets and outrunning every scaffold', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * MN.UNITS_PER_M - MN.mineEnd()) > 1e-6) fail('the mine stage length matches its layout', `${st0.len}`);
+  // the stage's order: crossings, then barrels, then ropeways, then scaffolds, each first met alone (never easier later)
+  {
+    const firsts = {}, seen = [];
+    for (const sec of MN.MINE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const base = kind.match(/^[a-z]+/)[0];
+      if (!firsts[base]) { firsts[base] = o; seen.push(base); if (kind !== base) fail('each mine trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if ((o.open && firsts[base].open && o.open > firsts[base].open) || (o.v && firsts[base].v && o.v < firsts[base].v)) fail('a mine trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'dash,tnt,rope,scaf') fail('the mine teaches crossings, then barrels, then ropeways, then scaffolds', seen.join());
+    if (!MN.MINE_STAGE.some(sec => sec.calm && !sec.finish && sec !== MN.MINE_STAGE[0])) fail('the mine has a breather', '');
+    if (!MN.MINE_STAGE[MN.MINE_STAGE.length - 1].finish) fail('the mine ends in the mother lode cavern', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (MN.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // every trap's shapes at search time t (the search starting at t0): a crossing on its free clock, a barrel's ring
+  // solid (or, for a dare, its fuse lit at t0), a scaffold creaking from t0
+  const shapesAt = (traps, t, real, t0) => {
+    const S = [];
+    for (const h of traps) {
+      if (h.type === 'mineDash') MN.mineShapes({ ...h, clk: t }, t, S);
+      else if (h.type === 'mineTnt') { if (real) MN.mineShapes({ ...h, litT: t0, boomT: t0 + h.fuse }, t, S); else MN.mineShapes(h, t, S, 'ring'); }
+      else if (h.type === 'mineScaf') MN.mineShapes({ ...h, litT: t0 }, t, S);
+      else MN.mineShapes(h, t, S);
+    }
+    return S;
+  };
+  // the search (as the grotto's), with an optional waypoint: `via(x, a)` must be touched before the goal counts
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via, real) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = shapesAt(traps, t, real, t0);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = MN.createMineLevel(MN.advSeed(st), st), hz = [], fr = [];
+    mineStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('mine traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('mine pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    mineStats.len = level.end / 10;
+    for (const h of hz) if (!MN.MINE_TYPES.has(h.type)) fail('the mine only has its own traps', h.type);
+    for (const h of hz) mineStats.kinds[h.type] = (mineStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // every trap kind is first met in a beat of its own
+    { const met = new Set(); for (const b of level.beats) for (const h of b.hs) if (!met.has(h.type)) { met.add(h.type); if (b.hs.length !== 1) fail('every mine trap is first met alone', `${h.type} in ${b.kind}`); } }
+    // beats never crowd: each beat's traps start above the last beat's reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); mineStats.beatGap = Math.min(mineStats.beatGap ?? Infinity, g); if (g < 0) fail('mine beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the mother lode cavern below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      mineStats.minW = Math.min(mineStats.minW, r - l); mineStats.slope = Math.max(mineStats.slope, l2 - l, r - r2);
+    }
+    if (mineStats.minW < R.minWidth) fail('the mine shaft is never narrower than minWidth', mineStats.minW.toFixed(1));
+    if (mineStats.slope > R.maxWallSlope) fail('the mine walls never step in faster than maxWallSlope', mineStats.slope.toFixed(2));
+    // static lanes: a crossing's gap between its stubs, the lane past a barrel's ring and past a standing scaffold are
+    // each minLane; a ropeway's buckets leave gaps the widest pilot fits with room
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt);
+      if (h.type === 'mineDash') {
+        const S = MN.mineShapes(h, 0, [], 'body'), up = S.slice(0, 2), lo = S.slice(2), [u0, u1] = ext(up), [l0, l1] = ext(lo), g = h.side > 0 ? l0 - u1 : u0 - l1;
+        mineStats.gapLane = Math.min(mineStats.gapLane, g); if (g < R.minLane) fail('a crossing leaves a gap of minLane between its stubs', `${g.toFixed(1)} at ${h.alt}`);
+        // nothing a cart does ever rises: its path only falls
+        let pa = Infinity; for (let s = 0; s <= h.run; s += 4) { const [, a] = MN.mineCartAt(h, s); if (a > pa + 1e-6) { fail('a minecart never rises', `${h.alt} at ${s}`); break; } pa = a; }
+      }
+      if (h.type === 'mineTnt') { const [x0, x1] = ext([{ k: 'c', x: h.bx, a: h.ba, r: h.R }]), [wl, wr] = level.walls(h.ba), g = h.side > 0 ? wr - x1 : x0 - wl; mineStats.ringLane = Math.min(mineStats.ringLane, g); if (g < R.minLane) fail('a barrel\'s ring leaves a far lane of minLane', `${g.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'mineScaf') {
+        const [x0, x1] = ext(MN.mineShapes(h, 0, [], 'body')), g = h.side > 0 ? r - x1 : x0 - l; mineStats.towerLane = Math.min(mineStats.towerLane, g); if (g < R.minLane) fail('a standing scaffold leaves a lane of minLane', `${g.toFixed(1)} at ${h.alt}`);
+        let pth = -1; for (let t = 0; t < h.tell + 1; t += 0.01) { const th = MN.mineScafPose({ ...h, litT: 0 }, t).th; if (th < pth - 1e-9) { fail('a scaffold only ever falls', `${h.alt}`); break; } pth = th; }
+      }
+      if (h.type === 'mineRope') for (let t = 0; t < 4; t += 0.1) {
+        const bs = MN.mineBuckets(h, t).map(([x, , sw]) => ext(MN.mineBucketShapes([], h, x, sw))).sort((p, q) => p[0] - q[0]);
+        for (let i = 1; i < bs.length; i++) { const g = bs[i][0] - bs[i - 1][1]; mineStats.bucketGap = Math.min(mineStats.bucketGap, g); if (g < W + 2 * M + 30) fail('a ropeway\'s buckets leave gaps the widest pilot fits with room', `${g.toFixed(1)} at ${h.alt}`); }
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = MN.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('mine pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the nuggets, the Lamp Room's horseshoe)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(MN.laneSize().w / 2 + 6 + MN.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of MN.mineDanger(h)) dd = Math.min(dd, MN.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) mineStats.pick = Math.min(mineStats.pick, dd);
+      if (dd < need - 0.5) fail('mine pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < MN.pickR(fr[i]) + MN.pickR(fr[j]) + MN.PICK_GAP - 0.01) fail('mine pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'nugget').length !== 3) fail('the mine holds exactly 3 gold nuggets', `${fr.filter(f => f.kind === 'nugget').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the mine keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const sc = b.hs.find(h => h.type === 'mineScaf'), hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      if (sc) {
+        // a scaffold: from its trigger line the moment it starts to creak, from either side and the middle
+        const a0 = sc.trig - Hh / 2, lo = a0 - 60, traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(a0);
+        mineStats.traps++;
+        for (const x0 of [l + W / 2 + 12, (l + r) / 2, r - W / 2 - 12]) for (let p = 0; p < 3; p++) {
+          mineStats.searches++;
+          const tm = fly(level, traps, x0, a0, p * 1.13 + k * 0.37, (x, a) => a >= hi - 10, lo, hi + 20);
+          if (tm < 0) fail('every mine scaffold can be passed by the widest pilot from wherever it starts to creak', `${b.kind} at ${b.a} (${b.sec.name}), from x ${x0.toFixed(0)}, phase ${p}, seed ${k}`);
+          else mineStats.worst = Math.max(mineStats.worst, tm);
+        }
+        // and outrun (the mission): flat out from its trigger line, the widest pilot is above its top before it lands
+        {
+          const lane = sc.side > 0 ? (sc.base + sc.W + r) / 2 : (l + sc.base - sc.W) / 2, land = sc.tell + X.scaf.fall;
+          mineStats.searches++;
+          const tm = fly(level, traps, lane, a0, 0, (x, a) => a - Hh / 2 > sc.alt + sc.H + 2, lo, sc.hi + 200);
+          if (tm < 0 || tm > land) fail('every scaffold can be outrun by the widest pilot flying flat out from its trigger', `${sc.alt}: ${tm.toFixed(2)} s vs ${land.toFixed(2)} s, seed ${k}`);
+          else { mineStats.outrun++; mineStats.outrunWorst = Math.max(mineStats.outrunWorst, tm / land); }
+        }
+        continue;
+      }
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      mineStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        mineStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every mine trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else mineStats.worst = Math.max(mineStats.worst, tm);
+      }
+    }
+    // every nugget can be touched and then escaped (flown on past its trap) by the widest pilot: a crossing's from 6
+    // phases, a barrel's and a scaffold's from their trigger lines (the fuse burning, the tower creaking)
+    for (const f of fr.filter(f => f.kind === 'nugget')) {
+      const own = hz.filter(h => h.lo - 60 < f.alt && h.hi + 140 > f.alt), trig = own.find(h => h.trig != null);
+      const touch = (x, a) => Math.hypot(x - f.x, a - f.alt) < MN.COCO_R + W / 2 - 4;
+      if (trig) {
+        const a0 = trig.trig - Hh / 2, lo = a0 - 60, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100, traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(a0);
+        let ok = false;
+        for (const x0 of [l + W / 2 + 12, (l + r) / 2, r - W / 2 - 12]) { mineStats.searches++; if (fly(level, traps, x0, a0, k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch, true) >= 0) ok = true; }
+        if (!ok) fail('every gold nugget can be grabbed and escaped by the widest pilot', `nugget at ${f.alt | 0} (${trig.type}), seed ${k}`);
+      } else {
+        const lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+        const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+        for (let p = 0; p < 6; p++) {
+          mineStats.searches++;
+          const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+          if (tm < 0) fail('every gold nugget can be grabbed and escaped by the widest pilot', `nugget at ${f.alt | 0}, phase ${p}, seed ${k}`);
+        }
+      }
+      mineStats.nuggets++;
+    }
+  }
+}
+const mineSummary = () => `PASS: Old Gold Mine: ${mineStats.seeds} layouts × ${mineStats.len} m, only its own traps (${Object.entries(mineStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${mineStats.minW.toFixed(0)}+ wide, wall slope ${mineStats.slope.toFixed(2)} (max ${MN.RULES.maxWallSlope}); gaps between trestle stubs ${mineStats.gapLane.toFixed(0)}+, lanes past blast rings ${mineStats.ringLane.toFixed(0)}+ and standing scaffolds ${mineStats.towerLane.toFixed(0)}+ (minLane ${MN.RULES.minLane}), bucket gaps ${mineStats.bucketGap.toFixed(0)}+, carts and towers only ever fall, beats ${mineStats.beatGap.toFixed(0)}+ apart; pickups ${mineStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${mineStats.traps} beats and ${mineStats.nuggets} nuggets (grab and escape) flown by the widest pilot in ${mineStats.searches} searches, the slowest pass ${mineStats.worst.toFixed(1)} s; ${mineStats.outrun} scaffolds outrun flat out (at worst ${Math.round(mineStats.outrunWorst * 100)}% of the time they take to land)`;
+
 // ---------- Adventure: the Sunken Temple (island level 4), an authored stage with its own traps ----------
 // Its own copy of the generator code, so its checks never disturb the shafts above. Every rule is checked on the
 // stage's layout as the game builds it (and on 12 other seeds, which only move phases and looks), then every trap and
@@ -1796,4 +1986,5 @@ console.log(hiveSummary());
 console.log(grottoSummary());
 console.log(frostSummary());
 console.log(stormSummary());
+console.log(mineSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
