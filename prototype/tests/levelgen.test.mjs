@@ -1980,6 +1980,32 @@ console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every l
   console.log(RULES.chili.endless ? `PASS: chili line every ${RULES.chili.gap / 10} m or less: ${ammoStats.ratio.toFixed(2)}× the ammo auto-fire spends at the tightest leash (${ammoStats.spend.toFixed(2)} shots/s); flat out at the calm leash it fires ${ammoStats.flatSpend.toFixed(2)} shots/s, ${Math.round(ammoStats.flat * 100)}% of the chili line's supply; empty to caught ${ammoStats.caught.toFixed(1)} s (${ammoStats.caughtFlat.toFixed(1)} s flat out) vs ${ammoStats.climb.toFixed(2)} s to the next chili; first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m` : `PASS: no chilies or blaster in endless (Adventure only); first 500 m offers ${Math.min(...cn)}–${Math.max(...cn)} coconut pickups (avg ${avg(cn)}, worth ${avg(cv)} with golden ones), ${(zoneMix.per150 || 0).toFixed(2)} golden per 150 m`);
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
+// Level slots: each new themed level puts its test block immediately before its slot line.
+// (test slot: Murk Mire, island level 7)
+// (test slot: Hidden Lagoon, island level 11)
+// (test slot: Amethyst Geode, island level 16)
+// (test slot: Fossil Bonepit, island level 21)
+// (test slot: Shipwreck Hold, island level 22)
+// (test slot: Cursed Treasure Vault, island level 23)
+// (test slot: Cascade Falls, island level 24)
+// (test slot: Gull Cliffs, island level 25)
+// (test slot: Clockwork Tower, island level 26)
+// (test slot: Kooky Lab, island level 27)
+// (test slot: Pipe Organ Cavern, island level 28)
+// (test slot: Pinball Palace, island level 29)
+// (test slot: Candy Caverns, island level 30)
+// (test slot: Cheddar Caverns, island level 31)
+// (test slot: Toybox Tower, island level 32)
+// (test slot: Monkey Carnival, island level 33)
+// (test slot: Haunted Lighthouse, island level 34)
+// (test slot: Wizard's Spire, island level 35)
+// (test slot: Starfall Summit, island level 36)
+// (test slot: Beanstalk Heights, island level 37)
+// (test slot: Sandstorm Canyon, island level 38)
+// (test slot: Anthill Underworks, island level 39)
+// (test slot: Bamboo Pagoda, island level 40)
+// (test slot: Hollow Palm, island level 41)
+
 console.log(advSummary());
 console.log(templeSummary());
 console.log(hiveSummary());
