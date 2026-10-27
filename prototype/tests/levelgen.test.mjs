@@ -1171,6 +1171,159 @@ const templeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, idols: 0, pick:
 const templeSummary = () => `PASS: Sunken Temple: ${templeStats.seeds} layouts × ${templeStats.len} m, only its own traps (${Object.entries(templeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${templeStats.minW.toFixed(0)}+ wide with steps of slope ${templeStats.slope.toFixed(2)} (max ${TM.RULES.maxWallSlope}); jet lanes ${templeStats.jetLane.toFixed(0)}+, totem lanes ${templeStats.totemLane.toFixed(0)}+ (minLane ${TM.RULES.minLane}), facing jets never both alight, darts straight across; pickups ${templeStats.pick.toFixed(1)}+ from any trap's reach (racing line ${templeStats.bonus.toFixed(1)}+), nothing pops in; ${templeStats.traps} beats and ${templeStats.idols} idols flown by the widest pilot (${PILOT_W.toFixed(1)} × ${PILOT_H.toFixed(1)} + 4) in ${templeStats.searches} searches from 6 phases each, the slowest pass ${templeStats.worst.toFixed(1)} s`;
 
 
+// ---------- Adventure: Frost Hollow (island level 17), an authored stage with its own traps ----------
+// As the grotto's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every frost lily flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases (a breath face's cone counts as solid here: every beat can be passed without
+// ever getting frosted, which the "never frosted" mission needs).
+const FR = new Function(regions.join('\n') + '\nreturn { createFrostLevel, frostShapes, frostDanger, frostEnd, frostIcicle, frostBreathAt, frostCone, frostSnowball, frostPanel, FROST, FROST_STAGE, FROST_TYPES, ADV_FROST, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const frostStats = { seeds: 0, traps: 0, searches: 0, worst: 0, lilies: 0, pick: Infinity, minW: Infinity, slope: 0, shelfLane: Infinity, faceLane: Infinity, coneLane: Infinity, panel: Infinity, burst: 0, len: 0, kinds: {} };
+{
+  const R = FR.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = FR.ADV_FROST;
+  if (st0.theme !== 'frost' || !(st0.reward > 0)) fail('Frost Hollow is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'lilies' && g.n === 3) || !st0.goals.some(g => g.k === 'noFrost')) fail('Frost Hollow has three missions: the Frost Throne, 3 frost lilies and never frosted', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * FR.UNITS_PER_M - FR.frostEnd()) > 1e-6) fail('the Frost Hollow stage length matches its layout', `${st0.len}`);
+  // the stage's order: icicle shelves, then breath faces, then snowball chutes, then glass bridges, each taught alone
+  // (never faster first: a later one is never slower than its introduction)
+  {
+    const firsts = {}, seen = [], base = { iciclePair: 'icicles', breathPair: 'breath', breathIcicle: 'breath', snowballPair: 'snowball', snowBreath: 'breath', paneSnow: 'pane' };
+    for (const sec of FR.FROST_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each frost trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P / (o.n || 1) > firsts[b].P / (firsts[b].n || 1) + 1e-9) fail('a frost trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'icicles,breath,snowball,pane') fail('Frost Hollow teaches icicles, then breath, then snowballs, then bridges', seen.join());
+    if (!FR.FROST_STAGE.some(sec => sec.calm && !sec.finish && sec !== FR.FROST_STAGE[0])) fail('Frost Hollow has a breather cavern', '');
+    if (!FR.FROST_STAGE[FR.FROST_STAGE.length - 1].finish) fail('Frost Hollow ends in the Frost Throne\'s hall', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (FR.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the grotto's), with an optional waypoint: `via(x, a)` must be touched before the goal counts
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) FR.frostShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = FR.createFrostLevel(FR.advSeed(st), st), hz = [], fr = [];
+    frostStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('frost traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('frost pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    frostStats.len = level.end / 10;
+    for (const h of hz) if (!FR.FROST_TYPES.has(h.type)) fail('Frost Hollow only has its own traps', h.type);
+    for (const h of hz) frostStats.kinds[h.type] = (frostStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's reach (one thing to read at a time); an icicle
+    // shelf's lo is its icicles' whole fall, so only its shelf counts here
+    const bodyLo = h => h.type === 'icicles' ? h.alt - FR.FROST.icicle.len[1] - 30 : h.type === 'snowball' ? h.hitAt[1] - FR.FROST.snowball.r : h.lo;
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(bodyLo)) - Math.max(...p.hs.map(h => h.hi)); frostStats.beatGap = Math.min(frostStats.beatGap ?? Infinity, g); if (g < 0) fail('frost beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Frost Throne\'s hall below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      frostStats.minW = Math.min(frostStats.minW, r - l); frostStats.slope = Math.max(frostStats.slope, l2 - l, r - r2);
+    }
+    if (frostStats.minW < R.minWidth) fail('the Frost Hollow shaft is never narrower than minWidth', frostStats.minW.toFixed(1));
+    if (frostStats.slope > R.maxWallSlope) fail('the Frost Hollow walls never step in faster than maxWallSlope', frostStats.slope.toFixed(2));
+    // static lanes: an icicle shelf with every icicle at every point of its fall, a breath face and its widest cone each
+    // leave a lane (minLane past the shelf and the head; the cone, which never kills, the widest pilot with room)
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt), lane = S => { const [x0, x1] = ext(S); return h.side > 0 ? r - x1 : x0 - l; };
+      if (h.type === 'icicles') { const m = lane(FR.frostDanger(h)); frostStats.shelfLane = Math.min(frostStats.shelfLane, m); if (m < R.minLane) fail('an icicle shelf and its falling icicles leave a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'breath') {
+        const m = lane(FR.frostShapes(h, 0, [], 'body')), mc = lane(FR.frostDanger(h));
+        frostStats.faceLane = Math.min(frostStats.faceLane, m); frostStats.coneLane = Math.min(frostStats.coneLane, mc);
+        if (m < R.minLane) fail('a breath face leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        if (mc < W + 30) fail('a breath face\'s widest cone leaves a lane the widest pilot fits with room', `${mc.toFixed(1)} at ${h.alt}`);
+      }
+      if (h.type === 'pane') {
+        for (const [x0, x1] of h.panels) { const w = Math.min(x1, r) - Math.max(x0, l); frostStats.panel = Math.min(frostStats.panel, w); if (w < W + 2 * M + 30) fail('a glass bridge panel opens wide enough for the widest pilot with room', `${w.toFixed(1)} at ${h.alt}`); }
+        // one panel at a time: never more than one open, and a panel is open (or opening) at least every P / n s
+        let both = 0, longest = 0, shutFor = 0;
+        for (let t = 0; t < h.P * 2; t += 0.02) { const op = h.panels.filter((_, j) => FR.frostPanel(h, t, j).open).length; if (op > 1) both++; shutFor = op ? 0 : shutFor + 0.02; longest = Math.max(longest, shutFor); }
+        if (both) fail('a glass bridge opens one panel at a time', `${h.alt}`);
+        if (longest > h.P / h.n) fail('a glass bridge is never all shut for longer than P / n', `${longest.toFixed(2)} at ${h.alt}`);
+      }
+      if (h.type === 'snowball') {
+        // the ball never leaves the shaft before it bursts on the far wall, and it bursts there within the trap's reach
+        const S = FR.FROST.snowball;
+        for (let t = 0; t < h.P; t += 0.01) { const b = FR.frostSnowball(h, t).ball; if (!b) continue; const [bl, br] = level.walls(b[1]); if (b[0] - S.r < bl - S.r * 0.75 || b[0] + S.r > br + S.r * 0.75) { fail('a snowball stays in the shaft until it bursts', `${h.alt} t ${t.toFixed(2)}`); break; } if (b[1] - S.r < h.lo) { fail('a snowball\'s arc stays inside its trap\'s band', `${h.alt}`); break; } }
+        frostStats.burst++;
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = FR.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('frost pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the lilies, the Frozen Falls snowflake)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(FR.laneSize().w / 2 + 6 + FR.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of FR.frostDanger(h)) dd = Math.min(dd, FR.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) frostStats.pick = Math.min(frostStats.pick, dd);
+      if (dd < need - 0.5) fail('frost pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < FR.pickR(fr[i]) + FR.pickR(fr[j]) + FR.PICK_GAP - 0.01) fail('frost pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'lily').length !== 3) fail('Frost Hollow holds exactly 3 frost lilies', `${fr.filter(f => f.kind === 'lily').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('Frost Hollow keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.type === 'snowball' ? h.hitAt[1] - 120 : h.lo - (h.type === 'icicles' ? 40 : 150))) - 40, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      frostStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        frostStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every frost trap can be passed by the widest pilot from any phase, never frosted', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else frostStats.worst = Math.max(frostStats.worst, tm);
+      }
+    }
+    // every frost lily can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'lily')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.type === 'icicles' ? h.alt - 260 : h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        frostStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < FR.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every frost lily can be grabbed and escaped by the widest pilot', `lily at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      frostStats.lilies++;
+    }
+  }
+}
+const frostSummary = () => `PASS: Frost Hollow: ${frostStats.seeds} layouts × ${frostStats.len} m, only its own traps (${Object.entries(frostStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${frostStats.minW.toFixed(0)}+ wide, wall slope ${frostStats.slope.toFixed(2)} (max ${FR.RULES.maxWallSlope}); lanes past icicle shelves ${frostStats.shelfLane.toFixed(0)}+, breath faces ${frostStats.faceLane.toFixed(0)}+ (minLane ${FR.RULES.minLane}), past their cones ${frostStats.coneLane.toFixed(0)}+, bridge panels ${frostStats.panel.toFixed(0)}+ wide, one open at a time; ${frostStats.burst} snowball arcs inside the shaft; beats ${(frostStats.beatGap ?? 0).toFixed(0)}+ apart; pickups ${frostStats.pick.toFixed(1)}+ from any reach; ${frostStats.traps} beats × 6 phases and ${frostStats.lilies} lilies flown by the widest pilot without frost (${frostStats.searches} searches, slowest ${frostStats.worst.toFixed(1)} s)`;
 // ---------- Adventure: the Honeycomb Hive (island level 5), an authored stage with its own traps ----------
 // As the temple's checks: every rule on the stage's layout as the game builds it (and on 12 other seeds), then every beat
 // flown by a time-space search for the widest pilot on the traps' own clocks with no holds, from 6 start phases: once
@@ -1313,6 +1466,170 @@ const hiveStats = { seeds: 0, traps: 0, searches: 0, worst: 0, clean: 0, pots: 0
 const hiveSummary = () => `PASS: Honeycomb Hive: ${hiveStats.seeds} layouts × ${hiveStats.len} m, only its own traps (${Object.entries(hiveStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; comb shaft ${hiveStats.minW.toFixed(0)}+ wide with slopes ${hiveStats.slope.toFixed(2)} (max ${HV.RULES.maxWallSlope}); drip lanes ${hiveStats.dripLane.toFixed(0)}+, honey lanes ${hiveStats.honeyLane.toFixed(0)}+ (minLane ${HV.RULES.minLane}), drips straight down, swarm loops inside the shaft; pickups ${hiveStats.pick.toFixed(1)}+ from any trap's reach (racing line ${hiveStats.bonus.toFixed(1)}+), nothing pops in; ${hiveStats.traps} beats (each also flown clear of the honey: ${hiveStats.clean} clean passes) and ${hiveStats.pots} honey pots flown by the widest pilot in ${hiveStats.searches} searches from 6 phases each, the slowest pass ${hiveStats.worst.toFixed(1)} s`;
 
 
+// ---------- Adventure: the Thunder Rift (island level 18), an authored stage with its own traps ----------
+// As the grotto's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every storm-glass orb flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases, with each gust shoving the search sideways while it blows (and each beat flown
+// again with the gusts' bands closed while they blow: the "never caught by a gust" mission is always possible).
+const SM = new Function(regions.join('\n') + '\nreturn { createStormLevel, stormShapes, stormDanger, stormEnd, stormTeslaState, stormBoltState, stormGustState, stormOrbPos, stormTerm, STORM, STORM_STAGE, STORM_TYPES, ADV_STORM, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const stormStats = { seeds: 0, traps: 0, searches: 0, worst: 0, clean: 0, glass: 0, pick: Infinity, minW: Infinity, slope: 0, teslaLane: Infinity, boltLane: Infinity, orbWall: Infinity, len: 0, kinds: {} };
+{
+  const R = SM.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = SM.ADV_STORM, X = SM.STORM;
+  if (st0.theme !== 'storm' || !(st0.reward > 0)) fail('the Thunder Rift is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'stormGlass' && g.n === 3) || !st0.goals.some(g => g.k === 'stormCalm')) fail('the rift has three missions: the Storm Heart, 3 storm-glass orbs and never caught by a gust', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * SM.UNITS_PER_M - SM.stormEnd()) > 1e-6) fail('the rift stage length matches its layout', `${st0.len}`);
+  // the stage's order: pylons, then ball lightning, then lightning strikes, then gusts, each taught alone (never slower)
+  {
+    const firsts = {}, seen = [];
+    for (const sec of SM.STORM_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const base = kind.replace(/(Stack|Pair|Orb|Tesla|Bolt)$/, '');
+      if (!firsts[base]) { firsts[base] = o; seen.push(base); if (kind !== base || o.tilt) fail('each storm trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === base && o.P && firsts[base].P && o.P > firsts[base].P) fail('a storm trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'tesla,orb,bolt,gust') fail('the rift teaches pylons, then ball lightning, then strikes, then gusts', seen.join());
+    if (!SM.STORM_STAGE.some(sec => sec.calm && !sec.finish && sec !== SM.STORM_STAGE[0])) fail('the rift has a breather', '');
+    if (!SM.STORM_STAGE[SM.STORM_STAGE.length - 1].finish) fail('the rift ends at the Storm Heart', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (SM.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // the search (as the grotto's) with the gusts: while a gust blows over the pilot it is carried a cell a step toward the
+  // far wall (never into it); closed: a blowing gust's band counts as solid. via(x, a) must be touched before the goal.
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via, closed) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, gusts = traps.filter(h => h.type === 'stormGust');
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [], G = gusts.map(h => ({ h, k: SM.stormGustState(h, t).k }));
+      for (const h of traps) SM.stormShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const inWalls = (x, a) => { const [l, r] = level.walls(a); return x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2; };
+      const gustOver = a => G.find(g => g.k > 0.3 && a + Hh / 2 > g.h.lo && a - Hh / 2 < g.h.hi);
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, ok = inWalls(x, a) && !capHit(S, x, a, M) && !(closed && gustOver(a));
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          let nx = xi + dX; const na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g = !closed && gustOver(lo + na * DA);
+          if (g) { const d = g.h.side, n2 = nx + d; if (inWalls(n2 * DX, lo + na * DA)) nx = n2; }   // (carried, but never into the wall)
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = SM.createStormLevel(SM.advSeed(st), st), hz = [], fr = [];
+    stormStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('storm traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('storm pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    stormStats.len = level.end / 10;
+    for (const h of hz) if (!SM.STORM_TYPES.has(h.type)) fail('the rift only has its own traps', h.type);
+    for (const h of hz) stormStats.kinds[h.type] = (stormStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); stormStats.beatGap = Math.min(stormStats.beatGap ?? Infinity, g); if (g < 0) fail('storm beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the summit below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      stormStats.minW = Math.min(stormStats.minW, r - l); stormStats.slope = Math.max(stormStats.slope, l2 - l, r - r2);
+    }
+    if (stormStats.minW < R.minWidth) fail('the rift is never narrower than minWidth', stormStats.minW.toFixed(1));
+    if (stormStats.slope > R.maxWallSlope) fail('the rift walls never step in faster than maxWallSlope', stormStats.slope.toFixed(2));
+    // static lanes and the traps' own rules
+    for (const h of hz) {
+      if (h.type === 'stormTesla') {
+        // the pylons sit on the walls (no gap behind them) and leave a lane of minLane between their terminals; the arc
+        // runs between the two terminals and nowhere else
+        const [[xl, al], [xr, ar]] = SM.stormTerm(h), lane = (xr - X.tesla.ball) - (xl + X.tesla.ball);
+        stormStats.teslaLane = Math.min(stormStats.teslaLane, lane); if (lane < R.minLane) fail('tesla pylons leave a lane of minLane between their terminals', `${lane.toFixed(1)} at ${h.alt}`);
+        if (Math.abs(level.walls(al)[0] - h.L) > 3 || Math.abs(level.walls(ar)[1] - h.R) > 3) fail('tesla pylons sit on the walls', `${h.alt}`);
+      }
+      if (h.type === 'stormBolt') {
+        // the open lane beside a rod's column and outcrop is at least minLane, the column hangs from above the rod (never
+        // from below) and the rod stands on its own wall
+        const [l, r] = level.walls(h.alt + X.bolt.col * 0.5), S = SM.stormDanger(h), x0 = Math.min(...S.map(q => q.k === 'c' ? q.x - q.r : Math.min(q.x0, q.x1) - q.r)), x1 = Math.max(...S.map(q => q.k === 'c' ? q.x + q.r : Math.max(q.x0, q.x1) + q.r));
+        const lane = h.side > 0 ? r - x1 : x0 - l;
+        stormStats.boltLane = Math.min(stormStats.boltLane, lane); if (lane < R.minLane) fail('a lightning column leaves a lane of minLane beside it', `${lane.toFixed(1)} at ${h.alt}`);
+        const col = SM.stormShapes(h, h.P * (1 - h.ph) - (X.bolt.strike * 0.5 + X.bolt.glow), [], 'shock')[0];
+        if (!col || col.a0 < h.alt + X.bolt.rod || col.a1 <= col.a0) fail('a lightning strike comes down from above its rod', `${h.alt}`);
+        if (Math.abs(h.base - (h.side > 0 ? level.walls(h.alt)[0] : level.walls(h.alt)[1])) > 3) fail('a lightning rod stands on its own wall', `${h.alt}`);
+      }
+      if (h.type === 'stormOrb') for (let q = 0; q < 64; q++) {
+        // an orb's path stays inside the shaft with room to spare
+        const [x, a] = SM.stormOrbPos(h, h.P * q / 64), [l, r] = level.walls(a), m = Math.min(x - l, r - x) - X.orb.r;
+        stormStats.orbWall = Math.min(stormStats.orbWall, m); if (m < 20) fail('an orb\'s path keeps off the walls', `${m.toFixed(1)} at ${h.alt}`);
+        if (h.pair) { const [x2, a2] = SM.stormOrbPos(h, h.P * q / 64, 1); if (Math.hypot(x2 - x, a2 - a) < 2 * X.orb.r + W) fail('a pair of orbs never bunch up', `${h.alt}`); }
+      }
+      if (h.type === 'stormGust') {
+        // a gust's band stays inside its trap's height and never overlaps anything lethal at the same height on its
+        // downwind wall closer than the pilot's width plus the push (it throws you toward traps, not into them)
+        const st2 = SM.stormGustState(h, h.P * 2), k = Math.max(...Array.from({ length: 80 }, (_, i) => SM.stormGustState(h, h.P * i / 80).k));
+        if (!(k > 0.95) || st2 == null) fail('a gust blows full strength once a cycle', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = SM.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('storm pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: storm glass, the gold in a rod's column, the eye's spiral)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(SM.laneSize().w / 2 + 6 + SM.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of SM.stormDanger(h)) dd = Math.min(dd, SM.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) stormStats.pick = Math.min(stormStats.pick, dd);
+      if (dd < need - 0.5) fail('storm pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < SM.pickR(fr[i]) + SM.pickR(fr[j]) + SM.PICK_GAP - 0.01) fail('storm pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'stormGlass').length !== 3) fail('the rift holds exactly 3 storm-glass orbs', `${fr.filter(f => f.kind === 'stormGlass').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the rift keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      stormStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        stormStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every storm trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else stormStats.worst = Math.max(stormStats.worst, tm);
+        if (traps.some(h => h.type === 'stormGust')) {
+          stormStats.searches++;
+          if (fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20, null, true) < 0) fail('every storm beat can be flown without being caught by a gust', `${b.kind} at ${b.a}, start ${t0.toFixed(2)} s, seed ${k}`);
+          else stormStats.clean++;
+        }
+      }
+    }
+    // every storm-glass orb can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'stormGlass')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        stormStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < SM.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every storm-glass orb can be grabbed and escaped by the widest pilot', `glass at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      stormStats.glass++;
+    }
+  }
+}
+const stormSummary = () => `PASS: Thunder Rift: ${stormStats.seeds} layouts × ${stormStats.len} m, only its own traps (${Object.entries(stormStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${stormStats.minW.toFixed(0)}+ wide, slate steps of slope ${stormStats.slope.toFixed(2)} (max ${SM.RULES.maxWallSlope}); lanes between pylons ${stormStats.teslaLane.toFixed(0)}+, beside lightning columns ${stormStats.boltLane.toFixed(0)}+ (minLane ${SM.RULES.minLane}), strikes only from above, orb paths ${stormStats.orbWall.toFixed(0)}+ off the walls, beats ${stormStats.beatGap.toFixed(0)}+ apart; pickups ${stormStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${stormStats.traps} beats (gusts shoving the search; ${stormStats.clean} passes also clear of every gust) and ${stormStats.glass} storm-glass orbs (grab and escape) flown by the widest pilot in ${stormStats.searches} searches from 6 phases each, the slowest pass ${stormStats.worst.toFixed(1)} s`;
 // ---------- Adventure: the Glowshroom Grotto (island level 10), an authored stage with its own traps ----------
 // As the temple's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
 // phases and looks), then every beat and every glow pearl flown by a time-space search for the widest pilot on the
@@ -1477,4 +1794,6 @@ console.log(advSummary());
 console.log(templeSummary());
 console.log(hiveSummary());
 console.log(grottoSummary());
+console.log(frostSummary());
+console.log(stormSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
