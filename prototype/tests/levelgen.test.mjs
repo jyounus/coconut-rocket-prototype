@@ -3582,6 +3582,163 @@ const clockworkStats = { seeds: 0, traps: 0, searches: 0, worst: 0, watches: 0, 
 }
 const clockworkSummary = () => `PASS: Clockwork Tower: ${clockworkStats.seeds} layouts × ${clockworkStats.len} m, only its own traps (${Object.entries(clockworkStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first, all on one ${CG.CLOCKWORK.beat} s beat; shaft ${clockworkStats.minW.toFixed(0)}+ wide, wall slope ${clockworkStats.slope.toFixed(2)} (max ${CG.RULES.maxWallSlope}); open lanes past gears ${clockworkStats.lane.clockworkGear.toFixed(0)}+, pistons ${clockworkStats.lane.clockworkPiston.toFixed(0)}+, cuckoos ${clockworkStats.lane.clockworkCuckoo.toFixed(0)}+, anchors ${clockworkStats.lane.clockworkAnchor.toFixed(0)}+ (minLane ${CG.RULES.minLane}), beats ${clockworkStats.beatGap.toFixed(0)}+ apart; pickups ${clockworkStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${clockworkStats.traps} beats and ${clockworkStats.watches} golden watches (reach and escape) flown by the widest pilot in ${clockworkStats.searches} searches, the slowest pass ${clockworkStats.worst.toFixed(1)} s`;
 // (test slot: Clockwork Tower, island level 26)
+// ---------- Adventure: Kooky Lab (island level 27), an authored stage with its own traps ----------
+// As Cascade Falls' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every Eureka potion flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases. A ray's beam, a falling flask and its goo count as solid (every beat can be
+// passed without ever being shrunk or slimed, which the "never shrunk" mission needs), and a magnet that is on drags the
+// search toward it as it drags the rocket.
+const LK = new Function(regions.join('\n') + '\nreturn { createLabLevel, labkShapes, labkDanger, labkEnd, labkGrabAt, labkGrabTip, labkRayAt, labkFlaskAt, labkMagAt, labkPull, labkFallT, LABK, LABK_STAGE, LABK_TYPES, LABK_GOO, ADV_LAB, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const labStats = { seeds: 0, traps: 0, searches: 0, worst: 0, pots: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, grabLane: Infinity, pull: 0 };
+{
+  const R = LK.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = LK.ADV_LAB, X = LK.LABK;
+  if (st0.theme !== 'lab' || !(st0.reward > 0)) fail('Kooky Lab is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'labPotions' && g.n === 3) || !st0.goals.some(g => g.k === 'labNoShrink')) fail('Kooky Lab has three missions: the Great Tank, 3 Eureka potions and never shrunk', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * LK.UNITS_PER_M - LK.labkEnd()) > 1e-6) fail('the Kooky Lab stage length matches its layout', `${st0.len}`);
+  // the stage's order: grabbers, then rays, then flasks, then magnets, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { grabPair: 'labGrab', grabBoth: 'labGrab', rayGrab: 'labRay', rayPair: 'labRay', flaskPair: 'labFlask', flaskGrab: 'labFlask', flaskRay: 'labFlask', magGrab: 'labMag', magFlask: 'labFlask', magRay: 'labRay', magPair: 'labMag' };
+    const S = LK.LABK_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each lab trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a lab trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'labGrab,labRay,labFlask,labMag') fail('Kooky Lab teaches grabbers, then rays, then flasks, then magnets', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) fail('Kooky Lab has a breather', '');
+    if (!S[S.length - 1].finish) fail('Kooky Lab ends at the Great Tank', '');
+  }
+  // a magnet's pull is always much weaker than the steering
+  labStats.pull = X.mag.pull;
+  if (X.mag.pull > 330 * 0.6) fail('a magnet never pulls harder than 60% of the steering', `${X.mag.pull}`);
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (LK.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // every shape of the traps at t, lethal and soft alike (the search never lets itself be shrunk or slimed)
+  const allShapes = (traps, t, S) => { for (const h of traps) LK.labkShapes(h, t, S, h.noBeam ? 'still' : undefined); return S; };
+  // the search (as the cascade's): a magnet that is on shifts every step sideways by its pull
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, mags = traps.filter(h => h.type === 'labMag');
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []), pw = mags.map(h => LK.labkMagAt(h, t - DT).power);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        let drift = 0; mags.forEach((h, i) => { drift += LK.labkPull(h, pw[i], xi * DX, lo + ai * DA); });
+        const sh = drift ? Math.round(drift * DT / DX) || Math.sign(drift) : 0;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd + sh; dX <= sd + sh; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.labDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)), xs: [...front].slice(0, 30).map(k => [Math.floor((k % V) / 1000) * DX, lo + (k % V) % 1000 * DA]) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = LK.createLabLevel(LK.advSeed(st), st), hz = [], fr = [];
+    labStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('lab traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('lab pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    labStats.len = level.end / 10;
+    for (const h of hz) if (!LK.LABK_TYPES.has(h.type)) fail('Kooky Lab only has its own traps', h.type);
+    for (const h of hz) labStats.kinds[h.type] = (labStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); labStats.beatGap = Math.min(labStats.beatGap, g); if (g < 0) fail('lab beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    // within a beat the traps never overlap either
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.alt !== q.alt && p.hi > q.lo && q.hi > p.lo) fail('the traps of a lab beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Great Tank below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      labStats.minW = Math.min(labStats.minW, r - l); labStats.slope = Math.max(labStats.slope, l2 - l, r - r2);
+    }
+    if (labStats.minW < R.minWidth) fail('the lab shaft is never narrower than minWidth', labStats.minW.toFixed(1));
+    if (labStats.slope > R.maxWallSlope) fail('the lab walls never step in faster than maxWallSlope', labStats.slope.toFixed(2));
+    for (const h of hz) {
+      if (h.type === 'labGrab') {
+        // at full reach a claw leaves the widest pilot a lane by the far wall (past whatever is parked there)
+        const [l, r] = level.walls(h.alt), S = [];
+        for (let t = 0; t < h.P; t += 1 / 30) LK.labkShapes(h, t, S, 'body');
+        const twin = hz.find(q => q !== h && q.type === 'labGrab' && q.alt === h.alt);
+        let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + h.side * q.r] : [q.x0 + h.side * q.r, q.x1 + h.side * q.r]; for (const x of xs) reach = Math.max(reach, h.side * x); }
+        let lane = h.side > 0 ? r - reach : -reach - l;
+        if (twin) { const T = []; LK.labkShapes(twin, (1 - twin.ph) * twin.P + 0.01, T, 'body'); let park = -Infinity; for (const q of T) { const xs = q.k === 'c' ? [q.x - h.side * q.r] : [q.x0 - h.side * q.r, q.x1 - h.side * q.r]; for (const x of xs) park = Math.max(park, -h.side * x); } lane = h.side > 0 ? -park - reach : -reach - park; }
+        labStats.grabLane = Math.min(labStats.grabLane, lane);
+        if (lane < W + 12) fail('a grabber at full reach leaves the widest pilot a lane', `${h.alt} ${lane.toFixed(0)}`);
+      }
+      if (h.type === 'labFlask') {
+        // a flask lands on its bench
+        const land = X.flask.x0 + X.flask.vx * LK.labkFallT();
+        if (land > X.flask.bench - 8) fail('a slime flask lands on its bench', `${land}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = LK.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('lab pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the Eureka potions, the Tea Break's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(LK.laneSize().w / 2 + 6 + LK.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of LK.labkDanger(h)) dd = Math.min(dd, LK.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) labStats.pick = Math.min(labStats.pick, dd);
+      if (dd < need - 0.5) fail('lab pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < LK.pickR(fr[i]) + LK.pickR(fr[j]) + LK.PICK_GAP - 0.01) fail('lab pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'potion').length !== 3) fail('Kooky Lab holds exactly 3 Eureka potions', `${fr.filter(f => f.kind === 'potion').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('Kooky Lab keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      // (it starts 150 under the beat, or just over the last beat's reach where that is closer)
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      labStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        labStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every lab trap can be passed by the widest pilot from any phase, never shrunk or slimed', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.labDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else labStats.worst = Math.max(labStats.worst, tm);
+      }
+    }
+    // every Eureka potion can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'potion')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      // (a potion on a beam's line is a dare against the "never shrunk" mission: there the beam only shrinks)
+      const flyTraps = traps.map(h => h.type === 'labRay' && Math.abs(h.alt - f.alt) < 20 ? { ...h, noBeam: true } : h);
+      for (let p = 0; p < 6; p++) {
+        labStats.searches++;
+        const tm = fly(level, flyTraps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < LK.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every Eureka potion can be grabbed and escaped by the widest pilot', `potion at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      labStats.pots++;
+    }
+  }
+}
+const labSummary = () => `PASS: Kooky Lab: ${labStats.seeds} layouts × ${labStats.len} m, only its own traps (${Object.entries(labStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each trap taught alone first; shaft ${labStats.minW.toFixed(0)}+ wide, wall slope ${labStats.slope.toFixed(2)} (max ${LK.RULES.maxWallSlope}); grabbers leave ${labStats.grabLane.toFixed(0)}+ lanes, magnets pull ${labStats.pull} at most; beats ${labStats.beatGap.toFixed(0)}+ apart; pickups ${labStats.pick.toFixed(1)}+ from any reach; ${labStats.traps} beats × 6 phases and ${labStats.pots} Eureka potions flown by the widest pilot never shrunk or slimed (${labStats.searches} searches, slowest ${labStats.worst.toFixed(1)} s)`;
 // (test slot: Kooky Lab, island level 27)
 // (test slot: Pipe Organ Cavern, island level 28)
 // (test slot: Pinball Palace, island level 29)
@@ -3614,4 +3771,5 @@ console.log(vaultSummary());
 console.log(cascadeSummary());
 console.log(clockworkSummary());
 console.log(cliffsSummary());
+console.log(labSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
