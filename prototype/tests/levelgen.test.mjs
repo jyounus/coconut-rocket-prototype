@@ -3740,6 +3740,178 @@ const labStats = { seeds: 0, traps: 0, searches: 0, worst: 0, pots: 0, pick: Inf
 }
 const labSummary = () => `PASS: Kooky Lab: ${labStats.seeds} layouts × ${labStats.len} m, only its own traps (${Object.entries(labStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each trap taught alone first; shaft ${labStats.minW.toFixed(0)}+ wide, wall slope ${labStats.slope.toFixed(2)} (max ${LK.RULES.maxWallSlope}); grabbers leave ${labStats.grabLane.toFixed(0)}+ lanes, magnets pull ${labStats.pull} at most; beats ${labStats.beatGap.toFixed(0)}+ apart; pickups ${labStats.pick.toFixed(1)}+ from any reach; ${labStats.traps} beats × 6 phases and ${labStats.pots} Eureka potions flown by the widest pilot never shrunk or slimed (${labStats.searches} searches, slowest ${labStats.worst.toFixed(1)} s)`;
 // (test slot: Kooky Lab, island level 27)
+// ---------- Adventure: the Pipe Organ Cavern (island level 28), an authored stage with its own traps ----------
+// As the tower's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), then every beat and every golden tuning fork flown by a time-space search for the widest pilot on
+// the traps' own clocks from several start phases (a blowing jet, a crashing cymbal and a falling note all count as
+// solid exactly when the game kills on them; a drum's head counts as solid too, so no pass needs a boing). The cave
+// plays one beat for every trap: the searches start off the beat too.
+const OG = new Function(regions.join('\n') + '\nreturn { createOrganLevel, organShapes, organDanger, organEnd, organPipeState, organCymbalState, organNotesState, organCymbalDisc, ORGAN, ORGAN_STAGE, ORGAN_TYPES, ADV_ORGAN, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const organStats = { seeds: 0, traps: 0, searches: 0, worst: 0, forks: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { organPipe: Infinity, organDrum: Infinity, organCymbal: Infinity }, cols: 0, len: 0, kinds: {}, beatGap: Infinity, drumClear: Infinity, drums: 0 };
+{
+  const R = OG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = OG.ADV_ORGAN;
+  const ofail = (rule, d) => fail('organ: ' + rule, d);
+  if (st0.theme !== 'organ' || !(st0.reward > 0)) ofail('the cavern is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'organFork' && g.n === 3) || !st0.goals.some(g => g.k === 'organDrum' && g.n > 0)) ofail('three missions: the grand organ, 3 golden tuning forks and the drums', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * OG.UNITS_PER_M - OG.organEnd()) > 1e-6) ofail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: pipes, then drums, then cymbals, then notes, each taught alone; never faster than taught
+  {
+    const fam = { pipe: 'pipe', pipePair: 'pipe', pipeStack: 'pipe', drum: 'drum', pipeDrum: 'drum', cymbal: 'cymbal', cymbalPipe: 'cymbal', pipeCymbal: 'cymbal', notes: 'notes', notesPipe: 'notes', notesCymbal: 'notes' };
+    const firsts = {}, seen = [];
+    for (const sec of OG.ORGAN_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { ofail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) ofail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if ((o.P && firsts[b].P && o.P > firsts[b].P) || (o.every && firsts[b].every && o.every > firsts[b].every)) ofail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'pipe,drum,cymbal,notes') ofail('the cavern teaches pipes, drums, cymbals, then notes', seen.join());
+    if (!OG.ORGAN_STAGE.some(sec => sec.calm && !sec.finish && sec !== OG.ORGAN_STAGE[0])) ofail('the cavern has a breather', '');
+    if (!OG.ORGAN_STAGE[OG.ORGAN_STAGE.length - 1].finish) ofail('the stage ends at the grand organ', '');
+    for (const sec of OG.ORGAN_STAGE) if (!sec.calm) for (const [, , o] of sec.beats) if ((o.ph && Math.abs(o.ph - Math.round(o.ph)) > 1e-9) || (o.P && o.P !== Math.round(o.P)) || (o.every && o.every !== Math.round(o.every))) ofail('every trap keeps the cave\'s beat (whole beats)', JSON.stringify(o));
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (OG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  const span = q => { const r = q.r || 0; return q.k === 'c' ? [q.a - r, q.a + r] : [Math.min(q.a0, q.a1) - r, Math.max(q.a0, q.a1) + r]; };
+  // the search (as the tower's): solid = every lethal shape of every trap at that moment, and the drums' heads
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) OG.organShapes(h, t, S, 'bot');
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = OG.createOrganLevel(OG.advSeed(st), st), hz = [], fr = [];
+    organStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) ofail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) ofail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    organStats.len = level.end / 10;
+    for (const h of hz) if (!OG.ORGAN_TYPES.has(h.type)) ofail('the cavern only has its own traps', h.type);
+    for (const h of hz) organStats.kinds[h.type.slice(5)] = (organStats.kinds[h.type.slice(5)] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); organStats.beatGap = Math.min(organStats.beatGap, g); if (g < 0) ofail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) ofail('the organ loft below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      organStats.minW = Math.min(organStats.minW, r - l); organStats.slope = Math.max(organStats.slope, l2 - l, r - r2);
+    }
+    if (organStats.minW < R.minWidth) ofail('the shaft is never narrower than minWidth', organStats.minW.toFixed(1));
+    if (organStats.slope > R.maxWallSlope) ofail('the walls never step in faster than maxWallSlope', organStats.slope.toFixed(2));
+    // static lanes: a pipe rank with every jet at full throw and a drum (kettle, ledge and head) leave an open lane of
+    // minLane to the far wall at every height they reach; parked cymbals leave minLane open between them
+    for (const h of hz) {
+      if (h.type === 'organNotes') continue;
+      const S = h.type === 'organCymbal' ? [-1, 1].map(e => { const d = OG.organCymbalDisc(h, e, 0); return { k: 'c', x: d.cx, a: h.alt, r: d.ey }; }) : OG.organDanger(h);
+      if (h.type === 'organCymbal') {
+        const [x0] = ext([S[1]]), [, x1] = ext([S[0]]), m = x0 - x1;
+        organStats.lane.organCymbal = Math.min(organStats.lane.organCymbal, m);
+        if (m < R.minLane) ofail('parked cymbals leave minLane open between them', `${m.toFixed(1)} at ${h.alt | 0}`);
+        continue;
+      }
+      for (const q of S) {
+        const [a0, a1] = span(q);
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l;
+          organStats.lane[h.type] = Math.min(organStats.lane[h.type], m);
+          if (m < R.minLane) { ofail('every pipe and drum leaves a lane of minLane to the far wall', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    // a staff never drops more than two of its four columns at once, and its columns sit inside the walls
+    for (const h of hz.filter(h => h.type === 'organNotes')) {
+      let most = 0;
+      for (let t = 0; t < h.pat.length * h.every * OG.ORGAN.beat + 1; t += 0.02) { const cs = new Set(OG.organNotesState(h, t).falling.map(f => f.i)); most = Math.max(most, cs.size); }
+      organStats.cols = Math.max(organStats.cols, most);
+      if (most > 2) ofail('a staff drops at most two columns at once', `${most} at ${h.alt | 0}`);
+      for (const x of h.cols) for (let a = h.alt - OG.ORGAN.notes.drop; a <= h.alt; a += 10) { const [l, r] = level.walls(a); if (x - 14 < l || x + 14 > r) { ofail('a staff\'s notes fall clear of the walls', `${h.alt | 0}`); break; } }
+    }
+    // a boing never throws you into a trap: above every drum's head the shaft is clear of traps for ORGAN.drum.clear
+    for (const h of hz.filter(h => h.type === 'organDrum')) {
+      const head = h.alt + OG.ORGAN.drum.head;
+      if (!k) organStats.drums++;
+      for (const g of hz) if (g !== h && g.hi > head && g.lo < head + OG.ORGAN.drum.clear + 400) { const d = g.lo - head; organStats.drumClear = Math.min(organStats.drumClear, d); if (d < OG.ORGAN.drum.clear) ofail('the shaft above a drum is clear for its boing', `${g.type} ${d | 0} above the drum at ${h.alt | 0}`); }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = OG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) ofail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: forks and the Choir Rest's stave)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(OG.laneSize().w / 2 + 6 + OG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of OG.organDanger(h)) dd = Math.min(dd, OG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) organStats.pick = Math.min(organStats.pick, dd);
+      if (dd < need - 0.5) ofail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a fork is a dare, but never inside a solid part (a windchest, a trumpet, a kettle, a bracket)
+    for (const f of fr.filter(f => f.kind === 'organFork')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of OG.organShapes(h, 0, [], 'body')) if (OG.shapeDist(q, f.x, f.alt) < OG.COCO_R + 4) { ofail('a fork never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < OG.pickR(fr[i]) + OG.pickR(fr[j]) + OG.PICK_GAP - 0.01) ofail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'organFork').length !== 3) ofail('the cavern holds exactly 3 golden tuning forks', `${fr.filter(f => f.kind === 'organFork').length}`);
+    if (organStats.drums < st0.goals.find(g => g.k === 'organDrum').n) ofail('the cavern has enough drums for its drum mission', `${organStats.drums}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) ofail('the cavern keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      organStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        organStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) ofail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else organStats.worst = Math.max(organStats.worst, tm);
+      }
+    }
+    // every fork can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    const dare = (f, x, a, touch, n, label) => {
+      const own = hz.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        organStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { ofail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'organFork')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < OG.COCO_R + W / 2 - 4, 6, 'golden tuning fork')) organStats.forks++;
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const organSummary = () => `PASS: Pipe Organ Cavern: ${organStats.seeds} layouts × ${organStats.len} m, only its own traps (${Object.entries(organStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first, all on one ${OG.ORGAN.beat} s beat; shaft ${organStats.minW.toFixed(0)}+ wide, wall slope ${organStats.slope.toFixed(2)} (max ${OG.RULES.maxWallSlope}); open lanes past pipes ${organStats.lane.organPipe.toFixed(0)}+, drums ${organStats.lane.organDrum.toFixed(0)}+, between parked cymbals ${organStats.lane.organCymbal.toFixed(0)}+ (minLane ${OG.RULES.minLane}), at most ${organStats.cols} of 4 note columns at once, ${organStats.drumClear.toFixed(0)}+ clear above every drum (${organStats.drums} drums), beats ${organStats.beatGap.toFixed(0)}+ apart; pickups ${organStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${organStats.traps} beats and ${organStats.forks} golden forks (reach and escape) flown by the widest pilot in ${organStats.searches} searches, the slowest pass ${organStats.worst.toFixed(1)} s`;
 // (test slot: Pipe Organ Cavern, island level 28)
 // (test slot: Pinball Palace, island level 29)
 // (test slot: Candy Caverns, island level 30)
@@ -3772,4 +3944,5 @@ console.log(cascadeSummary());
 console.log(clockworkSummary());
 console.log(cliffsSummary());
 console.log(labSummary());
+console.log(organSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
