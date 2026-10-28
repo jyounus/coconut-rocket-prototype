@@ -12633,6 +12633,403 @@ const ADV_WIZARD = { name: 'Wizard\'s Spire', theme: 'wizard', seed: 'isl-35-wiz
   goals: [{ k: 'finish', text: 'Reach the observatory' }, { k: 'wizardScroll', n: 3 }, { k: 'wizardPortal', n: 3 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Wizard's Spire, island level 35)
+/* LEVELGEN:BEGIN */
+// ---------- Starfall Summit (island level 36): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Haunted Lighthouse (see createLighthouseLevel): past the top of the island's volcano and on
+// up into open space, one new trap at a time, each taught alone and slow before it is combined (the Meteor Steps, the
+// Satellite Graveyard, Saucer Shoals, Sunspot Reef), a breather (the Ringed Rest), the Starstorm, then the Star Nest at
+// the top and its finish. Its own shaft (two walls of floating asteroids, the shaft's edge the very outline of the rocks),
+// its own traps and its own look (G.theme 'starfall', see the starfall drawing). The traps' clocks read the sky's time
+// (G.starfallT in play).
+// The twist: low gravity. Gravity eases off as you leave the volcano behind (starfallGrav, to STARFALL.grav.lo of the
+// island's by the Meteor Steps), so the climb is floatier and a fall slower: the game's physics, the bot and the test's
+// search all read the same curve.
+// The traps (every one leaves a lane or a timing that the widest pilot fits through; nothing ever moves up at you):
+// - starfallMeteor (Meteor Shower): stars twinkle on one wall and a dashed track shows across the shaft for `warn` s,
+//   then 1-3 meteors streak down the parallel tracks, one after another (`stag`), fast: only the flaming rock and the
+//   hot first part of its trail hurt. Cross a track before or after its meteor; a close shave is a graze (a mission).
+// - starfallSat (Satellite): an old satellite drifting to and fro across the shaft while it tumbles, two solar panels
+//   on booms sweeping round its gold-foil body; one side of the shaft or the other is always open.
+// - starfallUfo (UFO Beam): a little saucer hovering by one wall. Every P s its lights chase and the beam flickers
+//   (`tell`), then a tractor beam slants down and across the shaft for `on` s: inside it you are hauled toward the
+//   saucer (sideways and up), and the saucer itself is solid. Steer out of the beam, or go by while it is off.
+// - starfallFlare (Solar Flare, this stage's own): a baby sun set in an asteroid wall. It swells and sputters (`tell`),
+//   then throws a looping arch of plasma out of its top, round into the shaft and back into the wall below (a
+//   prominence), holds it, and lets it fall back. The far lane stays open; inside the loop is a tight pocket.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const STARFALL = {
+  grav: { lo: 0.72, a0: 900, a1: 2600 },                 // gravity: the island's below a0, eased to lo by a1
+  rock: { r: [30, 50], gap: 1.12 },                       // the wall asteroids: radius range, spacing (radii)
+  meteor: { warn: 1.15, fly: 0.62, stag: 0.26, r: 12, trail: 30, tr: 7, gap: 100, drop: 124, over: 46, graze: 34, ease: 330 },
+  sat: { amp: 100, Pd: 6.6, Pr: 5.4, body: 15, p0: 20, p1: 66, pr: 10, dish: 22, ease: 300 },
+  ufo: { off: 66, tell: 0.75, on: 2.3, len: 270, ang: 0.62, hw0: 14, hw1: 72, pull: 160, ramp: 0.3, half: 24, rr: 10, dome: 13, k: 1.3, ease: 340 },
+  flare: { reach: 150, half: 80, tell: 0.95, rise: 0.38, hold: 0.8, fade: 0.36, r: 11, sun: 72, out: 22, ease: 330 },
+  star: { r: 16 },
+  chiliGap: 470, end: 380,
+};
+const STARFALL_TYPES = new Set(['starfallMeteor', 'starfallSat', 'starfallUfo', 'starfallFlare']);
+// gravity's share at height a (1 at the volcano's rim, STARFALL.grav.lo out in space)
+const starfallGrav = a => 1 - (1 - STARFALL.grav.lo) * smooth(STARFALL.grav.a0, STARFALL.grav.a1, a);
+// The stage, bottom to top (as LIGHTHOUSE_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). P and ph in seconds. star: that trap guards a fallen star
+// (3 in all, the stage's collectible).
+const STARFALL_STAGE = [
+  { name: 'The Volcano Rim', w: 384, len: 1000, calm: true },
+  { name: 'The Meteor Steps', w: 380, beats: [[560, 'meteor', { n: 1, P: 4.4 }], [620, 'meteor', { n: 1, P: 4.2, ph: 1.6 }], [660, 'meteor', { n: 2, P: 4.4 }], [720, 'meteor', { n: 2, P: 4.2, ph: 2 }],
+    [720, 'meteor', { n: 2, P: 4.0, ph: 0.8 }], [740, 'meteor', { n: 3, P: 4.4 }], [800, 'meteor', { n: 3, P: 4.2, ph: 1.3 }]], tail: 640 },
+  { name: 'The Satellite Graveyard', w: 380, beats: [[640, 'sat', { dir: 1 }], [640, 'sat', { dir: -1, ph: 3 }], [700, 'satPair', {}], [760, 'satMeteor', { P: 4.4 }],
+    [740, 'sat', { dir: 1, ph: 1.5, star: true }], [720, 'satPair', { ph: 2 }], [780, 'satMeteor', { P: 4.2, ph: 1 }]], tail: 620 },
+  { name: 'Saucer Shoals', w: 380, beats: [[560, 'ufo', { P: 5.2 }], [700, 'ufo', { P: 5.2, ph: 2.4 }], [800, 'ufoMeteor', { P: 5, mp: 4.4 }], [760, 'ufo', { P: 5, ph: 1, star: true }],
+    [800, 'ufoSat', { P: 5 }], [800, 'ufoPair', { P: 5 }], [820, 'ufoMeteor', { P: 4.8, mp: 4.2, ph: 2 }]], tail: 640 },
+  { name: 'Sunspot Reef', w: 380, beats: [[620, 'flare', { P: 5 }], [660, 'flare', { P: 5, ph: 2.2 }], [720, 'flarePair', { P: 4.8 }], [760, 'flareMeteor', { P: 4.8, mp: 4.4 }],
+    [740, 'flare', { P: 4.8, ph: 1, star: true }], [780, 'flareSat', { P: 4.6 }], [820, 'flareUfo', { P: 4.6, up: 5 }]], tail: 680 },
+  { name: 'The Ringed Rest', w: 384, len: 1500, calm: true },
+  { name: 'The Starstorm', w: 376, beats: [[580, 'meteor', { n: 3, P: 4 }], [820, 'satMeteor', { P: 4, ph: 1.4 }], [800, 'flareSat', { P: 4.6, ph: 0.8 }], [820, 'ufoMeteor', { P: 4.8, mp: 4, ph: 1 }],
+    [800, 'flarePair', { P: 4.6, ph: 2 }], [900, 'satPair', { ph: 1 }], [800, 'flareUfo', { P: 4.6, up: 4.8, ph: 1.6 }], [800, 'ufoSat', { P: 4.8, ph: 2.6 }], [760, 'meteor', { n: 3, P: 3.9, ph: 2.2 }],
+    [800, 'flareMeteor', { P: 4.6, mp: 4, ph: 2.8 }], [820, 'ufoPair', { P: 4.8, ph: 1.2 }], [780, 'satMeteor', { P: 4, ph: 0.4 }], [800, 'flareSat', { P: 4.4, ph: 3 }]], tail: 780 },
+  { name: 'The Star Nest', w: 384, len: 900, calm: true, finish: true },
+];
+const starfallSecLen = sec => sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const starfallEnd = () => { let y = 0; for (const sec of STARFALL_STAGE) { if (sec.finish) return y + STARFALL.end; y += starfallSecLen(sec); } return y; };
+const starfallEase = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const starfallU = (h, t, P) => pmod(t - (h.ph || 0), P);
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// A meteor track k: from beyond the entry wall (h.from: +1 the right wall) high, down across the shaft to beyond the far
+// wall; the meteor's place on it at v 0..1
+function starfallTrack(h, k) {
+  const X = STARFALL.meteor, a = h.alt + k * X.gap, fx = h.from > 0 ? h.R + X.over : h.L - X.over, tx = h.from > 0 ? h.L - X.over : h.R + X.over;
+  return [fx, a + X.drop / 2, tx, a - X.drop / 2];
+}
+// the shower's state: warn 0..1 through the warning, each meteor's v (null while it is not flying)
+function starfallMeteorState(h, t) {
+  const X = STARFALL.meteor, u = starfallU(h, t, h.P), v = [];
+  for (let k = 0; k < h.n; k++) { const q = (u - X.warn - k * X.stag) / X.fly; v.push(q >= 0 && q <= 1 ? q : null); }
+  return { u, warn: u < X.warn ? u / X.warn : null, v };
+}
+function starfallMeteorShapes(S, h, t, kind) {
+  if (kind === 'body') return S;
+  const X = STARFALL.meteor;
+  if (kind === 'sweep') { for (let k = 0; k < h.n; k++) { const [x0, a0, x1, a1] = starfallTrack(h, k); S.push({ k: 's', x0, a0, x1, a1, r: X.r }); } return S; }
+  const st = starfallMeteorState(h, t);
+  for (let k = 0; k < h.n; k++) {
+    const v = st.v[k]; if (v == null) continue;
+    const [x0, a0, x1, a1] = starfallTrack(h, k), L = Math.hypot(x1 - x0, a1 - a0), ux = (x1 - x0) / L, ua = (a1 - a0) / L;
+    const x = lerp(x0, x1, v), a = lerp(a0, a1, v);
+    S.push({ k: 'c', x, a, r: X.r }, { k: 's', x0: x - ux * 8, a0: a - ua * 8, x1: x - ux * X.trail, a1: a - ua * X.trail, r: X.tr });
+  }
+  return S;
+}
+// The satellite: its middle drifts to and fro across the shaft (and bobs) while it tumbles round
+function starfallSatState(h, t) {
+  const X = STARFALL.sat, w = 2 * Math.PI * pmod(t - (h.ph || 0), X.Pd) / X.Pd;
+  return { x: h.cx + h.amp * Math.sin(w), a: h.alt + 6 * Math.sin(2 * Math.PI * t / 2.7 + h.alt * 0.01), th: h.th0 + h.dir * 2 * Math.PI * t / X.Pr, vx: h.amp * Math.cos(w) * 2 * Math.PI / X.Pd };
+}
+// its parts (art units round its middle, y up): the body, two panels on their booms, the dish and the antenna
+function starfallSatBody(S, x, a, th) {
+  const X = STARFALL.sat, c = Math.cos(th), sn = Math.sin(th);
+  S.push({ k: 'c', x, a, r: X.body });
+  for (const e of [-1, 1]) S.push({ k: 's', x0: x + e * c * X.p0, a0: a + e * sn * X.p0, x1: x + e * c * X.p1, a1: a + e * sn * X.p1, r: X.pr });
+  S.push({ k: 'c', x: x - sn * X.dish, a: a + c * X.dish, r: 8 }, { k: 's', x0: x + sn * 14, a0: a - c * 14, x1: x + sn * 30, a1: a - c * 30, r: 2.5 });
+  return S;
+}
+function starfallSatShapes(S, h, t, kind) {
+  if (kind === 'body') return S;
+  if (kind === 'sweep') { const R = STARFALL.sat.p1 + STARFALL.sat.pr; S.push({ k: 'b', x0: h.cx - h.amp - R, x1: h.cx + h.amp + R, a0: h.alt - R - 6, a1: h.alt + R + 6 }); return S; }
+  const st = starfallSatState(h, t);
+  return starfallSatBody(S, st.x, st.a, st.th);
+}
+// The UFO: the saucer bobbing by its wall; its cycle (rest, the tell, the beam on); the beam's apex and axis
+function starfallUfoState(h, t) {
+  const X = STARFALL.ufo, u = starfallU(h, t, h.P), rest = h.P - X.tell - X.on;
+  const x = h.base + h.side * X.off + 3 * Math.sin(2 * Math.PI * t / 3.1 + h.alt), a = h.alt + 5 * Math.sin(2 * Math.PI * t / 2.3 + h.alt * 0.01);
+  let on = 0, tell = null;
+  if (u >= rest && u < rest + X.tell) tell = (u - rest) / X.tell;
+  else if (u >= rest + X.tell) { const v = u - rest - X.tell; on = Math.min(1, v / X.ramp, (X.on - v) / 0.15); }
+  return { x, a, u, on: clamp(on, 0, 1), tell, beamOn: u >= rest + X.tell };
+}
+const starfallUfoAxis = h => { const A = STARFALL.ufo.ang; return [h.side * Math.sin(A), -Math.cos(A)]; };
+// inside the beam? (the pull's share 0..1 at a point, given the state); the beam is a cone from under the saucer
+function starfallBeamAt(h, st, x, a) {
+  if (!st.on) return 0;
+  const X = STARFALL.ufo, [ux, ua] = starfallUfoAxis(h), dx = x - st.x, da = a - (st.a - 10), l = dx * ux + da * ua, w = Math.abs(dx * ua - da * ux);
+  if (l < 0 || l > X.len) return 0;
+  const hw = lerp(X.hw0, X.hw1, l / X.len);
+  return w < hw ? st.on : 0;
+}
+// the haul (world units a second) on a point in the beam: toward the saucer
+function starfallPullAt(h, st, x, a) {
+  const k = starfallBeamAt(h, st, x, a); if (!k) return null;
+  const dx = st.x - x, da = st.a - a, L = Math.hypot(dx, da) || 1, v = STARFALL.ufo.pull * k;
+  return [dx / L * v, da / L * v];
+}
+function starfallUfoBody(S, x, a) {
+  const X = STARFALL.ufo;
+  const K = X.k; S.push({ k: 's', x0: x - X.half * K, a0: a, x1: x + X.half * K, a1: a, r: X.rr * K }, { k: 'c', x, a: a + 9 * K, r: X.dome * K });
+  return S;
+}
+function starfallUfoShapes(S, h, t, kind) {
+  if (kind === 'sweep' || kind === 'body') { for (const d of [-4, 4]) starfallUfoBody(S, h.base + h.side * STARFALL.ufo.off, h.alt + d); for (const q of S) if (q.k === 'c') q.r += 3; return S; }
+  const st = starfallUfoState(h, t);
+  return starfallUfoBody(S, st.x, st.a);
+}
+// The solar flare: its cycle (rest, the tell, the arch rising out along its loop, held, falling back from its root) and
+// the loop itself (u 0 at the root on top, 1 where it goes back into the wall below)
+function starfallFlareState(h, t) {
+  const X = STARFALL.flare, u = starfallU(h, t, h.P), rest = h.P - X.tell - X.rise - X.hold - X.fade;
+  if (u < rest) return { u0: 0, u1: 0 };
+  let v = u - rest;
+  if (v < X.tell) return { u0: 0, u1: 0, tell: v / X.tell };
+  v -= X.tell; if (v < X.rise) return { u0: 0, u1: starfallEase(v / X.rise), rise: v / X.rise };
+  v -= X.rise; if (v < X.hold) return { u0: 0, u1: 1, hold: v / X.hold };
+  v -= X.hold; return { u0: starfallEase(v / X.fade), u1: 1, fade: v / X.fade };
+}
+const starfallLoopPt = (h, u) => { const X = STARFALL.flare; return [h.base + h.side * (8 + (X.reach - 8) * Math.sin(Math.PI * u)), h.alt + X.half * Math.cos(Math.PI * u)]; };
+function starfallFlareShapes(S, h, t, kind) {
+  const X = STARFALL.flare;
+  S.push({ k: 'c', x: h.base - h.side * (X.sun - X.out), a: h.alt, r: X.sun });   // the baby sun bulging out of the rock
+  if (kind === 'body') return S;
+  const st = kind === 'sweep' ? { u0: 0, u1: 1 } : starfallFlareState(h, t);
+  if (st.u1 - st.u0 < 0.01) return S;
+  const N = 10;
+  for (let i = 0; i < N; i++) {
+    const a = Math.max(st.u0, i / N), b = Math.min(st.u1, (i + 1) / N); if (b <= a) continue;
+    const [x0, a0] = starfallLoopPt(h, a), [x1, a1] = starfallLoopPt(h, b);
+    S.push({ k: 's', x0, a0, x1, a1, r: X.r });
+  }
+  return S;
+}
+// Every collision shape of a starfall trap at time t (the sky's clock), fitted to its drawing. kind: undefined for the
+// lethal ones, 'body' the parts that never go away (a flare's sun, a saucer), 'sweep' everywhere it can ever be.
+function starfallShapes(h, t, S = [], kind) {
+  if (h.type === 'starfallMeteor') starfallMeteorShapes(S, h, t, kind);
+  else if (h.type === 'starfallSat') starfallSatShapes(S, h, t, kind);
+  else if (h.type === 'starfallUfo') starfallUfoShapes(S, h, t, kind);
+  else if (h.type === 'starfallFlare') starfallFlareShapes(S, h, t, kind);
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear)
+function starfallDanger(h) {
+  const S = [];
+  if (h.type === 'starfallSat') { const X = STARFALL.sat; for (let i = 0; i <= 16; i++) S.push({ k: 'c', x: h.cx + h.amp * (i / 8 - 1), a: h.alt, r: X.p1 + X.pr + 6 }); return S; }
+  if (h.type === 'starfallMeteor') { starfallMeteorShapes(S, h, 0, 'sweep'); for (const q of S) q.r += 10; return S; }
+  return starfallShapes(h, 0, S, 'sweep');
+}
+
+// The Starfall Summit's shaft, laid out in full from STARFALL_STAGE (the seed only nudges looks and sides). It answers
+// the same questions as createLighthouseLevel (walls, marks, chambers, chunkMarks, fill, all), plus its wall asteroids.
+// The walls: a stack of floating asteroids on each side. The shaft's edge is the outline of the rocks themselves (each an
+// ellipse, its face `p` into the shaft), filled in where two meet so the edge never steps faster than maxWallSlope (so
+// the hitbox is never inside the art), rocks set back flat where a trap is set into the wall.
+function createStarfallLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x57A2FA11) >>> 0), rr = mulberry32((seed ^ 0x2C0FFEE) >>> 0), C0 = STARFALL;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of STARFALL_STAGE) { const len = starfallSecLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = starfallEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+
+  // ---- the traps (alts and sides first: their flat faces shape the walls) ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const pick = () => (rng() < 0.5 ? 1 : -1);
+  const wallOf = d => d > 0 ? -1 : 1;   // (a trap on the left wall, d 1, flattens side 0)
+  const M0 = C0.meteor, S0 = C0.sat, U0 = C0.ufo, F0 = C0.flare;
+  const make = {
+    meteor(A, o) {
+      const n = o.n || 1, from = o.from || pick();
+      return [{ type: 'starfallMeteor', side: 0, from, n, alt: A, P: o.P || 4.2, ph: o.ph || 0, lo: A - M0.drop / 2 - M0.r - 14, hi: A + (n - 1) * M0.gap + M0.drop / 2 + M0.r + 14, ease: M0.ease, star: !!o.star }];
+    },
+    sat(A, o) {        // (it drifts close to both walls: both are set back flat)
+      flat(A - S0.p1 - 20, A + S0.p1 + 20, 0);
+      return [{ type: 'starfallSat', side: 0, alt: A, ph: o.ph != null ? o.ph : rng() * S0.Pd, dir: o.dir || pick(), th0: rng() * 6.28, lo: A - S0.p1 - S0.pr - 10, hi: A + S0.p1 + S0.pr + 10, ease: S0.ease, star: !!o.star }];
+    },
+    satPair(A, o) {    // two satellites one over the other, drifting half a swing out of step and tumbling opposite ways
+      const p0 = o.ph != null ? o.ph : rng() * S0.Pd, d = pick();
+      return [...make.sat(A, { ph: p0, dir: d }), ...make.sat(A + 190, { ph: p0 + S0.Pd / 2, dir: -d })];
+    },
+    satMeteor(A, o) {  // a satellite, a meteor track above it
+      return [...make.sat(A, { ph: o.ph }), ...make.meteor(A + 250, { n: 1, P: o.P, ph: (o.ph || 0) + 1.1 })];
+    },
+    ufo(A, o) {        // (the saucer hangs `up` over the beat's foot so its beam starts at the beat)
+      const d = o.side || pick(), a = A + (o.up != null ? 0 : 200); flat(a - 50, a + 40, wallOf(d));
+      return [{ type: 'starfallUfo', side: d, alt: a, P: o.P || 5, ph: o.ph || 0, lo: a - U0.len - 10, hi: a + 30, ease: U0.ease, star: !!o.star }];
+    },
+    ufoMeteor(A, o) {  // a meteor track, a saucer above it whose beam hauls you back toward the track
+      return [...make.meteor(A, { n: 1, P: o.mp, ph: o.ph }), ...make.ufo(A + 420, { P: o.P, ph: (o.ph || 0) + 1.4, up: 0 })];
+    },
+    ufoSat(A, o) {     // a satellite, a saucer above it
+      return [...make.sat(A, { ph: o.ph }), ...make.ufo(A + 410, { P: o.P, ph: (o.ph || 0) + 2, up: 0 })];
+    },
+    ufoPair(A, o) {    // saucers on facing walls, their beams out of step
+      const d = pick();
+      return [...make.ufo(A, { side: d, P: o.P, ph: o.ph || 0 }), ...make.ufo(A + 500, { side: -d, P: o.P, ph: (o.ph || 0) + o.P / 2, up: 0 })];
+    },
+    flare(A, o) {
+      const d = o.side || pick(); flat(A - F0.half - 30, A + F0.half + 30, wallOf(d));
+      return [{ type: 'starfallFlare', side: d, alt: A, P: o.P || 5, ph: o.ph || 0, lo: A - F0.half - F0.r - 12, hi: A + F0.half + F0.r + 12, ease: F0.ease, star: !!o.star }];
+    },
+    flarePair(A, o) {  // suns on facing walls, one over the other, out of step
+      const d = pick();
+      return [...make.flare(A, { side: d, P: o.P, ph: o.ph || 0 }), ...make.flare(A + 220, { side: -d, P: o.P, ph: (o.ph || 0) + o.P / 2 })];
+    },
+    flareMeteor(A, o) {
+      return [...make.flare(A, { P: o.P, ph: o.ph }), ...make.meteor(A + 230, { n: 1, P: o.mp, ph: (o.ph || 0) + 2 })];
+    },
+    flareSat(A, o) {
+      return [...make.flare(A, { P: o.P, ph: o.ph }), ...make.sat(A + 240, { ph: (o.ph || 0) * 1.3 })];
+    },
+    flareUfo(A, o) {
+      const d = pick();
+      return [...make.flare(A, { side: d, P: o.P, ph: o.ph }), ...make.ufo(A + 380, { side: -d, P: o.up || 5, ph: (o.ph || 0) + 1.5, up: 0 })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, starfall: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; beats.push({ a, kind, o, hs: make[kind](a, o), sec: sc }); }
+  }
+  marks.push({ alt: C0.grav.a0 + 300, name: 'Low gravity: the climb gets floaty!', zone: 0, starfall: true });
+  marks.sort((p, q) => p.alt - q.alt);
+
+  // ---- the wall asteroids and the shaft's edge ----
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 50 && a < f.a1 + 50) k = Math.max(k, smooth(f.a0 - 50, f.a0, a) * (1 - smooth(f.a1, f.a1 + 50, a))); return k; };
+  const rocks = [[], []], STEP = 4, OFF = 300, NP = Math.ceil((topA + 900 + OFF) / STEP) + 2, prof = [new Float32Array(NP), new Float32Array(NP)];
+  for (const side of [0, 1]) {
+    let a = -240, i = 0;
+    while (a < topA + 900) {
+      const r = lerp(C0.rock.r[0], C0.rock.r[1], rr()), big = rr();
+      let p = big < 0.22 ? 1 + rr() * 3 : 5 + rr() * 13;
+      p *= smooth(200, 520, a) * 0.85 + 0.15;
+      if (flatK(a, side) > 0.05) p = -3 - rr() * 4;
+      const cr = rr(), rk = { c: a, ry: r, rx: r * (0.66 + rr() * 0.3), p, seed: (i * 7919 + side * 104729 + (seed & 0xffff)) >>> 0, crys: cr < 0.28 ? 1 : cr < 0.46 ? 2 : 0, tint: Math.floor(rr() * 4), rot: (rr() - 0.5) * 0.6 };
+      rocks[side].push(rk);
+      a += r * C0.rock.gap + rr() * 10; i++;
+    }
+    const P = prof[side];
+    for (const rk of rocks[side]) {
+      if (rk.p <= 0) continue;
+      const i0 = Math.max(0, Math.floor((rk.c - rk.ry + OFF) / STEP) + 1), i1 = Math.min(NP - 1, Math.ceil((rk.c + rk.ry + OFF) / STEP) - 1);
+      for (let k = i0; k <= i1; k++) { const q = (k * STEP - OFF - rk.c) / rk.ry, e = rk.p - rk.rx + rk.rx * Math.sqrt(Math.max(0, 1 - q * q)); if (e + 1.2 > P[k]) P[k] = e + 1.2; }
+    }
+    // never step faster than the slope rule (filling the notch where two rocks meet: the edge never cuts into a rock)
+    const dmax = 1.42 * STEP;
+    for (let k = 1; k < NP; k++) P[k] = Math.max(P[k], P[k - 1] - dmax);
+    for (let k = NP - 2; k >= 0; k--) P[k] = Math.max(P[k], P[k + 1] - dmax);
+  }
+  const reliefAt = (a, side) => { const f = clamp((a + OFF) / STEP, 0, NP - 1.001), k = Math.floor(f), u = f - k, P = prof[side]; return P[k] * (1 - u) + P[k + 1] * u; };
+  function sWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function sOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = sWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+  // finish the traps now the walls are known
+  for (const b of beats) for (const h of b.hs) {
+    const [L, R] = sOpening(h.lo - 4, h.hi + 4);
+    h.L = L; h.R = R;
+    if (h.type === 'starfallMeteor') { h.base = L; h.x = (L + R) / 2; }
+    else if (h.type === 'starfallSat') { h.cx = (L + R) / 2; h.x = h.cx; h.amp = Math.min(S0.amp, (R - L) / 2 - S0.p1 - S0.pr - 8); h.base = L; }
+    else if (h.type === 'starfallUfo') { h.base = h.side > 0 ? L : R; h.x = h.base + h.side * U0.off; }
+    else { const [l2, r2] = sOpening(h.alt - 20, h.alt + 20); h.base = h.side > 0 ? l2 : r2; h.x = h.base + h.side * 90; }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, starfallDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const fits = (x, a, r, clear) => { const [l, rr2] = sWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr2 && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = sWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = sWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + C0.end - 120, 0.5);
+    else {   // the Ringed Rest: a ring of coconuts round a big coin (a little planet and its ring), then a weave
+      const cA = sc.a0 + 660, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 96, cA + Math.sin(an) * 40, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 120, sc.a0 + 540, 0.7, 2); weave(sc.a0 + 820, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way (the open lane or the time to go); a trap guarding a star keeps it as the dare
+  let stars = 0;
+  for (const b of beats) {
+    for (const h of b.hs) {
+      if (h.type === 'starfallFlare') { const [l, r] = sWalls(h.alt), e = h.base + h.side * (F0.reach + F0.r); column(h.side > 0 ? (e + r) / 2 : (l + e) / 2, h.alt - 40, 3, 40, { clear: 26 }); }
+      else if (h.type === 'starfallUfo') { const x = h.base + h.side * (U0.off + U0.half + 110); column(x, h.alt - 40, 2, 44, { clear: 26 }); }
+      else if (h.type === 'starfallSat') column(mid(h.alt) + (rng() - 0.5) * 120, h.alt + 110, 2, 40, { clear: 26 });
+      else column(mid(h.alt) + (rng() - 0.5) * 100, h.hi + 30, 2, 40, { clear: 26 });
+      if (h.star) {
+        let mx, ma;
+        if (h.type === 'starfallFlare') { mx = h.base + h.side * 82; ma = h.alt; }                     // in the loop's pocket
+        else if (h.type === 'starfallSat') { mx = h.cx + h.amp * 0.55; ma = h.alt; }                     // in its sweep
+        else if (h.type === 'starfallUfo') { const [ux, ua] = starfallUfoAxis(h); mx = h.x + ux * 150; ma = h.alt - 10 + ua * 150; }   // down its beam
+        else { const [x0, a0, x1, a1] = starfallTrack(h, 0); mx = lerp(x0, x1, 0.55); ma = lerp(a0, a1, 0.55) + M0.gap / 2; }       // between two tracks
+        fruit.push({ x: mx, alt: ma, kind: 'starfallStar', star: true, clear: -Infinity }); stars++;
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(h => h.hi)) + 70, a1 = Math.min(...next.hs.map(h => h.lo)) - 90; if (a1 - a0 > 60) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the lighthouse's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= C0.chiliGap + 130; j++) if (spots[j].a - last >= C0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < C0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: sWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, starfall: true, sections: secs, beats, top: topA, stars, rocks,
+    reliefAt, baseWalls,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 36): its own shaft (createStarfallLevel), the starfall look (G.theme), its missions
+// (the Star Nest, 3 fallen stars, graze 5 meteors) and its length in metres (from the layout).
+const ADV_STARFALL = { name: 'Starfall Summit', theme: 'starfall', seed: 'isl-36-starfall', reward: 260, target: 0, len: starfallEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Star Nest' }, { k: 'starfallStar', n: 3 }, { k: 'starfallGraze', n: 5 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Starfall Summit, island level 36)
 // (LEVELGEN slot: Beanstalk Heights, island level 37)
 // (LEVELGEN slot: Sandstorm Canyon, island level 38)
@@ -41376,7 +41773,7 @@ const ISLAND = {
     { id: 33, name: 'Monkey Carnival', region: 'carnival', pilot: 'lemur', perk: 'The monkeys think he is part of the act' },
     { id: 34, name: 'Haunted Lighthouse', region: 'lighthouse', pilot: 'firefly', perk: 'His own glow burns back the shadow hands', stage: 'lighthouse' },
     { id: 35, name: 'Wizard\'s Spire', region: 'wizard', pilot: 'mushroom', perk: 'The wizard\'s pet: the books leave him alone', stage: 'wizard' },
-    { id: 36, name: 'Starfall Summit', region: 'starfall', pilot: 'goat', perk: 'A firework rocket that goes extra high' },
+    { id: 36, name: 'Starfall Summit', region: 'starfall', pilot: 'goat', perk: 'His firework kick shoots extra high', stage: 'starfall' },
     { id: 37, name: 'Beanstalk Heights', region: 'beanstalk', pilot: 'snail', perk: 'Crawls up the stalk when the fuel runs out' },
     { id: 38, name: 'Sandstorm Canyon', region: 'sandstorm', pilot: 'chameleon', perk: 'Tongue snatches scorpions' },
     { id: 39, name: 'Anthill Underworks', region: 'anthill', pilot: 'mole', perk: 'Digs side tunnels' },
@@ -41455,6 +41852,7 @@ ADV_STAGES.cheese = ADV_CHEESE;   // (island level 31, Cheddar Caverns: see crea
 ADV_STAGES.toybox = ADV_TOYBOX;   // (island level 32, Toybox Tower: see createToyboxLevel)
 ADV_STAGES.lighthouse = ADV_LIGHTHOUSE;   // (island level 34, Haunted Lighthouse: see createLighthouseLevel)
 ADV_STAGES.wizard = ADV_WIZARD;   // (island level 35, Wizard's Spire: see createWizardLevel)
+ADV_STAGES.starfall = ADV_STARFALL;   // (island level 36, Starfall Summit: see createStarfallLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -81951,6 +82349,1408 @@ function wizardPortalIcon() {
 // play-testing hook (only with ?debug in the URL): the tower's shapes and clocks for scripts
 if (/[?&]debug\b/.test(location.search)) window.CRW = { WIZARD, WIZARD_STAGE, wizardShapes, wizardDanger, wizardBookState, wizardCauldronState, wizardQuillState, wizardPortalMouth, createWizardLevel, cache: WIZARD_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Wizard's Spire, island level 35)
+// ---------- Starfall Summit (island level 36): its look, traps, stars and sounds ----------
+// The stage's shaft and traps are laid out by createStarfallLevel (LEVELGEN); here they come alive and get drawn.
+// While it runs G.theme is 'starfall': up past the island volcano's smoking rim into open space. Two walls of floating
+// asteroids (lilac-grey moon rock lit from the top left, craters as bowl-and-lip line pairs, moon-dust drifts, crystals
+// of cyan and violet growing out of them, a warm rim of planet light from below), and behind them deep blue-violet space:
+// nebulae, a band of stars, a big ringed planet, far rocks drifting in parallax, and each section's own set dressing (the
+// volcano and its cloud sea below, a derelict satellite graveyard, a mothership's lights, a burning sun, the ringed
+// planet close up, a meteor storm). Nothing of it shows anywhere else (Daily and Practice never set a theme). Art as the
+// rest of the game: cartoony, 2-3 stop gradients lit from the top left, every edge a darker shade of its own colour
+// (never black), detail as line pairs (a dark furrow under a lit ridge), sheen strokes and soft glows.
+// Performance: everything static (the walls, the backdrop's layers, the planet, satellites, saucers, suns, the nest) is
+// drawn once into cached canvases at the screen's pixel density (tiles down the height, rendered a little ahead of the
+// camera, one per frame) and blitted; gradients for live parts are built once in local units and reused; motes, sparks
+// and dust are cheap fills, capped in number; every cache key is quantised.
+const STARFALL_P = {
+  rock: ['#c4bfe6', '#9089c4', '#5e5896', '#3a3570'], rockE: '#3e3878',
+  dust: ['#e8e4fa', '#bdb6e4', '#8a82c0'],
+  cyan: [124, 240, 255], violet: [196, 140, 255], gold: [255, 213, 106], warm: [255, 170, 120],
+  hot: ['#fffbe6', '#ffd56a', '#ff8a4a', '#c8402e'], hotE: '#8a2a26',
+  foil: ['#fff4b0', '#f0c048', '#b47a1c', '#7a4a10'], foilE: '#6a3e0e',
+  panel: ['#8ad0ff', '#3a78d8', '#1e449a', '#14306e'], panelE: '#1a3070',
+  steel: ['#f2f2ff', '#c4c6e6', '#8a8cba', '#555890'], steelE: '#45487e',
+  sun: ['#fffef0', '#ffe68a', '#ffa64a', '#e8603a'], sunE: '#a8382a',
+  plasma: [255, 150, 90],
+  pal: { bgTop: [40, 36, 110], bgBot: [16, 18, 58], far: [44, 44, 112], far2: [36, 36, 96], wall: [176, 170, 222], wallIn: [70, 64, 130], rim: [214, 206, 255] },
+};
+const starfallOn = () => !!(G && G.theme === 'starfall');
+{ const base = pal; pal = function (key, a) { return starfallOn() && STARFALL_P.pal[key] ? STARFALL_P.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function starfallLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function starfallRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+// a radial gradient with its hot spot off centre (lit from the top left)
+function starfallRG2(x0, y0, r0, x1, y1, r1, cols, c = ctx) { const g = c.createRadialGradient(x0, y0, r0, x1, y1, r1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+const starfallCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const starfallHex = h => h.slice(1, 7).match(/../g).map(x => parseInt(x, 16));
+const starfallMixC = (a, b, k) => a.map((v, i) => lerp(v, b[i], k));
+const starfallLift = (c, d) => c.map(v => clamp(v + d, 0, 255));
+function starfallCirc(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.01, r), 0, TWO_PI); }
+function starfallEll(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); }
+function starfallRRect(c, x, y, w, h, r) { c.beginPath(); c.roundRect(Math.min(x, x + w), Math.min(y, y + h), Math.abs(w), Math.abs(h), Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2))); }
+// a smooth closed blob through points (quadratic curves through the midpoints)
+function starfallBlob(c, pts) {
+  const n = pts.length, mx = i => (pts[i][0] + pts[(i + 1) % n][0]) / 2, my = i => (pts[i][1] + pts[(i + 1) % n][1]) / 2;
+  c.beginPath(); c.moveTo(mx(n - 1), my(n - 1));
+  for (let i = 0; i < n; i++) c.quadraticCurveTo(pts[i][0], pts[i][1], mx(i), my(i));
+  c.closePath();
+}
+// a sheen stroke on a round thing (an arc of white on its lit upper left)
+function starfallSheen(c, x, y, r, a = 0.5, from = 3.6, to = 4.7) { c.save(); c.strokeStyle = `rgba(255,255,250,${a})`; c.lineWidth = Math.max(0.6, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.7, from, to); c.stroke(); c.restore(); }
+// a four-point twinkle (additive)
+function starfallTwinkle(c, x, y, r, a, col = [236, 244, 255]) {
+  if (a < 0.03 || r < 0.3) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = starfallCol(col, Math.min(1, a));
+  c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r); c.fill();
+  c.restore();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function starfallCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0); c.lineJoin = 'round'; c.lineCap = 'round';
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const STARFALL_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map(), grads: new Map() };
+function starfallCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (STARFALL_CACHE.key !== key) { STARFALL_CACHE.key = key; STARFALL_CACHE.walls.clear(); STARFALL_CACHE.layers.clear(); STARFALL_CACHE.sprites.clear(); STARFALL_CACHE.grads.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function starfallSprite(name, w, h, draw) {
+  let sp = STARFALL_CACHE.sprites.get(name);
+  if (!sp) { sp = starfallCanvas(w, h); draw(sp.c, sp.w, sp.h); STARFALL_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// A cached piece of art in screen orientation drawn at the screen's scale in world units round its origin (y down),
+// covering x0..x1, y0..y1; blitted with starfallBlit(sp, X, Y) at the origin's screen point
+function starfallPiece(name, x0, x1, y0, y1, draw) {
+  let sp = STARFALL_CACHE.sprites.get(name);
+  if (!sp) {
+    sp = starfallCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = -x0 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(s, s); draw(sp.c);
+    STARFALL_CACHE.sprites.set(name, sp);
+  }
+  return sp;
+}
+const starfallBlit = (sp, X, Y) => ctx.drawImage(sp.cv, X - sp.ax, Y - sp.ay, sp.w, sp.h);
+// blit a piece rotated by an angle round its origin
+function starfallBlitRot(sp, X, Y, ang, k = 1) { ctx.save(); ctx.translate(X, Y); ctx.rotate(ang); if (k !== 1) ctx.scale(k, k); ctx.drawImage(sp.cv, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore(); }
+// a gradient built once in local units for the main context (reused every frame under a transform)
+function starfallGrad(name, make) { let g = STARFALL_CACHE.grads.get(name); if (!g) { g = make(ctx); STARFALL_CACHE.grads.set(name, g); } return g; }
+// a soft additive glow blitted from a cached disc (cheap: no gradient built per frame); colours keyed as given (fixed
+// palette colours only, never computed ones)
+function starfallGlow(x, y, r, col, a, c = ctx) {
+  if (a < 0.004 || r < 0.5) return;
+  col = col.map(v => Math.min(255, Math.round(v / 24) * 24));   // (quantised: a blended section colour never grows the cache)
+  const sp = starfallSprite('glow' + col.join(','), 64, 64, cc => { cc.fillStyle = starfallRG(32, 32, 32, [starfallCol(col, 1), starfallCol(col, 0.32), starfallCol(col, 0)], cc); cc.fillRect(0, 0, 64, 64); });
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+// a soft dark shade blitted from a cached disc
+function starfallShade(x, y, rx, ry, a, c = ctx) {
+  if (a < 0.01) return;
+  const sp = starfallSprite('shade', 64, 32, cc => { cc.fillStyle = starfallRG(32, 16, 32, ['rgba(14,12,44,1)', 'rgba(14,12,44,.45)', 'rgba(14,12,44,0)'], cc); cc.save(); cc.scale(1, 0.5); cc.fillRect(0, 0, 64, 64); cc.restore(); });
+  c.save(); c.globalAlpha = Math.min(1, a); c.drawImage(sp.cv, x - rx, y - ry, rx * 2, ry * 2); c.restore();
+}
+// the sky's time, and how loud something at height a sounds (0 off screen)
+const starfallT = () => (G && G.starfallT) || 0;
+const starfallVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+// is the pilot Billy Boom the goat (his Triple-Bang firework's re-press kick shoots extra high: the perk)?
+const STARFALL_PERK = { kick: 1.55 };
+const starfallGoat = () => settings.character === 'goat';
+
+// ---- the sky's own particles: sparks, moon dust, rings, embers of plasma, little stars ----
+function starfallFx(kind, x, a, vx, va, life, size, o = {}) {
+  const D = G.starfallFx || (G.starfallFx = []); if (D.length > 150) D.shift();
+  D.push({ kind, x, a, vx, va, life, max: life, size, rot: Math.random() * 6, w: (Math.random() - 0.5) * 8, ...o });
+}
+function updateStarfallFx(dt) {
+  const D = G.starfallFx; if (!D) return;
+  const g = 300 * starfallGrav(G.p ? G.p.alt : 0);
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    if (q.kind === 'spark' || q.kind === 'fire') { q.va -= g * dt; q.vx *= 1 - dt * 1.2; }
+    else if (q.kind === 'dust') { q.vx *= 1 - dt * 1.6; q.va = q.va * (1 - dt * 1.4) + 12 * dt; }
+    else if (q.kind === 'ember') { q.vx *= 1 - dt * 2; q.va = q.va * (1 - dt * 2) + 30 * dt; }
+    else if (q.kind === 'star') { q.vx *= 1 - dt * 2.4; q.va *= 1 - dt * 2.4; }
+    q.x += q.vx * dt; q.a += q.va * dt; q.rot += q.w * dt;
+  }
+}
+function starfallBlobSprite(col) {
+  return starfallSprite('blob' + col.join(','), 32, 32, c => { c.fillStyle = starfallRG(16, 16, 16, [starfallCol(col, 0.9), starfallCol(col, 0.4), starfallCol(col, 0)], c); c.fillRect(0, 0, 32, 32); });
+}
+function drawStarfallFx() {
+  const D = G.starfallFx; if (!D || !D.length) return;
+  for (const q of D) {
+    const y = sy(q.a); if (y < -50 || y > H + 50) continue;
+    const t = q.life / q.max, x = sx(q.x);
+    if (q.kind === 'dust') {
+      const r = q.size * (0.6 + 0.9 * (1 - t)) * s, sp = starfallBlobSprite(q.col || [170, 160, 220]);
+      ctx.save(); ctx.globalAlpha = 0.5 * t; ctx.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); ctx.restore();
+    } else if (q.kind === 'ember') {
+      const r = q.size * (0.5 + 0.5 * t) * s;
+      starfallGlow(x, y, r * 2.4, q.col || STARFALL_P.plasma, 0.55 * t);
+      ctx.fillStyle = `rgba(255,246,214,${0.85 * t})`; starfallCirc(ctx, x, y, r * 0.45); ctx.fill();
+    } else if (q.kind === 'ring') {
+      const u = 1 - t, r = q.size * (0.3 + u) * s;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = starfallCol(q.col || [200, 240, 255], 0.45 * t); ctx.lineWidth = (2 * t + 0.5) * s;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * (q.flat || 0.5), 0, 0, TWO_PI); ctx.stroke(); ctx.restore();
+    } else if (q.kind === 'star') {
+      starfallTwinkle(ctx, x, y, q.size * (0.4 + 0.6 * t) * s, t, q.col || [255, 236, 170]);
+    } else {   // a spark / firework fleck: a short hot streak along its flight
+      const col = q.col || [255, 226, 150];
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = starfallCol(col, t); ctx.lineWidth = q.size * s; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - q.vx * 0.03 * s, y + q.va * 0.03 * s); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+// ---- sounds (synth): a meteor warning's twinkle and its streak, a graze's whizz, a satellite's beeps, a saucer's
+// warble and its beam's hum, a sun's rumble and its flare's roar, a fallen star's chime, the goat's firework, the nest ----
+const STARFALL_SFX = {
+  // the warning: glassy twinkles high up, one per track
+  swarn: (t, B, v, o) => { const n = o.n || 1; for (let k = 0; k < 2 + n; k++) vTone(B, t + k * 0.11, 2093 + (k % 3) * 400, { type: 'sine', v: 0.022 * v, dur: 0.22 }); vTone(B, t, 1046, { type: 'triangle', v: 0.01 * v, dur: 0.6, vib: [7, 14] }); },
+  // a meteor streaking past: a falling whoosh with a crackle of fire
+  sstreak: (t, B, v) => { vNoise(B, t, { f: 2400, f2: 500, q: 1.3, v: 0.09 * v, dur: 0.55, a: 0.04 }); vNoise(B, t + 0.05, { type: 'highpass', f: 5000, v: 0.03 * v, dur: 0.35 }); vTone(B, t, 900, { f2: 180, glide: 0.5, type: 'sawtooth', lp: 1200, v: 0.025 * v, dur: 0.5 }); },
+  sgraze: (t, B) => { vTone(B, t, 1600, { f2: 700, glide: 0.18, type: 'square', lp: 3000, v: 0.03, dur: 0.2 }); vNoise(B, t, { f: 3200, q: 2, v: 0.05, dur: 0.18 }); vTone(B, t + 0.08, 2637, { type: 'sine', v: 0.03, dur: 0.3 }); },
+  // the satellite: two little telemetry beeps
+  sbeep: (t, B, v) => { vTone(B, t, 1760, { type: 'square', lp: 2600, v: 0.012 * v, dur: 0.06 }); vTone(B, t + 0.12, 2349, { type: 'square', lp: 2600, v: 0.012 * v, dur: 0.06 }); },
+  // the saucer: a theremin warble rising (the tell), then the beam's hum
+  sufo: (t, B, v) => { vTone(B, t, 520, { f2: 980, glide: 0.6, type: 'sine', v: 0.05 * v, dur: 0.7, a: 0.08, vib: [9, 40] }); vTone(B, t + 0.02, 780, { f2: 1470, glide: 0.6, type: 'triangle', lp: 2000, v: 0.015 * v, dur: 0.6, vib: [9, 50] }); },
+  sbeam: (t, B, v) => { vTone(B, t, 110, { type: 'sawtooth', lp: 500, v: 0.04 * v, dur: 2.2, a: 0.2, vib: [5, 6] }); vTone(B, t, 220.5, { type: 'sine', v: 0.03 * v, dur: 2.2, a: 0.25, vib: [6, 10] }); vTone(B, t, 1320, { type: 'sine', v: 0.008 * v, dur: 2, a: 0.3, vib: [4, 20] }); },
+  // the sun: a rumbling crackle swelling (the tell), then the flare's roar
+  srumble: (t, B, v) => { vNoise(B, t, { f: 300, f2: 900, q: 1.5, v: 0.07 * v, dur: 0.9, a: 0.5 }); for (let k = 0; k < 5; k++) vNoise(B, t + 0.15 + k * 0.13, { type: 'highpass', f: 4000, v: 0.02 * v, dur: 0.04 }); },
+  sroar: (t, B, v) => { vNoise(B, t, { f: 600, f2: 1800, q: 0.9, v: 0.12 * v, dur: 0.9, a: 0.05 }); vTone(B, t, 70, { f2: 110, glide: 0.4, type: 'sawtooth', lp: 400, v: 0.06 * v, dur: 0.9, a: 0.05 }); },
+  // a fallen star caught: a sparkling rising arpeggio
+  sstar: (t, B) => { [79, 84, 88, 91, 96].forEach((m, i) => vTone(B, t + i * 0.06, mf(m), { type: 'sine', v: 0.05, dur: 0.5 })); vTone(B, t + 0.32, mf(103), { type: 'triangle', v: 0.02, dur: 0.9 }); for (let k = 0; k < 6; k++) vTone(B, t + 0.05 + k * 0.07, 3000 + k * 300, { type: 'sine', v: 0.008, dur: 0.12 }); },
+  // the goat's firework kick: a pop and a crackle
+  sboom: (t, B) => { vNoise(B, t, { f: 900, q: 0.8, v: 0.1, dur: 0.18 }); vTone(B, t, 160, { f2: 60, glide: 0.2, type: 'sine', v: 0.08, dur: 0.25 }); for (let k = 0; k < 6; k++) vNoise(B, t + 0.12 + k * 0.05 + Math.random() * 0.03, { type: 'highpass', f: 5000, v: 0.025, dur: 0.03 }); },
+  // the Star Nest: the great star wakes: a shimmering chord, a bloom of fireworks
+  snest: (t, B) => { [[0, 72], [0.12, 76], [0.24, 79], [0.36, 84], [0.5, 88]].forEach(([d, m]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.06, dur: 1.6 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.012, dur: 1 }); }); for (let k = 0; k < 3; k++) { vNoise(B, t + 0.4 + k * 0.3, { f: 800, q: 0.8, v: 0.07, dur: 0.2 }); for (let q = 0; q < 5; q++) vNoise(B, t + 0.5 + k * 0.3 + q * 0.04, { type: 'highpass', f: 5200, v: 0.02, dur: 0.03 }); } },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = STARFALL_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + (o.delay || 0) + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+
+// ---- the traps at play ----
+CAUSES.starfallMeteor = 'Hit by a meteor';
+CAUSES.starfallSat = 'Clipped by a satellite';
+CAUSES.starfallUfo = 'Bonked a flying saucer';
+CAUSES.starfallFlare = 'Singed by a solar flare';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'starfallMeteor' ? [255, 170, 100] : cause === 'starfallSat' ? [255, 220, 120] : cause === 'starfallUfo' ? [150, 255, 210] : cause === 'starfallFlare' ? [255, 150, 90] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!STARFALL_TYPES.has(h.type)) return base(h);
+  return starfallShapes(h, starfallT()).map(shrinkShape);
+}; }
+// the sky's clock runs with the game
+{ const base = updateHazards; updateHazards = function (dt) {
+  if (G.level && G.level.starfall) { G.starfallT = (G.starfallT || 0) + dt; updateStarfallTraps(dt); updateStarfallFx(dt); }
+  base(dt);
+}; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.starfall) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && STARFALL_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// The low gravity (the twist) and the goat's firework kick (the perk): the run's own physics, only for that frame (cfg
+// itself is untouched). And the UFO beams' haul up toward their saucers (the sideways part is in steer, below).
+{ const base = update; update = function (dt) {
+  if (!G || !starfallOn() || !G.level || !G.level.starfall) return base(dt);
+  const g0 = cfg.gravity, b0 = cfg.boost, goat = starfallGoat(), en = G.eng, was = en ? en.boostT : 0;
+  cfg.gravity = g0 * starfallGrav(G.p.alt);
+  if (goat) cfg.boost = b0 * STARFALL_PERK.kick;
+  try { base(dt); } finally { cfg.gravity = g0; cfg.boost = b0; }
+  if (G.state !== 'play') { G.starfallPull = null; return; }
+  const pl = G.starfallPull;
+  if (pl && pl[1]) { G.p.alt += pl[1] * dt; refreshPilotCaps(); }
+  // the goat's kick went off: a firework burst under him
+  if (goat && en && en.boostT > was + 0.2) {
+    const p = G.p;
+    for (let k = 0; k < 16; k++) { const an = Math.PI * (0.1 + 0.8 * k / 15); starfallFx('spark', p.x, p.alt - 24, -Math.cos(an) * 260, -Math.sin(an) * 200, 0.6, 2, { col: [[255, 120, 140], [255, 226, 120], [140, 220, 255]][k % 3] }); }
+    for (let k = 0; k < 5; k++) starfallFx('star', p.x + (Math.random() - 0.5) * 40, p.alt - 30 - Math.random() * 20, (Math.random() - 0.5) * 60, -40 - Math.random() * 60, 0.7, 5);
+    if (!G.starfallBoomed) { G.starfallBoomed = true; addPop('Firework kick!', p.x, p.alt + 70, { col: '#ffd56a', sub: 'Billy goes extra high' }); }
+    sfx('sboom');
+  }
+}; }
+// the haul on the pilot from every saucer whose beam it is in (world units a second, [x, alt])
+function starfallPullNow() {
+  const p = G.p, T = starfallT(); let px = 0, pa = 0, any = false;
+  for (const h of G.hazards) {
+    if (h.type !== 'starfallUfo' || Math.abs(h.alt - p.alt) > 360) continue;
+    const q = starfallPullAt(h, starfallUfoState(h, T), p.x, p.alt); if (q) { px += q[0]; pa += q[1]; any = true; }
+  }
+  return any ? [px, pa] : null;
+}
+{ const base = steer; steer = function (dt) {
+  base(dt);
+  if (!G || !starfallOn() || G.state !== 'play' || !G.level || !G.level.starfall) { if (G) G.starfallPull = null; return; }
+  const pl = G.starfallPull = starfallPullNow();
+  if (pl && pl[0]) { const p = G.p, [lo, hi] = steerRange(); p.x = clamp(p.x + pl[0] * dt, lo, hi); p.tilt = lerp(p.tilt, clamp(pl[0] * 0.0012, -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 6)); }
+}; }
+// how close the pilot's hitbox comes to a point
+const starfallNear = (x, a) => { let d = Infinity; for (const c of pCaps) d = Math.min(d, ptSeg(x, a, c.x0, c.a0, c.x1, c.a1) - c.r); return d; };
+function updateStarfallTraps(dt) {
+  const top = G.camAlt + viewH, T = starfallT(), play = G.state === 'play', X = STARFALL;
+  for (const h of G.hazards) {
+    if (!STARFALL_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80, v = vis ? starfallVol(h.alt) : 0;
+    if (h.type === 'starfallMeteor') {
+      const st = starfallMeteorState(h, T), was = h.st || st, cyc = Math.floor((T - (h.ph || 0)) / h.P);
+      if (vis && st.warn != null && was.warn == null) sfx('swarn', { v: v * 0.8, n: h.n });
+      for (let k = 0; k < h.n; k++) {
+        if (st.v[k] == null) continue;
+        if (vis && was.v[k] == null) sfx('sstreak', { v: v * 0.9 });
+        const [x0, a0, x1, a1] = starfallTrack(h, k), x = lerp(x0, x1, st.v[k]), a = lerp(a0, a1, st.v[k]);
+        if (vis && Math.random() < dt * 30) starfallFx('ember', x, a, (x0 - x1) * 0.15 + (Math.random() - 0.5) * 40, (a0 - a1) * 0.4 + Math.random() * 30, 0.5, 3 + Math.random() * 2);
+        // a graze: the rock passes close by the pilot's hitbox without touching it (counted once, as it moves away)
+        if (play) {
+          const d = starfallNear(x, a) - X.meteor.r, key = cyc * 8 + k, g = h.gz || (h.gz = {});
+          if (d < X.meteor.graze && d > 0) g[key] = Math.min(g[key] ?? Infinity, d);
+          else if (g[key] != null && g[key] !== -1 && d > X.meteor.graze) {
+            g[key] = -1;
+            const n = G.stats.starfallGraze = (G.stats.starfallGraze || 0) + 1, of = advGoalN('starfallGraze');
+            chainEvent(of && n <= of ? `Meteor graze! ${n}/${of}` : 'Meteor graze!', '#ffd9a8', 1.2);
+            sfx('sgraze'); vibrate(10);
+            for (let q = 0; q < 6; q++) starfallFx('spark', G.p.x, G.p.alt, (Math.random() - 0.5) * 200, (Math.random() - 0.3) * 200, 0.4, 1.6, { col: [255, 200, 120] });
+          }
+        }
+      }
+      h.st = st;
+    } else if (h.type === 'starfallSat') {
+      h.st = starfallSatState(h, T);
+      const bl = Math.floor(T / 2.2 + h.alt * 0.001);
+      if (vis && h.bl != null && bl !== h.bl) sfx('sbeep', { v: v * 0.6 });
+      h.bl = bl;
+    } else if (h.type === 'starfallUfo') {
+      const st = starfallUfoState(h, T), was = h.st || st;
+      if (vis && st.tell != null && was.tell == null) sfx('sufo', { v });
+      if (vis && st.beamOn && !was.beamOn) sfx('sbeam', { v: v * 0.8 });
+      h.st = st;
+    } else if (h.type === 'starfallFlare') {
+      const st = starfallFlareState(h, T), was = h.st || st;
+      if (vis && st.tell != null && was.tell == null) sfx('srumble', { v });
+      if (vis && st.rise != null && was.rise == null) sfx('sroar', { v });
+      if (vis && st.tell != null && Math.random() < dt * 30 * st.tell) { const an = (Math.random() - 0.5) * 2.4, x = h.base + h.side * X.flare.out; starfallFx('ember', x, h.alt + Math.sin(an) * 50, h.side * (40 + Math.random() * 80), Math.sin(an) * 60, 0.5, 2.5 + Math.random() * 2); }
+      if (vis && st.u1 - st.u0 > 0.05 && Math.random() < dt * 40) { const u = lerp(st.u0, st.u1, Math.random()), [x, a] = starfallLoopPt(h, u); starfallFx('ember', x, a, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, 0.6, 3 + Math.random() * 2); }
+      if (vis && st.fade != null && was.fade == null) for (let k = 0; k < 8; k++) { const [x, a] = starfallLoopPt(h, 0.3 + k * 0.08); starfallFx('spark', x, a, (Math.random() - 0.5) * 120, Math.random() * 80, 0.6, 1.6, { col: [255, 200, 120] }); }
+      h.st = st;
+    }
+  }
+}
+// ---- the traps' art (static parts cached as world-unit pieces, live parts drawn on top) ----
+
+// ---- Meteor Shower ----
+// the rock (round its middle, world units, y down): a lumpy chunk, dark rust where it trails, its cracks glowing
+function starfallMeteorRock(i) {
+  return starfallPiece('mrock' + i, -16, 16, -16, 16, c => {
+    const R = n => hash2(i * 13 + n, 8101), pts = [];
+    for (let k = 0; k < 9; k++) { const an = k / 9 * TWO_PI, r = 12 * (0.84 + 0.16 * R(k)); pts.push([Math.cos(an) * r, Math.sin(an) * r * 0.92]); }
+    starfallBlob(c, pts); c.fillStyle = starfallRG2(-5, -5, 1, -1, -1, 14, ['#ffe2a8', '#e88a4a', '#a8442e', '#6a2a26'], c); c.fill();
+    c.strokeStyle = STARFALL_P.hotE; c.lineWidth = 0.9; c.stroke();
+    c.save(); starfallBlob(c, pts); c.clip();
+    // craters (a shaded bowl, a lit far lip) and glowing cracks
+    for (let k = 0; k < 3; k++) { const x = (R(k + 10) - 0.5) * 12, y = (R(k + 20) - 0.5) * 12, r = 2 + R(k + 30) * 2.4; c.fillStyle = 'rgba(90,30,30,.5)'; starfallEll(c, x, y, r, r * 0.8); c.fill(); c.strokeStyle = 'rgba(255,214,160,.6)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(x, y, r, r * 0.8, 0, 0.2, 2.0); c.stroke(); }
+    c.strokeStyle = 'rgba(255,236,150,.9)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(-8, -1); c.lineTo(-2, 2); c.lineTo(3, -4); c.moveTo(-2, 2); c.lineTo(1, 8); c.stroke();
+    c.strokeStyle = 'rgba(255,170,80,.6)'; c.lineWidth = 2.4; c.stroke();
+    c.restore();
+    starfallSheen(c, -2, -2, 9, 0.6, 3.5, 4.6);
+  });
+}
+// the flame trail (pointing back along +x from the head at the origin): soft layered tongues, hot at the head
+function starfallTrailSprite() {
+  return starfallPiece('mtrail', -20, 130, -34, 34, c => {
+    c.globalCompositeOperation = 'lighter';
+    for (const [wd, a, col, len] of [[30, 0.2, [255, 90, 50], 125], [20, 0.42, [255, 150, 70], 104], [11, 0.7, [255, 220, 140], 72], [5, 0.95, [255, 255, 230], 40]]) {
+      c.fillStyle = starfallLG(0, 0, len, 0, [starfallCol(col, a), starfallCol(col, a * 0.5), starfallCol(col, 0)], c);
+      c.beginPath(); c.moveTo(0, -wd); c.quadraticCurveTo(len * 0.4, -wd * 0.7, len, 0); c.quadraticCurveTo(len * 0.4, wd * 0.7, 0, wd); c.arc(0, 0, wd, Math.PI / 2, Math.PI * 1.5); c.fill();
+    }
+  });
+}
+function drawStarfallMeteor(h) {
+  starfallCacheCheck();
+  const X = STARFALL.meteor, T = starfallT(), st = h.st || starfallMeteorState(h, T), sp = starfallTrailSprite();
+  // the warning: the tracks dashed across the shaft, twinkling stars where they enter, brightening to the streak
+  const wk = st.warn != null ? smooth(0, 0.35, st.warn) : 0;
+  for (let k = 0; k < h.n; k++) {
+    const [x0, a0, x1, a1] = starfallTrack(h, k), v = st.v[k], gone = v == null && st.warn == null;
+    const near = st.warn != null ? wk : v != null ? 1 - v : 0;
+    if (gone && near <= 0) { // a faint resting trace so the track is always readable
+      ctx.save(); ctx.setLineDash([2 * s, 9 * s]); ctx.strokeStyle = 'rgba(255,190,150,.12)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(sx(x0), sy(a0)); ctx.lineTo(sx(x1), sy(a1)); ctx.stroke(); ctx.restore();
+      continue;
+    }
+    ctx.save(); ctx.setLineDash([5 * s, 6 * s]); ctx.lineDashOffset = -T * 40 * s; ctx.strokeStyle = `rgba(255,150,110,${0.18 + 0.4 * near})`; ctx.lineWidth = (1.2 + 1.2 * near) * s;
+    ctx.beginPath(); ctx.moveTo(sx(x0), sy(a0)); ctx.lineTo(sx(x1), sy(a1)); ctx.stroke(); ctx.restore();
+    // the twinkles at the entry wall (and a warm danger glow)
+    const ex = sx(h.from > 0 ? h.R - 14 : h.L + 14), ey = sy(a0 - (X.drop / (h.R - h.L + 2 * X.over)) * (X.over + 14));
+    if (st.warn != null) {
+      const tw = wk * (0.6 + 0.4 * Math.sin(G.t * 22 + k * 2));
+      starfallGlow(ex, ey, (26 + 16 * tw) * s, [255, 140, 90], 0.25 * tw);
+      starfallTwinkle(ctx, ex, ey, (4 + 8 * tw) * s, tw, [255, 230, 190]);
+      starfallTwinkle(ctx, ex - h.from * 10 * s, ey - 12 * s, (2 + 4 * tw) * s, tw * 0.7, [255, 210, 160]);
+    }
+    if (v == null) continue;
+    // the meteor: its smoke, the trail streaming back up the track, the rock tumbling, sparks shed
+    const L = Math.hypot(x1 - x0, a1 - a0), ux = (x1 - x0) / L, ua = (a1 - a0) / L, x = sx(lerp(x0, x1, v)), y = sy(lerp(a0, a1, v)), dx = -ux, dy = ua;
+    const smk = starfallBlobSprite([120, 100, 160]);
+    for (let i = 1; i <= 4; i++) { const d = (i * 18 + 6) * s, r = (5 + i * 2.6) * s; ctx.save(); ctx.globalAlpha = 0.34 - i * 0.06; ctx.drawImage(smk.cv, x + dx * d - r + Math.sin(i * 2 + k) * 3 * s, y + dy * d - r, r * 2, r * 2); ctx.restore(); }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(dy, dx)); ctx.globalAlpha = 0.95; ctx.drawImage(sp.cv, -sp.ax, -sp.ay, sp.w, sp.h);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      const o = (i / 4 - 0.5) * 2, fl = 0.7 + 0.3 * Math.sin(G.t * 30 + i * 2.1 + k), len = (24 + (1 - Math.abs(o)) * 22) * fl * s, by = o * 9 * s;
+      ctx.fillStyle = starfallGrad('mtongue', cc => starfallLG(0, 0, 60 * s, 0, ['rgba(255,226,130,.85)', 'rgba(255,110,50,0)'], cc));
+      ctx.beginPath(); ctx.moveTo(-2 * s, by - 2.4 * s); ctx.quadraticCurveTo(len * 0.5, by + Math.sin(G.t * 20 + i) * 3 * s, len, by); ctx.quadraticCurveTo(len * 0.4, by + 1 * s, -2 * s, by + 2.4 * s); ctx.fill();
+    }
+    ctx.restore();
+    starfallGlow(x, y, 34 * s, [255, 190, 110], 0.6);
+    starfallBlitRot(starfallMeteorRock(k % 3), x, y, G.t * 4 + k);
+    for (let i = 0; i < 4; i++) { const u = pmod(G.t * 3 + i * 0.25, 1); starfallTwinkle(ctx, x + dx * u * 46 * s + Math.sin(i * 3) * 7 * s, y + dy * u * 46 * s + Math.cos(i * 3) * 7 * s, 3 * (1 - u) * s, 1 - u, [255, 210, 120]); }
+  }
+}
+
+// ---- Satellite ----
+// the satellite (round its body's middle, world units, screen orientation with the panels along x): two solar panels
+// of blue cells in steel frames on booms, a crinkled gold-foil body with a radiator and a porthole, a white dish on top
+// (pointing up), an antenna below (its blinking tip is live)
+function starfallSatSprite() {
+  return starfallPiece('sat', -80, 80, -36, 36, c => {
+    const P = STARFALL_P, X = STARFALL.sat;
+    for (const d of [-1, 1]) {
+      // the boom: a steel tube with a lit top
+      c.fillStyle = starfallLG(0, -3, 0, 3, [P.steel[1], P.steel[2], P.steel[3]], c); c.fillRect(Math.min(d * 9, d * (X.p0 + 2)), -2.6, Math.abs(X.p0 + 2 - 9), 5.2);
+      c.strokeStyle = P.steelE; c.lineWidth = 0.6; c.strokeRect(Math.min(d * 9, d * (X.p0 + 2)), -2.6, Math.abs(X.p0 + 2 - 9), 5.2);
+      c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(Math.min(d * 9, d * (X.p0 + 2)), -2.2, Math.abs(X.p0 + 2 - 9), 0.9);
+      // the panel: a steel frame round two rows of cells
+      const x0 = d > 0 ? X.p0 - 6 : -X.p1 - 6, w = X.p1 - X.p0 + 12, hh = X.pr * 2 - 2;
+      c.fillStyle = starfallLG(x0, -hh / 2, x0 + w * 0.3, hh / 2, [P.steel[0], P.steel[2]], c); starfallRRect(c, x0 - 1.4, -hh / 2 - 1.4, w + 2.8, hh + 2.8, 2.2); c.fill();
+      c.strokeStyle = P.steelE; c.lineWidth = 0.8; c.stroke();
+      c.fillStyle = starfallLG(x0, -hh / 2, x0 + w, hh / 2, [P.panel[0], P.panel[1], P.panel[2], P.panel[3]], c); c.fillRect(x0, -hh / 2, w, hh);
+      // the cells: dark grid furrows with lit edges (line pairs), a glint stripe
+      c.strokeStyle = 'rgba(14,30,80,.65)'; c.lineWidth = 0.8; c.beginPath();
+      for (let gx = x0 + w / 6; gx < x0 + w - 1; gx += w / 6) { c.moveTo(gx, -hh / 2); c.lineTo(gx, hh / 2); }
+      c.moveTo(x0, 0); c.lineTo(x0 + w, 0); c.stroke();
+      c.strokeStyle = 'rgba(170,220,255,.55)'; c.lineWidth = 0.5; c.beginPath();
+      for (let gx = x0 + w / 6; gx < x0 + w - 1; gx += w / 6) { c.moveTo(gx + 0.8, -hh / 2); c.lineTo(gx + 0.8, hh / 2); }
+      c.moveTo(x0, 0.8); c.lineTo(x0 + w, 0.8); c.stroke();
+      c.save(); c.beginPath(); c.rect(x0, -hh / 2, w, hh); c.clip(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = starfallLG(x0 + w * 0.2, 0, x0 + w * 0.45, 0, ['rgba(200,240,255,0)', 'rgba(200,240,255,.45)', 'rgba(200,240,255,0)'], c);
+      c.beginPath(); c.moveTo(x0 + w * 0.18, hh); c.lineTo(x0 + w * 0.32, -hh); c.lineTo(x0 + w * 0.46, -hh); c.lineTo(x0 + w * 0.32, hh); c.fill();
+      c.restore();
+      // a scorched corner (it's old), a missing cell
+      c.fillStyle = 'rgba(20,24,60,.55)'; c.fillRect(d > 0 ? x0 + w - w / 6 : x0, 0.8, w / 6 - 0.8, hh / 2 - 0.8);
+    }
+    // the body: crinkled gold foil, lit top left, creases as line pairs
+    c.fillStyle = starfallLG(-11, -12, 11, 12, [P.foil[0], P.foil[1], P.foil[2], P.foil[3]], c); starfallRRect(c, -11, -12, 22, 24, 5); c.fill();
+    c.strokeStyle = P.foilE; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,214,.75)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(-8, -8); c.lineTo(-3, -4); c.lineTo(-7, 1); c.lineTo(-2, 8); c.moveTo(3, -9); c.lineTo(7, -3); c.lineTo(2, 4); c.stroke();
+    c.strokeStyle = 'rgba(120,70,10,.6)'; c.beginPath(); c.moveTo(-7, -7); c.lineTo(-2, -3); c.lineTo(-6, 2); c.moveTo(4, -8); c.lineTo(8, -2); c.stroke();
+    // a steel band with rivets, a porthole sensor
+    c.fillStyle = starfallLG(0, -2, 0, 3, [P.steel[1], P.steel[3]], c); c.fillRect(-11, 2, 22, 4); c.fillStyle = P.steel[0]; c.fillRect(-11, 2, 22, 0.8);
+    c.fillStyle = P.steel[3]; for (const x of [-8, -3, 3, 8]) { starfallCirc(c, x, 4, 0.7); c.fill(); }
+    c.fillStyle = starfallRG(-1, -6, 4, ['#d8f8ff', '#3a8ac8', '#1a3a6a'], c); starfallCirc(c, 0, -5, 3.4); c.fill(); c.strokeStyle = P.steelE; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.85)'; starfallCirc(c, -1.1, -6.2, 0.9); c.fill();
+    // the dish on top (pointing up), its feed horn
+    c.strokeStyle = P.steel[2]; c.lineWidth = 1.6; c.beginPath(); c.moveTo(0, -12); c.lineTo(0, -16); c.stroke();
+    c.fillStyle = starfallLG(-9, -30, 9, -18, ['#ffffff', P.steel[1], P.steel[2]], c); c.beginPath(); c.ellipse(0, -22, 8.5, 4, 0, Math.PI, TWO_PI); c.quadraticCurveTo(0, -14, -8.5, -22); c.fill();
+    c.strokeStyle = P.steelE; c.lineWidth = 0.7; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, -22, 6.5, 2.6, 0, Math.PI * 1.1, Math.PI * 1.6); c.stroke();
+    c.strokeStyle = P.steel[2]; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-5, -21); c.lineTo(0, -28); c.lineTo(5, -21); c.stroke();
+    c.fillStyle = P.steel[1]; starfallCirc(c, 0, -28.5, 1.4); c.fill();
+    // the antenna below
+    c.strokeStyle = P.steel[2]; c.lineWidth = 1.3; c.beginPath(); c.moveTo(0, 12); c.lineTo(0, 30); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(-0.4, 13); c.lineTo(-0.4, 28); c.stroke();
+  });
+}
+function drawStarfallSat(h) {
+  starfallCacheCheck();
+  const T = starfallT(), st = h.st || starfallSatState(h, T), x = sx(st.x), y = sy(st.a);
+  if (y < -90 || y > H + 90) return;
+  starfallShade(x + 6 * s, y + 10 * s, 70 * s, 22 * s, 0.18);
+  starfallBlitRot(starfallSatSprite(), x, y, -st.th);
+  // the sun glinting off a panel as it turns, the antenna's blinking tip
+  const g = Math.max(0, Math.sin(st.th * 2 + 0.6)) ** 6;
+  if (g > 0.05) { const e = Math.cos(st.th) > 0 ? 1 : -1, gx = x + Math.cos(-st.th) * e * 46 * s, gy = y + Math.sin(-st.th) * e * 46 * s; starfallTwinkle(ctx, gx, gy, 9 * g * s, g, [220, 240, 255]); }
+  const bl = pmod(G.t * 1.6 + h.alt * 0.01, 1) < 0.3, ax = x + Math.sin(-st.th) * -30 * s, ay = y + Math.cos(-st.th) * 30 * s;
+  starfallGlow(ax, ay, 10 * s, [255, 80, 90], bl ? 0.8 : 0.15);
+  ctx.fillStyle = bl ? '#ffd0d0' : '#a04050'; starfallCirc(ctx, ax, ay, 1.8 * s); ctx.fill();
+}
+
+// ---- UFO ----
+// the saucer (round its middle, screen orientation): a silver-lilac disc, a band of hull plates, a glowing hatch
+// underneath; the glass dome and the little alien in it, its rim lights and the beam are live
+function starfallSaucerSprite() {
+  return starfallPiece('saucer', -40 * STARFALL.ufo.k, 40 * STARFALL.ufo.k, -26 * STARFALL.ufo.k, 16 * STARFALL.ufo.k, c => {
+    c.scale(STARFALL.ufo.k, STARFALL.ufo.k);
+    const P = STARFALL_P.steel, X = STARFALL.ufo, rx = X.half + X.rr - 1, ry = X.rr - 0.5;
+    c.fillStyle = 'rgba(160,240,255,.22)'; starfallEll(c, 0, -7, 12.5, 12.5); c.fill();   // the dome's back (the alien goes on it, the glass over it)
+    c.fillStyle = starfallLG(0, -ry, 0, ry, ['#ffffff', P[1], P[2], P[3]], c); starfallEll(c, 0, 0, rx, ry); c.fill();
+    c.strokeStyle = STARFALL_P.steelE; c.lineWidth = 1; c.stroke();
+    // the rim ring and the hull plates (seams as line pairs)
+    c.strokeStyle = 'rgba(70,72,120,.55)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 1.5, rx - 2, ry - 3.5, 0, 0.15, Math.PI - 0.15); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -1.2, rx - 3, ry - 3, 0, Math.PI * 1.08, Math.PI * 1.62); c.stroke();
+    c.lineWidth = 0.8;
+    for (const f of [-0.62, -0.25, 0.25, 0.62]) { const x = f * rx, y0 = -ry * Math.sqrt(1 - f * f) + 1, y1 = ry * Math.sqrt(1 - f * f) - 1; c.strokeStyle = 'rgba(80,82,130,.5)'; c.beginPath(); c.moveTo(x, y0); c.quadraticCurveTo(x + f * 2, 0, x, y1); c.stroke(); c.strokeStyle = 'rgba(255,255,255,.45)'; c.beginPath(); c.moveTo(x + 0.9, y0); c.quadraticCurveTo(x + f * 2 + 0.9, 0, x + 0.9, y1); c.stroke(); }
+    // the hatch under it
+    c.fillStyle = starfallLG(0, 4, 0, 10, ['#c8ffe6', '#3a9a86'], c); starfallEll(c, 0, 6.5, 9, 3); c.fill();
+    c.strokeStyle = 'rgba(40,110,96,.8)'; c.lineWidth = 0.7; c.stroke();
+  });
+}
+function starfallDomeGlass() {
+  return starfallPiece('dome', -14 * STARFALL.ufo.k, 14 * STARFALL.ufo.k, -21 * STARFALL.ufo.k, 1 * STARFALL.ufo.k, c => {
+    c.scale(STARFALL.ufo.k, STARFALL.ufo.k);
+    c.save(); c.beginPath(); c.ellipse(0, -7, 12.5, 12.5, 0, Math.PI, TWO_PI); c.closePath(); c.clip();
+    c.fillStyle = starfallLG(-10, -18, 10, -2, ['rgba(220,250,255,.35)', 'rgba(150,230,255,.12)', 'rgba(120,200,240,.25)'], c); c.fillRect(-14, -21, 28, 22);
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.3; c.beginPath(); c.arc(0, -7, 10, 3.55, 4.3); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = 0.8; c.beginPath(); c.arc(0, -7, 7, 3.7, 4.0); c.stroke();
+    c.strokeStyle = 'rgba(110,190,220,.8)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, -7, 12.5, 12.5, 0, Math.PI, TWO_PI); c.stroke();
+    c.fillStyle = starfallLG(-13, -8, 13, -6, [STARFALL_P.steel[1], STARFALL_P.steel[3]], c); starfallEll(c, 0, -7, 13.5, 1.8); c.fill();
+  });
+}
+// the little alien (in the dome, head round 0,-8): green, two antennae with pink bobbles, big eyes that look at you
+function starfallAlienSprite() {
+  return starfallPiece('alien', -10 * STARFALL.ufo.k, 10 * STARFALL.ufo.k, -22 * STARFALL.ufo.k, 0, c => {
+    c.scale(STARFALL.ufo.k, STARFALL.ufo.k);
+    c.fillStyle = starfallRG2(-2, -12, 1, 0, -8, 8, ['#d8ffb0', '#76dc54', '#358a3c'], c); c.beginPath(); c.ellipse(0, -8, 6.6, 6, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#2e7a36'; c.lineWidth = 0.6; c.stroke();
+    c.fillStyle = '#5ab844'; c.beginPath(); c.moveTo(-5, -2); c.quadraticCurveTo(0, 1, 5, -2); c.lineTo(5, 0); c.lineTo(-5, 0); c.fill();
+    c.strokeStyle = '#5cc848'; c.lineWidth = 1; c.beginPath(); c.moveTo(-3, -13); c.quadraticCurveTo(-4, -16, -5.5, -17.5); c.moveTo(3, -13); c.quadraticCurveTo(4, -16, 5.5, -17.5); c.stroke();
+    c.fillStyle = '#ff7ab8'; starfallCirc(c, -5.5, -17.8, 1.4); c.fill(); starfallCirc(c, 5.5, -17.8, 1.4); c.fill();
+    c.fillStyle = 'rgba(255,220,240,.9)'; starfallCirc(c, -5.9, -18.2, 0.5); c.fill(); starfallCirc(c, 5.1, -18.2, 0.5); c.fill();
+    for (const e of [-1, 1]) { c.fillStyle = '#ffffff'; starfallEll(c, e * 2.6, -8.6, 2.3, 2.7); c.fill(); c.strokeStyle = 'rgba(40,100,40,.6)'; c.lineWidth = 0.4; c.stroke(); }
+    c.fillStyle = 'rgba(255,140,170,.55)'; starfallEll(c, -4.6, -5.6, 1.3, 0.8); c.fill(); starfallEll(c, 4.6, -5.6, 1.3, 0.8); c.fill();
+  });
+}
+// the beam: one cached cone pointing down (apex at the top middle), soft green light fading along it
+function starfallBeamSprite() {
+  const X = STARFALL.ufo;
+  return starfallPiece('ubeam', -X.hw1 - 4, X.hw1 + 4, -2, X.len + 4, c => {
+    for (const [k, al] of [[1.18, 0.1], [1.0, 0.2], [0.55, 0.22]]) {
+      c.fillStyle = starfallLG(0, 0, 0, X.len, [`rgba(200,255,230,${al * 1.8})`, `rgba(140,250,220,${al})`, `rgba(120,230,255,${al * 0.35})`, 'rgba(110,220,255,0)'], c);
+      c.beginPath(); c.moveTo(-X.hw0 * k, 0); c.lineTo(-X.hw1 * k, X.len); c.lineTo(X.hw1 * k, X.len); c.lineTo(X.hw0 * k, 0); c.closePath(); c.fill();
+    }
+  });
+}
+function drawStarfallUfo(h) {
+  starfallCacheCheck();
+  const X = STARFALL.ufo, T = starfallT(), st = h.st || starfallUfoState(h, T), x = sx(st.x), y = sy(st.a);
+  if (y < -X.len * s - 60 || y > H + 80) return;
+  const flick = st.tell != null ? (Math.sin(G.t * 50) > 0 ? 0.45 : 0.08) * st.tell : 0, bk = Math.max(st.on, flick);
+  // the beam: the cone (additive), rings travelling up it toward the saucer, dust drawn up
+  if (bk > 0.02) {
+    const ang = -h.side * X.ang, [ux, ua] = starfallUfoAxis(h), dx = ux, dy = -ua, nx = -dy, ny = dx, ax = x, ay = y + 10 * s;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang); ctx.globalAlpha = bk * (0.85 + 0.15 * Math.sin(G.t * 9)); ctx.drawImage(starfallBeamSprite().cv, -starfallBeamSprite().ax, -starfallBeamSprite().ay, starfallBeamSprite().w, starfallBeamSprite().h); ctx.restore();
+    if (st.on > 0.05) {
+      ctx.lineWidth = 1.4 * s;
+      for (let i = 0; i < 4; i++) {
+        const v = 1 - pmod(G.t * 0.9 + i / 4, 1), l = v * X.len * s, cx = ax + dx * l, cy = ay + dy * l, rr = lerp(X.hw0, X.hw1, v) * s;
+        ctx.strokeStyle = `rgba(210,255,236,${0.55 * st.on * (1 - Math.abs(v - 0.5) * 1.6)})`;
+        ctx.beginPath(); ctx.ellipse(cx, cy, rr, rr * 0.28, Math.atan2(dy, dx) + Math.PI / 2, 0, TWO_PI); ctx.stroke();
+      }
+      for (let i = 0; i < 9; i++) { const v = 1 - pmod(G.t * 0.7 + i * 0.13, 1), o = Math.sin(i * 4.1) * 0.75, l = v * X.len * s, w = lerp(X.hw0, X.hw1, v) * s * o; ctx.fillStyle = `rgba(226,255,244,${0.8 * st.on})`; ctx.fillRect(ax + dx * l + nx * w, ay + dy * l + ny * w, 1.6 * s, 1.6 * s); }
+    }
+    ctx.restore();
+  }
+  // the saucer: its glow under it, the body, the alien in its dome looking your way, the glass, the chasing lights
+  starfallGlow(x, y + 10 * s, (44 + 24 * bk) * s, [140, 255, 200], 0.2 + 0.4 * bk);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(G.t * 1.7 + h.alt) * 0.05 - h.side * 0.12 * st.on);
+  const sp = starfallSaucerSprite(); ctx.drawImage(sp.cv, -sp.ax, -sp.ay, sp.w, sp.h);
+  const al = starfallAlienSprite(); ctx.drawImage(al.cv, -al.ax, -al.ay, al.w, al.h);
+  ctx.save(); ctx.scale(X.k, X.k);
+  const p = G.p, lx = clamp((p.x - st.x) * 0.02, -1, 1), ly = clamp((st.a - p.alt) * 0.01, -0.6, 1), eo = (st.tell != null || st.on > 0.1) ? 1.1 : 0.9;
+  ctx.fillStyle = '#2a1e5a'; for (const e of [-1, 1]) { starfallEll(ctx, (e * 2.6 + lx * 0.9) * s, (-8.4 + ly * 0.8) * s, 1.25 * eo * s, 1.6 * eo * s); ctx.fill(); }
+  ctx.fillStyle = '#ffffff'; for (const e of [-1, 1]) { starfallCirc(ctx, (e * 2.6 + lx * 0.9 - 0.5) * s, (-9.1 + ly * 0.8) * s, 0.5 * s); ctx.fill(); }
+  ctx.restore();
+  const dg = starfallDomeGlass(); ctx.drawImage(dg.cv, -dg.ax, -dg.ay, dg.w, dg.h);
+  ctx.scale(X.k, X.k);
+  const rx = (X.half + X.rr - 4) * s, sp2 = 2 + 6 * bk;
+  for (let i = 0; i < 7; i++) {
+    const an = Math.PI * (0.12 + i / 6 * 0.76), qx = Math.cos(an) * -rx, qy = (Math.sin(an) * 5.2 + 1) * s, on = pmod(G.t * sp2 - i / 7, 1) < 0.35, c = [[255, 220, 90], [120, 255, 200], [255, 120, 180]][i % 3];
+    if (on) starfallGlow(qx, qy, 7 * s, c, 0.8);
+    ctx.fillStyle = on ? ['#fff0b0', '#d0fff0', '#ffd0e8'][i % 3] : ['#8a6a2a', '#2a7a6a', '#8a3a5a'][i % 3]; starfallCirc(ctx, qx, qy, 1.7 * s); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---- Solar Flare ----
+// the baby sun bulging out of its asteroid (round the wall point at the flare's height, d into the shaft): a molten
+// globe, white-gold at the heart through orange to a red limb, granulation cells (a dark furrow and a lit ridge each),
+// two sunspots, and the cracked rock cradle it sits in, glowing at its lips
+function starfallSunPiece(d) {
+  const X = STARFALL.flare, R = X.sun, cx = -d * (R - X.out);
+  return starfallPiece('sun' + d, Math.min(cx - R - 18, -30), Math.max(cx + R + 18, 30), -R - 22, R + 22, c => {
+    const P = STARFALL_P;
+    // the rock cradle round it: chunky moon rock, glowing where it meets the sun
+    for (const sg of [-1, 1]) {
+      const pts = [[0, sg * (R * 0.72)], [d * 6, sg * (R * 0.86)], [d * 2, sg * (R + 14)], [-d * 26, sg * (R + 20)], [-d * 40, sg * (R * 0.8)], [-d * 18, sg * (R * 0.6)]];
+      starfallBlob(c, pts); c.fillStyle = starfallLG(-d * 30, sg * R * 0.6 - 10, 0, sg * R + 10, [P.rock[1], P.rock[2], P.rock[3]], c); c.fill();
+      c.strokeStyle = P.rockE; c.lineWidth = 1; c.stroke();
+      c.strokeStyle = 'rgba(230,226,255,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-d * 30, sg * (R + 12)); c.quadraticCurveTo(-d * 12, sg * (R + 16), d * 2, sg * (R + 10)); c.stroke();
+    }
+    // the globe
+    c.fillStyle = starfallRG2(cx + d * R * 0.55, -R * 0.25, R * 0.08, cx + d * R * 0.3, 0, R, [P.sun[0], P.sun[1], P.sun[2], P.sun[3]], c); starfallCirc(c, cx, 0, R); c.fill();
+    c.save(); starfallCirc(c, cx, 0, R); c.clip();
+    // granulation: little cells across it
+    for (let i = 0; i < 46; i++) {
+      const an = hash2(i, 8201) * TWO_PI, rr = Math.sqrt(hash2(i, 8202)) * R * 0.95, gx = cx + Math.cos(an) * rr, gy = Math.sin(an) * rr, gr = 3 + hash2(i, 8203) * 4;
+      c.strokeStyle = 'rgba(220,90,40,.4)'; c.lineWidth = 0.9; c.beginPath(); c.arc(gx, gy, gr, 0.3, 2.6); c.stroke();
+      c.strokeStyle = 'rgba(255,246,200,.45)'; c.lineWidth = 0.7; c.beginPath(); c.arc(gx, gy, gr, 3.5, 5.4); c.stroke();
+    }
+    // sunspots: a dark umbra in a warm penumbra
+    for (const [fx, fy, r] of [[0.62, -0.32, 6], [0.5, 0.42, 4.2]]) { const x = cx + d * R * fx, y = R * fy; c.fillStyle = 'rgba(200,80,40,.55)'; starfallEll(c, x, y, r * 1.6, r * 1.3); c.fill(); c.fillStyle = '#8a2a24'; starfallEll(c, x, y, r * 0.8, r * 0.7); c.fill(); }
+    // the limb darkening into deep red at its rim
+    c.strokeStyle = 'rgba(200,60,40,.6)'; c.lineWidth = 5; starfallCirc(c, cx, 0, R - 2); c.stroke();
+    c.restore();
+    c.strokeStyle = P.sunE; c.lineWidth = 1.1; starfallCirc(c, cx, 0, R); c.stroke();
+    c.strokeStyle = 'rgba(255,255,236,.85)'; c.lineWidth = 2; c.beginPath(); c.arc(cx, 0, R - 5, d > 0 ? -1.1 : Math.PI + 0.5, d > 0 ? -0.4 : Math.PI + 1.1); c.stroke();
+    // glowing lips where the rock meets the sun
+    c.strokeStyle = 'rgba(255,170,90,.75)'; c.lineWidth = 2.2; for (const sg of [-1, 1]) { c.beginPath(); c.moveTo(d * 4, sg * R * 0.74); c.lineTo(-d * 14, sg * R * 0.66); c.stroke(); }
+  });
+}
+// the plasma loop between u0 and u1 (a tube: an outer glow, a darker-hued edge, an orange body, a lit upper ridge,
+// a white-hot core, two twisted strands; the growing head a flickering tongue)
+function drawStarfallLoop(h, st) {
+  const N = 26, pts = [];
+  for (let i = 0; i <= N; i++) { const u = lerp(st.u0, st.u1, i / N), [x, a] = starfallLoopPt(h, u); pts.push([sx(x), sy(a)]); }
+  const line = (lw, col, off = 0) => {
+    ctx.lineWidth = lw * s; ctx.strokeStyle = col; ctx.beginPath();
+    pts.forEach(([x, y], i) => { const [px, py] = pts[Math.max(0, i - 1)], [qx, qy] = pts[Math.min(N, i + 1)], l = Math.hypot(qx - px, qy - py) || 1, ox2 = (qy - py) / l * off * s * h.side, oy2 = -(qx - px) / l * off * s * h.side; i ? ctx.lineTo(x + ox2, y + oy2) : ctx.moveTo(x + ox2, y + oy2); });
+    ctx.stroke();
+  };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = 'lighter'; line(38, 'rgba(255,120,60,.16)'); line(28, 'rgba(255,150,80,.2)');
+  ctx.globalCompositeOperation = 'source-over';
+  line(22.5, '#b8382a'); line(19.5, '#f0703c'); line(12, '#ff9a4a', -2.5); line(6, '#ffd070', -4.5);
+  ctx.globalCompositeOperation = 'lighter'; line(4, 'rgba(255,250,220,.9)', -1);
+  // twisted strands winding along it (line pairs, slowly crawling)
+  ctx.lineWidth = 1.3 * s;
+  for (const ph of [0, Math.PI]) {
+    ctx.strokeStyle = 'rgba(255,240,190,.65)'; ctx.beginPath();
+    pts.forEach(([x, y], i) => { const [px, py] = pts[Math.max(0, i - 1)], [qx, qy] = pts[Math.min(N, i + 1)], l = Math.hypot(qx - px, qy - py) || 1, w = Math.sin(i * 0.9 + G.t * 6 + ph) * 6 * s; const X2 = x + (qy - py) / l * w, Y2 = y - (qx - px) / l * w; i ? ctx.lineTo(X2, Y2) : ctx.moveTo(X2, Y2); });
+    ctx.stroke();
+  }
+  ctx.restore();
+  // the head (rising) or the ragged tail (falling back)
+  if (st.u1 < 1) { const [x, y] = pts[N]; starfallGlow(x, y, 30 * s, [255, 190, 110], 0.7); ctx.fillStyle = '#fff2c8'; starfallCirc(ctx, x, y, (6 + Math.sin(G.t * 30) * 1.2) * s); ctx.fill(); }
+  if (st.u0 > 0) { const [x, y] = pts[0]; starfallGlow(x, y, 22 * s, [255, 150, 80], 0.5); }
+}
+function drawStarfallFlare(h) {
+  starfallCacheCheck();
+  const X = STARFALL.flare, T = starfallT(), st = h.st || starfallFlareState(h, T), bx = sx(h.base), by = sy(h.alt);
+  if (by < -260 || by > H + 260) return;
+  const tell = st.tell != null ? st.tell : 0, hot = st.u1 - st.u0 > 0.01 ? 1 : 0;
+  // its corona, the sun itself, a brightening as it swells (the tell)
+  const cx = sx(h.base - h.side * (X.sun - X.out));
+  starfallGlow(cx, by, (X.sun * 1.9 + 30 * tell) * s, [255, 150, 80], 0.32 + 0.3 * tell + 0.15 * hot);
+  starfallBlit(starfallSunPiece(h.side), bx, by);
+  starfallGlow(sx(h.base + h.side * 6), by, (40 + 30 * tell) * s, [255, 236, 170], 0.25 + 0.55 * tell * (0.7 + 0.3 * Math.sin(G.t * 40)));
+  // the loop's path, faintly dotted, through the tell (where it will arc)
+  if (tell > 0) {
+    ctx.save(); ctx.setLineDash([3 * s, 6 * s]); ctx.lineDashOffset = -G.t * 30 * s; ctx.strokeStyle = `rgba(255,190,120,${0.5 * smooth(0, 0.5, tell)})`; ctx.lineWidth = 2 * s; ctx.beginPath();
+    for (let i = 0; i <= 20; i++) { const [x, a] = starfallLoopPt(h, i / 20); i ? ctx.lineTo(sx(x), sy(a)) : ctx.moveTo(sx(x), sy(a)); }
+    ctx.stroke(); ctx.restore();
+  }
+  if (hot) drawStarfallLoop(h, st);
+  // little surface loops always flickering on its face
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let q = 0; q < 3; q++) { const v = pmod(G.t * 0.6 + q / 3 + h.alt * 0.001, 1), a0 = (q - 1) * 34, r = (6 + 10 * Math.sin(v * Math.PI)) * s, x0 = sx(h.base + h.side * (X.out - 4)); ctx.strokeStyle = `rgba(255,200,120,${0.6 * Math.sin(v * Math.PI)})`; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.arc(x0, by - a0 * s, r, h.side > 0 ? -Math.PI / 2 : Math.PI / 2, h.side > 0 ? Math.PI / 2 : Math.PI * 1.5); ctx.stroke(); }
+  ctx.restore();
+}
+DRAW.starfallMeteor = drawStarfallMeteor; DRAW.starfallSat = drawStarfallSat; DRAW.starfallUfo = drawStarfallUfo; DRAW.starfallFlare = drawStarfallFlare;
+// ---- the sky's scene ----
+// Walls: floating asteroids stacked up each side (createStarfallLevel lays them out: the shaft's edge is their very
+// outline). Each rock lilac-grey moon rock lit from the top left (a 3-stop gradient), a darker violet edge, its lit upper
+// lip and shaded underside along the shaft, craters as a shaded bowl with a lit far lip, cracks as line pairs, drifts of
+// pale moon dust on its upper slopes, chips nicked out of its rim, a faint warm rim of planet light from below; crystals
+// of cyan or violet growing out of some (they glow: live, from a list each tile keeps). Behind them, deeper in shade,
+// a second rank of rocks closes the gaps. All drawn once into cached tiles (STARFALL_TILE high) and blitted.
+const STARFALL_TILE = 200;
+const starfallPx = y => Math.round(y * dpr) / dpr;
+// a tile's content stretched a hair to fill its canvas's last (rounded-up) row of pixels: tiles meet with no seam
+const starfallFitY = sp => sp.c.setTransform(dpr, 0, 0, sp.cv.height / sp.h, 0, 0);
+const STARFALL_DECOR = { 'The Volcano Rim': 'rim', 'The Meteor Steps': 'meteor', 'The Satellite Graveyard': 'junk', 'Saucer Shoals': 'ufo', 'Sunspot Reef': 'sun', 'The Ringed Rest': 'ring', 'The Starstorm': 'storm', 'The Star Nest': 'nest' };
+function starfallSecName(a) {
+  const S = G.level && G.level.sections; if (!S) return 'The Volcano Rim';
+  let n = S[0].name; for (const q of S) if (a >= q.a0) n = q.name; return n;
+}
+const starfallDecorAt = a => STARFALL_DECOR[starfallSecName(a)] || 'meteor';
+// Each section's light and colour: the backdrop's gradient (top, middle, bottom), a multiply tint over the layers, the
+// colour of its light pools and how strong they are; warm: a sun's or the planet's light
+const STARFALL_MOOD = {
+  'The Volcano Rim':         { g: [[64, 56, 140], [40, 36, 104], [44, 28, 74]], tint: [232, 222, 255], pool: [255, 150, 110], pk: 0.16, warm: 0.4 },
+  'The Meteor Steps':        { g: [[42, 40, 124], [26, 26, 90], [14, 14, 54]], tint: [222, 216, 255], pool: [170, 160, 255], pk: 0.14 },
+  'The Satellite Graveyard': { g: [[30, 54, 124], [20, 34, 90], [10, 14, 50]], tint: [208, 228, 255], pool: [140, 200, 255], pk: 0.14 },
+  'Saucer Shoals':           { g: [[26, 70, 104], [16, 44, 78], [8, 18, 42]], tint: [204, 246, 238], pool: [130, 255, 210], pk: 0.15 },
+  'Sunspot Reef':            { g: [[112, 54, 92], [68, 30, 76], [28, 12, 42]], tint: [255, 222, 212], pool: [255, 160, 100], pk: 0.2, warm: 1 },
+  'The Ringed Rest':         { g: [[92, 72, 134], [56, 44, 102], [24, 20, 58]], tint: [255, 236, 218], pool: [255, 210, 150], pk: 0.18, warm: 0.6 },
+  'The Starstorm':           { g: [[72, 34, 104], [42, 20, 76], [16, 8, 38]], tint: [242, 210, 242], pool: [255, 140, 170], pk: 0.15 },
+  'The Star Nest':           { g: [[84, 82, 154], [50, 48, 112], [22, 22, 62]], tint: [255, 242, 216], pool: [255, 220, 140], pk: 0.22, warm: 0.7 },
+};
+function starfallMoodAt(a) {
+  const S = G.level && G.level.sections, D = STARFALL_MOOD['The Volcano Rim'];
+  if (!S) return D;
+  let i = 0; for (let k = 0; k < S.length; k++) if (a >= S[k].a0) i = k;
+  const cur = STARFALL_MOOD[S[i].name] || D, prev = i > 0 ? STARFALL_MOOD[S[i - 1].name] || D : cur, k = smooth(S[i].a0 - 200, S[i].a0 + 200, a);
+  if (k >= 1 || prev === cur) return cur;
+  const L = (x, y) => Array.isArray(x) ? x.map((v, j) => Array.isArray(v) ? L(v, y[j]) : lerp(v, y[j], k)) : lerp(x, y, k);
+  return { g: L(prev.g, cur.g), tint: L(prev.tint, cur.tint), pool: L(prev.pool, cur.pool), pk: L(prev.pk, cur.pk), warm: lerp(prev.warm || 0, cur.warm || 0, k) };
+}
+const starfallSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function starfallWallTile(side, k) {
+  const C = STARFALL_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = starfallRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+// one asteroid into a tile (c in tile px; X, Y map world to tile px). rk: the rock (its centre alt c, radii rx ry, face
+// p into the shaft from the base line), dir into the shaft, shade 0..1 (the rank behind is darker)
+const STARFALL_TINTS = [[0, 0, 0], [12, -6, -16], [-10, 2, 12], [8, -4, 4]];
+function starfallRockArt(c, rk, side, X, Y, shade, live, L) {
+  const dir = side ? -1 : 1, bw = L.baseWalls(rk.c), face = side ? bw[1] - rk.p : bw[0] + rk.p, cxw = face - dir * rk.rx, x = X(cxw), y = Y(rk.c), rx = rk.rx * s, ry = rk.ry * s;
+  const R = n => hash2(rk.seed % 100000 + n * 31, 8301), tn = STARFALL_TINTS[rk.tint], tc = (h, k = 0) => starfallCol(starfallLift(starfallHex(h), k).map((v, i) => clamp(v + tn[i] - shade * 40, 0, 255)));
+  // the outline: an ellipse roughened inward only (the face never pokes past the hitbox)
+  const pts = []; for (let i = 0; i < 12; i++) { const an = i / 12 * TWO_PI + rk.rot, f = 0.86 + 0.14 * R(i); pts.push([x + Math.cos(an) * rx * f, y + Math.sin(an) * ry * f]); }
+  starfallBlob(c, pts);
+  c.fillStyle = starfallRG2(x - rx * 0.4, y - ry * 0.5, rx * 0.06, x - rx * 0.1, y - ry * 0.1, Math.max(rx, ry) * 1.15, [tc(STARFALL_P.rock[0]), tc(STARFALL_P.rock[1]), tc(STARFALL_P.rock[2]), tc(STARFALL_P.rock[3])], c); c.fill();
+  c.save(); starfallBlob(c, pts); c.clip();
+  // craters: a shaded bowl, its far lip lit (a line pair); bigger rocks get more
+  // (one big crater and a couple of small pits: never two equal holes side by side)
+  const nc = shade ? 2 : 3;
+  for (let i = 0; i < nc; i++) {
+    const an = (side ? Math.PI : 0) + (R(i + 20) - 0.5) * 2.6, d = 0.2 + R(i + 21) * 0.5, cx = x + Math.cos(an) * rx * d, cy = y + Math.sin(an) * ry * d * 0.85, cr = (rk.ry * (i ? 0.06 + R(i + 22) * 0.05 : 0.2 + R(i + 22) * 0.1)) * s;
+    c.fillStyle = 'rgba(40,34,90,.42)'; starfallEll(c, cx, cy, cr, cr * 0.78); c.fill();
+    c.fillStyle = 'rgba(28,22,70,.35)'; starfallEll(c, cx - cr * 0.15, cy - cr * 0.18, cr * 0.7, cr * 0.5); c.fill();
+    c.strokeStyle = 'rgba(236,232,255,.6)'; c.lineWidth = 0.9 * s; c.beginPath(); c.ellipse(cx, cy, cr, cr * 0.78, 0, 0.15, 2.1); c.stroke();
+    c.strokeStyle = 'rgba(30,24,74,.55)'; c.lineWidth = 0.8 * s; c.beginPath(); c.ellipse(cx, cy, cr * 0.95, cr * 0.74, 0, 3.4, 5.1); c.stroke();
+  }
+  // cracks (a dark furrow, a lit ridge under it)
+  for (let i = 0; i < 2; i++) {
+    const an = R(i + 40) * TWO_PI, x0 = x + Math.cos(an) * rx * 0.2, y0 = y + Math.sin(an) * ry * 0.2, x1 = x + Math.cos(an + 0.5) * rx * 0.85, y1 = y + Math.sin(an + 0.5) * ry * 0.85, mx = (x0 + x1) / 2 + (R(i + 41) - 0.5) * 8 * s, my = (y0 + y1) / 2 + (R(i + 42) - 0.5) * 8 * s;
+    c.strokeStyle = 'rgba(34,28,80,.55)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(x0, y0); c.lineTo(mx, my); c.lineTo(x1, y1); c.stroke();
+    c.strokeStyle = 'rgba(226,222,255,.35)'; c.lineWidth = 0.7 * s; c.beginPath(); c.moveTo(x0, y0 + 1.1 * s); c.lineTo(mx, my + 1.1 * s); c.lineTo(x1, y1 + 1.1 * s); c.stroke();
+  }
+  // moon dust drifted on its upper slope, a speckle of dust and grit
+  c.fillStyle = starfallLG(0, y - ry, 0, y - ry * 0.3, ['rgba(236,232,255,.5)', 'rgba(210,204,246,.12)'], c); starfallEll(c, x - rx * 0.15, y - ry * 0.78, rx * 0.62, ry * 0.32); c.fill();
+  c.fillStyle = 'rgba(240,238,255,.5)'; for (let i = 0; i < 7; i++) { const an = R(i + 60) * TWO_PI, d = R(i + 61) * 0.8; c.fillRect(x + Math.cos(an) * rx * d, y + Math.sin(an) * ry * d, 1.1 * s, 1.1 * s); }
+  // a faint warm rim of planet light along its underside, the lower half in shade
+  c.fillStyle = starfallLG(0, y, 0, y + ry, ['rgba(20,16,60,0)', 'rgba(20,16,60,.32)'], c); c.fillRect(x - rx, y, rx * 2, ry);
+  c.restore();
+  starfallBlob(c, pts); c.strokeStyle = shade ? 'rgba(46,40,100,.9)' : STARFALL_P.rockE; c.lineWidth = 1.5 * s; c.stroke();
+  c.strokeStyle = `rgba(255,190,140,${0.22 - shade * 0.15})`; c.lineWidth = 2 * s; c.beginPath(); c.ellipse(x, y, rx * 0.9, ry * 0.9, 0, 0.6, 2.5); c.stroke();
+  c.strokeStyle = `rgba(236,232,255,${0.32 - shade * 0.2})`; c.lineWidth = 2.6 * s; c.beginPath(); c.ellipse(x, y, rx * 0.86, ry * 0.86, 0, 3.7, 4.6); c.stroke();
+  // chips nicked out of its rim on the shaft side (a dark notch, a lit lower lip)
+  if (!shade) for (let i = 0; i < 2; i++) {
+    const an = (side ? Math.PI : 0) + (R(i + 70) - 0.5) * 1.6, px = x + Math.cos(an) * rx * 0.9, py = y + Math.sin(an) * ry * 0.9;
+    c.fillStyle = 'rgba(46,40,100,.75)'; c.beginPath(); c.moveTo(px, py - 2.6 * s); c.lineTo(px - dir * 2.6 * s, py); c.lineTo(px, py + 2 * s); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(236,232,255,.7)'; c.lineWidth = 0.7 * s; c.beginPath(); c.moveTo(px - dir * 2.6 * s, py); c.lineTo(px, py + 2 * s); c.stroke();
+  }
+  // crystals growing out of its upper slope, leaning toward the shaft, kept behind the edge
+  if (rk.crys && !shade) {
+    const col = rk.crys === 1 ? STARFALL_P.cyan : STARFALL_P.violet, ba = rk.c + rk.ry * 0.55, bxw = cxw + dir * rk.rx * 0.35;
+    const room = Math.max(0, (side ? bxw - L.walls(ba + 14)[1] : L.walls(ba + 14)[0] - bxw) * -1) - 3;
+    if (room > 6) {
+      const len = Math.min(rk.ry * 0.85, room * 1.6, 26), bx = X(bxw), by = Y(ba);
+      starfallCrystal(c, bx - dir * 4 * s, by + 2 * s, -Math.PI / 2 + dir * 0.15 - dir * 0.5, len * 0.62 * s, 3.4 * s, col);
+      starfallCrystal(c, bx, by, -Math.PI / 2 + dir * 0.45, len * s, 4.6 * s, col);
+      starfallCrystal(c, bx + dir * 3 * s, by + 3 * s, -Math.PI / 2 + dir * 0.95, len * 0.55 * s, 3.2 * s, col);
+      live.push({ type: 'crys', x: bxw + dir * len * 0.2, a: ba + len * 0.4, col, j: R(90) });
+    }
+  }
+}
+// a crystal prism (c, root x y in px, angle, length, half width): a shaded flank, a lit face, a white facet, a tip
+function starfallCrystal(c, x, y, ang, len, wd, col) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  const m = len * 0.72;
+  c.fillStyle = starfallCol(starfallLift(col, -70)); c.beginPath(); c.moveTo(0, -wd); c.lineTo(m, -wd * 0.8); c.lineTo(len, 0); c.lineTo(m, wd * 0.8); c.lineTo(0, wd); c.closePath(); c.fill();
+  c.fillStyle = starfallLG(0, -wd, 0, wd, [starfallCol(starfallLift(col, 90)), starfallCol(col), starfallCol(starfallLift(col, -30))], c); c.beginPath(); c.moveTo(0, -wd * 0.2); c.lineTo(m, -wd * 0.3); c.lineTo(len, 0); c.lineTo(m, wd * 0.3); c.lineTo(0, wd * 0.6); c.closePath(); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.75)'; c.beginPath(); c.moveTo(len * 0.1, -wd * 0.55); c.lineTo(m, -wd * 0.62); c.lineTo(len * 0.92, -wd * 0.05); c.closePath(); c.fill();
+  c.strokeStyle = starfallCol(starfallLift(col, -110), 0.9); c.lineWidth = Math.max(0.5, wd * 0.16); c.beginPath(); c.moveTo(0, -wd); c.lineTo(m, -wd * 0.8); c.lineTo(len, 0); c.lineTo(m, wd * 0.8); c.lineTo(0, wd); c.stroke();
+  c.restore();
+}
+function starfallRenderWallTile(side, k) {
+  const a0 = k * STARFALL_TILE, a1 = (k + 1) * STARFALL_TILE, dir = side ? -1 : 1, L = G.level, wx = a => side ? rightWall(a) : leftWall(a);
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = starfallSpan(), xa = side ? reach - 8 : s0, xb = side ? s1 : reach + 8;
+  const sp = starfallCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c; starfallFitY(sp);
+  sp.xa = xa; sp.a1 = a1; sp.live = [];
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 60, A1 = a1 + 60;
+  const bw = a => L.baseWalls(a)[side];
+  // the deep mass behind everything: dark moon rock from the screen's edge to just behind the base line, a bumpy face
+  const edge = side ? X(xb) + 40 : X(xa) - 40;
+  c.beginPath(); c.moveTo(edge, Y(A0));
+  for (let a = A0; a <= A1 + 3; a += 6) c.lineTo(X(bw(a) - dir * (6 + 5 * Math.sin(a * 0.045 + side) + 3 * Math.sin(a * 0.13))), Y(a));
+  c.lineTo(edge, Y(A1 + 3)); c.closePath();
+  const ex = X(bw((a0 + a1) / 2));
+  c.fillStyle = starfallLG(ex, 0, ex - dir * 70 * s, 0, ['#4a4288', '#332e6c', '#221e50'], c); c.fill();
+  c.save(); c.clip();
+  for (let i = 0; i < 9; i++) { const a = lerp(A0, A1, hash2(k * 9 + i, 8401 + side)), d = 10 + 50 * hash2(k * 9 + i, 8402 + side), r = (4 + 7 * hash2(k * 9 + i, 8403)) * s, x = X(bw(a) - dir * d), y = Y(a); c.fillStyle = 'rgba(20,16,56,.4)'; starfallEll(c, x, y, r, r * 0.8); c.fill(); c.strokeStyle = 'rgba(160,150,220,.3)'; c.lineWidth = 0.7 * s; c.beginPath(); c.ellipse(x, y, r, r * 0.8, 0, 0.2, 2.0); c.stroke(); }
+  c.restore();
+  // the rank behind (darker, fitted behind the edge), then the rocks themselves
+  const rocks = L.rocks[side].filter(r => r.c + r.ry > A0 - 30 && r.c - r.ry < A1 + 30);
+  for (const rk of rocks) {
+    const b = { ...rk, c: rk.c + rk.ry * 0.62, ry: rk.ry * 0.88, rx: rk.rx * 0.9, seed: rk.seed + 17, crys: 0, tint: (rk.tint + 1) % 4, rot: -rk.rot };
+    let p = rk.p - rk.ry * 0.45;
+    for (let q = -0.95; q <= 0.95; q += 0.1) { const a = b.c + q * b.ry, e = -b.rx + b.rx * Math.sqrt(1 - q * q), room = L.reliefAt(a, side) - e - 1.5; p = Math.min(p, room); }
+    b.p = p; starfallRockArt(c, b, side, X, Y, 0.55, sp.live, L);
+  }
+  for (const rk of rocks) starfallRockArt(c, rk, side, X, Y, 0, sp.live, L);
+  // the drum's shade toward the screen's edge (the walls fall away into the dark)
+  c.fillStyle = starfallLG(ex - dir * 20 * s, 0, ex - dir * 80 * s, 0, ['rgba(12,10,40,0)', 'rgba(12,10,40,.5)'], c); c.fillRect(Math.min(edge, ex - dir * 20 * s), 0, Math.abs(edge - ex) + 100, sp.h);
+  return sp;
+}
+function drawStarfallWalls() {
+  starfallCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = STARFALL_TILE;
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = starfallWallTile(side, k);
+    const y0 = starfallPx(sy(t.a1)), y1 = starfallPx(sy(t.a1 - T));
+    ctx.drawImage(t.cv, ox + t.xa * s, y0, t.w, y1 - y0);
+    for (const q of t.live) {
+      const y = sy(q.a); if (y < -30 || y > H + 30) continue;
+      const tw = 0.5 + 0.5 * Math.sin(G.t * 1.8 + q.j * 20);
+      starfallGlow(sx(q.x), y, (18 + 6 * tw) * s, q.col, 0.22 + 0.14 * tw);
+      if (tw > 0.92) starfallTwinkle(ctx, sx(q.x), y - 6 * s, 4 * s * (tw - 0.92) / 0.08, (tw - 0.92) / 0.08, [230, 250, 255]);
+    }
+  }
+  // render one tile ahead each frame (above the screen, where you are heading)
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!STARFALL_CACHE.walls.has(side + ':' + k)) { starfallWallTile(side, k); done = true; break; } if (done) break; }
+}
+
+// ---- the backdrop: deep space (calm, hazed, lower in contrast). Three parallax layers drawn once per tile and blitted:
+// the far (0.03) nebulae, a band of stars and a scatter of stars; the middle (0.14) far asteroids drifting, hazed, and
+// each section's distant things (the satellite graveyard's junk, saucer buoys, hot rocks by the sun, comets in the
+// storm); the near (0.3) bigger rocks at the screen's edges with crystals, an old rocket stage, a space buoy. And the big
+// bodies on their own slow parallax: the volcano below and its cloud sea, the ringed planet, the blue home world, a
+// mothership, the sun, the moon.
+const STARFALL_LAYERS = [{ f: 0.03, LT: 800, id: 0 }, { f: 0.14, LT: 520, id: 1 }, { f: 0.3, LT: 440, id: 2 }];
+const STARFALL_HAZE = [44, 42, 110];
+const starfallMute = (q, k) => { const v = typeof q !== 'string' ? q : q[0] === '#' ? starfallHex(q) : q.match(/\d+/g).slice(0, 3).map(Number); return starfallCol(v.map((x, i) => lerp(x, STARFALL_HAZE[i], k))); };
+const starfallMuteA = (C, k) => C.map(q => starfallMute(q, k));
+function starfallLayerTile(Ly, k) {
+  const C = STARFALL_CACHE.layers, key = Ly.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = starfallSpan(), pa0 = k * Ly.LT, pa1 = (k + 1) * Ly.LT;
+  t = starfallCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1; starfallFitY(t);
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  const col = { live: [] };
+  for (let kk = k - 1; kk <= k + 1; kk++) starfallDrawLayer(t.c, Ly, kk, X, Y, x0, x1, col);
+  t.live = col.live.filter(g => Math.floor(g.a / Ly.LT) === k);
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// a little far asteroid (c in px, radius r px), hazed by mute
+function starfallFarRock(c, x, y, r, seed, mute, crys) {
+  const pts = []; for (let i = 0; i < 9; i++) { const an = i / 9 * TWO_PI, f = 0.8 + 0.2 * hash2(seed, 8501 + i); pts.push([x + Math.cos(an) * r * f, y + Math.sin(an) * r * f * 0.88]); }
+  starfallBlob(c, pts); c.fillStyle = starfallRG2(x - r * 0.4, y - r * 0.45, r * 0.05, x, y, r * 1.1, starfallMuteA(STARFALL_P.rock, mute), c); c.fill();
+  c.strokeStyle = starfallMute(STARFALL_P.rockE, mute); c.lineWidth = Math.max(0.6, r * 0.05); c.stroke();
+  if (r > 5 * s) { c.fillStyle = starfallMute('#3a3478', mute); starfallEll(c, x + r * 0.2, y + r * 0.1, r * 0.22, r * 0.17); c.fill(); starfallEll(c, x - r * 0.3, y + r * 0.35, r * 0.13, r * 0.1); c.fill(); }
+  c.strokeStyle = starfallMute('#f0eeff', mute); c.lineWidth = Math.max(0.6, r * 0.07); c.beginPath(); c.arc(x, y, r * 0.66, 3.5, 4.6); c.stroke();
+  if (crys) { const cc = crys === 1 ? STARFALL_P.cyan : STARFALL_P.violet; starfallCrystal(c, x + r * 0.2, y - r * 0.6, -Math.PI / 2 + 0.3, r * 0.8, r * 0.16, cc.map((v, i) => lerp(v, STARFALL_HAZE[i], mute * 0.6))); }
+}
+function starfallDrawLayer(c, Ly, k, X, Y, x0, x1, t) {
+  const id = Ly.id, LT = Ly.LT, base = k * LT, wa = (base + LT / 2) / Ly.f, fl = starfallDecorAt(wa), h = (q, n = 0) => hash2(k * 7 + n, 8600 + id * 37 + q);
+  const LX = X(Math.max(x0 + 6, -ox / s)), RX = X(Math.min(x1 - 6, WORLD_W + ox / s)), W2 = RX - LX;
+  if (id === 0) {
+    // nebula clouds (soft and wide, each section's own colours), the band of the galaxy, stars
+    const neb = { rim: [[200, 90, 170], [90, 120, 230]], meteor: [[90, 110, 240], [200, 90, 200]], junk: [[60, 150, 230], [120, 100, 230]], ufo: [[60, 200, 180], [80, 130, 230]], sun: [[255, 120, 90], [220, 80, 160]], ring: [[255, 170, 120], [160, 110, 230]], storm: [[230, 70, 140], [130, 70, 220]], nest: [[255, 200, 130], [140, 130, 255]] }[fl] || [[90, 110, 240], [200, 90, 200]];
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (let q = 0; q < 5; q++) {
+      const cx = LX + W2 * h(q, 1), cy = Y(base + LT * h(q, 2)), r = (110 + 120 * h(q, 3)) * s, cc = neb[q % 2];
+      c.fillStyle = starfallRG(cx, cy, r, [starfallCol(cc, 0.13), starfallCol(cc, 0.05), starfallCol(cc, 0)], c); c.save(); c.translate(cx, cy); c.scale(1, 0.6 + 0.5 * h(q, 4)); c.translate(-cx, -cy); c.fillRect(cx - r, cy - r, r * 2, r * 2); c.restore();
+      for (let m = 0; m < 3; m++) { const mx = cx + (h(q * 3 + m, 5) - 0.5) * r, my = cy + (h(q * 3 + m, 6) - 0.5) * r * 0.6, mr = r * (0.25 + 0.25 * h(q * 3 + m, 7)); c.fillStyle = starfallRG(mx, my, mr, [starfallCol(cc, 0.08), starfallCol(cc, 0)], c); c.fillRect(mx - mr, my - mr, mr * 2, mr * 2); }
+    }
+    // the band: a diagonal river of faint light, stars crowded along it
+    const bx = LX + W2 * 0.5, by = Y(base + LT / 2), ang = -0.55 + 0.3 * Math.sin(k * 0.7);
+    c.save(); c.translate(bx, by); c.rotate(ang); c.fillStyle = starfallLG(0, -46 * s, 0, 46 * s, ['rgba(170,180,255,0)', 'rgba(190,200,255,.1)', 'rgba(170,180,255,0)'], c); c.fillRect(-W2, -46 * s, W2 * 2, 92 * s); c.restore();
+    c.restore();
+    for (let q = 0; q < 150; q++) {
+      let x = LX + W2 * h(q, 10), y = Y(base + LT * h(q, 11));
+      if (q < 50) { const u = h(q, 12) * 2 - 1, off = (h(q, 13) - 0.5) * 70 * s; x = bx + Math.cos(ang) * u * W2 - Math.sin(ang) * off; y = by + Math.sin(ang) * u * W2 + Math.cos(ang) * off; }
+      const r = (h(q, 14) < 0.08 ? 1.3 : h(q, 14) < 0.3 ? 0.9 : 0.55) * s, w = h(q, 15);
+      c.fillStyle = w < 0.15 ? 'rgba(255,226,200,.85)' : w < 0.3 ? 'rgba(200,226,255,.85)' : `rgba(236,240,255,${0.4 + 0.5 * h(q, 16)})`; starfallCirc(c, x, y, r); c.fill();
+    }
+    for (let q = 0; q < 5; q++) t.live.push({ type: 'tw', xpx: LX + W2 * h(q, 20), ypx: Y(base + LT * h(q, 21)), a: base + LT * h(q, 21), j: h(q, 22) });
+  } else if (id === 1) {
+    // far asteroids drifting, hazed (a few with a glint of crystal)
+    const mute = 0.5;
+    for (let q = 0; q < 7; q++) { const x = LX + W2 * h(q, 30), y = Y(base + LT * h(q, 31)), r = (4 + 10 * h(q, 32) ** 2) * s; starfallFarRock(c, x, y, r, k * 11 + q, mute, h(q, 33) < 0.2 ? 1 + (q % 2) : 0); }
+    // the section's distant things
+    const px = LX + W2 * (0.2 + 0.6 * h(1, 40)), py = Y(base + LT * (0.3 + 0.4 * h(1, 41))), m2 = 0.42;
+    if (fl === 'junk') {
+      // a derelict satellite tumbled still, a loose panel, a spent fuel tank
+      c.save(); c.translate(px, py); c.rotate(h(2, 42) * 3);
+      c.fillStyle = starfallMute(STARFALL_P.panel[1], m2); c.fillRect(-46 * s, -6 * s, 30 * s, 12 * s); c.fillRect(16 * s, -6 * s, 30 * s, 12 * s);
+      c.strokeStyle = starfallMute(STARFALL_P.panel[3], m2); c.lineWidth = 0.6 * s; c.beginPath(); for (let gx = -40; gx < 46; gx += 6) { if (gx > -16 && gx < 16) continue; c.moveTo(gx * s, -6 * s); c.lineTo(gx * s, 6 * s); } c.stroke();
+      c.fillStyle = starfallMute(STARFALL_P.foil[2], m2); starfallRRect(c, -10 * s, -9 * s, 20 * s, 18 * s, 3 * s); c.fill();
+      c.restore();
+      const tx = LX + W2 * (0.2 + 0.6 * h(3, 43)), ty = Y(base + LT * h(3, 44));
+      c.fillStyle = starfallLG(tx - 8 * s, 0, tx + 8 * s, 0, starfallMuteA(['#f0f0ff', '#a0a2c8', '#606290'], m2), c); starfallRRect(c, tx - 8 * s, ty - 20 * s, 16 * s, 40 * s, 7 * s); c.fill();
+      c.fillStyle = starfallMute('#e86a50', m2); c.fillRect(tx - 8 * s, ty - 6 * s, 16 * s, 4 * s);
+      t.live.push({ type: 'blink', xpx: px, ypx: py, a: base + LT * 0.5, col: [255, 90, 90], j: h(4, 45) });
+    } else if (fl === 'ufo') {
+      // a little fleet of far saucers: lit domes and rims
+      for (let q = 0; q < 3; q++) { const ux = LX + W2 * h(q, 46), uy = Y(base + LT * h(q, 47)), r = (10 + 6 * h(q, 48)) * s; c.fillStyle = starfallMute('#c4c6e6', m2); starfallEll(c, ux, uy, r, r * 0.3); c.fill(); c.fillStyle = starfallMute('#8aeee0', m2 * 0.8); c.beginPath(); c.ellipse(ux, uy - r * 0.1, r * 0.4, r * 0.4, 0, Math.PI, TWO_PI); c.fill(); t.live.push({ type: 'glow', xpx: ux, ypx: uy + r * 0.2, a: base + LT * h(q, 47), col: [140, 255, 210], r: 14, j: h(q, 49) }); }
+    } else if (fl === 'sun' || fl === 'storm') {
+      // hot rocks glowing red at their edges, a comet in the storm
+      for (let q = 0; q < 3; q++) { const x = LX + W2 * h(q, 50), y = Y(base + LT * h(q, 51)), r = (6 + 6 * h(q, 52)) * s; starfallFarRock(c, x, y, r, k * 5 + q + 90, 0.45, 0); c.strokeStyle = 'rgba(255,140,90,.45)'; c.lineWidth = 1.4 * s; c.beginPath(); c.arc(x, y, r * 0.9, 0.2, 2.2); c.stroke(); }
+      if (fl === 'storm') { const cx = LX + W2 * h(5, 53), cy = Y(base + LT * h(5, 54)), L2 = 120 * s; c.save(); c.globalCompositeOperation = 'lighter'; c.translate(cx, cy); c.rotate(-0.5); c.fillStyle = starfallLG(0, 0, L2, 0, ['rgba(200,240,255,.5)', 'rgba(150,200,255,.15)', 'rgba(150,200,255,0)'], c); c.beginPath(); c.moveTo(0, -4 * s); c.quadraticCurveTo(L2 * 0.5, -10 * s, L2, -14 * s); c.lineTo(L2, 14 * s); c.quadraticCurveTo(L2 * 0.5, 10 * s, 0, 4 * s); c.closePath(); c.fill(); c.fillStyle = 'rgba(240,250,255,.9)'; starfallCirc(c, 0, 0, 3 * s); c.fill(); c.restore(); }
+    } else if (fl === 'rim' || fl === 'meteor') {
+      // little shooting stars streaking across (hazed)
+      c.save(); c.globalCompositeOperation = 'lighter';
+      for (let q = 0; q < 2; q++) { const x = LX + W2 * h(q, 55), y = Y(base + LT * h(q, 56)); c.strokeStyle = starfallLG(x, y, x + 40 * s, y - 16 * s, ['rgba(255,240,220,.6)', 'rgba(255,200,160,0)'], c); c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 40 * s, y - 16 * s); c.stroke(); }
+      c.restore();
+    }
+  } else {
+    // the near layer: two big rocks a tile from the screen's edges (partly off it), crystals, the section's props
+    const mute = 0.24;
+    for (let q = 0; q < 2; q++) {
+      const sd = (pmod(k, 2) + q) % 2, dd = sd ? -1 : 1, ex = sd ? RX + 10 * s : LX - 10 * s, ta = base + 120 + q * 200 + 60 * h(q, 60), ty = Y(ta), r = (26 + 22 * h(q, 61)) * s;
+      starfallFarRock(c, ex + dd * r * 0.25, ty, r, k * 3 + q + 200, mute, h(q, 62) < 0.45 ? 1 + (q % 2) : 0);
+      const v = h(q, 63);
+      if (fl === 'junk' && v < 0.6) {
+        // an old rocket stage drifting, its nozzle and a scorched band
+        const rx2 = ex + dd * r * 1.4, ry2 = ty - r * 0.9; c.save(); c.translate(rx2, ry2); c.rotate(dd * 0.6);
+        c.fillStyle = starfallLG(-9 * s, 0, 9 * s, 0, starfallMuteA(['#ffffff', '#c8cae6', '#7a7cae'], mute), c); starfallRRect(c, -9 * s, -30 * s, 18 * s, 44 * s, 4 * s); c.fill();
+        c.strokeStyle = starfallMute(STARFALL_P.steelE, mute); c.lineWidth = 0.8 * s; c.stroke();
+        c.fillStyle = starfallMute('#d84a3a', mute); c.fillRect(-9 * s, -18 * s, 18 * s, 5 * s);
+        c.fillStyle = starfallLG(-7 * s, 0, 7 * s, 0, starfallMuteA(['#6a6c90', '#3a3c60'], mute), c); c.beginPath(); c.moveTo(-6 * s, 14 * s); c.lineTo(6 * s, 14 * s); c.lineTo(9 * s, 24 * s); c.lineTo(-9 * s, 24 * s); c.closePath(); c.fill();
+        c.restore();
+      } else if (fl === 'ufo' && v < 0.6) {
+        // a space buoy: a ball on a mast with a blinking green lamp, moored to the rock
+        const bx = ex + dd * r * 0.9, by = ty - r * 0.95; c.strokeStyle = starfallMute('#9a9cc4', mute); c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(ex + dd * r * 0.5, ty - r * 0.5); c.lineTo(bx, by); c.stroke();
+        c.fillStyle = starfallRG2(bx - 3 * s, by - 3 * s, 1, bx, by, 9 * s, starfallMuteA(['#ffe0a0', '#e88a3a', '#9a4a24'], mute), c); starfallCirc(c, bx, by, 8 * s); c.fill();
+        c.strokeStyle = starfallMute('#7a3a20', mute); c.lineWidth = 0.8 * s; c.stroke(); c.fillStyle = starfallMute('#fff0d0', mute); c.fillRect(bx - 8 * s, by - 1 * s, 16 * s, 2 * s);
+        t.live.push({ type: 'blink', xpx: bx, ypx: by - 11 * s, a: ta, col: [120, 255, 170], j: h(q, 64) });
+      } else if (fl === 'nest' || fl === 'ring') {
+        // little golden star-blossoms on the rock (the nest's kin), glowing
+        for (let m = 0; m < 3; m++) { const fx = ex + dd * r * (0.3 + 0.25 * m), fy = ty - r * (0.7 + 0.1 * Math.sin(m * 2)); t.live.push({ type: 'glow', xpx: fx, ypx: fy, a: ta, col: [255, 220, 140], r: 10, j: h(m, 65) }); c.fillStyle = starfallMute('#ffe08a', mute * 0.6); c.beginPath(); for (let p = 0; p < 10; p++) { const an = -Math.PI / 2 + p * Math.PI / 5, rr = (p % 2 ? 2 : 4.6) * s; c.lineTo(fx + Math.cos(an) * rr, fy + Math.sin(an) * rr); } c.closePath(); c.fill(); }
+      }
+      if (h(q, 62) < 0.45) t.live.push({ type: 'glow', xpx: ex + dd * r * 0.45, ypx: ty - r * 0.75, a: ta, col: h(q, 62) < 0.22 ? STARFALL_P.cyan : STARFALL_P.violet, r: 16, j: h(q, 66) });
+    }
+  }
+}
+// The big bodies on their own slow parallax (each drawn once into a cached sprite): where each sits in the climb
+const STARFALL_BODIES = [
+  { kind: 'planet', a: 3200, f: 0.05, x: 0.78, r: 34 }, { kind: 'home', a: 9000, f: 0.06, x: 0.22, r: 44 }, { kind: 'mother', a: 14500, f: 0.07, x: 0.7, r: 60 },
+  { kind: 'sun', a: 20800, f: 0.07, x: 0.86, r: 80 }, { kind: 'planet', a: 24400, f: 0.1, x: 0.3, r: 74 }, { kind: 'moon', a: 30500, f: 0.06, x: 0.75, r: 40 }, { kind: 'moon', a: 36200, f: 0.12, x: 0.24, r: 62 },
+];
+function starfallBodySprite(kind, r) {
+  const R = Math.round(r);
+  return starfallSprite('body' + kind + R, (R * 2 + (kind === 'planet' ? R * 2.4 : kind === 'mother' ? R * 1.2 : R * 1.4)) * s, (R * 2 + R * 1.2) * s, (c, w, hh) => {
+    const x = w / 2, y = hh / 2, r2 = R * s;
+    if (kind === 'planet') {
+      // the ringed planet: banded gold, coral, cream and rust, a storm eye, rings in front and behind, the night side
+      const tilt = -0.32, RX = r2 * 1.95, RY = r2 * 0.44;
+      const ring = (from, to, front) => { for (const [k, cc, a, lw] of [[1.16, [214, 170, 120], 0.45, 2], [1.04, [255, 230, 160], 0.9, 4.5], [0.93, [240, 190, 110], 0.85, 3.5], [0.85, [120, 80, 90], 0.5, 1.4], [0.79, [255, 214, 150], 0.6, 2.6]]) { c.strokeStyle = starfallLG(x - RX, y, x + RX, y, [starfallCol(starfallLift(cc, 20), a), starfallCol(cc, a), starfallCol(starfallLift(cc, -70), a * (front ? 0.8 : 0.5))], c); c.lineWidth = lw * r2 / 50; c.beginPath(); c.ellipse(x, y, RX * k, RY * k, tilt, from, to); c.stroke(); } };
+      ring(Math.PI, TWO_PI, false);
+      c.save(); starfallCirc(c, x, y, r2); c.clip();
+      c.fillStyle = starfallLG(x, y - r2, x, y + r2, ['#ffe6b0', '#f2a870'], c); c.fillRect(x - r2, y - r2, r2 * 2, r2 * 2);
+      c.save(); c.translate(x, y); c.rotate(tilt);
+      const bands = [[-0.85, 0.16, [255, 244, 214]], [-0.6, 0.14, [232, 136, 96]], [-0.38, 0.1, [255, 214, 150]], [-0.18, 0.16, [196, 92, 78]], [0.06, 0.12, [255, 228, 180]], [0.26, 0.18, [222, 120, 88]], [0.5, 0.1, [255, 200, 140]], [0.7, 0.16, [176, 84, 84]]];
+      for (const [i, [by, bh, cc]] of bands.entries()) { c.fillStyle = starfallCol(cc, 0.85); c.beginPath(); c.moveTo(-r2 * 1.2, by * r2); for (let q = 0; q <= 12; q++) c.lineTo(-r2 * 1.2 + q * r2 * 0.2, by * r2 + Math.sin(q * 1.3 + i * 2) * r2 * 0.02); for (let q = 12; q >= 0; q--) c.lineTo(-r2 * 1.2 + q * r2 * 0.2, (by + bh) * r2 + Math.sin(q * 1.1 + i * 3) * r2 * 0.025); c.closePath(); c.fill(); }
+      c.fillStyle = starfallRG(r2 * 0.28, r2 * 0.33, r2 * 0.2, ['#fff0d0', '#e07a5a', '#a84a4a'], c); starfallEll(c, r2 * 0.3, r2 * 0.34, r2 * 0.2, r2 * 0.1); c.fill();
+      c.strokeStyle = 'rgba(255,230,200,.7)'; c.lineWidth = 1; c.beginPath(); c.ellipse(r2 * 0.3, r2 * 0.34, r2 * 0.12, r2 * 0.05, 0, 0.5, 4.5); c.stroke();
+      c.restore();
+      c.strokeStyle = 'rgba(80,30,70,.35)'; c.lineWidth = r2 * 0.1; c.beginPath(); c.ellipse(x + 3, y + 6, RX * 0.9, RY * 0.9, tilt, 0.15, Math.PI - 0.15); c.stroke();
+      c.fillStyle = starfallRG2(x - r2 * 0.55, y - r2 * 0.6, r2 * 0.5, x - r2 * 0.2, y - r2 * 0.2, r2 * 1.65, ['rgba(30,20,80,0)', 'rgba(30,20,80,.15)', 'rgba(30,20,80,.6)', 'rgba(30,20,80,.85)'], c); c.fillRect(x - r2, y - r2, r2 * 2, r2 * 2);
+      c.strokeStyle = 'rgba(140,200,255,.5)'; c.lineWidth = 1.6; c.beginPath(); c.arc(x, y, r2 - 1, 0.1, 1.4); c.stroke();
+      c.restore();
+      c.strokeStyle = 'rgba(255,244,220,.75)'; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r2 - 1, 3.4, 4.8); c.stroke();
+      ring(0, Math.PI, true);
+    } else if (kind === 'home') {
+      // the blue home world: ocean, green-gold continents, swirls of cloud, a thin bright atmosphere, its night side
+      c.save(); starfallCirc(c, x, y, r2); c.clip();
+      c.fillStyle = starfallRG2(x - r2 * 0.4, y - r2 * 0.4, r2 * 0.1, x, y, r2, ['#8ae0ff', '#2a8ad8', '#1a4a9a'], c); c.fillRect(x - r2, y - r2, r2 * 2, r2 * 2);
+      for (let q = 0; q < 6; q++) { const cx = x + (hash2(q, 8701) - 0.5) * r2 * 1.5, cy = y + (hash2(q, 8702) - 0.5) * r2 * 1.5, cr = r2 * (0.18 + 0.2 * hash2(q, 8703)); const pts = []; for (let i = 0; i < 9; i++) { const an = i / 9 * TWO_PI; pts.push([cx + Math.cos(an) * cr * (0.7 + 0.4 * hash2(q * 9 + i, 8704)), cy + Math.sin(an) * cr * (0.6 + 0.4 * hash2(q * 9 + i, 8705))]); } starfallBlob(c, pts); c.fillStyle = starfallLG(cx, cy - cr, cx, cy + cr, ['#bce87a', '#5aa850', '#3a7a3a'], c); c.fill(); }
+      c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = r2 * 0.06; for (let q = 0; q < 5; q++) { const cy = y + (q / 4 - 0.5) * r2 * 1.5; c.beginPath(); c.moveTo(x - r2, cy); c.bezierCurveTo(x - r2 * 0.3, cy - r2 * 0.15, x + r2 * 0.2, cy + r2 * 0.18, x + r2, cy - r2 * 0.05); c.stroke(); }
+      c.fillStyle = starfallRG2(x - r2 * 0.5, y - r2 * 0.55, r2 * 0.5, x - r2 * 0.2, y - r2 * 0.2, r2 * 1.6, ['rgba(20,18,70,0)', 'rgba(20,18,70,.2)', 'rgba(20,18,70,.75)'], c); c.fillRect(x - r2, y - r2, r2 * 2, r2 * 2);
+      c.restore();
+      c.strokeStyle = 'rgba(160,230,255,.85)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r2, 2.9, 5.2); c.stroke();
+      c.strokeStyle = 'rgba(160,230,255,.25)'; c.lineWidth = 6; c.beginPath(); c.arc(x, y, r2 + 2, 3.0, 5.0); c.stroke();
+      // its moon
+      c.fillStyle = starfallRG2(x + r2 * 1.25, y - r2 * 0.6, 1, x + r2 * 1.3, y - r2 * 0.55, r2 * 0.2, ['#f4f0ff', '#a8a4cc', '#5a5888'], c); starfallCirc(c, x + r2 * 1.3, y - r2 * 0.55, r2 * 0.18); c.fill();
+    } else if (kind === 'mother') {
+      // the mothership: a huge saucer far off, rows of lit windows, a glowing underbelly
+      c.fillStyle = starfallLG(0, y - r2 * 0.3, 0, y + r2 * 0.3, ['#9a9cc8', '#5a5c90', '#34366a'], c); starfallEll(c, x, y, r2 * 1.6, r2 * 0.32); c.fill();
+      c.strokeStyle = 'rgba(200,204,255,.6)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(x, y - 2, r2 * 1.5, r2 * 0.24, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+      c.fillStyle = starfallLG(0, y - r2 * 0.75, 0, y - r2 * 0.1, ['#8ae8dc', '#3a7a8a'], c); c.beginPath(); c.ellipse(x, y - r2 * 0.12, r2 * 0.62, r2 * 0.6, 0, Math.PI, TWO_PI); c.fill();
+      c.fillStyle = 'rgba(255,240,170,.85)'; for (let q = 0; q < 18; q++) { const an = Math.PI * (0.08 + q / 17 * 0.84), wx2 = x - Math.cos(an) * r2 * 1.35, wy = y + Math.sin(an) * r2 * 0.12; c.fillRect(wx2 - 1.2, wy - 1, 2.4, 2); }
+      c.fillStyle = starfallRG(x, y + r2 * 0.3, r2 * 0.6, ['rgba(160,255,220,.7)', 'rgba(160,255,220,0)'], c); starfallEll(c, x, y + r2 * 0.3, r2 * 0.6, r2 * 0.2); c.fill();
+    } else if (kind === 'sun') {
+      // a great sun at the side: white-gold heart, orange limb, prominences curling off it
+      c.fillStyle = starfallRG(x, y, r2 * 1.9, ['rgba(255,190,120,.45)', 'rgba(255,140,90,.15)', 'rgba(255,120,80,0)'], c); c.fillRect(0, 0, w, hh);
+      c.fillStyle = starfallRG2(x - r2 * 0.25, y - r2 * 0.25, r2 * 0.1, x, y, r2, STARFALL_P.sun, c); starfallCirc(c, x, y, r2); c.fill();
+      c.strokeStyle = 'rgba(255,120,70,.6)'; c.lineWidth = r2 * 0.12; for (const [an, sz] of [[2.4, 0.5], [3.6, 0.35], [4.4, 0.42]]) { const px = x + Math.cos(an) * r2, py = y + Math.sin(an) * r2; c.beginPath(); c.arc(px + Math.cos(an) * r2 * sz * 0.5, py + Math.sin(an) * r2 * sz * 0.5, r2 * sz * 0.5, an + Math.PI * 0.2, an + Math.PI * 1.8, true); c.stroke(); }
+      c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r2 * 0.85, 3.5, 4.5); c.stroke();
+    } else {
+      // the moon: pale, cratered, a soft glow
+      c.fillStyle = starfallRG(x, y, r2 * 1.6, ['rgba(220,226,255,.3)', 'rgba(200,210,255,0)'], c); c.fillRect(0, 0, w, hh);
+      c.fillStyle = starfallRG2(x - r2 * 0.35, y - r2 * 0.35, r2 * 0.1, x, y, r2, ['#ffffff', '#dcdcf4', '#9a9ac8'], c); starfallCirc(c, x, y, r2); c.fill();
+      c.save(); starfallCirc(c, x, y, r2); c.clip();
+      for (let q = 0; q < 9; q++) { const cx = x + (hash2(q, 8801) - 0.5) * r2 * 1.6, cy = y + (hash2(q, 8802) - 0.5) * r2 * 1.6, cr = r2 * (0.06 + 0.14 * hash2(q, 8803)); c.fillStyle = 'rgba(130,130,180,.45)'; starfallEll(c, cx, cy, cr, cr * 0.85); c.fill(); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(cx, cy, cr, cr * 0.85, 0, 0.2, 2); c.stroke(); }
+      c.fillStyle = starfallRG2(x - r2 * 0.5, y - r2 * 0.5, r2 * 0.6, x - r2 * 0.2, y - r2 * 0.2, r2 * 1.6, ['rgba(40,40,110,0)', 'rgba(40,40,110,.15)', 'rgba(40,40,110,.55)'], c); c.fillRect(x - r2, y - r2, r2 * 2, r2 * 2);
+      c.restore();
+    }
+  });
+}
+// the island volcano far below, its crater glowing, a lazy smoke plume, a sea of cloud round it (the first stretch)
+function starfallVolcanoSprite() {
+  return starfallSprite('volcano', cssW + 80, 300 * s, (c, w, hh) => {
+    const m = w / 2, b = hh;
+    c.fillStyle = starfallRG(m, b - 40 * s, 200 * s, ['rgba(255,140,80,.35)', 'rgba(255,110,70,.1)', 'rgba(255,100,60,0)'], c); c.fillRect(0, 0, w, hh);
+    c.fillStyle = starfallLG(0, b - 130 * s, 0, b, ['#6a447e', '#3e2a5e'], c);
+    c.beginPath(); c.moveTo(m - 230 * s, b); c.quadraticCurveTo(m - 90 * s, b - 90 * s, m - 44 * s, b - 128 * s); c.lineTo(m + 46 * s, b - 126 * s); c.quadraticCurveTo(m + 96 * s, b - 86 * s, m + 240 * s, b); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,170,120,.55)'; c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(m - 170 * s, b - 30 * s); c.quadraticCurveTo(m - 80 * s, b - 90 * s, m - 44 * s, b - 128 * s); c.stroke();
+    c.strokeStyle = 'rgba(40,24,60,.45)'; c.lineWidth = 1.2 * s; c.beginPath(); for (const f of [-0.5, 0.1, 0.6]) { c.moveTo(m + f * 60 * s, b - 120 * s); c.quadraticCurveTo(m + f * 110 * s, b - 60 * s, m + f * 170 * s, b); } c.stroke();
+    c.strokeStyle = 'rgba(255,140,70,.6)'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(m - 14 * s, b - 124 * s); c.quadraticCurveTo(m - 24 * s, b - 80 * s, m - 40 * s, b - 40 * s); c.moveTo(m + 22 * s, b - 124 * s); c.quadraticCurveTo(m + 34 * s, b - 76 * s, m + 44 * s, b - 30 * s); c.stroke();
+    c.fillStyle = starfallRG(m, b - 127 * s, 46 * s, ['rgba(255,244,180,1)', 'rgba(255,150,70,.85)', 'rgba(255,90,40,0)'], c); starfallEll(c, m, b - 127 * s, 44 * s, 7 * s); c.fill();
+    // the cloud sea round its foot
+    for (let i = 0; i < 12; i++) { const cx = (i / 11) * w, cy = b - (8 + 14 * hash2(i, 8901)) * s, r = (40 + 30 * hash2(i, 8902)) * s; c.fillStyle = starfallRG(cx, cy, r, ['rgba(186,180,240,.75)', 'rgba(150,140,220,.35)', 'rgba(130,120,210,0)'], c); starfallEll(c, cx, cy, r * 1.4, r * 0.5); c.fill(); }
+  });
+}
+function drawStarfallBodies() {
+  for (const B of STARFALL_BODIES) {
+    const y = H * 0.4 - (B.a - G.camAlt) * B.f * s * 4, sp = starfallBodySprite(B.kind, B.r);
+    if (y + sp.h < -40 || y - sp.h > H + 40) continue;
+    ctx.save(); ctx.globalAlpha = B.kind === 'mother' ? 0.6 : 0.9; ctx.drawImage(sp.cv, ox + playW * B.x - sp.w / 2, y - sp.h / 2, sp.w, sp.h); ctx.restore();
+    if (B.kind === 'mother') { const bl = pmod(G.t * 0.7, 1) < 0.5; starfallGlow(ox + playW * B.x, y + B.r * 0.3 * s, B.r * 1.2 * s, [140, 255, 210], bl ? 0.16 : 0.08); }
+  }
+  // the volcano sinks away below as you climb
+  const vy = H + 40 * s - (0 - G.camAlt) * 0.25 * s - 60 * s * 0;
+  const v2 = H + G.camAlt * 0.25 * s - 10 * s;
+  if (v2 - 300 * s < H + 20) { const sp = starfallVolcanoSprite(); ctx.drawImage(sp.cv, cssW / 2 - sp.w / 2, v2 - sp.h, sp.w, sp.h); const k = 0.5 + 0.5 * Math.sin(G.t * 1.3); starfallGlow(cssW / 2, v2 - 127 * s, 60 * s, [255, 150, 80], 0.25 + 0.1 * k); for (let i = 0; i < 4; i++) { const u = pmod(G.t * 0.1 + i / 4, 1), px = cssW / 2 + (Math.sin(u * 5 + i) * 8 + u * 40) * s, py = v2 - (130 + u * 140) * s, pr = (10 + u * 26) * s, spb = starfallBlobSprite([130, 116, 180]); ctx.save(); ctx.globalAlpha = 0.45 * (1 - u); ctx.drawImage(spb.cv, px - pr, py - pr, pr * 2, pr * 2); ctx.restore(); } }
+  void vy;
+}
+function drawStarfallBackground() {
+  starfallCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P;
+  const M = starfallMoodAt(G.camAlt + viewH * 0.5);
+  ctx.fillStyle = starfallLG(0, 0, 0, H, M.g.map(c => starfallCol(c))); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  for (const Ly of STARFALL_LAYERS) {
+    const base = G.camAlt * Ly.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / Ly.LT); k * Ly.LT < pa1; k++) {
+      // tiles meet exactly on device pixels (no overlap: their soft nebulae would double up into a seam)
+      const t = starfallLayerTile(Ly, k), y = starfallPx(H - (t.pa1 - base) * s), yb = starfallPx(H - (t.pa1 - Ly.LT - base) * s), tx = ox + t.xa * s;
+      ctx.drawImage(t.cv, tx, y, t.w, yb - y);
+      for (const g of t.live) {
+        const yy = y + g.ypx, x = tx + g.xpx;
+        if (yy < Y0 - 40 || yy > Y1 + 40) continue;
+        if (g.type === 'tw') { const tw = Math.max(0, Math.sin(G.t * (0.8 + g.j) + g.j * 30)) ** 3; starfallTwinkle(ctx, x, yy, (2 + 4 * tw) * s, 0.3 + 0.6 * tw, [226, 236, 255]); }
+        else if (g.type === 'blink') { const on = pmod(G.t * 0.9 + g.j, 1) < 0.25; starfallGlow(x, yy, 9 * s, g.col, on ? 0.7 : 0.08); }
+        else if (g.type === 'glow') starfallGlow(x, yy, g.r * s, g.col, 0.18 + 0.1 * Math.sin(G.t * 1.6 + g.j * 9));
+      }
+    }
+    if (Ly.id === 0) drawStarfallBodies();
+  }
+  // shooting stars streaking across the far sky (the Meteor Steps a few, the Starstorm many)
+  { const fl = starfallDecorAt(G.camAlt + viewH * 0.5), n = fl === 'storm' ? 4 : fl === 'meteor' || fl === 'rim' ? 2 : 0;
+    if (n) { const sp = starfallStreakSprite();
+      for (let q = 0; q < n; q++) { const P = 2.6 + q * 0.7, u = pmod(G.t / P + q * 0.37, 1), cyc = Math.floor(G.t / P + q * 0.37); if (u > 0.4) continue;
+        const k = u / 0.4, x0 = cssW * (0.2 + 0.9 * hash2(cyc, 8961 + q)), y0 = H * (0.05 + 0.5 * hash2(cyc, 8962 + q)), ang = 2.5 + 0.3 * hash2(cyc, 8963 + q), L2 = (160 + 120 * hash2(cyc, 8964 + q)) * s;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.sin(k * Math.PI) * 0.8; ctx.translate(x0 + Math.cos(ang) * L2 * k, y0 + Math.sin(ang) * L2 * k); ctx.rotate(ang); ctx.drawImage(sp.cv, -sp.w, -sp.h / 2, sp.w, sp.h); ctx.restore(); } } }
+  // the section's own light: the layers tinted to its colour, soft pools of its light, the corners in shade
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = starfallCol(M.tint); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore();
+  { const slot = 560, f = 0.12, base = G.camAlt * f, first = Math.floor((base - 300) / slot), last = Math.ceil((base + viewH + 300) / slot);
+    for (let i = first; i <= last; i++) { const y = H - (i * slot - base) * s, x = ox + playW * (0.18 + 0.64 * hash2(i, 8951)), r = (150 + 90 * hash2(i, 8952)) * s; starfallGlow(x, y, r, M.pool.map(Math.round), M.pk * (0.75 + 0.25 * Math.sin(G.t * 0.5 + i))); } }
+  ctx.fillStyle = starfallCol(M.g[2], 0.18); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  drawStarfallMotes(M);
+}
+function starfallStreakSprite() {
+  return starfallSprite('streak', 90 * s, 6 * s, (c, w, h) => {
+    c.fillStyle = starfallLG(0, 0, w, 0, ['rgba(255,220,180,0)', 'rgba(255,230,200,.35)', 'rgba(255,250,235,.95)'], c); c.beginPath(); c.moveTo(0, h / 2); c.lineTo(w - h / 2, h * 0.15); c.arc(w - h / 2, h / 2, h * 0.35, -Math.PI / 2, Math.PI / 2); c.lineTo(w - h / 2, h * 0.85); c.closePath(); c.fill();
+  });
+}
+// motes: stardust drifting slowly (low gravity), a few little stars twinkling close by
+MOTE_DRIFT.sfmote = [-3, 6];
+{ const base = moteKind; moteKind = function (m, a) { return starfallOn() ? 'sfmote' : base(m, a); }; }
+function drawStarfallMotes(M) {
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 0.5 + m.ph) * 9 * s, y = m.y, tw = 0.4 + 0.6 * Math.max(0, Math.sin(G.t * 2 + m.ph * 3)) ** 3;
+    if (m.r > 0.88) { starfallTwinkle(ctx, x, y, (1.5 + 2.5 * m.depth) * s * tw, 0.6 * m.depth * tw, M.warm > 0.5 ? [255, 230, 190] : [220, 236, 255]); continue; }
+    const r = (0.4 + m.sz * 0.5) * m.depth * s;
+    ctx.fillStyle = M.warm > 0.5 ? `rgba(255,226,196,${0.45 * m.depth * tw})` : `rgba(210,214,255,${0.45 * m.depth * tw})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+  }
+}
+// the midground (0.55): big asteroids drifting in from beyond the screen's edges, slowly turning, some with crystals
+function starfallMidSprite(v) {
+  return starfallSprite('mid' + v, 150, 130, c => {
+    const R = 52, x = 75, y = 65;
+    starfallFarRock(c, x, y, R, 300 + v, 0.12, v % 3 === 0 ? 1 : v % 3 === 1 ? 2 : 0);
+    starfallFarRock(c, x + 40, y + 42, 16, 330 + v, 0.18, 0);
+  });
+}
+function drawStarfallMidground() {
+  starfallCacheCheck();
+  const f = 0.55, slot = 340, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 9001); if (r < 0.45) continue;
+    const side = hash2(i, 9002) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, v = i & 7, sp = starfallMidSprite(v), sc = (0.55 + 0.25 * r) * s;
+    if (y + 80 * sc < -20 || y - 80 * sc > H + 20) continue;
+    const x = side ? cssW + 10 * sc : -10 * sc;
+    ctx.save(); ctx.globalAlpha = 0.92; ctx.translate(x, y); ctx.rotate(Math.sin(G.t * 0.05 + i) * 0.2); if (side) ctx.scale(-1, 1); ctx.drawImage(sp.cv, -75 * sc, -65 * sc, 150 * sc, 130 * sc); ctx.restore();
+    if (v % 3 !== 2) starfallGlow(side ? x - 10 * sc : x + 10 * sc, y - 46 * sc, 26 * s, v % 3 === 0 ? STARFALL_P.cyan : STARFALL_P.violet, 0.16);
+  }
+}
+// speed: pale streaks of starlight along the walls
+function drawStarfallSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 91), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 92) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = starfallCol(j < 0.6 ? [190, 196, 255] : [236, 240, 255], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: little pebbles of moon rock drifting by close over the screen's edges (over the walls, never the lanes)
+function starfallPebbleSprite(v) {
+  return starfallSprite('peb' + v, 40, 40, c => { starfallFarRock(c, 20, 20, 9 + (v % 3) * 3, 400 + v, 0, 0); });
+}
+function drawStarfallForeground() {
+  starfallCacheCheck();
+  const f = 1.3, slot = 300, baseA = G.camAlt * f, first = Math.floor((baseA - 100) / slot), last = Math.ceil((baseA + viewH + 100) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, 9011) < 0.5) continue;
+    const side = hash2(i, 9012) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, v = i & 3, sp = starfallPebbleSprite(v), sc = (0.8 + 0.4 * hash2(i, 9013)) * s;
+    if (y + 30 * sc < -20 || y - 30 * sc > H + 20) continue;
+    const x = side ? cssW - (6 + 10 * hash2(i, 9014)) * s : (6 + 10 * hash2(i, 9014)) * s;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(G.t * 0.4 * (hash2(i, 9015) - 0.5) + i); ctx.drawImage(sp.cv, -20 * sc, -20 * sc, 40 * sc, 40 * sc); ctx.restore();
+  }
+}
+// The sky's light: a deep violet vignette, cool starlight from the upper left, the Star Nest's gold as you near it
+function drawStarfallLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = starfallGrad('vign' + cssW + 'x' + H, c => { const g = c.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75); g.addColorStop(0, 'rgba(10,8,36,0)'); g.addColorStop(1, 'rgba(10,8,36,.36)'); return g; });
+  ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = starfallGrad('starTop' + H, c => { const g = c.createLinearGradient(0, 0, cssW * 0.6, H * 0.5); g.addColorStop(0, 'rgba(180,190,255,.07)'); g.addColorStop(1, 'rgba(180,190,255,0)'); return g; });
+  ctx.fillRect(X0, Y0, WW, H * 0.6 + P);
+  ctx.restore();
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 260), k = clamp(1 - Math.abs(a.end + 260 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) starfallGlow(cssW / 2, y, Math.max(cssW, H) * 0.7, [255, 220, 150], (0.05 + 0.1 * pay) * k);
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (starfallOn()) drawStarfallBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (starfallOn()) drawStarfallMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (starfallOn()) drawStarfallWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (starfallOn()) drawStarfallLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (starfallOn()) drawStarfallSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (starfallOn()) drawStarfallForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { base(); if (starfallOn()) drawStarfallFx(); }; }
+// ---- the finish: the Star Nest ----
+// The asteroids open out at the summit into the nest: the top of one great old asteroid, its crater a bowl of lilac moon
+// rock lined with crystal spires (cyan and violet) and drifts of golden star-dust, the ringed planet hanging huge in the
+// sky behind it, the band of the galaxy overhead. Sleeping in the crater, half-tucked in, lies the Mother Star: a big
+// plump golden star with a round soft face, eyes shut, cheeks pink, snoring little "z"s, three baby stars dozing on the
+// rim. Clear the stage and she wakes: her eyes open, she beams, her points blaze with spinning rays, the babies hop and
+// a shower of golden sparks comes down. The deck: two slabs of moon rock edged with crystal sliding out of the walls.
+const STARFALL_FIN = { star: 258, R: 92, rim: 230, deck: 16 };
+function starfallNestRender(E) {
+  const key = 'nest' + E; let sp = STARFALL_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 140, A1 = E + 900, F = STARFALL_FIN, P = STARFALL_P;
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = xl - 24, xb = xr + 24;
+  sp = starfallCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1; sp.xl = xl; sp.xr = xr; sp.crys = [];
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s, mid = (xl + xr) / 2; sp.mid = mid;
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the sky: deep violet, the galaxy's band across the top, a sprinkle of stars
+  c.fillStyle = starfallLG(0, 0, 0, sp.h, ['#2c2a78', '#3a3290', '#4a3a8a', '#2a2260'], c); c.fillRect(0, 0, sp.w, sp.h);
+  c.save(); c.globalCompositeOperation = 'lighter';
+  c.save(); c.translate(X(mid), Y(E + 720)); c.rotate(-0.35); c.fillStyle = starfallLG(0, -70 * s, 0, 70 * s, ['rgba(200,190,255,0)', 'rgba(220,210,255,.16)', 'rgba(255,220,200,.1)', 'rgba(200,190,255,0)'], c); c.fillRect(-400 * s, -70 * s, 800 * s, 140 * s); c.restore();
+  for (let q = 0; q < 4; q++) { const cx = X(lerp(xl, xr, hash2(q, 9101))), cy = Y(E + 380 + 480 * hash2(q, 9102)), r = (70 + 60 * hash2(q, 9103)) * s, cc = q % 2 ? [255, 160, 200] : [140, 150, 255]; c.fillStyle = starfallRG(cx, cy, r, [starfallCol(cc, 0.14), starfallCol(cc, 0)], c); c.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  c.restore();
+  for (let q = 0; q < 140; q++) { const x = X(lerp(xl, xr, hash2(q, 9111))), y = Y(lerp(E + 80, A1, hash2(q, 9112))), r = (hash2(q, 9113) < 0.1 ? 1.3 : 0.7) * s; c.fillStyle = hash2(q, 9114) < 0.2 ? 'rgba(255,230,190,.9)' : 'rgba(236,240,255,.75)'; starfallCirc(c, x, y, r); c.fill(); }
+  // the ringed planet, huge, behind the nest to one side
+  { const bs = starfallBodySprite('planet', 120), k = 1; c.save(); c.globalAlpha = 0.95; c.drawImage(bs.cv, X(mid + 70) - bs.w * k / 2, Y(E + 600) - bs.h * k / 2, bs.w * k, bs.h * k); c.restore(); }
+  // a far shooting star frozen mid-streak
+  c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = starfallLG(X(xl + 40), Y(E + 820), X(xl + 140), Y(E + 770), ['rgba(255,240,210,0)', 'rgba(255,240,210,.7)'], c); c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(X(xl + 40), Y(E + 820)); c.lineTo(X(xl + 140), Y(E + 770)); c.stroke(); c.restore();
+  // the great asteroid: its shoulder rising from below, the crater cut into its top (a lumpy wide dome, lit top left).
+  // Drawn twice: whole on the back canvas, and its near half (below the crater's middle, the crater cut out) on a front
+  // canvas blitted over the Mother Star so she lies down in the bowl
+  const rimA = E + F.rim, rw = (xr - xl) * 0.5 - 6, body = [], cry0 = 38;
+  for (let i = 0; i <= 28; i++) { const u = i / 28, x = lerp(xl - 10, xr + 10, u), d = (u - 0.5) * 2, top = rimA - 46 + (cry0 + 54) * (1 - d * d) + 6 * Math.sin(u * 17) + 4 * Math.sin(u * 41); body.push([X(x), Y(top)]); }
+  const cx0 = X(mid), cy0 = Y(rimA), crx = rw * 0.78 * s, cry = cry0 * s;
+  const drawBody = cc => {
+    const path = () => { cc.beginPath(); cc.moveTo(X(xl - 30), Y(A0 - 10)); for (const [x, y] of body) cc.lineTo(x, y); cc.lineTo(X(xr + 30), Y(A0 - 10)); cc.closePath(); };
+    path(); cc.fillStyle = starfallRG2(X(mid - rw * 0.5), Y(rimA + 60), 10 * s, X(mid), Y(rimA - 60), rw * 1.5 * s, P.rock, cc); cc.fill();
+    cc.strokeStyle = P.rockE; cc.lineWidth = 1.4 * s; cc.beginPath(); for (const [x, y] of body) cc.lineTo(x, y); cc.stroke();
+    cc.strokeStyle = 'rgba(244,242,255,.7)'; cc.lineWidth = 1.6 * s; cc.beginPath(); for (const [x, y] of body.slice(2, 12)) cc.lineTo(x, y + 2 * s); cc.stroke();
+    cc.save(); path(); cc.clip();
+    // its craters, cracks and dust (a shaded bowl with a lit far lip)
+    for (let q = 0; q < 11; q++) { const cx = X(lerp(xl + 20, xr - 20, hash2(q, 9121))), cy = Y(lerp(A0 + 20, rimA - 60, hash2(q, 9122))), cr = (8 + 16 * hash2(q, 9123)) * s; cc.fillStyle = 'rgba(40,34,90,.4)'; starfallEll(cc, cx, cy, cr, cr * 0.7); cc.fill(); cc.fillStyle = 'rgba(28,22,70,.3)'; starfallEll(cc, cx - cr * 0.15, cy - cr * 0.15, cr * 0.7, cr * 0.45); cc.fill(); cc.strokeStyle = 'rgba(236,232,255,.6)'; cc.lineWidth = 1 * s; cc.beginPath(); cc.ellipse(cx, cy, cr, cr * 0.7, 0, 0.15, 2.2); cc.stroke(); }
+    for (let q = 0; q < 5; q++) { const x0 = X(lerp(xl + 30, xr - 30, hash2(q, 9141))), y0 = Y(lerp(A0 + 30, rimA - 80, hash2(q, 9142))), dx = (hash2(q, 9143) - 0.5) * 60 * s, dy = 20 * s; cc.strokeStyle = 'rgba(34,28,80,.5)'; cc.lineWidth = 1.1 * s; cc.beginPath(); cc.moveTo(x0, y0); cc.lineTo(x0 + dx * 0.4, y0 + dy * 0.6); cc.lineTo(x0 + dx, y0 + dy); cc.stroke(); cc.strokeStyle = 'rgba(226,222,255,.35)'; cc.lineWidth = 0.8 * s; cc.beginPath(); cc.moveTo(x0, y0 + 1.2 * s); cc.lineTo(x0 + dx * 0.4, y0 + dy * 0.6 + 1.2 * s); cc.lineTo(x0 + dx, y0 + dy + 1.2 * s); cc.stroke(); }
+    cc.fillStyle = 'rgba(240,238,255,.45)'; for (let q = 0; q < 60; q++) cc.fillRect(X(lerp(xl, xr, hash2(q, 9131))), Y(lerp(A0, rimA - 20, hash2(q, 9132))), 1.2 * s, 1.2 * s);
+    cc.fillStyle = starfallLG(0, Y(rimA - 30), 0, Y(A0), ['rgba(20,16,60,0)', 'rgba(20,16,60,.45)'], cc); cc.fillRect(0, Y(rimA - 30), sp.w, Y(A0) - Y(rimA - 30));
+    cc.restore();
+  };
+  drawBody(c);
+  // the crater: a deep bowl in the top (shaded), its far wall lit gold by the star
+  c.fillStyle = starfallLG(0, cy0 - cry, 0, cy0 + cry, ['#4a3c84', '#2a2460', '#3a3074'], c); starfallEll(c, cx0, cy0, crx, cry); c.fill();
+  c.fillStyle = starfallRG(cx0, cy0 - cry * 0.4, crx * 0.8, ['rgba(255,214,120,.6)', 'rgba(255,180,110,.22)', 'rgba(255,180,110,0)'], c); starfallEll(c, cx0, cy0 - cry * 0.3, crx * 0.95, cry * 0.7); c.fill();
+  c.strokeStyle = P.rockE; c.lineWidth = 1.2 * s; c.beginPath(); c.ellipse(cx0, cy0, crx, cry, 0, Math.PI, TWO_PI); c.stroke();
+  c.strokeStyle = 'rgba(255,226,160,.5)'; c.lineWidth = 1 * s; c.beginPath(); c.ellipse(cx0, cy0 + 2 * s, crx * 0.96, cry * 0.92, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+  c.restore();
+  // the front: the dome's near half with the crater cut out of it, the near lip lit gold, spires, the dust heap
+  const fr = starfallCanvas(sp.w, sp.h), f = fr.c; sp.front = fr;
+  f.save(); f.beginPath(); for (let a = A0; a <= A1; a += 8) f.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) f.lineTo(X(rightWall(a) + 3), Y(a)); f.closePath(); f.clip();
+  f.save(); f.beginPath(); f.rect(0, cy0, sp.w, sp.h); f.clip(); drawBody(f); f.restore();
+  f.save(); f.globalCompositeOperation = 'destination-out'; starfallEll(f, cx0, cy0, crx, cry); f.fill(); f.restore();
+  f.strokeStyle = starfallLG(cx0 - crx, 0, cx0 + crx, 0, ['rgba(255,240,200,.95)', 'rgba(255,214,140,.85)', 'rgba(220,150,110,.6)'], f); f.lineWidth = 2.4 * s; f.beginPath(); f.ellipse(cx0, cy0, crx, cry, 0, 0.04, Math.PI - 0.04); f.stroke();
+  f.strokeStyle = 'rgba(70,56,130,.8)'; f.lineWidth = 1 * s; f.beginPath(); f.ellipse(cx0, cy0 + 3 * s, crx * 1.01, cry * 1.05, 0, 0.1, Math.PI - 0.1); f.stroke();
+  // crystal spires round the rim (bigger to the sides, leaning out)
+  for (const [u, ln, col] of [[-0.96, 78, P.cyan], [-0.86, 54, P.violet], [-0.76, 34, P.cyan], [0.74, 38, P.violet], [0.85, 60, P.cyan], [0.95, 84, P.violet]]) {
+    const bx = cx0 + u * crx, by = cy0 + Math.sqrt(Math.max(0, 1 - u * u)) * cry * 0.6, ang = -Math.PI / 2 + u * 0.55;
+    starfallCrystal(f, bx - Math.sign(u) * 6 * s, by + 4 * s, ang - Math.sign(u) * 0.3, ln * 0.55 * s, ln * 0.09 * s, col);
+    starfallCrystal(f, bx, by, ang, ln * s, ln * 0.13 * s, col);
+    sp.crys.push([xa + bx / s + Math.cos(ang) * ln * 0.6, A1 - by / s + Math.sin(ang) * ln * 0.6 * -1, col]);
+  }
+  // golden star-dust heaped on the near lip, sparkles in it
+  f.fillStyle = starfallLG(0, cy0 + cry * 0.7, 0, cy0 + cry * 1.5, ['rgba(255,230,150,.8)', 'rgba(255,190,110,0)'], f); starfallEll(f, cx0, cy0 + cry * 1.08, crx * 0.66, cry * 0.4); f.fill();
+  f.fillStyle = 'rgba(255,250,220,.9)'; for (let q = 0; q < 24; q++) { const an = hash2(q, 9151) * Math.PI, rr2 = 0.8 + 0.25 * hash2(q, 9152); f.fillRect(cx0 + Math.cos(an) * crx * rr2 * 0.8, cy0 + Math.sin(an) * cry * rr2 * 1.1, 1.2 * s, 1.2 * s); }
+  f.restore();
+  return sp;
+}
+// the Mother Star's body (round her middle, world units, y down): five plump rounded points, gold lit from the top left,
+// a darker amber edge, a fold of shading under each point, a lip of light along the top points, rosy cheeks; her face
+// drawn live (eyes shut or open, the smile)
+function starfallMotherSprite() {
+  const R = STARFALL_FIN.R;
+  return starfallPiece('mother', -R - 8, R + 8, -R - 8, R + 8, c => {
+    const pts = []; for (let i = 0; i < 10; i++) { const an = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? R * 0.55 : R; pts.push([Math.cos(an) * r, Math.sin(an) * r]); }
+    const path = () => { c.beginPath(); for (let i = 0; i < 10; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % 10], mx = (x0 + x1) / 2, my = (y0 + y1) / 2; if (i === 0) c.moveTo(mx, my); const [x2, y2] = pts[(i + 1) % 10], [x3, y3] = pts[(i + 2) % 10]; c.quadraticCurveTo(x2, y2, (x2 + x3) / 2, (y2 + y3) / 2); } c.closePath(); };
+    path(); c.fillStyle = starfallRG2(-R * 0.35, -R * 0.4, R * 0.05, 0, 0, R * 1.1, ['#fffbe0', '#ffe27a', '#ffb840', '#e88a2a'], c); c.fill();
+    c.save(); path(); c.clip();
+    // folds of shade toward the lower right of each point
+    for (let i = 0; i < 10; i += 2) { const an = -Math.PI / 2 + i * Math.PI / 5; c.strokeStyle = 'rgba(200,110,30,.28)'; c.lineWidth = R * 0.08; c.beginPath(); c.moveTo(Math.cos(an + 0.08) * R * 0.3, Math.sin(an + 0.08) * R * 0.3); c.lineTo(Math.cos(an + 0.12) * R * 0.85, Math.sin(an + 0.12) * R * 0.85); c.stroke(); }
+    c.fillStyle = starfallRG(R * 0.2, R * 0.35, R * 0.9, ['rgba(220,110,40,0)', 'rgba(220,110,40,.0)', 'rgba(200,90,30,.32)'], c); c.fillRect(-R, -R, R * 2, R * 2);
+    c.restore();
+    path(); c.strokeStyle = '#b8601e'; c.lineWidth = 2.2; c.stroke();
+    // the lip of light along the upper-left points
+    c.strokeStyle = 'rgba(255,255,236,.85)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(pts[8][0] * 0.88, pts[8][1] * 0.88); c.quadraticCurveTo(pts[9][0] * 0.9, pts[9][1] * 0.9, pts[0][0] * 0.82, pts[0][1] * 0.82); c.stroke();
+    c.strokeStyle = 'rgba(255,255,236,.5)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(pts[7][0] * 0.62, pts[7][1] * 0.62); c.lineTo(pts[8][0] * 0.82, pts[8][1] * 0.82); c.stroke();
+    // a dimple of sheen on her brow, freckles of star-dust
+    c.fillStyle = 'rgba(255,255,240,.55)'; starfallEll(c, -R * 0.24, -R * 0.36, R * 0.16, R * 0.08, -0.5); c.fill();
+    c.fillStyle = 'rgba(255,250,210,.8)'; for (let q = 0; q < 10; q++) { const an = hash2(q, 9201) * TWO_PI, d = R * (0.5 + 0.3 * hash2(q, 9202)); starfallCirc(c, Math.cos(an) * d, Math.sin(an) * d, 1.1); c.fill(); }
+    // the cheeks
+    for (const e of [-1, 1]) { c.fillStyle = starfallRG(e * R * 0.3, R * 0.12, R * 0.14, ['rgba(255,120,130,.55)', 'rgba(255,120,130,0)'], c); starfallCirc(c, e * R * 0.3, R * 0.12, R * 0.14); c.fill(); }
+  });
+}
+// her face live (ctx in world units round her middle): w 0 asleep .. 1 awake and beaming, blink, a snore breath
+function starfallMotherFace(w, blink, breath) {
+  const R = STARFALL_FIN.R, ink = '#5a2a20';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const e of [-1, 1]) {
+    const ex = e * R * 0.22, ey = -R * 0.04;
+    if (w < 0.5 || blink) { ctx.strokeStyle = ink; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(ex, ey - 2, 7.5, 0.25, Math.PI - 0.25); ctx.stroke(); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(ex + e * 7, ey + 1); ctx.lineTo(ex + e * 10, ey - 1); ctx.stroke(); }
+    else {
+      const k = smooth(0.5, 0.8, w);
+      ctx.fillStyle = ink; starfallEll(ctx, ex, ey, 7, 9 * k); ctx.fill();
+      ctx.fillStyle = '#fff'; starfallCirc(ctx, ex - 2.4, ey - 3.4 * k, 2.8 * k); ctx.fill(); starfallCirc(ctx, ex + 2.4, ey + 3 * k, 1.2 * k); ctx.fill();
+    }
+  }
+  // the mouth: a small open "o" while snoring, a wide smile awake
+  if (w < 0.5) { ctx.fillStyle = '#8a3a2a'; starfallEll(ctx, 0, R * 0.22, 4.5 + 1.5 * breath, 3.6 + 2 * breath); ctx.fill(); }
+  else { const k = smooth(0.5, 0.9, w); ctx.fillStyle = '#8a3a2a'; ctx.beginPath(); ctx.moveTo(-16 * k - 4, R * 0.15); ctx.quadraticCurveTo(0, R * 0.15 + 22 * k, 16 * k + 4, R * 0.15); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ff8a8a'; starfallEll(ctx, 0, R * 0.15 + 9 * k, 7 * k, 4 * k); ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-16 * k - 4, R * 0.15); ctx.quadraticCurveTo(0, R * 0.15 + 22 * k, 16 * k + 4, R * 0.15); ctx.stroke(); }
+}
+// a little sleeping baby star (cached): the same plump star, small, a sleepy face
+function starfallBabySprite() {
+  return starfallPiece('baby', -18, 18, -18, 18, c => {
+    const R = 15, pts = []; for (let i = 0; i < 10; i++) { const an = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? R * 0.55 : R; pts.push([Math.cos(an) * r, Math.sin(an) * r]); }
+    c.beginPath(); for (let i = 0; i < 10; i++) { const [x2, y2] = pts[(i + 1) % 10], [x3, y3] = pts[(i + 2) % 10]; if (!i) c.moveTo((pts[0][0] + x2) / 2, (pts[0][1] + y2) / 2); c.quadraticCurveTo(x2, y2, (x2 + x3) / 2, (y2 + y3) / 2); } c.closePath();
+    c.fillStyle = starfallRG2(-5, -6, 1, 0, 0, R * 1.1, ['#fffbe0', '#ffe07a', '#ffb040'], c); c.fill(); c.strokeStyle = '#b8601e'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,236,.85)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-9, -4); c.quadraticCurveTo(-6, -9, -1, -12); c.stroke();
+    c.strokeStyle = '#5a2a20'; c.lineWidth = 1.1; for (const e of [-1, 1]) { c.beginPath(); c.arc(e * 3.4, 0, 2, 0.3, Math.PI - 0.3); c.stroke(); }
+    for (const e of [-1, 1]) { c.fillStyle = 'rgba(255,120,130,.5)'; starfallCirc(c, e * 5.5, 3, 2); c.fill(); }
+  });
+}
+// her rays: a soft golden spike (cached), spun round her when she wakes
+function starfallRaySprite() {
+  return starfallPiece('ray', -6, 6, -200, 0, c => {
+    c.fillStyle = starfallLG(0, 0, 0, -200, ['rgba(255,240,170,.75)', 'rgba(255,214,120,.25)', 'rgba(255,200,110,0)'], c);
+    c.beginPath(); c.moveTo(-5, 0); c.lineTo(0, -200); c.lineTo(5, 0); c.closePath(); c.fill();
+  });
+}
+function drawStarfallDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t, F = STARFALL_FIN, P = STARFALL_P;
+  if (y < -300 || y - (900 * s) > H + 220) return;
+  starfallCacheCheck();
+  const rm = starfallNestRender(E), ct = a.clearT >= 0 ? a.clearT : -1, pay = ct >= 0 ? Math.min(1, ct * 1.6) : 0, wake = ct >= 0 ? smooth(0, 0.5, ct) : 0;
+  ctx.drawImage(rm.cv, ox + rm.xa * s, sy(rm.a1), rm.w, rm.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 140; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 140; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  // the crystals' glow, twinkling (brighter once she wakes)
+  for (const [x, al, col] of rm.crys) { const tw = 0.5 + 0.5 * Math.sin(T * 1.7 + x * 0.1); starfallGlow(sx(x), sy(al), (22 + 8 * tw + 14 * pay) * s, col, 0.2 + 0.12 * tw + 0.2 * pay); }
+  // the Mother Star: breathing in her sleep, rising a little and beaming when she wakes; her rays spin round her
+  const mx = sx(rm.mid), breath = 0.5 + 0.5 * Math.sin(T * 1.2), my = sy(E + F.star + 4 * breath + 26 * wake + Math.sin(T * 5) * 4 * pay), sc = 1 + 0.02 * breath + 0.06 * pay;
+  starfallGlow(mx, my, (150 + 30 * breath + 140 * pay) * s, [255, 210, 120], 0.3 + 0.1 * breath + 0.4 * pay);
+  if (pay > 0) { const rs = starfallRaySprite(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, pay * 1.4);
+    for (let q = 0; q < 10; q++) { const an = T * 0.5 + q * Math.PI / 5, k = (q % 2 ? 0.7 : 1.15) * (0.9 + 0.1 * Math.sin(T * 4 + q)); starfallBlitRot(rs, mx, my, an, k); } ctx.restore(); }
+  { const ms = starfallMotherSprite(); ctx.save(); ctx.translate(mx, my); ctx.rotate(Math.sin(T * 0.8) * 0.05 + Math.sin(T * 6) * 0.06 * pay); ctx.scale(sc, sc); ctx.drawImage(ms.cv, -ms.ax, -ms.ay, ms.w, ms.h);
+    ctx.scale(s, s); starfallMotherFace(wake, wake > 0.6 && pmod(T / 3.1, 1) < 0.05, breath); ctx.restore(); }
+  // the near half of the asteroid over her (she lies down in the crater)
+  ctx.drawImage(rm.front.cv, ox + rm.xa * s, sy(rm.a1), rm.w, rm.h);
+  starfallTwinkle(ctx, mx - 40 * s, my - 60 * s, (6 + 8 * pay) * s, 0.4 + 0.5 * Math.max(0, Math.sin(T * 1.9)) ** 4 + 0.4 * pay, [255, 250, 220]);
+  // her snores: little golden "z"s drifting up and away (while she sleeps)
+  if (wake < 0.5) { ctx.save(); ctx.font = `400 ${14 * s}px "Lilita One", sans-serif`; ctx.textAlign = 'center';
+    for (let q = 0; q < 3; q++) { const u = pmod(T * 0.28 + q / 3, 1), zx = mx + (F.R * 0.6 + u * 40 + Math.sin(u * 7) * 6) * s, zy = my - (F.R * 0.5 + u * 70) * s, al = Math.sin(u * Math.PI) * (1 - wake * 2); ctx.globalAlpha = al; ctx.fillStyle = '#ffe9a0'; ctx.strokeStyle = 'rgba(120,70,40,.8)'; ctx.lineWidth = 2.5 * s; ctx.save(); ctx.translate(zx, zy); ctx.scale(0.6 + 0.6 * u, 0.6 + 0.6 * u); ctx.strokeText('z', 0, 0); ctx.fillText('z', 0, 0); ctx.restore(); }
+    ctx.restore(); }
+  // the babies dozing on the rim (they hop when she wakes)
+  { const bs = starfallBabySprite(), cyA = E + F.rim - 36;
+    for (const [u, j] of [[-0.5, 0], [-0.3, 1.7], [0.44, 3.1]]) { const bx = rm.mid + u * (rm.xr - rm.xl) * 0.5, hop = pay > 0 ? Math.abs(Math.sin(T * 6 + j)) * 16 : Math.sin(T * 1.3 + j) * 1.5; starfallGlow(sx(bx), sy(cyA + hop), 26 * s, [255, 220, 140], 0.25 + 0.2 * pay); starfallBlitRot(bs, sx(bx), sy(cyA + hop), Math.sin(T * 0.9 + j) * 0.15 + (pay > 0 ? Math.sin(T * 8 + j) * 0.3 : 0)); }
+  }
+  // the payoff: golden sparks drifting down through the nest
+  if (pay > 0) for (let q = 0; q < 24; q++) {
+    const u = pmod(T * (0.16 + 0.1 * hash2(q, 9231)) + hash2(q, 9232), 1), x = lerp(rm.xl + 20, rm.xr - 20, hash2(q, 9233)) + Math.sin(u * 8 + q) * 12, al = E + 720 - u * 680, a2 = Math.min(1, pay * 2) * Math.sin(u * Math.PI);
+    starfallTwinkle(ctx, sx(x), sy(al), (3 + 3 * hash2(q, 9234)) * s, a2, q % 3 ? [255, 236, 170] : [190, 240, 255]);
+  }
+  ctx.restore();
+  // ---- the deck: two slabs of moon rock sliding out of the walls to meet, crystal studs along their lit top edge
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, th = F.deck * s;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 14 : R + 14), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet, e)), xa = Math.min(X0, X1), w = Math.abs(X1 - X0);
+    if (w < 2) continue;
+    // a rock corbel under it into the wall
+    ctx.fillStyle = starfallLG(0, y, 0, y + 40 * s, [P.rock[1], P.rock[2], P.rock[3]]); ctx.beginPath(); ctx.moveTo(X0, y + th); ctx.lineTo(X0 - side * 34 * s, y + th); ctx.quadraticCurveTo(X0 - side * 8 * s, y + th + 12 * s, X0, y + th + 38 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.rockE; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    // the slab: lilac moon rock, its lit top, a shaded underside, a rough tip, craters
+    ctx.fillStyle = starfallLG(0, y - 2 * s, 0, y + th, [P.rock[0], P.rock[1], P.rock[2]]);
+    ctx.beginPath(); ctx.moveTo(xa, y - 2 * s); ctx.lineTo(xa + w, y - 2 * s); for (let q = 0; q <= 4; q++) ctx.lineTo(xa + w + (side < 0 ? (q % 2 ? -3 : 1) : 0) * s - (side > 0 ? 0 : 0), y - 2 * s + q * (th + 2 * s) / 4); ctx.lineTo(xa, y + th); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = P.rockE; ctx.lineWidth = 0.9 * s; ctx.stroke();
+    ctx.fillStyle = 'rgba(40,34,90,.35)'; for (let x = xa + 14 * s; x < xa + w - 10 * s; x += 30 * s) { starfallEll(ctx, x + hash2(x | 0, 9241) * 8 * s, y + th * 0.55, 3.4 * s, 2 * s); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(244,242,255,.8)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.moveTo(xa + 2 * s, y - 1 * s); ctx.lineTo(xa + w - 2 * s, y - 1 * s); ctx.stroke();
+    // crystal studs along it (little prisms standing on the top edge)
+    for (let x = xa + 12 * s, q = 0; x < xa + w - 8 * s; x += 26 * s, q++) { const col = q % 2 ? P.cyan : P.violet; starfallGlow(x, y - 5 * s, 10 * s, col, 0.3); ctx.fillStyle = starfallCol(col); ctx.beginPath(); ctx.moveTo(x - 3.4 * s, y - 1 * s); ctx.lineTo(x, y - 12 * s); ctx.lineTo(x + 3.4 * s, y - 1 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = starfallCol(starfallLift(col, -110)); ctx.lineWidth = 0.6 * s; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(x - 1.2 * s, y - 9 * s, 1 * s, 6 * s); }
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (starfallOn()) drawStarfallDeck(); else base(); }; }
+// the payoff: the Mother Star wakes with a chord, golden and cyan sparks burst up round you, rings, a warm flash
+function starfallClearBurst() {
+  const a = G.adv, p = G.p;
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; starfallFx('spark', p.x, a.end + 40, Math.cos(an) * 300, Math.sin(an) * 300 + 100, 0.7, 2.2, { col: k % 3 ? [255, 226, 150] : [140, 240, 255] }); }
+  for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; starfallFx('star', p.x, a.end + 40, Math.cos(an) * 160, Math.sin(an) * 160 + 60, 1.1, 10); }
+  for (let k = 0; k < 3; k++) starfallFx('ring', p.x, a.end + 40, 0, 0, 0.6 + k * 0.15, 60 + k * 40, { flat: 0.7, col: [255, 230, 170] });
+  puff(p.x, a.end + 30, 0, 40, 0.7, 22, 'star');
+  sfx('snest');
+  G.flashCol = [255, 230, 170];
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (starfallOn() && !boss) starfallClearBurst(); }; }
+// ---- fallen stars: three little lost stars hiding in daring spots (a satellite's sweep, down a saucer's beam, a flare's
+// pocket), worth a big coin each; the Mother Star's babies. And the stage's star and meteor-graze missions ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'starfallStar') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.starfallStar = (st.starfallStar || 0) + 1, of = advGoalN('starfallStar');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Fallen star ${n}/${of}!` : 'Fallen star!', '#ffe9a0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 236, 180];
+  for (let k = 0; k < 14; k++) { const an = k / 14 * TWO_PI; starfallFx('spark', f.x, f.alt, Math.cos(an) * 200, Math.sin(an) * 200, 0.55, 2, { col: k % 3 ? [255, 226, 150] : [140, 240, 255] }); }
+  for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; starfallFx('star', f.x, f.alt, Math.cos(an) * 110, Math.sin(an) * 110, 0.8, 7); }
+  for (let k = 0; k < 3; k++) starfallFx('ring', f.x, f.alt, 0, 0, 0.5 + k * 0.15, 30 + k * 22, { flat: 1, col: [255, 236, 170] });
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe9a0', big: true, sub: 'fallen star' });
+  vibrate([20, 30, 20]); sfx('sstar');
+}; }
+// The fallen star (round its middle, world units): a plump golden star with a sleepy-happy face, a cyan halo ring, a
+// little comet tail of sparkle behind it. The body is cached; it bobs, turns and twinkles live.
+function starfallLostSprite() {
+  return starfallPiece('lost', -22, 22, -22, 22, c => {
+    const R = 19, pts = []; for (let i = 0; i < 10; i++) { const an = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? R * 0.56 : R; pts.push([Math.cos(an) * r, Math.sin(an) * r]); }
+    c.beginPath(); for (let i = 0; i < 10; i++) { const [x2, y2] = pts[(i + 1) % 10], [x3, y3] = pts[(i + 2) % 10]; if (!i) c.moveTo((pts[0][0] + x2) / 2, (pts[0][1] + y2) / 2); c.quadraticCurveTo(x2, y2, (x2 + x3) / 2, (y2 + y3) / 2); } c.closePath();
+    c.fillStyle = starfallRG2(-6, -7, 1, 0, 0, R * 1.1, ['#fffbe6', '#ffe27a', '#ffb440', '#e88a2a'], c); c.fill();
+    c.strokeStyle = '#b8601e'; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(255,255,236,.9)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-12, -5); c.quadraticCurveTo(-8, -11, -1, -16); c.stroke();
+    c.fillStyle = 'rgba(255,255,240,.6)'; starfallEll(c, -5, -6, 3.4, 1.8, -0.5); c.fill();
+    // the face: happy closed eyes, a little smile, rosy cheeks
+    c.strokeStyle = '#5a2a20'; c.lineWidth = 1.4; for (const e of [-1, 1]) { c.beginPath(); c.arc(e * 4.4, 0.5, 2.4, Math.PI + 0.4, TWO_PI - 0.4); c.stroke(); }
+    c.beginPath(); c.arc(0, 3.5, 3, 0.4, Math.PI - 0.4); c.stroke();
+    for (const e of [-1, 1]) { c.fillStyle = 'rgba(255,120,130,.55)'; starfallCirc(c, e * 7.4, 4, 2.4); c.fill(); }
+  });
+}
+function drawStarfallLost(t, ph, sc = 1) {
+  const bob = Math.sin(t * 2 + ph) * 3, rot = Math.sin(t * 1.3 + ph) * 0.2;
+  starfallGlow(0, bob, 44 * sc, [255, 214, 120], 0.38 + 0.1 * Math.sin(t * 3 + ph));
+  // the comet tail of sparkle behind it (it drifts as if just fallen)
+  for (let q = 0; q < 4; q++) { const u = pmod(t * 0.9 + q / 4 + ph, 1); starfallTwinkle(ctx, (10 + u * 26) * sc, bob - (8 + u * 18) * sc, (3.4 - u * 2.4) * sc, 0.8 * (1 - u), q % 2 ? [255, 236, 170] : [160, 240, 255]); }
+  ctx.save(); ctx.strokeStyle = `rgba(160,240,255,${0.5 + 0.2 * Math.sin(t * 2.4 + ph)})`; ctx.lineWidth = 1.6 * sc; ctx.beginPath(); ctx.ellipse(0, bob, 26 * sc, 8 * sc, -0.25, 0, TWO_PI); ctx.stroke(); ctx.restore();
+  const sp = starfallLostSprite();
+  ctx.save(); ctx.translate(0, bob); ctx.rotate(rot); ctx.scale(sc / s, sc / s); ctx.drawImage(sp.cv, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
+  const v = (t * 0.6 + ph) % 1, a = Math.sin(v * Math.PI);
+  starfallTwinkle(ctx, -16 * sc, -16 * sc + bob, 5 * a * sc, 0.9 * a, [255, 250, 220]);
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'starfallStar')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'starfallStar');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'starfallStar') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawStarfallLost(G.t, f.alt * 0.05 + f.x * 0.01, 0.82); ctx.restore();
+  }
+}; }
+// the star and graze missions, and their counts on the HUD under the others
+ADV_GOALS.starfallStar = { text: g => `Catch all ${g.n} fallen stars`, done: (r, g) => (r.stats.starfallStar || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.starfallStar || 0)}/${g.n}` };
+ADV_GOALS.starfallGraze = { text: g => `Graze ${g.n} meteors (fly close, don't touch!)`, done: (r, g) => (r.stats.starfallGraze || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.starfallGraze || 0)}/${g.n}` };
+function starfallMeteorIcon() {
+  // a little meteor (about 22 across): a hot rock with a flame tail, a dashed near-miss arc beside it
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = starfallLG(-14, -10, 2, 2, ['rgba(255,120,60,0)', 'rgba(255,170,80,.8)', 'rgba(255,240,180,.95)']); ctx.beginPath(); ctx.moveTo(-14, -11); ctx.lineTo(4, -2); ctx.lineTo(0, 4); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = starfallRG2(1, 1, 0.5, 3, 3, 7, ['#fffbe6', '#ffb84a', '#c8402e']); starfallCirc(ctx, 3, 3, 5.5); ctx.fill();
+  ctx.strokeStyle = STARFALL_P.hotE; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.strokeStyle = '#a8f4ff'; ctx.lineWidth = 1.6; ctx.setLineDash([2.4, 2]); ctx.beginPath(); ctx.arc(3, 3, 10, -0.6, 1.6); ctx.stroke(); ctx.setLineDash([]);
+}
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv; if (!a || !a.st || a.st.theme !== 'starfall') return;
+  const goals = advGoalList(a.lv, a.st);
+  let row = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  for (const k of ['starfallStar', 'starfallGraze']) {
+    const g = goals.find(q => q.k === k); if (!g) continue;
+    const n = G.stats[k] || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * row, txt = `${Math.min(n, g.n)}/${g.n}`;
+    ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(14,14,50,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#ffe9a0' : '#eef2ff'; ctx.fillText(txt, xr, y);
+    ctx.translate(xr - tw - 13, y);
+    if (k === 'starfallStar') { ctx.scale(0.5, 0.5); drawStarfallLost(G.t, 0, 0.62); } else { ctx.scale(0.72, 0.72); starfallMeteorIcon(); }
+    ctx.restore();
+    row++;
+  }
+}; }
+// The stage on the island: level 36 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'starfall' || (G.level && G.level.starfall)) return;
+  G.level = createStarfallLevel(G.seed, st); G.starfallT = 0; G.starfallFx = [];
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Star Nest ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the sky's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) {
+  window.CRL = { STARFALL, STARFALL_STAGE, STARFALL_PERK, starfallShapes, starfallDanger, starfallMeteorState, starfallSatState, starfallUfoState, starfallFlareState, starfallPullAt, starfallBeamAt, starfallGrav, starfallGoat, createStarfallLevel, cache: STARFALL_CACHE, scr: (x, a) => [sx(x), sy(a)] };
+  const base = die; die = function (cause, h) {
+    if (starfallOn()) try { const R = q => q.k === 'c' ? [q.x, q.a, q.r].map(Math.round) : q.k === 's' ? [q.x0, q.a0, q.x1, q.a1, q.r].map(Math.round) : ['b', q.x0, q.x1, q.a0, q.a1].map(v => typeof v === 'number' ? Math.round(v) : v); window.CRL.lastDie = { cause, T: G.starfallT, t: G.t, p: [G.p.x, G.p.alt, G.p.vy].map(Math.round), caps: pCaps.map(c => [c.x0, c.a0, c.x1, c.a1, c.r].map(Math.round)), S: h && hazardShapes && h.type ? hazardShapes(h).map(R) : null }; } catch (e) { /* debug only */ }
+    return base.apply(this, arguments);
+  };
+}
 // (game slot: Starfall Summit, island level 36)
 // (game slot: Beanstalk Heights, island level 37)
 // (game slot: Sandstorm Canyon, island level 38)
