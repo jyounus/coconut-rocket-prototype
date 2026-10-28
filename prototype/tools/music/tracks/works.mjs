@@ -68,7 +68,7 @@ function worksFilter(C, tune, X) {
 }
 
 export default {
-  name: 'works', label: 'Works', bpm: 126, keyTr: -2, seed: 2613,
+  name: 'works', label: 'Machines', bpm: 126, keyTr: -2, seed: 2613,
   form: [['intro', 4], ['A', 12], ['B', 8], ['climax', 8], ['break', 4], ['build', 4]], loop: LOOP_BAR, join: LOOP_BAR,
   chords: CHORDS, up: { climax: 3 },
   // the key per bar, for the studio's note editor: C (harmonic) minor, the lift in E-flat major, the climax in E-flat minor

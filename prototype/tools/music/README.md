@@ -21,6 +21,10 @@ github.com/sgossner/VSCO-2-CE). Nothing here needs installing beyond Node and ma
    instrument's notes against its samples), `CLASH=1` / `LOGNOTES=from,to` on a render (clashing notes, a note list),
    `node pitch.mjs <wav>` (a sample's pitch: VSCO names notes an octave low).
 
+The sound studio's instrument kit (the instruments the owner can add parts with): `KIT=1 node render.mjs` renders
+single notes of each kit instrument (the `KIT` table in render.mjs) to `out/kit/`, `KIT=1 ./encode.sh` encodes them
+into `prototype/audio/kit/` with `kit.json`.
+
 Sample sources and licences: `SOURCES.md`.
 
 The game plays the mixes (and the debug **Music lab** plays the stems, by section, with mute / solo and timestamped

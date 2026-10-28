@@ -28,6 +28,8 @@ export default {
   up: { climax: 2 },       // a key change: the section's chords (and your tunes, via B.up) go up 2 semitones
   key: { tonic: 5, scale: 'lydian' },             // or keyOf: B => ({ tonic, scale }) per bar (see ruins)
   mix: { send: {...}, level: {...} },             // optional, per stem: reverb send and level (defaults in lib.mjs)
+  grid: { A: 12, B: 12 },  // optional: the studio note editor's steps per bar (12 = 12/8 in eighth triplets), whole
+                           // track (a number) or per section; 16 (sixteenths) when left out
   compose(S) { ... },
 };
 ```
@@ -40,6 +42,9 @@ export default {
   `{ b, sec, i, n, t0, up, ch, C, last, intoNew, next }`), `loopStart`, `loopEnd`, `note(stem, id, midi, t, o)`,
   `rev(stem, id, filter, tEnd, o)` (a reversed sample ending at `tEnd`: cymbal swells into a section) and `rnd`
   (seeded: the same seed renders the same file).
+- `S.N(...)`: `note` for intro notes that must be gone by the loop's first bar line (its hold and release are cut to
+  end 5 ms before it; use it for everything in the intro's last bar, percussion included). `S.late(t)`: a hit that
+  falls on the loop's first bar line moves 4 ms later, so the seam never lands inside an attack.
 - `note` options: `dur` (s), `vel` (0..1, also picks the dynamic layer), `pan` (-1..1), `att`, `rel` (s), `gain`,
   `tune` (cents), `filter` (a regex on the sample's file name: articulation, round robin, a particular drum).
   Unpitched instruments take `midi = null`.
@@ -100,6 +105,8 @@ export default {
 - **Clash audit**: no clashes except deliberate ones (ruins: 1 of 36 bars, a scale run in the lift's last bar).
 - Every instrument within its samples (`range.mjs`).
 - All five stems carry music (`levels.mjs` per stem: the brass and piano may be silent in the intro).
+
+- `label` must match the track's label in the game's registry (`MUS_TRACKS`: e.g. `works` is "Machines").
 
 ## Testing in the game
 

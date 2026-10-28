@@ -45,16 +45,29 @@ const KIT = [
   ['tbnSus', 'Trombone', 'brass', 40, 72, 6, 2.2], ['tubaSus', 'Tuba', 'brass', 28, 55, 6, 2.2],
   ['timp', 'Timpani', 'drums', null], ['bdrum', 'Bass drum', 'drums', null], ['snare', 'Snare', 'drums', null], ['tenorHi', 'Tom, high', 'drums', null], ['tenorLo', 'Tom, low', 'drums', null],
   ['cym', 'Cymbal', 'drums', null], ['log', 'Log drum', 'drums', null], ['shaker', 'Shaker', 'drums', null],
+  // (2026-10-28, the mood-group tracks' instruments; their last field: { src: the score's instrument when the kit's id
+  // differs, filter: which of its samples, trim: start at the sample's first sound (these samples open with silence) })
+  ['harp', 'Harp', 'strings', 36, 96, 6, 1.6, { trim: true }],
+  ['vlnPizz', 'Violins, plucked', 'strings', 55, 85, 6, 0.5, { trim: true }], ['vcPizz', 'Cellos, plucked', 'strings', 36, 72, 6, 0.5, { trim: true }],
+  ['cbPizz', 'Double bass, plucked', 'strings', 28, 52, 6, 0.5, { trim: true }], ['vlnTrem', 'Violins, tremolo', 'strings', 55, 85, 6, 2.2, { trim: true }],
+  ['oboe', 'Oboe', 'winds', 58, 88, 6, 2.2, { trim: true }], ['clar', 'Clarinet', 'winds', 50, 86, 6, 2.2, { trim: true }],
+  ['bsn', 'Bassoon', 'winds', 34, 70, 6, 2.2, { trim: true }], ['picc', 'Piccolo', 'winds', 79, 103, 6, 1.6, { trim: true }],
+  ['organ', 'Organ', 'keys', 36, 90, 6, 2.2, { trim: true }],
+  ['conga', 'Conga', 'drums', null, null, null, 0.6, { trim: true, filter: /^Conga-HitN/ }], ['tumba', 'Conga, low', 'drums', null, null, null, 0.7, { trim: true, src: 'conga', filter: /^Tumba-HitN/ }],
+  ['bongo', 'Bongo', 'drums', null, null, null, 0.4, { trim: true, filter: /^HighBongo/ }], ['bigHand', 'Hand drum', 'drums', null, null, null, 0.9, { trim: true, filter: /_hit_f_/ }],
+  ['tamb', 'Tambourine', 'drums', null, null, null, 0.5, { trim: true, filter: /^Tamb1-Hit/ }], ['fingerCym', 'Finger cymbals', 'drums', null, null, null, 1.6, { trim: true }],
+  ['chimes', 'Wind chimes', 'drums', null, null, null, 2.6, { trim: true, filter: /slowAsc/ }], ['sleigh', 'Sleigh bells', 'drums', null, null, null, 0.8, { trim: true, filter: /^sleighbell1_hit_\d/ }],
+  ['crash', 'Crash cymbal', 'drums', null, null, null, 2.4, { trim: true, filter: /_mf_/ }], ['gong', 'Gong', 'drums', null, null, null, 3.5, { trim: true, filter: /^gongHit_f$/ }],
 ];
 if (process.env.KIT) {
   const dir = join(OUT, 'kit'); if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const man = {};
-  for (const [id, label, family, lo, hi, step, hold] of KIT) {
+  for (const [id, label, family, lo, hi, step, hold, o = {}] of KIT) {
     const notes = lo == null ? [null] : Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
     man[id] = { label, family, notes: lo == null ? [] : notes }; let h = 2166136261;
     for (const m of notes) {
       setSeed(11 + (m ?? 0)); const n = Math.round(((hold ?? 1.2) + 0.9) * SR), bufs = { k: { L: new Float32Array(n), R: new Float32Array(n) } };
-      note(bufs, 'k', id, m, 0.002, { dur: hold ?? 1.2, rel: 0.35, vel: 0.75 });
+      note(bufs, 'k', o.src || id, m, 0.002, { dur: hold ?? 1.2, rel: 0.35, vel: 0.75, ...(o.filter ? { filter: o.filter } : {}), ...(o.trim ? { trim: true } : {}) });
       const L = bufs.k.L, R = bufs.k.R; let end = n; while (end > SR * 0.1 && Math.abs(L[end - 1]) < 1e-4 && Math.abs(R[end - 1]) < 1e-4) end--;
       // even loudness across the kit (the samples' own layers differ by up to 20 dB): a held note to a set loudness over
       // its first 0.6 s, a drum to a set peak, never past a peak of 0.7

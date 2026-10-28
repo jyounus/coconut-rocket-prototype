@@ -1441,6 +1441,7 @@ button.srow:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-
 .strl.root { color: var(--cream); }
 .strlane { position: relative; border-bottom: 1px solid rgba(0,0,0,.3); background-image: linear-gradient(90deg, rgba(255,226,190,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,226,190,.07) 1px, transparent 1px); background-size: 25% 100%, 6.25% 100%; touch-action: pan-y; cursor: crosshair; }
 .strlane.ct { background-color: rgba(244,204,90,.08); }
+.strg.musg .strlane { background-size: calc(100% / var(--musb)) 100%, calc(100% / var(--musg)) 100%; }   /* (a bar on its own grid: 12/8's four dotted beats of three) */
 .stn { position: absolute; top: 3px; bottom: 3px; border-radius: 6px; background: var(--fam); box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); pointer-events: none; }
 .strollph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--go-hi); box-shadow: 0 0 6px var(--go-hi); pointer-events: none; display: none; }
 .strollacts { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -16562,6 +16563,21 @@ function musInfoMore() {
 const musKeyTr = name => KEY_TR[name] ?? (MF.info && MF.info[name] && MF.info[name].keyTr) ?? 0;
 // the tracks the music lab and the sound studio list: the menu and gameplay track, then every other one rendered
 const musTrackList = () => Object.keys(TRACK_NAMES).filter(n => n === 'menu' || n === GAME_TRACK || (MF.info && MF.info[n]));
+// The sound studio's note grid: how many steps a bar has (16 sixteenths; 12 for a 12/8 bar of eighth-note triplets),
+// from the recording's json (`grid`: a number for the whole track, or per section, see tools/music/lib.mjs), else
+// MUS_GRID (tracks rendered before the json carried it). Notes keep their place and length in sixteenths, so a triplet
+// step is 4/3 of one; the players play a note between two sixteenths at its own time.
+const MUS_GRID = { frost: { intro: 12, A: 12, B: 12, break: 12, build: 12 } };
+function musGrid(name, b) {
+  const src = srcOf(name), fi = MF.info && MF.info[src], g = (fi && fi.grid) || MUS_GRID[src];
+  if (!g) return 16; if (typeof g === 'number') return g;
+  return g[barInfo(name, b).sec] || 16;
+}
+const musQ = x => Math.round(x * 1e4) / 1e4;   // (a place or length in sixteenths, rounded so triplet steps add up)
+// the note lengths offered for a grid (in sixteenths): the classic five on 16, eighths to a bar on 12/8
+const musLens = G => G === 16 ? ROLL_LENS : G === 12 ? [[musQ(16 / 12), '1/8'], [musQ(32 / 12), '1/4'], [4, 'Beat'], [8, 'Half'], [16, 'Bar']]
+  : [1, 2, G / 4, G / 2, G].filter((k, i, a) => k >= 1 && k === Math.round(k) && a.indexOf(k) === i).map(k => [musQ(k * 16 / G), k === G ? 'Bar' : `${k}/${G}`]);
+const musLen = (len, G) => musLens(G).reduce((a, [l]) => Math.abs(l - len) < Math.abs(a - len) ? l : a, 16);   // (the nearest offered)
 // (debug builds, ?debug: the headless music checks read the music's own state through this, see tools/music)
 if (/[?&]debug\b/.test(location.search)) window.CRMUS = { ev: src => eval(src) };   // eslint-disable-line no-eval
 // (beyond the track's effects a zone has: bass cut, a focus band, a filter sweep, phaser, flanger, ring mod, lo-fi,
@@ -16798,8 +16814,8 @@ function voiceBar(V, b, t) {   // the arrangement: each stem on or off for the b
 }
 function voiceStep(V, b, s, t, sp) {   // the added instruments' notes on this step
   const e = studioOf(V.name); if (!e || !e.parts || !e.parts.length) return;
-  if (V.ver !== STV) { V.ver = STV; V.idx = new Map(); for (const P of e.parts) for (const n of P.notes || []) { const k = n.b * 16 + n.s; if (!V.idx.has(k)) V.idx.set(k, []); V.idx.get(k).push([P, n]); } }
-  for (const [P, n] of V.idx.get(b * 16 + s) || []) if (P.on !== false && (!P.zone || P.zone === V.zone) && (!V.solo || V.solo === P.id)) partNote(P, n, t, n.l * sp, V.rate, V.bus, V.send);
+  if (V.ver !== STV) { V.ver = STV; V.idx = new Map(); for (const P of e.parts) for (const n of P.notes || []) { const k = n.b * 16 + Math.floor(n.s + 1e-6); if (!V.idx.has(k)) V.idx.set(k, []); V.idx.get(k).push([P, n]); } }
+  for (const [P, n] of V.idx.get(b * 16 + s) || []) if (P.on !== false && (!P.zone || P.zone === V.zone) && (!V.solo || V.solo === P.id)) partNote(P, n, t + (n.s - Math.floor(n.s + 1e-6)) * sp, n.l * sp, V.rate, V.bus, V.send);   // (a triplet note: its own time after the step)
 }
 const partNote = (P, n, t, dur, rate, dest, send) => kitPlay(P.inst, n.m + 12 * (P.oct || 0), t, { vol: P.vol * (n.v ?? 0.8), dur, pan: P.pan, tone: P.tone, room: P.room, rate, dest, send });
 // ---- the studio's instrument kit: single notes of the score's own instruments (tools/music, KIT=1), loaded when used ----
@@ -16808,6 +16824,7 @@ const KIT = { info: null, failed: false, busy: {}, bufs: {}, off: {}, want: new 
 // the effects' own single notes (in sfx.json) are instruments too
 const FX_KIT = { glock: 'Glockenspiel', xylo: 'Xylophone', marimba: 'Marimba, bright', tbell: 'Tubular bell', claves: 'Claves', logHi: 'Wood block', tri: 'Triangle', cowbell: 'Cowbell' };
 const KIT_DRUMS = new Set(['timp', 'bdrum', 'snare', 'tenorHi', 'tenorLo', 'cym', 'log', 'shaker', 'fx.claves', 'fx.logHi', 'fx.tri', 'fx.cowbell']);
+for (const k of ['conga', 'tumba', 'bongo', 'bigHand', 'tamb', 'fingerCym', 'chimes', 'sleigh', 'crash', 'gong']) KIT_DRUMS.add(k);   // (the mood-group tracks' drums in the kit)
 const kitPitched = inst => !KIT_DRUMS.has(inst);
 function kitInfo() {
   if (KIT.info || KIT.failed || KIT.busy.info) return; KIT.busy.info = true;
@@ -43302,15 +43319,15 @@ function stRollRows(P, bi) {
 }
 function stRollRender() {
   const R = STU.roll, P = R && stPart(R.part); if (!P) { if (R) stRollClose(); return; }
-  const bi = barInfo(STU.track, R.b), fam = kitFamily(P.inst), rows = stRollRows(P, bi), fi = stInfo();
+  const bi = barInfo(STU.track, R.b), fam = kitFamily(P.inst), rows = stRollRows(P, bi), fi = stInfo(), G = musGrid(STU.track, R.b);
   $('stRollName').textContent = kitName(P.inst);
-  $('stRollWhere').textContent = `Bar ${R.b + 1} of ${fi.bars} · ${SEC_NAMES[bi.sec] || bi.sec} · chord ${bi.chord}`;
-  $('stLens').innerHTML = ROLL_LENS.map(([l, nm]) => `<button data-len="${l}" aria-pressed="${R.len === l}">${nm}</button>`).join('');
+  $('stRollWhere').textContent = `Bar ${R.b + 1} of ${fi.bars} · ${SEC_NAMES[bi.sec] || bi.sec} · chord ${bi.chord}${G === 12 ? ' · 12/8' : G !== 16 ? ` · ${G} steps` : ''}`;
+  $('stLens').innerHTML = musLens(G).map(([l, nm]) => `<button data-len="${l}" aria-pressed="${musLen(R.len, G) === l}">${nm}</button>`).join('');
   $('stVel').value = R.vel; $('stVel').nextElementSibling.textContent = pct(R.vel); $('stInKey').checked = R.inKey; $('stInKey').closest('label').hidden = !kitPitched(P.inst);
   $('stRollPlay').textContent = R.play ? 'Stop' : 'Play this bar'; $('stRollPlay').setAttribute('aria-pressed', String(R.play));
   $('stRollPaste').disabled = !STU.clip;
   const notes = P.notes.map((n, i) => [n, i]).filter(([n]) => n.b === R.b);
-  $('stRollGrid').innerHTML = `<div class="strg" style="--fam:var(--f-${fam})">${rows.map(r => {
+  $('stRollGrid').innerHTML = `<div class="strg${G !== 16 ? ' musg' : ''}" style="--fam:var(--f-${fam})${G !== 16 ? `;--musg:${G};--musb:${G % 3 ? 4 : G / 3}` : ''}" data-g="${G}">${rows.map(r => {
     const pc = ((r.m % 12) + 12) % 12, ct = kitPitched(P.inst) && bi.tones.includes(pc) ? ' ct' : '', c = kitPitched(P.inst) && pc === bi.tones[0] ? ' root' : '';
     return `<div class="strl${ct}${c}">${r.label}</div><div class="strlane${ct}" data-m="${r.m}">${notes.filter(([n]) => n.m === r.m).map(([n, i]) => `<i class="stn" data-i="${i}" style="left:${n.s / 16 * 100}%;width:${n.l / 16 * 100}%;opacity:${0.45 + 0.55 * (n.v ?? 0.8)}"></i>`).join('')}</div>`;
   }).join('')}<div class="strollph" id="stRollPh"></div></div>`;
@@ -43319,21 +43336,21 @@ function stRollScroll() {   // the notes written (or the middle of the range) in
   const g = $('stRollGrid'), n = g.querySelector('.stn') || g.querySelector('.strl.root') || g.querySelector('.strl.ct');
   if (n) g.scrollTop = Math.max(0, (n.closest('.strlane') || n).offsetTop - g.clientHeight / 2);
 }
-const stRollStep = (r, x) => clamp(Math.floor((x - r.left) / r.width * 16), 0, 15);   // (the lane's box is kept: the grid is redrawn under a drag)
+const stRollStep = (r, x, G = 16) => musQ(clamp(Math.floor((x - r.left) / r.width * G), 0, G - 1) * 16 / G);   // (in sixteenths, on the bar's grid)   // (the lane's box is kept: the grid is redrawn under a drag)
 $('stRollGrid').addEventListener('pointerdown', e => {
   const lane = e.target.closest('.strlane'); if (!lane || !STU.roll) return;
-  const R = STU.roll, P = stTrackEdit().parts.find(x => x.id === R.part), m = +lane.dataset.m, rect = lane.getBoundingClientRect(), s = stRollStep(rect, e.clientX);
-  const hit = P.notes.find(n => n.b === R.b && n.m === m && s >= n.s && s < n.s + n.l);
+  const R = STU.roll, P = stTrackEdit().parts.find(x => x.id === R.part), m = +lane.dataset.m, rect = lane.getBoundingClientRect(), G = musGrid(STU.track, R.b), s = stRollStep(rect, e.clientX, G);
+  const hit = P.notes.find(n => n.b === R.b && n.m === m && s >= n.s - 1e-3 && s < n.s + n.l - 1e-3);
   stEdit(() => {}, true);
-  if (hit) STU.rdrag = { n: hit, P, rect, x: e.clientX, s0: hit.s, grab: s, moved: false };
-  else { const n = { b: R.b, s, l: Math.min(R.len, 16 - s), m, v: R.vel }; P.notes.push(n); STU.rdrag = { n, P, rect, add: true, s0: s }; stPreviewNote(P, n); stSave(); stRollRender(); }
+  if (hit) STU.rdrag = { n: hit, P, rect, G, x: e.clientX, s0: hit.s, grab: s, moved: false };
+  else { const n = { b: R.b, s, l: musQ(Math.min(musLen(R.len, G), 16 - s)), m, v: R.vel }; P.notes.push(n); STU.rdrag = { n, P, rect, G, add: true, s0: s }; stPreviewNote(P, n); stSave(); stRollRender(); }
   try { lane.setPointerCapture(e.pointerId); } catch {}
 });
 $('stRollGrid').addEventListener('pointermove', e => {
   const D = STU.rdrag; if (!D) return;
-  const s = stRollStep(D.rect, e.clientX);
-  if (D.add) { const l = clamp(s - D.n.s + 1, 1, 16 - D.n.s); if (l !== D.n.l) { D.n.l = l; stRollRender(); } }
-  else if (Math.abs(e.clientX - D.x) > 6 || D.moved) { D.moved = true; const ns = clamp(D.s0 + s - D.grab, 0, 16 - D.n.l); if (ns !== D.n.s) { D.n.s = ns; stRollRender(); } }
+  const G = D.G || 16, u = 16 / G, s = stRollStep(D.rect, e.clientX, G);
+  if (D.add) { const l = musQ(clamp(s - D.n.s + u, u, 16 - D.n.s)); if (l !== D.n.l) { D.n.l = l; stRollRender(); } }
+  else if (Math.abs(e.clientX - D.x) > 6 || D.moved) { D.moved = true; const ns = musQ(clamp(D.s0 + s - D.grab, 0, 16 - D.n.l)); if (ns !== D.n.s) { D.n.s = ns; stRollRender(); } }
 });
 function stRollUp() {
   const D = STU.rdrag; STU.rdrag = null; if (!D) return;
