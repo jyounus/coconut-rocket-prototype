@@ -2592,6 +2592,160 @@ const geodeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, hearts: 0, pick:
 }
 const geodeSummary = () => `PASS: Amethyst Geode: ${geodeStats.seeds} layouts × ${geodeStats.len} m, only its own traps (${Object.entries(geodeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${geodeStats.minW.toFixed(0)}+ wide, wall slope ${geodeStats.slope.toFixed(2)} (max ${GE.RULES.maxWallSlope}); beams only sweep down, shards only fly level or down, ${geodeStats.paths} gem paths only fall and stay in the shaft, ${geodeStats.ripples} ripples spread only down; beats ${geodeStats.beatGap.toFixed(0)}+ apart; pickups ${geodeStats.pick.toFixed(1)}+ from any reach; ${geodeStats.traps} beats × 6 phases and ${geodeStats.hearts} heart geodes flown by the widest pilot never singed (${geodeStats.searches} searches, slowest ${geodeStats.worst.toFixed(1)} s)`;
 // (test slot: Amethyst Geode, island level 16)
+// ---------- Adventure: the Fossil Bonepit (island level 21), an authored stage with its own traps ----------
+// As the Amethyst Geode's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases and looks), then every beat and every amber mosquito flown by a time-space search for the widest pilot on
+// the traps' own clocks from 6 start phases (the bone dust of a snapping skull or a slamming ribcage counts as solid
+// here: every beat can be passed without ever getting dusted, which the "never dusted" mission needs).
+const FO = new Function(regions.join('\n') + '\nreturn { createFossilLevel, fossilShapes, fossilDanger, fossilEnd, fossilSkullAt, fossilRibAt, fossilSerpentAt, fossilPathAt, fossilSkullPt, FOSSIL, FOSSIL_STAGE, FOSSIL_TYPES, ADV_FOSSIL, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const fossilStats = { seeds: 0, traps: 0, searches: 0, worst: 0, ambers: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, lanes: Infinity, digs: 0 };
+{
+  const R = FO.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = FO.ADV_FOSSIL, X = FO.FOSSIL;
+  if (st0.theme !== 'fossil' || !(st0.reward > 0)) fail('the Fossil Bonepit is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'fossilAmber' && g.n === 3) || !st0.goals.some(g => g.k === 'fossilDustless')) fail('the Fossil Bonepit has three missions: the Great Amber, 3 amber mosquitoes and never dusted', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * FO.UNITS_PER_M - FO.fossilEnd()) > 1e-6) fail('the Fossil Bonepit stage length matches its layout', `${st0.len}`);
+  // the stage's order: skulls, then ribcages, then serpents, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { skullPair: 'fossilSkull', ribSkull: 'fossilRib', ribDuo: 'fossilRib', serpentSkull: 'fossilSerpent', serpentRib: 'fossilSerpent', serpentDuo: 'fossilSerpent' };
+    for (const sec of FO.FOSSIL_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each fossil trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a fossil trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'fossilSkull,fossilRib,fossilSerpent') fail('the Fossil Bonepit teaches skulls, then ribcages, then serpents', seen.join());
+    if (!FO.FOSSIL_STAGE.some(sec => sec.calm && !sec.finish && sec !== FO.FOSSIL_STAGE[0])) fail('the Fossil Bonepit has a breather seam', '');
+    if (!FO.FOSSIL_STAGE[FO.FOSSIL_STAGE.length - 1].finish) fail('the Fossil Bonepit ends in the Great Amber', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (FO.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // every lethal shape of the traps at t, and their bone dust (the search never lets itself be dusted)
+  const allShapes = (traps, t, S) => { for (const h of traps) FO.fossilShapes(h, t, S); return S; };
+  // the search (as the geode's), with an optional waypoint: `via(x, a)` must be touched before the goal counts
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 16 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = FO.createFossilLevel(FO.advSeed(st), st), hz = [], fr = [];
+    fossilStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('fossil traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('fossil pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    fossilStats.len = level.end / 10;
+    for (const h of hz) if (!FO.FOSSIL_TYPES.has(h.type)) fail('the Fossil Bonepit only has its own traps', h.type);
+    for (const h of hz) fossilStats.kinds[h.type] = (fossilStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); fossilStats.beatGap = Math.min(fossilStats.beatGap, g); if (g < 0) fail('fossil beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Great Amber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      fossilStats.minW = Math.min(fossilStats.minW, r - l); fossilStats.slope = Math.max(fossilStats.slope, l2 - l, r - r2);
+    }
+    if (fossilStats.minW < R.minWidth) fail('the fossil shaft is never narrower than minWidth', fossilStats.minW.toFixed(1));
+    if (fossilStats.slope > R.maxWallSlope) fail('the fossil walls never step in faster than maxWallSlope', fossilStats.slope.toFixed(2));
+    for (const h of hz) {
+      if (h.type === 'fossilSkull') {
+        // nothing strikes from below: the lower jaw never rises (it only lunges sideways), the upper skull only slams
+        // down (it opens slowly, in the tell and as it slides back), and a lunging skull always leaves the far lane
+        let prevJ = null, prevTip = null;
+        for (let t = 0; t < h.P; t += 1 / 60) {
+          const s1 = FO.fossilSkullAt(h, t), jaw = FO.fossilSkullPt(h, s1, 138, -11, false)[1], tip = FO.fossilSkullPt(h, s1, 150, 5, true)[1];
+          if (prevJ != null && jaw > prevJ + 1e-6) { fail('a skull\'s lower jaw never rises', `${h.alt}`); break; }
+          if (prevTip != null && (tip - prevTip) * 60 > 140) { fail('a skull only opens slowly (it strikes downward)', `${h.alt} ${((tip - prevTip) * 60).toFixed(0)}`); break; }
+          prevJ = jaw; prevTip = tip;
+          const S = FO.fossilShapes(h, t, [], 'body'); let reach = -Infinity;
+          for (const q of S) { const xs = q.k === 'c' ? [q.x] : [q.x0, q.x1]; for (const x of xs) reach = Math.max(reach, h.side * (x - h.base) + q.r); }
+          const [l, r] = level.walls(h.alt), lane = (r - l) - reach; fossilStats.lanes = Math.min(fossilStats.lanes, lane);
+          if (lane < FO.laneSize().w + 8) { fail('a skull always leaves the widest pilot a lane', `${h.alt}: ${lane.toFixed(0)}`); break; }
+        }
+      }
+      if (h.type === 'fossilSerpent') {
+        // its band only ever dips across the shaft (it never swims up past its burrow's height)
+        for (let dd = 0; dd <= h.span; dd += 4) { const [, a] = FO.fossilPathAt(h, dd); if (a > h.alt + X.serpent.amp + 1e-6) { fail('a serpent never swims up past its burrow', `${h.alt}`); break; } }
+        if (Math.abs(h.span - Math.abs(h.x1 - h.x0)) > 1e-6) fail('a serpent swims burrow to burrow', `${h.alt}`);
+      }
+      if (h.type === 'fossilRib') {
+        // the ribs only ever slide sideways, and shut they leave no gap anywhere across the shaft
+        for (const Rb of h.ribs) if (Math.abs(Rb.shut - h.cx) > X.rib.over + 1e-6 || Math.sign(Rb.shut - Rb.open) !== Rb.d) fail('ribs slide out across the shaft to interlock', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = FO.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('fossil pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the amber mosquitoes, the seam's ammonite)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(FO.laneSize().w / 2 + 6 + FO.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of FO.fossilDanger(h)) dd = Math.min(dd, FO.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) fossilStats.pick = Math.min(fossilStats.pick, dd);
+      if (dd < need - 0.5) fail('fossil pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < FO.pickR(fr[i]) + FO.pickR(fr[j]) + FO.PICK_GAP - 0.01) fail('fossil pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'amber').length !== 3) fail('the Fossil Bonepit holds exactly 3 amber mosquitoes', `${fr.filter(f => f.kind === 'amber').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the Fossil Bonepit keeps a chili line', `${gap | 0}`);
+    // the buried bones sit on quiet wall, well away from every trap
+    for (const g of level.digs) { if (hz.some(h => h.lo - 160 < g.alt && h.hi + 160 > g.alt)) fail('buried bones sit well away from the traps', `${g.alt | 0}`); }
+    fossilStats.digs = level.digs.length;
+    if (level.digs.length < 6) fail('the Fossil Bonepit buries a few bones to dig up', `${level.digs.length}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      fossilStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        fossilStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every fossil trap can be passed by the widest pilot from any phase, never dusted', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else fossilStats.worst = Math.max(fossilStats.worst, tm);
+      }
+    }
+    // every amber mosquito can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'amber')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        fossilStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < FO.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every amber mosquito can be grabbed and escaped by the widest pilot', `amber at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      fossilStats.ambers++;
+    }
+  }
+}
+const fossilSummary = () => `PASS: Fossil Bonepit: ${fossilStats.seeds} layouts × ${fossilStats.len} m, only its own traps (${Object.entries(fossilStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${fossilStats.minW.toFixed(0)}+ wide, wall slope ${fossilStats.slope.toFixed(2)} (max ${FO.RULES.maxWallSlope}); lower jaws never rise, skulls only slam down and always leave a ${fossilStats.lanes.toFixed(0)}+ lane, ribs only slide sideways, serpents only dip; beats ${fossilStats.beatGap.toFixed(0)}+ apart; pickups ${fossilStats.pick.toFixed(1)}+ from any reach; ${fossilStats.digs} buried bones on quiet wall; ${fossilStats.traps} beats × 6 phases and ${fossilStats.ambers} amber mosquitoes flown by the widest pilot never dusted (${fossilStats.searches} searches, slowest ${fossilStats.worst.toFixed(1)} s)`;
 // (test slot: Fossil Bonepit, island level 21)
 // (test slot: Shipwreck Hold, island level 22)
 // (test slot: Cursed Treasure Vault, island level 23)
@@ -2624,4 +2778,5 @@ console.log(mineSummary());
 console.log(geodeSummary());
 console.log(lagoonSummary());
 console.log(bogSummary());
+console.log(fossilSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
