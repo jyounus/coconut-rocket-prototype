@@ -5293,6 +5293,183 @@ const starfallStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pic
 }
 const starfallSummary = () => `PASS: Starfall Summit: ${starfallStats.seeds} layouts × ${starfallStats.len} m, only its own traps (${Object.entries(starfallStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}; ${starfallStats.meteors} meteors), each taught alone first; gravity down to ${SF.STARFALL.grav.lo} of the island's; shaft ${starfallStats.minW.toFixed(0)}+ wide, wall slope ${starfallStats.slope.toFixed(2)} (max ${SF.RULES.maxWallSlope}), ${starfallStats.rocks} wall asteroids none poking past the edge (worst ${starfallStats.poke.toFixed(2)}); open lanes past flare loops ${starfallStats.lane.starfallFlare.toFixed(0)}+, saucers ${starfallStats.lane.starfallUfo.toFixed(0)}+, satellites at the ends of their drift ${starfallStats.lane.starfallSat.toFixed(0)}+ (minLane ${SF.RULES.minLane}); beats ${starfallStats.beatGap.toFixed(0)}+ apart; pickups ${starfallStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${starfallStats.traps} beats and ${starfallStats.stars} stars (reach and escape) flown by the widest pilot (hauled by the beams) in ${starfallStats.searches} searches, the slowest pass ${starfallStats.worst.toFixed(1)} s`;
 // (test slot: Starfall Summit, island level 36)
+// ---------- Adventure: Beanstalk Heights (island level 37), an authored stage with its own traps ----------
+// As the starfall's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), the wall puffs and leaf ledges never poking out past the shaft's edge, then every beat and every
+// golden feather flown by a time-space search for the widest pilot on the traps' own clocks (the falling leaves on the
+// giant's footsteps) from several start phases. The search counts a bouncy cloud as solid: every beat can be passed
+// without touching one (a bounce is only ever a help or a shove, never needed).
+const BS = new Function(regions.join('\n') + '\nreturn { createBeanstalkLevel, beanstalkShapes, beanstalkLethal, beanstalkDanger, beanstalkEnd, beanstalkStep, beanstalkEggState, beanstalkPodState, beanstalkLeafState, beanstalkLeafPath, BEANSTALK, BEANSTALK_STAGE, BEANSTALK_TYPES, ADV_BEANSTALK, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const beanstalkStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { beanstalkEgg: Infinity, beanstalkPod: Infinity, beanstalkCloud: Infinity, beanstalkLeaf: Infinity }, len: 0, kinds: {}, beatGap: Infinity, puffs: 0, ledges: 0, poke: -Infinity, clouds: 0 };
+{
+  const R = BS.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = BS.ADV_BEANSTALK, X = BS.BEANSTALK;
+  const bfail = (rule, d) => fail('beanstalk: ' + rule, d);
+  if (st0.theme !== 'beanstalk' || !(st0.reward > 0)) bfail('the beanstalk is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'beanstalkFeather' && g.n === 3) || !st0.goals.some(g => g.k === 'beanstalkBounce' && g.n > 0)) bfail('three missions: the doorstep, 3 feathers and the bounces', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * BS.UNITS_PER_M - BS.beanstalkEnd()) > 1e-6) bfail('the stage length matches its layout', `${st0.len}`);
+  // the footsteps: a steady clock, the rumble before each step
+  { const a = BS.beanstalkStep(X.step.t0 + 0.01), b = BS.beanstalkStep(X.step.t0 + X.step.P - 0.1); if (!(a.since < 0.02) || b.tell == null || BS.beanstalkStep(0).since !== Infinity) bfail('the giant\'s footsteps keep time, with a rumble before each', JSON.stringify([a, b])); }
+  // the stage's order: eggs, then pods, then clouds, then leaves, each taught alone; a breather; the finish
+  {
+    const fam = { egg: 'egg', eggPair: 'egg', pod: 'pod', podPair: 'pod', podEgg: 'pod', cloud: 'cloud', cloudPair: 'cloud', cloudPod: 'cloud', cloudEgg: 'cloud', leaf: 'leaf', leafPair: 'leaf', leafPod: 'leaf', leafEgg: 'leaf', leafCloud: 'leaf' };
+    const firsts = {}, seen = [];
+    for (const sec of BS.BEANSTALK_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { bfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) bfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+    }
+    if (seen.join() !== 'egg,pod,cloud,leaf') bfail('the stalk teaches eggs, pods, clouds, then leaves', seen.join());
+    if (!BS.BEANSTALK_STAGE.some(sec => sec.calm && !sec.finish && sec !== BS.BEANSTALK_STAGE[0])) bfail('the stalk has a breather', '');
+    if (!BS.BEANSTALK_STAGE[BS.BEANSTALK_STAGE.length - 1].finish) bfail('the stage ends at the Giant\'s Doorstep', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (BS.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  const span = q => { const r = q.r || 0; return q.k === 'c' ? [q.a - r, q.a + r] : q.k === 'b' ? [q.a0, q.a1] : [Math.min(q.a0, q.a1) - r, Math.max(q.a0, q.a1) + r]; };
+  // the search (as the starfall's): solid = every shape of every trap at that moment, a bouncy cloud's puff included
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) BS.beanstalkShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = BS.createBeanstalkLevel(BS.advSeed(st), st), hz = [], fr = [];
+    beanstalkStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) bfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) bfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    beanstalkStats.len = level.end / 10;
+    for (const h of hz) if (!BS.BEANSTALK_TYPES.has(h.type)) bfail('the stalk only has its own traps', h.type);
+    for (const h of hz) beanstalkStats.kinds[h.type.slice(9)] = (beanstalkStats.kinds[h.type.slice(9)] || 0) + (k ? 0 : 1);
+    if (!k) beanstalkStats.clouds = hz.filter(h => h.type === 'beanstalkCloud').length;
+    if (beanstalkStats.clouds < st0.goals.find(g => g.k === 'beanstalkBounce').n * 2) bfail('the stalk has plenty more bouncy clouds than the bounce mission needs', `${beanstalkStats.clouds}`);
+    if (hz.some(h => h.type === 'beanstalkLeaf' && h.alt < level.stepFrom + 200)) bfail('no leaf falls before the giant starts walking', '');
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); beanstalkStats.beatGap = Math.min(beanstalkStats.beatGap, g); if (g < 0) bfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) bfail('the doorstep below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      beanstalkStats.minW = Math.min(beanstalkStats.minW, r - l); beanstalkStats.slope = Math.max(beanstalkStats.slope, Math.abs(l2 - l), Math.abs(r - r2));
+    }
+    if (beanstalkStats.minW < R.minWidth) bfail('the shaft is never narrower than minWidth', beanstalkStats.minW.toFixed(1));
+    if (beanstalkStats.slope > R.maxWallSlope) bfail('the walls never step faster than maxWallSlope', beanstalkStats.slope.toFixed(2));
+    // the wall puffs and leaf ledges: every face stays behind the shaft's edge (the pilot never overlaps the art)
+    for (const side of [0, 1]) {
+      for (const pf of level.puffs[side]) {
+        if (!k) beanstalkStats.puffs++;
+        if (pf.c > level.end + 600) continue;
+        for (let q = -0.95; q <= 0.95; q += 0.1) {
+          const a = pf.c + q * pf.ry, e = pf.p - pf.rx + pf.rx * Math.sqrt(1 - q * q), [bl, br] = level.baseWalls(a), [l, r] = level.walls(a), face = side ? br - e : bl + e;
+          const poke = side ? r - face : face - l; beanstalkStats.poke = Math.max(beanstalkStats.poke, poke);
+          if (poke > 0.5) { bfail('wall puffs never poke out past the shaft\'s edge', `side ${side} puff at ${pf.c | 0}: ${poke.toFixed(1)}`); break; }
+        }
+      }
+      for (const lg of level.ledges[side]) {
+        if (!k) beanstalkStats.ledges++;
+        for (let q = -0.98; q <= 0.98; q += 0.07) {
+          const a = lg.c + q * lg.th, e = lg.p - lg.L * Math.asin(Math.abs(q)) / Math.PI, [bl, br] = level.baseWalls(a), [l, r] = level.walls(a), face = side ? br - e : bl + e;
+          const poke = side ? r - face : face - l; beanstalkStats.poke = Math.max(beanstalkStats.poke, poke);
+          if (poke > 0.5) { bfail('leaf ledges never poke out past the shaft\'s edge', `side ${side} ledge at ${lg.c | 0}: ${poke.toFixed(1)}`); break; }
+        }
+      }
+    }
+    // static lanes: a goose's egg column, a pod and the reach of its spray's lower beans, a cloud, a leaf at every point of
+    // its swing leave an open lane of minLane
+    for (const h of hz) {
+      let shapes = h.type === 'beanstalkPod' ? BS.beanstalkShapes(h, 0, [], 'body') : BS.beanstalkShapes(h, 0, [], 'sweep');
+      if (h.type === 'beanstalkLeaf') {   // (a falling leaf as the satellite was: at each end of its swing, its whole length round it)
+        shapes = []; const P = q => BS.beanstalkLeafPath(h, q);
+        for (let q = 0.9; q < X.leaf.fall; q += 0.02) { const [x0] = P(q - 0.02), [x1, a1] = P(q), [x2] = P(q + 0.02); if ((x1 - x0) * (x2 - x1) <= 0) shapes.push({ k: 'c', x: x1, a: a1, r: X.leaf.hw + X.leaf.r }); }
+      }
+      for (const q of shapes) {
+        const [a0, a1] = span(q);
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.type === 'beanstalkLeaf' ? Math.max(r - x1, x0 - l) : h.side > 0 ? r - x1 : x0 - l;
+          beanstalkStats.lane[h.type] = Math.min(beanstalkStats.lane[h.type], m);
+          if (m < R.minLane) { bfail('every egg column, pod, cloud and leaf leaves a lane of minLane', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = BS.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) bfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: feathers, the meadow's rainbow, a pink cloud's coconuts)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(BS.laneSize().w / 2 + 6 + BS.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of BS.beanstalkDanger(h)) dd = Math.min(dd, BS.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) beanstalkStats.pick = Math.min(beanstalkStats.pick, dd);
+      if (dd < need - 0.5) bfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a feather is a dare, but never inside a solid part (a goose, a pod)
+    for (const f of fr.filter(f => f.kind === 'beanstalkFeather')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of BS.beanstalkShapes(h, 0, [], 'body')) if (BS.shapeDist(q, f.x, f.alt) < BS.COCO_R + 6) { bfail('a feather never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < BS.pickR(fr[i]) + BS.pickR(fr[j]) + BS.PICK_GAP - 0.01) bfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'beanstalkFeather').length !== 3) bfail('the stalk holds exactly 3 golden feathers', `${fr.filter(f => f.kind === 'beanstalkFeather').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) bfail('the stalk keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      beanstalkStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        beanstalkStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) bfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else beanstalkStats.worst = Math.max(beanstalkStats.worst, tm);
+      }
+    }
+    // every feather can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'beanstalkFeather')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      let ok = true;
+      for (let p = 0; p < 6 && ok; p++) {
+        beanstalkStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < X.feather.r + W / 2 - 4);
+        if (tm < 0) { bfail('every golden feather can be reached and escaped by the widest pilot', `feather at ${f.alt | 0}, phase ${p}, seed ${k}`); ok = false; }
+      }
+      if (ok) beanstalkStats.stars++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const beanstalkSummary = () => `PASS: Beanstalk Heights: ${beanstalkStats.seeds} layouts × ${beanstalkStats.len} m, only its own traps (${Object.entries(beanstalkStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; the giant's footsteps every ${BS.BEANSTALK.step.P} s; shaft ${beanstalkStats.minW.toFixed(0)}+ wide, wall slope ${beanstalkStats.slope.toFixed(2)} (max ${BS.RULES.maxWallSlope}), ${beanstalkStats.puffs} cloud puffs and ${beanstalkStats.ledges} leaf ledges none poking past the edge (worst ${beanstalkStats.poke.toFixed(2)}); open lanes past egg columns ${beanstalkStats.lane.beanstalkEgg.toFixed(0)}+, pods ${beanstalkStats.lane.beanstalkPod.toFixed(0)}+, clouds ${beanstalkStats.lane.beanstalkCloud.toFixed(0)}+, falling leaves ${beanstalkStats.lane.beanstalkLeaf.toFixed(0)}+ (minLane ${BS.RULES.minLane}); beats ${beanstalkStats.beatGap.toFixed(0)}+ apart; pickups ${beanstalkStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${beanstalkStats.traps} beats and ${beanstalkStats.stars} feathers (reach and escape) flown by the widest pilot (clouds counted solid) in ${beanstalkStats.searches} searches, the slowest pass ${beanstalkStats.worst.toFixed(1)} s`;
 // (test slot: Beanstalk Heights, island level 37)
 // ---------- Adventure: Sandstorm Canyon (island level 38), an authored stage with its own traps ----------
 // As the summit's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -5490,4 +5667,5 @@ console.log(wizardSummary());
 console.log(starfallSummary());
 console.log(carnivalSummary());
 console.log(sandstormSummary());
+console.log(beanstalkSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
