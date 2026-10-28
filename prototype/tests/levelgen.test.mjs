@@ -4772,6 +4772,191 @@ const lighthouseStats = { seeds: 0, traps: 0, searches: 0, worst: 0, moths: 0, p
 }
 const lighthouseSummary = () => `PASS: Haunted Lighthouse: ${lighthouseStats.seeds} layouts × ${lighthouseStats.len} m, only its own traps (${Object.entries(lighthouseStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}) under ${lighthouseStats.lamps} lamps, each taught alone first; shaft ${lighthouseStats.minW.toFixed(0)}+ wide, wall slope ${lighthouseStats.slope.toFixed(2)} (max ${LH.RULES.maxWallSlope}); every beam ${lighthouseStats.beamGap.toFixed(0)}+ short of other beats' traps; solid share (thorn stems and phantoms in the light, shadow hands reaching out in the dark) ${Object.entries(lighthouseStats.litFrac).map(([k, v]) => `${k} ${Math.round(100 * Math.min(...v))}-${Math.round(100 * Math.max(...v))}%`).join(', ')}; open lanes past thorn knots ${lighthouseStats.lane.lighthouseThorn.toFixed(0)}+, lantern swings ${lighthouseStats.lane.lighthouseLantern.toFixed(0)}+, shadow hands ${lighthouseStats.lane.lighthouseShadow.toFixed(0)}+ (minLane ${LH.RULES.minLane}); beats ${lighthouseStats.beatGap.toFixed(0)}+ apart; pickups ${lighthouseStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${lighthouseStats.traps} beats and ${lighthouseStats.moths} moths (reach and escape) flown by the widest pilot in ${lighthouseStats.searches} searches, the slowest pass ${lighthouseStats.worst.toFixed(1)} s`;
 // (test slot: Haunted Lighthouse, island level 34)
+// ---------- Adventure: Wizard's Spire (island level 35), an authored stage with its own traps ----------
+// As the toybox's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), then every beat and every lost scroll flown by a time-space search for the widest pilot on the
+// traps' own clocks from several start phases (a flying book, rising bubbles and fresh ink count as solid exactly when
+// the game kills on them). The rune portals never hurt and are never needed: the searches fly past them as open air,
+// and each portal's mouth and twin must sit clear of every trap, a skip of at least one beat up the shaft.
+const WZ = new Function(regions.join('\n') + '\nreturn { createWizardLevel, wizardShapes, wizardDanger, wizardEnd, wizardCycle, wizardBookState, wizardPortalMouth, wizardWallItems, WIZARD, WIZARD_STAGE, WIZARD_TYPES, ADV_WIZARD, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const wizardStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { wizardBook: Infinity, wizardCauldron: Infinity, wizardQuill: Infinity }, len: 0, kinds: {}, beatGap: Infinity, portals: 0, portalClear: Infinity, skip: Infinity };
+{
+  const R = WZ.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = WZ.ADV_WIZARD;
+  const tfail = (rule, d) => fail('wizard: ' + rule, d);
+  if (st0.theme !== 'wizard' || !(st0.reward > 0)) tfail('the spire is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'wizardScroll' && g.n === 3) || !st0.goals.some(g => g.k === 'wizardPortal' && g.n === 3)) tfail('three missions: the observatory, 3 lost scrolls and 3 rune portals', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * WZ.UNITS_PER_M - WZ.wizardEnd()) > 1e-6) tfail('the stage length matches its layout', `${st0.len}`);
+  // the perk: a book that Cappy came near never starts another flight
+  { const h = { type: 'wizardBook', P: 4, ph: 0, calm: 1.0 }; for (let t = 1; t < 20; t += 0.05) { const s = WZ.wizardBookState(h, t); if (s.v >= 0 && t - s.u + (4 - 1 - 2.3) >= 1.0) { tfail('a calmed book stays home', `t ${t.toFixed(2)}`); break; } } }
+  // the stage's order: books, then cauldrons, then quills, each taught alone; never slower than taught
+  {
+    const fam = { book: 'book', bookPair: 'book', cauldron: 'cauldron', cauldronPair: 'cauldron', cauldronBook: 'cauldron', quill: 'quill', quillPair: 'quill', quillBook: 'quill', quillCauldron: 'quill' };
+    const firsts = {}, seen = [];
+    for (const sec of WZ.WIZARD_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { tfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) tfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P) tfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'book,cauldron,quill') tfail('the spire teaches books, cauldrons, then quills', seen.join());
+    if (!WZ.WIZARD_STAGE.some(sec => sec.calm && !sec.finish && sec !== WZ.WIZARD_STAGE[0])) tfail('the spire has a breather', '');
+    if (!WZ.WIZARD_STAGE[WZ.WIZARD_STAGE.length - 1].finish) tfail('the stage ends at the observatory', '');
+    const X = WZ.WIZARD.cauldron;
+    for (const sec of WZ.WIZARD_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) { const P = kind.startsWith('quillC') ? o.CP : kind.startsWith('cauldron') ? o.P : 0; if (P && P < X.T.tell + 2 * X.T.gap + X.life + X.pop + 0.05) tfail('a cauldron\'s bubbles are gone before it boils again', `${kind} P ${P}`); }
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (WZ.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // the widest open interval across the shaft at height a, given shapes S
+  const openAt = (level, S, a) => {
+    const [l, r] = level.walls(a), iv = [];
+    for (const q of S) {
+      let x0, x1;
+      if (q.k === 'c') { const d = Math.abs(a - q.a); if (d >= q.r) continue; const w = Math.sqrt(q.r * q.r - d * d); x0 = q.x - w; x1 = q.x + w; }
+      else if (q.k === 'b') { if (a < q.a0 || a > q.a1) continue; x0 = q.x0; x1 = q.x1; }
+      else { let lo = Infinity, hi = -Infinity; for (let u = 0; u <= 1.0001; u += 1 / 24) { const x = q.x0 + (q.x1 - q.x0) * u, aa = q.a0 + (q.a1 - q.a0) * u, d = Math.abs(a - aa); if (d < q.r) { const w = Math.sqrt(q.r * q.r - d * d); lo = Math.min(lo, x - w); hi = Math.max(hi, x + w); } } if (lo > hi) continue; x0 = lo; x1 = hi; }
+      iv.push([x0, x1]);
+    }
+    iv.sort((p, q) => p[0] - q[0]);
+    let best = 0, cur = l;
+    for (const [x0, x1] of iv) { if (x0 > cur) best = Math.max(best, x0 - cur); cur = Math.max(cur, x1); }
+    return Math.max(best, r - cur);
+  };
+  // the search (as the vault's): solid = every lethal shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) WZ.wizardShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = WZ.createWizardLevel(WZ.advSeed(st), st), hz = [], fr = [];
+    wizardStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) tfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) tfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    wizardStats.len = level.end / 10;
+    for (const h of hz) if (!WZ.WIZARD_TYPES.has(h.type)) tfail('the spire only has its own traps', h.type);
+    const traps = hz.filter(h => h.type !== 'wizardPortal');
+    for (const h of hz) if (!(h.type === 'wizardPortal' && h.role === 'out')) wizardStats.kinds[h.type.slice(6)] = (wizardStats.kinds[h.type.slice(6)] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); wizardStats.beatGap = Math.min(wizardStats.beatGap, g); if (g < 0) tfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (traps.some(h => h.hi > level.end - 320)) tfail('the observatory below the finish is clear of traps', `${Math.max(...traps.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      wizardStats.minW = Math.min(wizardStats.minW, r - l); wizardStats.slope = Math.max(wizardStats.slope, l2 - l, r - r2);
+    }
+    if (wizardStats.minW < R.minWidth) tfail('the shaft is never narrower than minWidth', wizardStats.minW.toFixed(1));
+    if (wizardStats.slope > R.maxWallSlope) tfail('the walls never step in faster than maxWallSlope', wizardStats.slope.toFixed(2));
+    // lanes: every trap alone, at every moment of its cycle, leaves an open lane of minLane across the shaft at every
+    // height it reaches (a book anywhere on its loop, every bubble anywhere on its rise, the ink line at full length)
+    if (k < 3) for (const h of traps) {
+      const C = WZ.wizardCycle(h), n = 64, D = WZ.wizardDanger(h);
+      let a0 = Infinity, a1 = -Infinity; for (const q of D) { const r = q.r || 0, lo = q.k === 'c' ? q.a - r : q.k === 'b' ? q.a0 : Math.min(q.a0, q.a1) - r, hi = q.k === 'c' ? q.a + r : q.k === 'b' ? q.a1 : Math.max(q.a0, q.a1) + r; a0 = Math.min(a0, lo); a1 = Math.max(a1, hi); }
+      let worst = Infinity;
+      for (let i = 0; i < n; i++) { const S = WZ.wizardShapes(h, (i + 0.5) * C / n + (h.ph || 0), []); for (let a = a0; a <= a1; a += 4) worst = Math.min(worst, openAt(level, S, a)); }
+      wizardStats.lane[h.type] = Math.min(wizardStats.lane[h.type], worst);
+      if (worst < R.minLane) tfail('every trap leaves an open lane of minLane at every moment', `${h.type} ${worst.toFixed(1)} at ${h.alt | 0}`);
+    }
+    // the portals: a mouth on one wall, its twin on the other wall higher up past at least one beat, both clear of every
+    // trap's reach, the pilot let out of the twin with room all round
+    const ins = hz.filter(h => h.type === 'wizardPortal' && h.role === 'in');
+    wizardStats.portals = ins.length;
+    if (ins.length < 4) tfail('the spire has enough portals for the portal mission', `${ins.length}`);
+    for (const p of ins) {
+      const tw = p.twin;
+      if (!tw || tw.side !== -p.side) { tfail('a portal\'s twin is on the other wall', `${p.alt | 0}`); continue; }
+      const skipped = level.beats.filter(b => b.lo > p.alt && b.hi < tw.alt).length;
+      wizardStats.skip = Math.min(wizardStats.skip, skipped);
+      if (!skipped) tfail('a portal skips at least one beat', `${p.alt | 0} → ${tw.alt | 0}`);
+      for (const [x, a, what] of [[p.wx + p.side * 12, p.alt, 'mouth'], [tw.wx - p.side * 12, tw.alt, 'twin'], [p.ox, p.oa, 'exit']]) {
+        let dd = Infinity; for (const h of traps) if (h.lo - 300 < a && h.hi + 300 > a) for (const q of WZ.wizardDanger(h)) dd = Math.min(dd, WZ.shapeDist(q, x, a));
+        wizardStats.portalClear = Math.min(wizardStats.portalClear, dd);
+        if (dd < W / 2 + 40) tfail('a portal and its twin sit clear of every trap\'s reach', `${what} at ${a | 0}: ${dd.toFixed(1)}`);
+      }
+      const [l, r] = level.walls(p.oa);
+      if (p.ox - W / 2 < l + 8 || p.ox + W / 2 > r - 8) tfail('the pilot comes out of a twin inside the shaft', `${p.oa | 0}`);
+      if (Math.abs(p.wx - level.walls(p.alt)[p.side > 0 ? 0 : 1]) > 0.5) tfail('a portal sits on its wall', `${p.alt | 0}`);
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = WZ.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) tfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: scrolls and the Star Chart Landing's ring of coconuts)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(WZ.laneSize().w / 2 + 6 + WZ.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of traps) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of WZ.wizardDanger(h)) dd = Math.min(dd, WZ.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) wizardStats.pick = Math.min(wizardStats.pick, dd);
+      if (dd < need - 0.5) tfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a scroll is a dare, but never inside a solid part (a shelf lip, a corbel, a pot, an inkwell)
+    for (const f of fr.filter(f => f.kind === 'wizardScroll')) for (const h of traps) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of WZ.wizardShapes(h, 0, [], 'body')) if (WZ.shapeDist(q, f.x, f.alt) < WZ.COCO_R + 4) { tfail('a scroll never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < WZ.pickR(fr[i]) + WZ.pickR(fr[j]) + WZ.PICK_GAP - 0.01) tfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (level.stack.some(items => items.some((q, i) => i && Math.abs(q.p - items[i - 1].p) > Math.min(6, (items[i - 1].a1 - items[i - 1].a0) / 2, (q.a1 - q.a0) / 2) * 1.4 + 1e-6))) tfail('the wall pieces never step out faster than their ramps', '');
+    if (fr.filter(f => f.kind === 'wizardScroll').length !== 3) tfail('the spire holds exactly 3 lost scrolls', `${fr.filter(f => f.kind === 'wizardScroll').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) tfail('the spire keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const near = traps.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      wizardStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        wizardStats.searches++;
+        const tm = fly(level, near, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) tfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else wizardStats.worst = Math.max(wizardStats.worst, tm);
+      }
+    }
+    // every scroll can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    const dare = (f, x, a, touch, n, label) => {
+      const own = traps.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const near = traps.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        wizardStats.searches++;
+        const tm = fly(level, near, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { tfail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'wizardScroll')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < WZ.COCO_R + W / 2 - 4, 6, 'lost scroll')) wizardStats.stars++;
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const wizardSummary = () => `PASS: Wizard's Spire: ${wizardStats.seeds} layouts × ${wizardStats.len} m, only its own traps (${Object.entries(wizardStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${wizardStats.minW.toFixed(0)}+ wide, wall slope ${wizardStats.slope.toFixed(2)} (max ${WZ.RULES.maxWallSlope}); open lanes at every moment past books ${wizardStats.lane.wizardBook.toFixed(0)}+, cauldrons ${wizardStats.lane.wizardCauldron.toFixed(0)}+, quills ${wizardStats.lane.wizardQuill.toFixed(0)}+ (minLane ${WZ.RULES.minLane}), beats ${wizardStats.beatGap.toFixed(0)}+ apart; ${wizardStats.portals} rune portals, each skipping ${wizardStats.skip}+ beats, ${wizardStats.portalClear.toFixed(0)}+ clear of any trap; pickups ${wizardStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${wizardStats.traps} beats and ${wizardStats.stars} lost scrolls (reach and escape) flown by the widest pilot in ${wizardStats.searches} searches, the slowest pass ${wizardStats.worst.toFixed(1)} s`;
 // (test slot: Wizard's Spire, island level 35)
 // (test slot: Starfall Summit, island level 36)
 // (test slot: Beanstalk Heights, island level 37)
@@ -4803,4 +4988,5 @@ console.log(candySummary());
 console.log(cheeseSummary());
 console.log(toyboxSummary());
 console.log(lighthouseSummary());
+console.log(wizardSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
