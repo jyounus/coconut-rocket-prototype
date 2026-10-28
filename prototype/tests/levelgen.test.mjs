@@ -3249,6 +3249,155 @@ const cascadeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, drops: 0, pick
 const cascadeSummary = () => `PASS: Cascade Falls: ${cascadeStats.seeds} layouts × ${cascadeStats.len} m, only its own traps (${Object.entries(cascadeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), the great fall taught alone, then each trap alone first; shaft ${cascadeStats.minW.toFixed(0)}+ wide, wall slope ${cascadeStats.slope.toFixed(2)} (max ${CA.RULES.maxWallSlope}); falls (${cascadeStats.chutes}: ${cascadeStats.chuteKinds.twin} split, ${cascadeStats.chuteKinds.shift} crossing, ${cascadeStats.chuteKinds.pool} terrace pools) leave dry ground ${cascadeStats.dryGround | 0}+, beside traps ${cascadeStats.dryLane.toFixed(0)}+ dry lanes and bend at most ${cascadeStats.bend.toFixed(2)}; logs only fall (hop ${cascadeStats.hop.toFixed(1)}), fish never rise, tippers rise at ${cascadeStats.tipV.toFixed(0)} at most; beats ${cascadeStats.beatGap.toFixed(0)}+ apart; pickups ${cascadeStats.pick.toFixed(1)}+ from any reach; ${cascadeStats.traps} beats × 6 phases, the Downpour and ${cascadeStats.drops} rainbow drops flown by the widest pilot never washed back (${cascadeStats.searches} searches, slowest ${cascadeStats.worst.toFixed(1)} s)`;
 // (test slot: Cascade Falls, island level 24)
 // (test slot: Gull Cliffs, island level 25)
+// ---------- Adventure: the Clockwork Tower (island level 26), an authored stage with its own traps ----------
+// As the vault's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), then every beat and every golden watch flown by a time-space search for the widest pilot on the
+// traps' own clocks from several start phases (a sweeping tooth, a slamming ram, a punching cuckoo and a rocking anchor
+// all count as solid exactly when the game kills on them). The tower's clock is one beat for every trap: the searches
+// start off the beat too.
+const CG = new Function(regions.join('\n') + '\nreturn { createClockworkLevel, clockworkShapes, clockworkDanger, clockworkEnd, clockworkGearState, clockworkPistonState, clockworkCuckooState, clockworkAnchorState, CLOCKWORK, CLOCKWORK_STAGE, CLOCKWORK_TYPES, ADV_CLOCKWORK, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const clockworkStats = { seeds: 0, traps: 0, searches: 0, worst: 0, watches: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { clockworkGear: Infinity, clockworkPiston: Infinity, clockworkCuckoo: Infinity, clockworkAnchor: Infinity }, len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = CG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CG.ADV_CLOCKWORK;
+  const cfail = (rule, d) => fail('clockwork: ' + rule, d);
+  if (st0.theme !== 'clockwork' || !(st0.reward > 0)) cfail('the tower is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'clockworkWatch' && g.n === 3) || !st0.goals.some(g => g.k === 'time' && g.s > 0)) cfail('three missions: the great clock, 3 golden watches and the tower clock', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CG.UNITS_PER_M - CG.clockworkEnd()) > 1e-6) cfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: gears, then pistons, then cuckoos, then anchors, each taught alone; never faster than taught
+  {
+    const fam = { gear: 'gear', gearPair: 'gear', piston: 'piston', pistonPair: 'piston', pistonGear: 'piston', cuckoo: 'cuckoo', cuckooPair: 'cuckoo', cuckooPiston: 'cuckoo', cuckooGear: 'cuckoo', anchor: 'anchor', anchorCuckoo: 'anchor', anchorPiston: 'anchor', anchorGear: 'anchor' };
+    const firsts = {}, seen = [];
+    for (const sec of CG.CLOCKWORK_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { cfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) cfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if ((o.P && firsts[b].P && o.P > firsts[b].P) || (o.every && firsts[b].every && o.every > firsts[b].every)) cfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'gear,piston,cuckoo,anchor') cfail('the tower teaches gears, pistons, cuckoos, then anchors', seen.join());
+    if (!CG.CLOCKWORK_STAGE.some(sec => sec.calm && !sec.finish && sec !== CG.CLOCKWORK_STAGE[0])) cfail('the tower has a breather', '');
+    if (!CG.CLOCKWORK_STAGE[CG.CLOCKWORK_STAGE.length - 1].finish) cfail('the stage ends at the great clock', '');
+    for (const sec of CG.CLOCKWORK_STAGE) if (!sec.calm) for (const [, , o] of sec.beats) if ((o.ph && Math.abs(o.ph - Math.round(o.ph)) > 1e-9) || (o.P && o.P !== Math.round(o.P)) || (o.every && o.every !== Math.round(o.every))) cfail('every trap keeps the tower\'s beat (whole beats)', JSON.stringify(o));
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the vault's): solid = every lethal shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) CG.clockworkShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CG.createClockworkLevel(CG.advSeed(st), st), hz = [], fr = [];
+    clockworkStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) cfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) cfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    clockworkStats.len = level.end / 10;
+    for (const h of hz) if (!CG.CLOCKWORK_TYPES.has(h.type)) cfail('the tower only has its own traps', h.type);
+    for (const h of hz) clockworkStats.kinds[h.type.slice(9)] = (clockworkStats.kinds[h.type.slice(9)] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); clockworkStats.beatGap = Math.min(clockworkStats.beatGap, g); if (g < 0) cfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) cfail('the clock chamber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      clockworkStats.minW = Math.min(clockworkStats.minW, r - l); clockworkStats.slope = Math.max(clockworkStats.slope, l2 - l, r - r2);
+    }
+    if (clockworkStats.minW < R.minWidth) cfail('the shaft is never narrower than minWidth', clockworkStats.minW.toFixed(1));
+    if (clockworkStats.slope > R.maxWallSlope) cfail('the walls never step in faster than maxWallSlope', clockworkStats.slope.toFixed(2));
+    // static lanes: every trap at its widest reach (a tooth all round its sweep, a ram fully out, a cuckoo at full
+    // stretch, an anchor in both poses) leaves an open lane of minLane to the far wall, at every height it reaches
+    for (const h of hz) {
+      const S = CG.clockworkDanger(h);
+      for (const q of S) {
+        const r = q.r || 0, a0 = q.k === 'c' ? q.a - r : Math.min(q.a0, q.a1) - r, a1 = q.k === 'c' ? q.a + r : Math.max(q.a0, q.a1) + r;
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l;
+          clockworkStats.lane[h.type] = Math.min(clockworkStats.lane[h.type], m);
+          if (m < R.minLane) { cfail('every trap leaves a lane of minLane to the far wall', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) cfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: watches and the Bell Loft's clock face)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CG.laneSize().w / 2 + 6 + CG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CG.clockworkDanger(h)) dd = Math.min(dd, CG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) clockworkStats.pick = Math.min(clockworkStats.pick, dd);
+      if (dd < need - 0.5) cfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a watch is a dare, but never inside a solid part (a cog's rim, a housing, a house, a boss)
+    for (const f of fr.filter(f => f.kind === 'clockworkWatch')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of CG.clockworkShapes(h, 0, [], 'body')) if (CG.shapeDist(q, f.x, f.alt) < CG.COCO_R + 4) { cfail('a watch never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CG.pickR(fr[i]) + CG.pickR(fr[j]) + CG.PICK_GAP - 0.01) cfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'clockworkWatch').length !== 3) cfail('the tower holds exactly 3 golden watches', `${fr.filter(f => f.kind === 'clockworkWatch').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) cfail('the tower keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      clockworkStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        clockworkStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) cfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else clockworkStats.worst = Math.max(clockworkStats.worst, tm);
+      }
+    }
+    // every watch can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    const dare = (f, x, a, touch, n, label) => {
+      const own = hz.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        clockworkStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { cfail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'clockworkWatch')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < CG.COCO_R + W / 2 - 4, 6, 'golden watch')) clockworkStats.watches++;
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const clockworkSummary = () => `PASS: Clockwork Tower: ${clockworkStats.seeds} layouts × ${clockworkStats.len} m, only its own traps (${Object.entries(clockworkStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first, all on one ${CG.CLOCKWORK.beat} s beat; shaft ${clockworkStats.minW.toFixed(0)}+ wide, wall slope ${clockworkStats.slope.toFixed(2)} (max ${CG.RULES.maxWallSlope}); open lanes past gears ${clockworkStats.lane.clockworkGear.toFixed(0)}+, pistons ${clockworkStats.lane.clockworkPiston.toFixed(0)}+, cuckoos ${clockworkStats.lane.clockworkCuckoo.toFixed(0)}+, anchors ${clockworkStats.lane.clockworkAnchor.toFixed(0)}+ (minLane ${CG.RULES.minLane}), beats ${clockworkStats.beatGap.toFixed(0)}+ apart; pickups ${clockworkStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${clockworkStats.traps} beats and ${clockworkStats.watches} golden watches (reach and escape) flown by the widest pilot in ${clockworkStats.searches} searches, the slowest pass ${clockworkStats.worst.toFixed(1)} s`;
 // (test slot: Clockwork Tower, island level 26)
 // (test slot: Kooky Lab, island level 27)
 // (test slot: Pipe Organ Cavern, island level 28)
@@ -3280,4 +3429,5 @@ console.log(fossilSummary());
 console.log(shipwreckSummary());
 console.log(vaultSummary());
 console.log(cascadeSummary());
+console.log(clockworkSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
