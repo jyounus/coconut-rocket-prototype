@@ -3248,6 +3248,189 @@ const cascadeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, drops: 0, pick
 }
 const cascadeSummary = () => `PASS: Cascade Falls: ${cascadeStats.seeds} layouts × ${cascadeStats.len} m, only its own traps (${Object.entries(cascadeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), the great fall taught alone, then each trap alone first; shaft ${cascadeStats.minW.toFixed(0)}+ wide, wall slope ${cascadeStats.slope.toFixed(2)} (max ${CA.RULES.maxWallSlope}); falls (${cascadeStats.chutes}: ${cascadeStats.chuteKinds.twin} split, ${cascadeStats.chuteKinds.shift} crossing, ${cascadeStats.chuteKinds.pool} terrace pools) leave dry ground ${cascadeStats.dryGround | 0}+, beside traps ${cascadeStats.dryLane.toFixed(0)}+ dry lanes and bend at most ${cascadeStats.bend.toFixed(2)}; logs only fall (hop ${cascadeStats.hop.toFixed(1)}), fish never rise, tippers rise at ${cascadeStats.tipV.toFixed(0)} at most; beats ${cascadeStats.beatGap.toFixed(0)}+ apart; pickups ${cascadeStats.pick.toFixed(1)}+ from any reach; ${cascadeStats.traps} beats × 6 phases, the Downpour and ${cascadeStats.drops} rainbow drops flown by the widest pilot never washed back (${cascadeStats.searches} searches, slowest ${cascadeStats.worst.toFixed(1)} s)`;
 // (test slot: Cascade Falls, island level 24)
+// ---------- Adventure: Gull Cliffs (island level 25), an authored stage with its own traps and its own wind ----------
+// As the storm's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every golden egg flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases, the blowholes' jets and the wind's gusts shoving the search sideways while they
+// blow, and every gull's dive tried at 5 targets across the shaft (it locks onto wherever you are), plus a dodge from
+// right under each target as the gull locks on.
+const CL = new Function(regions.join('\n') + '\nreturn { createCliffsLevel, cliffsShapes, cliffsDanger, cliffsEnd, cliffsGullState, cliffsGullPos, cliffsGullPath, cliffsGullBody, cliffsSlideState, cliffsSlideRock, cliffsBoulders, cliffsBlowState, cliffsInJet, cliffsJetPush, cliffsCrabState, cliffsCrabBody, cliffsShelf, cliffsWindState, CLIFFS, CLIFFS_STAGE, CLIFFS_TYPES, ADV_CLIFFS, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const cliffsStats = { seeds: 0, traps: 0, searches: 0, worst: 0, eggs: 0, dodges: 0, pick: Infinity, minW: Infinity, slope: 0, slideLane: Infinity, crabLane: Infinity, crabShut: 0, crabWall: Infinity, gullWall: Infinity, jetWall: Infinity, boulderWall: Infinity, len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = CL.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CL.ADV_CLIFFS, X = CL.CLIFFS;
+  const cfail = (rule, d) => fail('cliffs: ' + rule, d);
+  if (st0.theme !== 'cliffs' || !(st0.reward > 0)) cfail('Gull Cliffs is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'cliffsEgg' && g.n === 3) || !st0.goals.some(g => g.k === 'cliffsSurf' && g.n > 0)) cfail('three missions: the summit, 3 golden eggs and surfing the blowholes', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CL.UNITS_PER_M - CL.cliffsEnd()) > 1e-6) cfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: gulls, then rockfalls, then blowholes, then crabs, each taught alone (never faster at first)
+  {
+    const firsts = {}, seen = [], base = k => k.replace(/(Pair|Gull|Slide|Blow)$/, '');
+    for (const sec of CL.CLIFFS_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base(kind);
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) cfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P) cfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'gull,slide,blow,crab') cfail('the cliffs teach gulls, rockfalls, blowholes, then crabs', seen.join());
+    if (!CL.CLIFFS_STAGE.some(sec => sec.calm && !sec.finish && sec !== CL.CLIFFS_STAGE[0])) cfail('the cliffs have a breather', '');
+    if (!CL.CLIFFS_STAGE[CL.CLIFFS_STAGE.length - 1].finish) cfail('the stage ends at the summit', '');
+  }
+  // nothing lethal comes from below: a gull only ever dives down (its height never rises while it can hurt), boulders
+  // only fall, a crab's claw only ever reaches down over the gap
+  {
+    const h = { side: 1, alt: 0, P: 5, ph: 0, hx: 66, L: 0, R: 360, base: 0 };
+    for (const lx of [40, 180, 320]) { let prev = null; for (let t = 0; t < 5; t += 0.005) { const st = CL.cliffsGullState(h, t); if (st.mode !== 'dive') { prev = null; continue; } const p = CL.cliffsGullPos(h, st, lx); if (prev && p.a > prev.a + 1e-6) { cfail('a gull only dives down while it can hurt', `${t.toFixed(3)} target ${lx}`); break; } prev = p; } }
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CL.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the storm's): solid = every lethal shape at that moment (gulls diving at lockX); while a blowhole's
+  // jet blasts over the pilot it is carried a cell a step toward the far wall, and while the wind gusts a cell every
+  // third step downwind (never into a wall). via(x, a) must be touched before the goal; goal(x, a, time).
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via, lockX, T = 10) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, blows = traps.filter(h => h.type === 'cliffsBlow');
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= T / DT; step++) {
+      const t = t0 + step * DT, S = [], B = blows.map(h => ({ h, k: CL.cliffsBlowState(h, t).k })).filter(b => b.k > 0.3), wd = CL.cliffsWindState(t);
+      for (const h of traps) CL.cliffsShapes(h, t, S, h.type === 'cliffsGull' ? lockX : undefined);
+      const next = new Set(), blocked = new Map();
+      const inWalls = (x, a) => { const [l, r] = level.walls(a); return x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2; };
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, ok = inWalls(x, a) && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          let nx = xi + dX; const na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const a = lo + na * DA;
+          const b = B.find(q => CL.cliffsInJet(q.h, nx * DX, a, Hh / 2 - 10) >= 0 && CL.cliffsInJet(q.h, nx * DX, a, Hh / 2 - 10) < 0.85);
+          if (b) { const n2 = nx + b.h.side; if (inWalls(n2 * DX, a)) nx = n2; }   // (carried, but never into the wall)
+          else if (wd.k * level.windAt(a) > 0.25 && step % 3 === 0) { const n2 = nx + wd.side; if (inWalls(n2 * DX, a)) nx = n2; }
+          const g2 = got || !via || via(nx * DX, a), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, a, step * DT)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  const locks = h => { const out = []; for (let i = 0; i < 5; i++) out.push(h.L + X.gull.edge + (h.R - h.L - 2 * X.gull.edge) * i / 4); return out; };
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CL.createCliffsLevel(CL.advSeed(st), st), hz = [], fr = [];
+    cliffsStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) cfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) cfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    cliffsStats.len = level.end / 10;
+    for (const h of hz) if (!CL.CLIFFS_TYPES.has(h.type)) cfail('the cliffs only have their own traps', h.type);
+    for (const h of hz) cliffsStats.kinds[h.type] = (cliffsStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); cliffsStats.beatGap = Math.min(cliffsStats.beatGap, g); if (g < 0) cfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) if (b.kind !== 'blowSlide') for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) cfail('the traps in a beat never overlap (but a blowhole aimed into a rockfall)', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) cfail('the summit below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    if (hz.filter(h => h.type === 'cliffsBlow').length < 6) cfail('enough blowholes to surf', '');
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      cliffsStats.minW = Math.min(cliffsStats.minW, r - l); cliffsStats.slope = Math.max(cliffsStats.slope, l2 - l, r - r2);
+    }
+    if (cliffsStats.minW < R.minWidth) cfail('the shaft is never narrower than minWidth', cliffsStats.minW.toFixed(1));
+    if (cliffsStats.slope > R.maxWallSlope) cfail('the walls never step in faster than maxWallSlope', cliffsStats.slope.toFixed(2));
+    // static lanes and reaches: past a rockfall's rock and its boulders at rest (minLane), boulders never reach the far
+    // wall; past a crab's shelf with the crab at home (minLane), its lunge shutting the gap and never touching the far
+    // wall; a gull's hover and dives inside the walls; a blowhole's jet stopping short of the far wall
+    for (const h of hz) {
+      const lane = (S, a) => { const [l, r] = level.walls(a), [x0, x1] = ext(S); return h.side > 0 ? r - x1 : x0 - l; };
+      if (h.type === 'cliffsSlide') {
+        const S = CL.cliffsSlideRock([], h); for (const b of CL.cliffsBoulders(h, { fall: -1, regrow: 1 })) if (b) S.push({ k: 'c', x: b[0], a: b[1], r: b[2] });
+        const m = Math.min(lane(S, h.alt), lane(S, h.alt - X.slide.drop)); cliffsStats.slideLane = Math.min(cliffsStats.slideLane, m); if (m < R.minLane) cfail('a rockfall leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        for (let f = 0; f <= X.slide.fall; f += 0.02) for (const b of CL.cliffsBoulders(h, { fall: f, regrow: 1 })) if (b) { const m2 = lane([{ k: 'c', x: b[0], a: b[1], r: b[2] }], b[1]); cliffsStats.boulderWall = Math.min(cliffsStats.boulderWall, m2); if (m2 < R.minLane) cfail('falling boulders leave a lane of minLane', `${m2.toFixed(1)} at ${h.alt}`); }
+      }
+      if (h.type === 'cliffsCrab') {
+        const S = CL.cliffsShelf([], h); CL.cliffsCrabBody(S, h, { pos: 0, lunge: 0, tell: 1 }); CL.cliffsCrabBody(S, h, { pos: 0, lunge: 0, tell: 0 });
+        const m = lane(S, h.alt); cliffsStats.crabLane = Math.min(cliffsStats.crabLane, m); if (m < R.minLane) cfail('a crab at home leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        const L2 = CL.cliffsCrabBody(CL.cliffsShelf([], h), h, { pos: 1, lunge: 1, tell: 0 }), g = lane(L2, h.alt);
+        cliffsStats.crabShut = Math.max(cliffsStats.crabShut, g); cliffsStats.crabWall = Math.min(cliffsStats.crabWall, g);
+        if (g < 6) cfail('a crab never lunges into the far wall', `${g.toFixed(1)} at ${h.alt}`);
+        if (g > W - 4) cfail('a lunging crab shuts the gap', `${g.toFixed(1)} at ${h.alt}`);
+      }
+      if (h.type === 'cliffsGull') for (const lx of locks(h)) {
+        const S = []; for (let q = 0; q <= 1; q += 0.05) CL.cliffsGullBody(S, CL.cliffsGullPos(h, { mode: 'dive', k: q, u: 0 }, lx), 'dive');
+        CL.cliffsGullBody(S, CL.cliffsGullPos(h, { mode: 'hover', k: 1, u: 0 }, lx), 'hover', 1);
+        for (const q of S) { const qa = q.k === 'c' ? q.a : (q.a0 + q.a1) / 2, [l, r] = level.walls(qa), [x0, x1] = ext([q]), m2 = Math.min(x0 - l, r - x1); cliffsStats.gullWall = Math.min(cliffsStats.gullWall, m2); if (m2 < 2) { cfail('a gull never flies into a wall', `${m2.toFixed(1)} at ${h.alt}`); break; } }
+      }
+      if (h.type === 'cliffsBlow') { const [l, r] = level.walls(h.alt), m = h.side > 0 ? r - (h.base + h.reach) : h.base - h.reach - l; cliffsStats.jetWall = Math.min(cliffsStats.jetWall, m); if (m < 30) cfail('a blowhole\'s jet stops short of the far wall', `${m.toFixed(1)} at ${h.alt}`); }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CL.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) cfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: eggs and the Meadow's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CL.laneSize().w / 2 + 6 + CL.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CL.cliffsDanger(h)) dd = Math.min(dd, CL.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) cliffsStats.pick = Math.min(cliffsStats.pick, dd);
+      if (dd < need - 0.5) cfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // the eggs are dares, but never inside a trap's solid parts (a rockfall's rock, a crab's shelf or the crab at home)
+    for (const f of fr.filter(f => f.kind === 'cliffsEgg')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt) {
+      const S = h.type === 'cliffsSlide' ? CL.cliffsSlideRock([], h) : h.type === 'cliffsCrab' ? CL.cliffsCrabBody(CL.cliffsShelf([], h), h, { pos: 0, lunge: 0, tell: 0 }) : [];
+      for (const q of S) if (CL.shapeDist(q, f.x, f.alt) < CL.COCO_R + 2) { cfail('an egg never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CL.pickR(fr[i]) + CL.pickR(fr[j]) + CL.PICK_GAP - 0.01) cfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'cliffsEgg').length !== 3) cfail('the cliffs hold exactly 3 golden eggs', `${fr.filter(f => f.kind === 'cliffsEgg').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) cfail('the cliffs keep a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), gull = b.hs.find(h => h.type === 'cliffsGull');
+      cliffsStats.traps++;
+      for (const lx of gull ? locks(gull) : [null]) for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        cliffsStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20, null, lx);
+        if (tm < 0) cfail('every beat can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, lock ${lx | 0}, seed ${k}`);
+        else cliffsStats.worst = Math.max(cliffsStats.worst, tm);
+      }
+      // the dodge: right under a gull's target, at its height, as it locks on: get clear (live 2 s or climb past)
+      if (gull && k === 0) for (const lx of locks(gull)) {
+        const G0 = X.gull, rest = gull.P - G0.tell - G0.dive - G0.away, tl = (Math.floor(5 - gull.ph) + rest / gull.P - gull.ph + 5) * gull.P;
+        cliffsStats.searches++; cliffsStats.dodges++;
+        const tm = fly(level, traps, lx, gull.alt, tl, (x, a, tt) => tt >= 2.0 || a >= hi - 10, lo, hi + 20, null, lx, 3);
+        if (tm < 0) cfail('a gull\'s target can always be dodged', `gull at ${gull.alt} target ${lx | 0}`);
+      }
+    }
+    // every egg can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'cliffsEgg')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40), gull = traps.find(h => h.type === 'cliffsGull');
+      for (const lx of gull ? [gull.L + X.gull.edge, (gull.L + gull.R) / 2, gull.R - X.gull.edge] : [null]) for (let p = 0; p < 6; p++) {
+        cliffsStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < CL.COCO_R + W / 2 - 4, lx);
+        if (tm < 0) cfail('every golden egg can be grabbed and escaped by the widest pilot', `egg at ${f.alt | 0}, phase ${p}, lock ${lx | 0}, seed ${k}`);
+      }
+      cliffsStats.eggs++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const cliffsSummary = () => `PASS: Gull Cliffs: ${cliffsStats.seeds} layouts × ${cliffsStats.len} m, only its own traps (${Object.entries(cliffsStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${cliffsStats.minW.toFixed(0)}+ wide, ledge undersides of slope ${cliffsStats.slope.toFixed(2)} (max ${CL.RULES.maxWallSlope}); lanes past rockfalls ${cliffsStats.slideLane.toFixed(0)}+ (falling boulders ${cliffsStats.boulderWall.toFixed(0)}+), past a crab at home ${cliffsStats.crabLane.toFixed(0)}+ (minLane ${CL.RULES.minLane}), a lunging crab leaves ${cliffsStats.crabShut.toFixed(0)} (widest pilot ${PILOT_W.toFixed(0)}) and stays ${cliffsStats.crabWall.toFixed(0)}+ off the wall; gulls ${cliffsStats.gullWall.toFixed(0)}+ off the walls and only diving down; jets stop ${cliffsStats.jetWall.toFixed(0)}+ short of the far wall; beats ${cliffsStats.beatGap.toFixed(0)}+ apart; pickups ${cliffsStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${cliffsStats.traps} beats (gulls diving at 5 targets each, jets and gusts shoving), ${cliffsStats.dodges} dodges from under a gull's target and ${cliffsStats.eggs} eggs (grab and escape) flown by the widest pilot in ${cliffsStats.searches} searches, the slowest pass ${cliffsStats.worst.toFixed(1)} s`;
 // (test slot: Gull Cliffs, island level 25)
 // ---------- Adventure: the Clockwork Tower (island level 26), an authored stage with its own traps ----------
 // As the vault's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -3430,4 +3613,5 @@ console.log(shipwreckSummary());
 console.log(vaultSummary());
 console.log(cascadeSummary());
 console.log(clockworkSummary());
+console.log(cliffsSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
