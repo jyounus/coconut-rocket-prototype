@@ -5565,6 +5565,407 @@ const ADV_HIVE = { name: 'Honeycomb Hive', theme: 'hive', seed: 'isl-5-hive', re
 // traps' shapes and its layout) immediately before its slot line, so levels built in parallel never share an anchor.
 // (LEVELGEN slot: Murk Mire, island level 7)
 // (LEVELGEN slot: Hidden Lagoon, island level 11)
+/* LEVELGEN:BEGIN */
+// ---------- the Amethyst Geode (island level 16): the stage, its traps' shapes and its layout ----------
+// An authored stage like Frost Hollow (see createFrostLevel): a calm geode mouth, then one new trap at a time, each
+// taught alone and slow before it is combined (the Prism Hall, the Shard Gallery, the Ricochet Run, the Singing
+// Chamber), the Echo Vault mixing them, a breather (the Rose Quartz Grotto), the Kaleidoscope Climb and the Prism Gauntlet, then the Heart of the
+// Geode and its finish deck. Its own shaft (faceted geode walls: amethyst druze along the shaft, agate bands behind it,
+// the geode's grey crust deeper in), its own traps and its own look (G.theme 'geode', see the geode drawing); it runs
+// pinned to the jungle (pinJungle) like the temple, so nothing of the endless zones shows up.
+// The traps (every one leaves a way through on its own clock that the widest pilot fits):
+// - geodePrism (Prism Laser): a prism crystal on a rock boss in a wall. Every P s it charges for `tell` s (a thin aim
+//   line flickers along its first angle, its fan glows faintly), then a fat beam fires from its tip and sweeps DOWN
+//   through the fan, from a0 above level to a1 (level), for `sweep` s, ending on the far wall. The emitter and the beam
+//   core kill; the beam's halo only singes (the "never singed" mission). The beam only ever comes down onto you.
+//   The turbo ball's glass sheds it: the beam glances off (its perk, see the geode update).
+// - geodeShard (Shard Burst): a crystal crown on a crystal spar jutting from a wall. Every P s it glows and cracks for
+//   `tell` s, then fires its n shards straight out along the angles they point (a fan from just below level down and
+//   round to the wall side: never up), each flying until `reach` or a wall; stubs regrow over the end of the cycle.
+// - geodeBounce (Ricochet Gem): a geode pocket bulging from a wall. Every P s light races down the path its gem will
+//   take (the tell: a dotted zigzag lit from the pocket down), then the gem shoots out angled down across the shaft and
+//   ricochets off the walls `bounces` times on its way down, shattering on the wall at the end. Only ever downward.
+// - geodeChime (Singing Crystal): crystal pipes on a rock boss in a wall. Every P s they hum for `tell` s (rings of light
+//   drawn in), then ring out a ripple: a thin arc of light spreading out and down from the pipes across the shaft
+//   (from level down to `span` below it), out to the far wall. The pipes and the ripple kill; a ripple never rises.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const GEODE = {
+  swell: [6, 4], facet: { every: [70, 130], D: [0, 13] },   // wall relief: a slow swell and straight crystal facets
+  prism: { tell: 1.1, sweep: 1.0, fade: 0.16, a0: 0.56, a1: 0, out: 40, rise: 6, core: 7, halo: 16, ease: 430 },
+  shard: { tell: 1.0, regrow: 0.8, v: 330, reach: 175, spar: 64, len: 25, r: 5, angles: [0.17, 0.79, 1.4, 2.0, 2.62], ease: 420 },
+  bounce: { tell: 0.95, v: 470, r: 11, beta: 0.45, ease: 470 },
+  chime: { tell: 1.0, v: 255, th: 6, span: 1.05, ease: 440 },
+  chiliGap: 470, end: 400,
+};
+const GEODE_TYPES = new Set(['geodePrism', 'geodeShard', 'geodeBounce', 'geodeChime']);
+// The stage, bottom to top (as FROST_STAGE: each section's width w and its beats [rise, kind, options], then `tail` of
+// clear shaft; a calm section is `len` of open shaft; heart: this beat holds one of the 3 heart geodes).
+const GEODE_STAGE = [
+  { name: 'Geode Mouth', w: 376, len: 760, calm: true },
+  { name: 'Prism Hall', w: 368, beats: [[480, 'geodePrism', { side: 1, P: 5.2 }], [600, 'geodePrism', { side: -1, P: 5.0, ph: 0.4 }], [600, 'geodePrism', { side: 1, P: 4.8, ph: 0.15, heart: true }],
+    [620, 'prismPair', { P: 4.8 }], [700, 'prismCross', { P: 4.8 }]], tail: 560 },
+  { name: 'Shard Gallery', w: 364, beats: [[460, 'geodeShard', { side: -1, P: 4.8 }], [560, 'geodeShard', { side: 1, P: 4.6, ph: 0.5 }], [600, 'shardPair', { P: 4.6 }],
+    [640, 'shardPrism', { P: 4.6 }], [840, 'geodeShard', { side: -1, P: 4.2, ph: 0.3, heart: true }]], tail: 560 },
+  { name: 'Ricochet Run', w: 360, beats: [[640, 'geodeBounce', { side: 1, P: 4.8 }], [760, 'geodeBounce', { side: -1, P: 4.6, ph: 0.4 }], [760, 'bounceShard', { P: 4.6, heart: true }],
+    [1140, 'bounceDuo', { P: 4.6 }]], tail: 560 },
+  { name: 'Singing Chamber', w: 368, beats: [[620, 'geodeChime', { side: 1, P: 4.6 }], [640, 'geodeChime', { side: -1, P: 4.4, ph: 0.4 }], [700, 'chimePrism', { P: 4.4 }],
+    [800, 'chimeShard', { P: 4.4 }]], tail: 600 },
+  { name: 'Echo Vault', w: 362, beats: [[620, 'chimePrism', { P: 4.4, ph: 0.6 }], [800, 'bounceShard', { P: 4.4 }], [840, 'chimeShard', { P: 4.4, ph: 0.2 }],
+    [1140, 'bounceDuo', { P: 4.4 }], [640, 'geodeChime', { side: -1, P: 4.2 }]], tail: 600 },
+  { name: 'Rose Quartz Grotto', w: 384, len: 880, calm: true },
+  { name: 'Kaleidoscope Climb', w: 360, beats: [[560, 'prismPair', { P: 4.4 }], [740, 'bounceShard', { P: 4.4 }], [960, 'chimePrism', { P: 4.2 }], [800, 'shardPair', { P: 4.2 }],
+    [700, 'chimeShard', { P: 4.2, ph: 0.7 }], [770, 'bounceShard', { P: 4.2, ph: 0.5 }], [680, 'prismCross', { P: 4.4, ph: 0.3 }]], tail: 620 },
+  { name: 'Prism Gauntlet', w: 356, beats: [[560, 'shardPrism', { P: 4.2 }], [1110, 'bounceDuo', { P: 4.4 }], [620, 'chimeShard', { P: 4.2 }], [720, 'prismPair', { P: 4.2, ph: 0.5 }],
+    [740, 'bounceShard', { P: 4.2, ph: 0.2 }], [700, 'prismCross', { P: 4.2, ph: 0.6 }],
+    [960, 'chimePrism', { P: 4.0 }], [960, 'chimePrism', { P: 4.0, ph: 0.5 }]], tail: 760 },
+  { name: 'Heart of the Geode', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height (the finish deck), from the layout alone
+const geodeEnd = () => { let y = 0; for (const sec of GEODE_STAGE) { if (sec.finish) return y + GEODE.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a prism's clock: charge 0..1 while it charges, fire 0..1 its beam's strength (1 while it sweeps, fading after),
+// sweep 0..1 how far down the fan it has swept, and ang (its beam's angle above level, outward)
+function geodePrismAt(h, t) {
+  const X = GEODE.prism, u = pmod(t / h.P + h.ph, 1) * h.P;
+  if (u < X.tell) return { charge: u / X.tell, fire: 0, sweep: 0, ang: X.a0, u };
+  const v = u - X.tell;
+  if (v < X.sweep) return { charge: 0, fire: 1, sweep: v / X.sweep, ang: lerp(X.a0, X.a1, v / X.sweep), u, on: true };
+  if (v < X.sweep + X.fade) return { charge: 0, fire: 1 - (v - X.sweep) / X.fade, sweep: 1, ang: X.a1, u };
+  return { charge: 0, fire: 0, sweep: 0, ang: X.a0, u };
+}
+// the beam's length at angle ang (from the prism's tip to the far wall), from the table made with the trap
+function geodeBeamLen(h, ang) {
+  const X = GEODE.prism, n = h.lens.length - 1, f = clamp((ang - X.a1) / (X.a0 - X.a1), 0, 1) * n, i = Math.min(n - 1, Math.floor(f));
+  return lerp(h.lens[i], h.lens[i + 1], f - i);
+}
+// a shard crown's clock: tell 0..1 while it glows and cracks, grow (1 a full crown, a stub of 0.18 after it fired,
+// growing back at the end of the cycle) and fly (seconds since the burst, -1 before it)
+function geodeShardAt(h, t) {
+  const X = GEODE.shard, u = pmod(t / h.P + h.ph, 1) * h.P;
+  if (u < X.tell) return { tell: u / X.tell, grow: 1, fly: -1, u };
+  const reg = h.P - X.regrow;
+  return { tell: 0, grow: u < reg ? 0.18 : 0.18 + 0.82 * smooth(reg, h.P, u), fly: u - X.tell, u };
+}
+// a ricochet pocket's clock: tell 0..1 while the light runs its path, then the gem's distance along the path (-1 when
+// it is home) and burst (seconds since it shattered at the end of the path, -1 otherwise)
+function geodeBounceAt(h, t) {
+  const X = GEODE.bounce, u = pmod(t / h.P + h.ph, 1) * h.P;
+  if (u < X.tell) return { tell: u / X.tell, d: -1, burst: -1, u };
+  const d = (u - X.tell) * X.v;
+  if (d < h.plen) return { tell: 0, d, burst: -1, u };
+  return { tell: 0, d: -1, burst: (d - h.plen) / X.v, u };
+}
+// the point at distance d along a ricochet path, and the index of its leg
+function geodePathAt(h, d) {
+  const P = h.path;
+  for (let i = 0; i < P.length - 1; i++) {
+    const [x0, a0] = P[i], [x1, a1] = P[i + 1], L = Math.hypot(x1 - x0, a1 - a0);
+    if (d <= L || i === P.length - 2) { const k = clamp(d / L, 0, 1); return [lerp(x0, x1, k), lerp(a0, a1, k), i]; }
+    d -= L;
+  }
+  return [P[0][0], P[0][1], 0];
+}
+// a chime's clock: tell 0..1 while it hums, then its ripple's radius (-1 when there is none)
+function geodeChimeAt(h, t) {
+  const X = GEODE.chime, u = pmod(t / h.P + h.ph, 1) * h.P;
+  if (u < X.tell) return { tell: u / X.tell, r: -1, u };
+  const r = 18 + (u - X.tell) * X.v;
+  return { tell: 0, r: r < h.rmax ? r : -1, k: r / h.rmax, u };
+}
+// the chime ripple's arc at radius r as points inside the shaft (outward from its centre, from level down to span)
+function geodeArc(h, r, walls, N = 16) {
+  const X = GEODE.chime, out = [];
+  for (let k = 0; k <= N; k++) {
+    const an = -X.span * k / N, x = h.cx + h.side * Math.cos(an) * r, a = h.ca + Math.sin(an) * r, [l, rr] = walls(a);
+    out.push(x > l - 4 && x < rr + 4 ? [x, a] : null);
+  }
+  return out;
+}
+// Every collision shape of a geode trap at time t, fitted to its drawing. kind: undefined for all of them, 'body' the
+// lethal parts only (a prism's beam core, not its halo), 'halo' a prism beam's halo only (it singes, never kills),
+// 'still' only the parts that never move (the mounts).
+function geodeShapes(h, t, S = [], kind) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, mount = kind !== 'halo';
+  if (h.type === 'geodePrism') {
+    const X = GEODE.prism;
+    if (mount) {
+      c(b + d * 4, A - 2, 19);                                     // the rock boss in the wall
+      cap(b + d * 8, A + 1, h.ox - d * 3, h.oa, 8.5);              // the prism crystal, out to its tip
+      cap(b + d * 8, A - 6, b + d * 25, A - 18, 5);                // its lower druze crystal
+      cap(b + d * 6, A + 9, b + d * 21, A + 24, 5);                // its upper one
+    }
+    if (kind !== 'still') {
+      const st = geodePrismAt(h, t);
+      if (st.on) {
+        const L = geodeBeamLen(h, st.ang), ex = h.ox + d * Math.cos(st.ang) * L, ea = h.oa + Math.sin(st.ang) * L;
+        cap(h.ox, h.oa, ex, ea, kind === 'halo' ? X.halo : X.core);
+      }
+    }
+  } else if (h.type === 'geodeShard') {
+    const X = GEODE.shard, st = geodeShardAt(h, t);
+    if (mount) {
+      cap(b - d * 4, A + 15, h.cx - d * 10, A + 3, 10);            // the spar out of the wall
+      c(h.cx, A, 13);                                               // the crown's core gem
+      cap(h.cx - d * 3, A + 8, h.cx - d * 7, A + 25, 4.5);         // its two short top crystals
+      cap(h.cx + d * 5, A + 8, h.cx + d * 11, A + 22, 4.5);
+      if (kind !== 'still') for (const an of X.angles) {           // the crown's shards (whole, or stubs regrowing)
+        const ux = d * Math.cos(an), ua = -Math.sin(an), L = 9 + X.len * st.grow;
+        cap(h.cx + ux * 9, A + ua * 9, h.cx + ux * L, A + ua * L, X.r - 0.5);
+      }
+    }
+    if (kind !== 'still' && kind !== 'halo' && st.fly >= 0) h.rays.forEach((dm, i) => {
+      const an = X.angles[i], ux = d * Math.cos(an), ua = -Math.sin(an), dd = 14 + X.v * st.fly;
+      if (dd > dm) return;
+      cap(h.cx + ux * (dd - X.len * 0.5), A + ua * (dd - X.len * 0.5), h.cx + ux * (dd + X.len * 0.5), A + ua * (dd + X.len * 0.5), X.r);
+    });
+  } else if (h.type === 'geodeBounce') {
+    if (mount) c(b + d * 9, A, 20);                                 // the geode pocket's shell, bulging from the wall
+    if (kind !== 'still' && kind !== 'halo') { const st = geodeBounceAt(h, t); if (st.d >= 0) { const [x, a] = geodePathAt(h, st.d); c(x, a, GEODE.bounce.r); } }
+  } else if (h.type === 'geodeChime') {
+    if (mount) {
+      c(b + d * 8, A - 2, 17);                                     // the rock boss
+      cap(b + d * 9, A + 6, b + d * 20, A + 50, 6);                // the tall pipe
+      cap(b + d * 14, A + 2, b + d * 31, A + 32, 5.5);             // the outer pipe
+      cap(b + d * 4, A + 10, b + d * 8, A + 40, 5);                // the inner pipe
+    }
+    if (kind !== 'still' && kind !== 'halo') {
+      const st = geodeChimeAt(h, t);
+      if (st.r > 0) { const P = geodeArc(h, st.r, h.walls); for (let k = 0; k < P.length - 1; k++) if (P[k] && P[k + 1]) cap(P[k][0], P[k][1], P[k + 1][0], P[k + 1][1], GEODE.chime.th); }
+    }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): a prism with its beam at every angle (halo and all), a
+// crown with every shard at every point of its flight, a pocket and its gem's whole path, a chime and its whole fan.
+function geodeDanger(h) {
+  const S = geodeShapes(h, 0, [], 'still');
+  if (h.type === 'geodePrism') { const X = GEODE.prism; for (let k = 0; k <= 12; k++) { const an = lerp(X.a1, X.a0, k / 12), L = geodeBeamLen(h, an); S.push({ k: 's', x0: h.ox, a0: h.oa, x1: h.ox + h.side * Math.cos(an) * L, a1: h.oa + Math.sin(an) * L, r: X.halo + 4 }); } }
+  else if (h.type === 'geodeShard') { const X = GEODE.shard; h.rays.forEach((dm, i) => { const an = X.angles[i], ux = h.side * Math.cos(an), ua = -Math.sin(an); S.push({ k: 's', x0: h.cx, a0: h.alt, x1: h.cx + ux * (dm + X.len * 0.5), a1: h.alt + ua * (dm + X.len * 0.5), r: X.r + 2 }); }); }
+  else if (h.type === 'geodeBounce') { for (let i = 0; i < h.path.length - 1; i++) S.push({ k: 's', x0: h.path[i][0], a0: h.path[i][1], x1: h.path[i + 1][0], a1: h.path[i + 1][1], r: GEODE.bounce.r + 2 }); }
+  else if (h.type === 'geodeChime') { for (let r = 24; r < h.rmax; r += 10) { const P = geodeArc(h, r, h.walls, 12); for (let k = 0; k < P.length - 1; k++) if (P[k] && P[k + 1]) S.push({ k: 's', x0: P[k][0], a0: P[k][1], x1: P[k + 1][0], a1: P[k + 1][1], r: GEODE.chime.th + 5 }); } }
+  return S;
+}
+
+// The Amethyst Geode's shaft, laid out in full from GEODE_STAGE (the seed only nudges looks and phases). It answers the
+// same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createGeodeLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x6E0DE16) >>> 0), Q = GEODE;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of GEODE_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = geodeEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the crystal's relief on a side: a slow swell and straight facets between knots `every` apart (each knot its own
+  // depth), eased flat where a trap is mounted and over the launch cave. Never steeper than RULES.maxWallSlope.
+  const ph0 = (seed & 0xfff) / 0xfff * 6.283, FC = Q.facet;
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knotA = (i, side) => i * 100 + 30 * (hash2(i, (seed & 0xffff) + 91 + side * 7) - 0.5);
+  const knotD = (i, side) => lerp(FC.D[0], FC.D[1], hash2(i, (seed & 0xffff) + 93 + side * 7));
+  const facetAt = (a, side) => { let i = Math.floor(a / 100); while (knotA(i, side) > a) i--; while (knotA(i + 1, side) <= a) i++; const a0 = knotA(i, side), a1 = knotA(i + 1, side); return lerp(knotD(i, side), knotD(i + 1, side), (a - a0) / (a1 - a0)); };
+  const reliefAt = (a, side) => {
+    const p = ph0 + side * 2.3, [l0, l1] = Q.swell;
+    const r = l0 * (0.5 + 0.5 * Math.sin(a / 97 + p)) + l1 * (0.5 + 0.5 * Math.sin(a / 41 + p * 1.7)) + facetAt(a, side);
+    return r * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function gWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function gOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = gWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  const make = {
+    geodePrism(A, o) { flat(A - 50, A + 50, o.side); return [{ type: 'geodePrism', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), heart: !!o.heart, ease: Q.prism.ease }]; },
+    prismPair(A, o) {   // prisms on facing walls 240 apart, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.geodePrism(A, { side: d, P: o.P, ph: p0 }), ...make.geodePrism(A + 240, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    prismCross(A, o) {   // a prism on each wall at one height, in step: their beams scissor down together
+      const p0 = o.ph ?? ph();
+      return [...make.geodePrism(A, { side: 1, P: o.P, ph: p0 }), ...make.geodePrism(A, { side: -1, P: o.P, ph: p0 })];
+    },
+    geodeShard(A, o) { flat(A - 30, A + 40, o.side); return [{ type: 'geodeShard', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), heart: !!o.heart, ease: Q.shard.ease }]; },
+    shardPair(A, o) {   // crowns on facing walls 300 apart, out of step: the upper one's fan rains past the lower one
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.geodeShard(A, { side: d, P: o.P, ph: p0 }), ...make.geodeShard(A + 300, { side: -d, P: o.P, ph: p0 + 0.45 })];
+    },
+    shardPrism(A, o) {   // a crown, then a prism on the far wall above it
+      const d = pick();
+      return [...make.geodeShard(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.geodePrism(A + 330, { side: -d, P: o.P + 0.2, ph: ph() })];
+    },
+    geodeBounce(A, o) { flat(A - 30, A + 30, o.side); return [{ type: 'geodeBounce', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), heart: !!o.heart, ease: Q.bounce.ease }]; },
+    bounceShard(A, o) {   // a crown low on one wall, a ricochet pocket above on the other: the gem comes down past it
+      const d = pick();
+      return [...make.geodeShard(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.geodeBounce(A + 560, { side: -d, P: o.P, ph: ph(), heart: o.heart })];
+    },
+    bounceDuo(A, o) {   // pockets on facing walls 260 apart, half a cycle out of step: two zigzags through one stretch
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.geodeBounce(A, { side: d, P: o.P, ph: p0 }), ...make.geodeBounce(A + 260, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    geodeChime(A, o) { flat(A - 40, A + 60, o.side); return [{ type: 'geodeChime', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), heart: !!o.heart, ease: Q.chime.ease }]; },
+    chimePrism(A, o) {   // a chime, then a prism above it on the other wall
+      const d = pick();
+      return [...make.geodeChime(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.geodePrism(A + 300, { side: -d, P: o.P, ph: ph() })];
+    },
+    chimeShard(A, o) {   // a crown, then a chime above it on the same wall: its ripple spreads over the crown's fan
+      const d = pick();
+      return [...make.geodeShard(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.geodeChime(A + 440, { side: -d, P: o.P, ph: ph() })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, geode: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions, the beam's reach at every angle, the crown's rays,
+  // the gem's path, the ripple's reach
+  for (const b of beats) for (const h of b.hs) {
+    const d = h.side;
+    if (h.type === 'geodePrism') {
+      const X = Q.prism, [L, R] = gOpening(h.alt - 30, h.alt + 30);
+      h.base = d > 0 ? L : R; h.ox = h.base + d * X.out; h.oa = h.alt + X.rise; h.lens = [];
+      for (let k = 0; k <= 24; k++) {
+        const an = lerp(X.a1, X.a0, k / 24), ux = d * Math.cos(an), ua = Math.sin(an);
+        let q = 0; for (; q < 700; q += 2) { const [l, r] = gWalls(h.oa + ua * q), x = h.ox + ux * q; if (d > 0 ? x >= r : x <= l) break; }
+        h.lens.push(q + 3);
+      }
+      h.x = (L + R) / 2; h.lo = h.alt - 28; h.hi = h.oa + Math.sin(X.a0) * h.lens[24] + X.halo + 6;
+    } else if (h.type === 'geodeShard') {
+      const X = Q.shard, [L, R] = gOpening(h.alt - 30, h.alt + 30);
+      h.base = d > 0 ? L : R; h.cx = h.base + d * X.spar;
+      h.rays = X.angles.map(an => { const ux = d * Math.cos(an), ua = -Math.sin(an); let q = 14; for (; q < X.reach; q += 2) { const [l, r] = gWalls(h.alt + ua * q), x = h.cx + ux * q; if (x - X.r < l + 2 || x + X.r > r - 2) break; } return q; });
+      h.x = h.cx; h.lo = h.alt - Math.max(...h.rays.map((q, i) => (q + X.len * 0.5) * Math.sin(X.angles[i]))) - X.r - 4; h.hi = h.alt + 30;
+    } else if (h.type === 'geodeBounce') {
+      const X = Q.bounce, [L, R] = gOpening(h.alt - 30, h.alt + 30);
+      h.base = d > 0 ? L : R;
+      // the gem's path: out of the pocket angled down at beta, reflecting off each wall it meets, shattering at the third
+      const P = [[h.base + d * 20, h.alt - 3]]; let x = P[0][0], a = P[0][1], vx = d * Math.cos(X.beta), va = -Math.sin(X.beta), hits = 0;
+      for (let q = 0; q < 3000 && hits < 3; q++) {
+        x += vx * 2; a += va * 2;
+        const [l, r] = gWalls(a);
+        if (vx > 0 && x + X.r >= r) { x = r - X.r; P.push([x, a]); vx = -vx; hits++; }
+        else if (vx < 0 && x - X.r <= l) { x = l + X.r; P.push([x, a]); vx = -vx; hits++; }
+      }
+      h.path = P; h.plen = 0; for (let i = 0; i < P.length - 1; i++) h.plen += Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]);
+      h.x = (L + R) / 2; h.lo = Math.min(...P.map(p => p[1])) - X.r - 6; h.hi = h.alt + 24;
+    } else if (h.type === 'geodeChime') {
+      const X = Q.chime, [L, R] = gOpening(h.alt - 30, h.alt + 50);
+      h.base = d > 0 ? L : R; h.cx = h.base + d * 20; h.ca = h.alt + 6; h.walls = gWalls;
+      // (the ripple spreads until it has crossed to the far wall at level)
+      let rm = 0; for (; rm < 700; rm += 2) { const [l, r] = gWalls(h.ca), xx = h.cx + d * rm; if (xx < l - 2 || xx > r + 2) break; }
+      h.rmax = rm + 8; h.x = (L + R) / 2; h.lo = h.ca - Math.sin(X.span) * h.rmax - X.th - 6; h.hi = h.alt + 58;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, geodeDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = gWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = gWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = gWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38) => { for (let k = 0; k < n; k++) add(x, a0 + k * step); };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Rose Quartz Grotto: a cut gem of coconuts (its table, crown and pavilion), golden at its corners, then a weave
+      const cA = sc.a0 + 400, cx = mid(cA);
+      for (const [dx, da, kind] of [[-60, 60, 'gold'], [60, 60, 'gold'], [-20, 60, 'coco'], [20, 60, 'coco'], [-104, 20, 'coco'], [104, 20, 'coco'], [-62, 20, 'coco'], [62, 20, 'coco'], [-20, 20, 'coco'], [20, 20, 'coco'],
+        [-70, -26, 'coco'], [70, -26, 'coco'], [-36, -66, 'coco'], [36, -66, 'coco'], [0, -110, 'gold']]) add(cx + dx, cA + da, kind, { clear: -Infinity });
+      weave(sc.a0 + 600, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way: a column up beside a prism's boss (under its fan), a short line out of a crown's
+  // reach, coconuts in the pockets between a gem's legs, a column hugging a chime's wall under its pipes (each heart
+  // geode a dare: in a beam's fan, between a crown's shards, on a gem's path)
+  let hearts = 0;
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      const d = h.side;
+      if (h.type === 'geodePrism') {
+        const x = h.base + d * 70; column(x, h.alt - 150, 3); add(h.x, h.hi + 40);
+        if (h.heart && hearts < 3) { const an = Q.prism.a0 * 0.5, L = geodeBeamLen(h, an) * 0.62; if (add(h.ox + d * Math.cos(an) * L, h.oa + Math.sin(an) * L, 'heart', { heart: true, clear: -Infinity })) hearts++; }
+      } else if (h.type === 'geodeShard') {
+        const [l, r] = gWalls(h.alt), x = d > 0 ? r - 64 : l + 64; column(x, h.alt - 60, 3, 40); add(h.cx, h.hi + 40);
+        if (h.heart && hearts < 3) { const an = (Q.shard.angles[1] + Q.shard.angles[2]) / 2, q = Math.min(h.rays[1], h.rays[2]) * 0.72; if (add(h.cx + d * Math.cos(an) * q, h.alt - Math.sin(an) * q, 'heart', { heart: true, clear: -Infinity })) hearts++; }
+      } else if (h.type === 'geodeBounce') {
+        for (let i = 1; i < h.path.length - 1; i++) { const [px, pa] = h.path[i], [qx, qa] = h.path[i + 1], [l, r] = gWalls(pa); add(px > (l + r) / 2 ? l + 60 : r - 60, (pa + qa) / 2 + 30, 'coco', { clear: 30 }); }
+        add(h.x, h.hi + 40);
+        if (h.heart && hearts < 3) { const P = h.path, [x0, a0] = P[1], [x1, a1] = P[2]; if (add(lerp(x0, x1, 0.5), lerp(a0, a1, 0.5), 'heart', { heart: true, clear: -Infinity })) hearts++; }
+      } else if (h.type === 'geodeChime') {
+        const [l, r] = gWalls(h.alt + 90), x = d > 0 ? l + 56 : r - 56; column(x, h.hi + 30, 2); add(h.x, h.lo - 40);
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = top.hi + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the temple's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: gWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, geode: true, sections: secs, beats, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, facetAt, knotA,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 16): its own shaft (createGeodeLevel), the geode look (G.theme), its missions and its
+// length in metres (from the layout).
+const ADV_GEODE = { name: 'Amethyst Geode', theme: 'geode', seed: 'isl-16-geode', reward: 210, target: 0, len: geodeEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Heart of the Geode' }, { k: 'geodeHearts', n: 3 }, { k: 'geodeUnsinged' }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Amethyst Geode, island level 16)
 // (LEVELGEN slot: Fossil Bonepit, island level 21)
 // (LEVELGEN slot: Shipwreck Hold, island level 22)
@@ -34299,7 +34700,7 @@ const ISLAND = {
     { id: 13, name: 'Old Gold Mine',     region: 'mine',    pilot: 'mole',      perk: 'Rides the rails: runaway carts can\'t hurt him', stage: 'mine' },
     { id: 14, name: 'Basalt Deep',       region: 'caves',   pilot: 'firefly',   perk: 'Lights up the dark tunnels' },
     { id: 15, name: 'Geode King',        region: 'caves',   pilot: 'goat',      perk: 'Firework blasts crack the crystal boss', boss: 'golem' },
-    { id: 16, name: 'Amethyst Geode',    region: 'crystal', pilot: 'hamster',   perk: 'Lasers glance off the turbo ball' },
+    { id: 16, name: 'Amethyst Geode',    region: 'crystal', pilot: 'hamster',   perk: 'Lasers glance off the turbo ball', stage: 'geode' },
     { id: 17, name: 'Frost Hollow',      region: 'frost',   pilot: 'bear',      perk: 'Ice block never freezes up', stage: 'frost' },
     { id: 18, name: 'Thunder Rift',      region: 'storm',   pilot: 'robot',     perk: 'Tin tub soaks up one shock', stage: 'storm' },
     { id: 19, name: 'Magma Core',        region: 'magma',   pilot: 'ember',     perk: 'Fireproof: lava splashes do nothing' },
@@ -34386,6 +34787,7 @@ ADV_STAGES.frost = ADV_FROST;   // (island level 17, Frost Hollow: see createFro
 ADV_STAGES.storm = ADV_STORM;   // (island level 18, Thunder Rift: see createStormLevel)
 ADV_STAGES.mine = ADV_MINE;   // (island level 13, Old Gold Mine: see createMineLevel)
 ADV_STAGES.grotto = ADV_GROTTO;   // (island level 10, Glowshroom Grotto: see createGrottoLevel)
+ADV_STAGES.geode = ADV_GEODE;   // (island level 16, Amethyst Geode: see createGeodeLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -45499,6 +45901,1145 @@ if (/[?&]debug\b/.test(location.search)) window.CRM = { MINE, MINE_STAGE, gatePh
 // Level slots: each new themed level puts its game block (look, traps, pickups, sounds) immediately before its slot line.
 // (game slot: Murk Mire, island level 7)
 // (game slot: Hidden Lagoon, island level 11)
+// ---------- the Amethyst Geode (island level 16): its look, traps, heart geodes, singeing and sounds ----------
+// The stage's shaft and traps are laid out by createGeodeLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'geode': the inside of a giant geode, a violet crystal cavern in rose light refracting from above.
+// Its walls are the geode's own cross-section: a lining of amethyst druze along the shaft (every crystal's tip on the
+// collision line), agate bands behind it (lavender, cream, rose, smoky violet) and the geode's grey-violet crust deeper
+// in (faceted plates, cracks, little geode pockets glowing pink). Behind the shaft giant translucent crystal columns
+// stand in a violet haze, crystal clusters crowd the ledges and prismatic light falls in rainbow-fringed shafts; glitter
+// drifts and twinkles in the air. Nothing of it shows anywhere else (Daily and Practice never set a theme). Art as the
+// rest of the game: cartoony, 2-3 stop gradients lit from the top left (or from the glowing crystal nearest), every
+// edge a darker shade of its own colour (never black), detail as line pairs (a dark furrow under a lit ridge), sheen
+// strokes and soft glows; the backdrop stays calm and pushed back so the traps and pickups read first.
+// Performance: everything that never moves (the wall rock, the backdrop's layers, the traps' mounts, the finish
+// chamber) is painted once into offscreen canvases at the screen's pixel scale and blitted each frame (see geoTile,
+// geoSprite); only what moves or glows is drawn live.
+const GEOP = {
+  pal: { bgTop: [96, 66, 138], bgBot: [40, 24, 66], far: [98, 72, 140], far2: [80, 58, 120], wall: [62, 44, 86], wallIn: [24, 14, 40], rim: [255, 170, 236] },
+  ame: ['#fbe4ff', '#d49af2', '#9c52d6', '#5e2a9a'], ameEdge: '#47197a',
+  pink: ['#fff0fa', '#ffa6dc', '#e8549e', '#962366'], pinkEdge: '#6e1550',
+  clear: ['#ffffff', '#f2e6ff', '#c4a8ec', '#8a6ac0'], clearEdge: '#5e4392',
+  rock: ['#a890c0', '#76609c', '#4a386c'], rockEdge: '#3a2858',
+  gold: [255, 214, 120], rose: [255, 128, 206], violet: [196, 120, 255], lilac: [236, 200, 255], cyan: [130, 236, 255], white: [255, 248, 255],
+  beam: [255, 92, 196], hot: [255, 236, 250],
+};
+const geodeOn = () => !!(G && G.theme === 'geode');
+{ const base = pal; pal = function (key, a) { return geodeOn() && GEOP.pal[key] ? GEOP.pal[key].slice() : base(key, a); }; }
+// gradient and colour helpers on any context c (the screen's ctx or an offscreen canvas's)
+function gLG(c, x0, y0, x1, y1, cols) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function gRG(c, x, y, r, cols, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+const gCol = (q, a = 1) => a >= 1 ? `rgb(${q[0] | 0},${q[1] | 0},${q[2] | 0})` : `rgba(${q[0] | 0},${q[1] | 0},${q[2] | 0},${a})`;
+const gMix = (p, q, k) => p.map((v, i) => v + (q[i] - v) * k);
+function gPoly(c, P, close = true) { c.beginPath(); P.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); if (close) c.closePath(); }
+// a soft additive glow
+function gGlow(c, x, y, r, col, a) { if (a < 0.004 || r < 0.5) return; c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = gRG(c, x, y, r, [gCol(col, a), gCol(col, a * 0.33), gCol(col, 0)]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.restore(); }
+// a line pair: a dark furrow with a lit ridge just under it (pts in the context's units)
+function gPair(c, P, dk, lt, w, off) { c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = dk; c.lineWidth = w; gPoly(c, P, false); c.stroke(); c.strokeStyle = lt; c.lineWidth = w * 0.8; c.beginPath(); P.forEach(([x, y], i) => i ? c.lineTo(x + off * 0.3, y + off) : c.moveTo(x + off * 0.3, y + off)); c.stroke(); }
+// A crystal: a six-sided prism seen side on (three faces showing) with a pointed termination, its foot at (x, y) and
+// pointing along screen angle ang (0 = right, y down), len long and wid wide, in palette C (4 stops, light to deep) with
+// edge colour E. The face turned to the light (from the top left) is the bright one; a sheen runs down it and a glint
+// sits by the tip. lit adds an inner glow (charging traps). flat: plain face colours (small crystals in the wall art).
+function gCrystal(c, x, y, ang, len, wid, C, E, lit = 0, flat = false, lw = 1) {
+  const hw = wid / 2, sh = len * 0.7, up = Math.sin(ang) * -1 * 0.6 + Math.cos(ang) * 0.8 * 0, tn = Math.sin(ang) * 0.8 - Math.cos(ang) * 0.6;   // (tn > 0: the face at -y in the crystal's frame faces the light)
+  void up;
+  c.save(); c.translate(x, y); c.rotate(ang);
+  const top = tn > 0, A = top ? C[0] : C[2], B = C[1], D = top ? C[2] : C[0];
+  const fill = (P, cols) => { gPoly(c, P); c.fillStyle = flat ? cols[0] : gLG(c, 0, 0, len, 0, cols); c.fill(); };
+  // the three faces of the body, then the termination's facets
+  fill([[0, -hw * 0.9], [sh, -hw], [sh, -hw * 0.3], [0, -hw * 0.3]], top ? [C[0], C[1]] : [C[2], C[3]]);
+  fill([[0, -hw * 0.3], [sh, -hw * 0.3], [sh, hw * 0.3], [0, hw * 0.3]], [B, top ? C[2] : C[1]]);
+  fill([[0, hw * 0.3], [sh, hw * 0.3], [sh, hw], [0, hw * 0.9]], top ? [C[2], C[3]] : [C[0], C[1]]);
+  gPoly(c, [[sh, -hw], [len, 0], [sh, -hw * 0.3]]); c.fillStyle = top ? C[0] : C[2]; c.fill();
+  gPoly(c, [[sh, -hw * 0.3], [len, 0], [sh, hw * 0.3]]); c.fillStyle = C[1]; c.fill();
+  gPoly(c, [[sh, hw * 0.3], [len, 0], [sh, hw]]); c.fillStyle = top ? C[3] : C[0]; c.fill();
+  void A; void D;
+  if (lit > 0.01) { c.save(); c.globalCompositeOperation = 'lighter'; gPoly(c, [[0, -hw * 0.9], [sh, -hw], [len, 0], [sh, hw], [0, hw * 0.9]]); c.fillStyle = gLG(c, 0, 0, len, 0, [`rgba(255,170,240,${lit * 0.15})`, `rgba(255,220,250,${lit * 0.75})`]); c.fill(); c.restore(); }
+  // the seams between faces (the crystal's own deep hue), the outline, the sheen and the glint
+  c.strokeStyle = E; c.globalAlpha = 0.5; c.lineWidth = 0.7 * lw;
+  c.beginPath(); c.moveTo(0, -hw * 0.3); c.lineTo(sh, -hw * 0.3); c.lineTo(len, 0); c.moveTo(0, hw * 0.3); c.lineTo(sh, hw * 0.3); c.lineTo(len, 0); c.moveTo(sh, -hw); c.lineTo(sh, hw); c.stroke();
+  c.globalAlpha = 1; gPoly(c, [[0, -hw * 0.9], [sh, -hw], [len, 0], [sh, hw], [0, hw * 0.9]]); c.lineJoin = 'round'; c.lineWidth = 1 * lw; c.stroke();
+  if (wid > 3.5) {
+    const ys = top ? -hw * 0.62 : hw * 0.62;
+    c.strokeStyle = 'rgba(255,255,255,.62)'; c.lineCap = 'round'; c.lineWidth = Math.max(0.6, wid * 0.1);
+    c.beginPath(); c.moveTo(len * 0.1, ys); c.lineTo(sh * 0.9, ys * 1.08); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.arc(len * 0.78, top ? -hw * 0.22 : hw * 0.22, Math.max(0.5, wid * 0.07), 0, TWO_PI); c.fill();
+  }
+  c.restore();
+}
+const GEO_AME = GEOP.ame, GEO_PINK = GEOP.pink, GEO_CLEAR = GEOP.clear;
+// a faceted rock boss (a lump of the geode's crust): polygon P (in the context's units), lit from the top left
+function gBoss(c, P, cols = GEOP.rock, edge = GEOP.rockEdge, lw = 1) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of P) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  gPoly(c, P); c.fillStyle = gLG(c, x0, y0, x1, y1, cols); c.fill();
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // facets: each edge's wedge to an inner point, lit or shaded by which way it faces
+  for (let k = 0; k < P.length; k++) {
+    const a = P[k], b = P[(k + 1) % P.length], nx = b[1] - a[1], ny = a[0] - b[0], L = Math.hypot(nx, ny) || 1, f = (-nx * 0.6 - ny * 0.8) / L;
+    gPoly(c, [a, b, [lerp(b[0], cx, 0.42), lerp(b[1], cy, 0.42)], [lerp(a[0], cx, 0.42), lerp(a[1], cy, 0.42)]]);
+    c.fillStyle = f > 0 ? `rgba(240,220,255,${0.22 * f})` : `rgba(30,16,44,${-0.3 * f})`; c.fill();
+  }
+  gPoly(c, P); c.strokeStyle = edge; c.lineWidth = 1 * lw; c.lineJoin = 'round'; c.stroke();
+}
+// a four-point twinkle (additive), from a cached sprite: x, y, radius r, alpha a
+let geoTwCv = null;
+function geoTwinkle(c, x, y, r, a, warm = false) {
+  if (a <= 0.03 || r < 0.4) return;
+  if (!geoTwCv) {
+    geoTwCv = [0, 1].map(w => {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64; const q = cv.getContext('2d'), col = w ? [255, 226, 170] : [255, 220, 255];
+      q.fillStyle = gRG(q, 32, 32, 24, [gCol([255, 255, 255], 0.9), gCol(col, 0.35), gCol(col, 0)]); q.fillRect(0, 0, 64, 64);
+      q.fillStyle = gCol([255, 255, 255], 1); q.beginPath(); q.moveTo(32, 0); q.quadraticCurveTo(32, 32, 64, 32); q.quadraticCurveTo(32, 32, 32, 64); q.quadraticCurveTo(32, 32, 0, 32); q.quadraticCurveTo(32, 32, 32, 0); q.fill();
+      return cv;
+    });
+  }
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(geoTwCv[warm ? 1 : 0], x - r, y - r, r * 2, r * 2); c.restore();
+}
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps' mounts and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const GEOC = { key: '', tiles: new Map(), sprites: new Map() };
+function geoCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== GEOC.key) { GEOC.key = key; GEOC.tiles.clear(); GEOC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function geoTile(id, x0, x1, a0, a1, paint) {
+  let T = GEOC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1, extra: c.__extra || null };
+    GEOC.tiles.set(id, T);
+    if (GEOC.tiles.size > 70) { for (const kk of GEOC.tiles.keys()) { GEOC.tiles.delete(kk); if (GEOC.tiles.size <= 56) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function geoSprite(id, w, h, ax, ay, paint) {
+  let S = GEOC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.ceil(w * k); cv.height = Math.ceil(h * k);
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; GEOC.sprites.set(id, S);
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt)
+function geoBlit(S, x, alt, alpha = 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; }
+
+// ---- sounds ----
+const GEODE_SFX = {
+  // a prism charging: a glassy whine rising, with a shimmer of tiny chimes
+  gcharge: (t, B, v) => { vTone(B, t, 520, { f2: 1560, glide: 1.05, type: 'triangle', v: 0.03 * v, dur: 1.05, a: 0.2, vib: [11, 18], vibAt: 0.2 }); vTone(B, t, 1040, { f2: 3120, glide: 1.05, type: 'sine', v: 0.012 * v, dur: 1.0, a: 0.3 }); for (let i = 0; i < 4; i++) vTone(B, t + 0.2 + i * 0.2, mf(96 + i * 2), { type: 'sine', v: 0.01 * v, dur: 0.1 }); },
+  // its beam: a bright zap, then a humming buzz as it sweeps
+  gzap: (t, B, v) => { vTone(B, t, 1800, { f2: 300, glide: 0.12, type: 'sawtooth', lp: 4200, v: 0.05 * v, dur: 0.14 }); vTone(B, t, 220, { type: 'sawtooth', lp: 1500, q: 4, v: 0.04 * v, dur: 0.95, a: 0.03, vib: [32, 12], vibAt: 0 }); vTone(B, t, 440, { type: 'square', lp: 2400, v: 0.012 * v, dur: 0.9, a: 0.03 }); vNoise(B, t, { type: 'highpass', f: 5000, v: 0.04 * v, dur: 0.9, a: 0.05 }); },
+  // singed by its halo: a sizzle
+  gsinge: (t, B) => { vNoise(B, t, { type: 'highpass', f: 3200, v: 0.09, dur: 0.35, a: 0.01 }); vTone(B, t, 880, { f2: 420, glide: 0.25, type: 'sawtooth', lp: 2000, v: 0.025, dur: 0.25 }); },
+  // the beam glancing off the turbo ball: a bright ping and a ricochet whine
+  gglance: (t, B) => { vTone(B, t, mf(100), { type: 'sine', v: 0.06, dur: 0.3 }); vTone(B, t + 0.02, 2600, { f2: 1200, glide: 0.25, type: 'triangle', v: 0.03, dur: 0.25 }); },
+  // a crown loosening: crackling glass and a rising creak
+  gcrack: (t, B, v) => { for (let i = 0; i < 6; i++) vNoise(B, t + i * 0.13 + Math.random() * 0.04, { f: 3000 + Math.random() * 2500, q: 9, v: 0.05 * v, dur: 0.025 }); vTone(B, t, 300, { f2: 620, glide: 0.95, type: 'sawtooth', lp: 900, q: 5, v: 0.025 * v, dur: 0.95, a: 0.1 }); },
+  // its burst: a sharp glassy crack and the shards whistling out
+  gburst: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 2800, v: 0.14 * v, dur: 0.18 }); vTone(B, t, 150, { f2: 70, glide: 0.12, v: 0.08 * v, dur: 0.14 }); for (let i = 0; i < 5; i++) vTone(B, t + 0.01 + i * 0.012, 2400 + i * 300, { f2: 900, glide: 0.4, type: 'sine', v: 0.012 * v, dur: 0.4 }); },
+  // a crystal shattering on a wall
+  gtink: (t, B, v) => { vTone(B, t, mf(98 + ((Math.random() * 4) | 0)), { type: 'triangle', v: 0.035 * v, dur: 0.14 }); vNoise(B, t, { type: 'highpass', f: 6000, v: 0.04 * v, dur: 0.06 }); },
+  // a ricochet pocket's tell: a shimmer running down a scale as the light races its path
+  gglint: (t, B, v) => { [103, 98, 96, 91, 86, 84].forEach((m, i) => vTone(B, t + i * 0.13, mf(m), { type: 'sine', v: 0.022 * v, dur: 0.22 })); vNoise(B, t, { type: 'highpass', f: 7000, v: 0.02 * v, dur: 0.8, a: 0.2 }); },
+  // the gem shooting out: a pop and a whoosh
+  glaunch: (t, B, v) => { vTone(B, t, 420, { f2: 900, glide: 0.06, type: 'triangle', v: 0.06 * v, dur: 0.08 }); vNoise(B, t, { f: 1800, f2: 600, q: 1.5, v: 0.06 * v, dur: 0.3 }); },
+  // ...ricocheting off a wall: a crisp clink
+  gbounce: (t, B, v) => { vTone(B, t, mf(93), { type: 'square', lp: 3500, v: 0.035 * v, dur: 0.06 }); vTone(B, t, mf(105), { type: 'sine', v: 0.03 * v, dur: 0.2 }); vNoise(B, t, { f: 4500, q: 3, v: 0.05 * v, dur: 0.03 }); },
+  // ...and bursting at the end of its run
+  gshatter: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 3500, v: 0.11 * v, dur: 0.25 }); for (let i = 0; i < 5; i++) vTone(B, t + i * 0.025, mf(96 + ((i * 7) % 12)), { type: 'triangle', v: 0.02 * v, dur: 0.2 }); },
+  // a singing crystal humming up
+  ghum: (t, B, v, o) => { const f = o.f || 330; vTone(B, t, f, { type: 'sine', v: 0.05 * v, dur: 1.0, a: 0.6, vib: [5, 4], vibAt: 0.2 }); vTone(B, t, f * 2.01, { type: 'sine', v: 0.018 * v, dur: 1.0, a: 0.7 }); },
+  // ...and ringing out its ripple: a glass bell with its partials and a long tail
+  gbell: (t, B, v, o) => { const f = o.f || 330; for (const [m, a, d] of [[1, 0.09, 1.8], [2.76, 0.035, 1.1], [5.4, 0.02, 0.6], [8.9, 0.01, 0.35]]) vTone(B, t, f * m, { type: 'sine', v: a * v, dur: d, send: 0.3 }); vNoise(B, t, { type: 'highpass', f: 6000, v: 0.03 * v, dur: 0.05 }); },
+  // a heart geode: a crystal arpeggio over a warm swell
+  gheart: (t, B) => { [79, 83, 86, 91, 95, 98, 103].forEach((m, i) => vTone(B, t + i * 0.045, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.07, dur: 0.55, send: 0.25 })); vTone(B, t, mf(67), { type: 'sine', v: 0.06, dur: 1.2, a: 0.2 }); vNoise(B, t + 0.06, { type: 'highpass', f: 8000, v: 0.035, dur: 0.9 }); },
+  // the Heart of the Geode waking on the clear: a shimmering chord
+  gfinish: (t, B) => { [67, 74, 79, 83, 86, 91].forEach((m, i) => vTone(B, t + i * 0.07, mf(m), { type: 'triangle', v: 0.05, dur: 1.6, a: 0.05, send: 0.4 })); vNoise(B, t, { type: 'highpass', f: 7500, v: 0.04, dur: 1.5, a: 0.3 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = GEODE_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const geoVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.geodePrism = 'Zapped by a prism laser';
+CAUSES.geodeShard = 'Skewered by a crystal shard';
+CAUSES.geodeBounce = 'Clonked by a ricochet gem';
+CAUSES.geodeChime = 'Rung out by a singing crystal';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'geodePrism' ? [255, 110, 210] : cause === 'geodeShard' ? [210, 150, 255] : cause === 'geodeBounce' ? [255, 170, 230] : cause === 'geodeChime' ? [200, 170, 255] : base(cause); }; }
+// the turbo ball's glass sheds a prism beam (its perk): the beam glances off it
+const geodeGlass = () => settings.vehicle === 'turboball';
+// the lethal shapes: a prism beam's core (its halo only singes); for the turbo ball only the emitter itself
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!GEODE_TYPES.has(h.type)) return base(h);
+  return geodeShapes(h, G.t, [], h.type === 'geodePrism' && geodeGlass() ? 'still' : 'body').map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.geode) updateGeodeTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.geode) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && GEODE_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// shattered crystal bits flying (world space, drawn by the geode particle wrapper)
+function geoBits(x, a, n, v, col = 0, up = 60) {
+  for (let k = 0; k < n; k++) { const an = Math.random() * TWO_PI, sp = v * (0.35 + 0.65 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp * 0.8 + up, 0.55 + Math.random() * 0.4, 2 + Math.random() * 2.6, 'rock', { gs: col === 2 ? (Math.random() < 0.5 ? 0 : 1) : col, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 16, c: [150, 90, 200], l: [255, 220, 255] }); }
+}
+function updateGeodeTraps(dt) {
+  const play = G.state === 'play', top = G.camAlt + viewH, glass = geodeGlass();
+  let singe = null, glance = null;
+  for (const h of G.hazards) {
+    if (!GEODE_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80, d = h.side;
+    if (h.type === 'geodePrism') {
+      const st = geodePrismAt(h, G.t), was = h.st || st;
+      if (st.charge > 0 && !(was.charge > 0) && vis) sfx('gcharge', { v: geoVol(h.alt) });
+      if (st.on && !was.on && vis) { sfx('gzap', { v: geoVol(h.alt) }); if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 1.5); }
+      if (vis && st.on) {
+        const L = geodeBeamLen(h, st.ang), ex = h.ox + d * Math.cos(st.ang) * L, ea = h.oa + Math.sin(st.ang) * L;
+        h.hit = [ex, ea];
+        if (Math.random() < dt * 40) puff(ex - d * 2, ea, -d * (40 + Math.random() * 160), (Math.random() - 0.3) * 200, 0.3 + Math.random() * 0.25, 1.2 + Math.random(), 'ember', [255, 160, 230]);
+        if (Math.random() < dt * 8) geoBits(ex - d * 3, ea, 1, 140, 1);
+      }
+      if (play && st.on && Math.abs(h.alt - G.p.alt) < 400) {
+        if (geodeShapes(h, G.t, [], 'body').slice(-1).map(shrinkShape).some(shapeHits)) { if (glass) glance = { h, st }; }
+        else if (!glass && geodeShapes(h, G.t, [], 'halo').map(shrinkShape).some(shapeHits)) singe = { h, st };
+      }
+      h.st = st;
+    } else if (h.type === 'geodeShard') {
+      const st = geodeShardAt(h, G.t), was = h.st || st, X = GEODE.shard;
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('gcrack', { v: geoVol(h.alt) });
+      if (vis && st.tell > 0.35 && Math.random() < dt * 16) puff(h.cx + (Math.random() - 0.5) * 18, h.alt + (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, 0.45, 1.6, 'sparkle');
+      if (st.fly >= 0 && !(was.fly >= 0) && vis) {
+        sfx('gburst', { v: geoVol(h.alt) });
+        for (let k = 0; k < 12; k++) { const an = Math.random() * TWO_PI; puff(h.cx, h.alt, Math.cos(an) * 220, Math.sin(an) * 220, 0.4, 2, k % 2 ? 'sparkle' : 'ember', [255, 180, 240]); }
+        if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 2);
+      }
+      // each shard bursting where its flight ends (on a wall, or at its reach)
+      if (st.fly >= 0) {
+        h.done = h.done || [];
+        h.rays.forEach((dm, i) => {
+          const dd = 14 + X.v * st.fly;
+          if (dd > dm && !h.done[i]) {
+            h.done[i] = true;
+            const an = X.angles[i], x = h.cx + d * Math.cos(an) * dm, a = h.alt - Math.sin(an) * dm;
+            if (a > G.camAlt - 60 && a < top + 60) { geoBits(x, a, 5, 170, i % 2); for (let k = 0; k < 4; k++) puff(x, a, (Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160, 0.4, 2, 'sparkle'); if (i === 0) sfx('gtink', { v: geoVol(a) * 0.8 }); }
+          }
+        });
+      } else h.done = null;
+      h.st = st;
+    } else if (h.type === 'geodeBounce') {
+      const st = geodeBounceAt(h, G.t), was = h.st || st;
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('gglint', { v: geoVol(h.alt) });
+      if (st.d >= 0 && !(was.d >= 0) && vis) { sfx('glaunch', { v: geoVol(h.alt) }); for (let k = 0; k < 8; k++) puff(h.path[0][0], h.path[0][1], d * (60 + Math.random() * 120), (Math.random() - 0.5) * 120, 0.4, 2, 'sparkle'); }
+      if (st.d >= 0) {
+        const [x, a, leg] = geodePathAt(h, st.d), wl = was.d >= 0 ? geodePathAt(h, was.d)[2] : 0;
+        if (leg > wl && h.path[leg] && h.path[leg][1] > G.camAlt - 60 && h.path[leg][1] < top + 60) {
+          const [bx, ba] = h.path[leg]; sfx('gbounce', { v: geoVol(ba) });
+          for (let k = 0; k < 10; k++) puff(bx, ba, (bx < WORLD_W / 2 ? 1 : -1) * (40 + Math.random() * 200), (Math.random() - 0.5) * 220, 0.35, 1.6 + Math.random(), 'ember', [255, 200, 250]);
+          puff(bx, ba, 0, 0, 0.35, 6, 'glint');
+        }
+        if (vis && Math.random() < dt * 30) puff(x + (Math.random() - 0.5) * 8, a + (Math.random() - 0.5) * 8, 0, 0, 0.35, 1.2 + Math.random(), 'sparkle');
+      }
+      if (st.burst >= 0 && !(was.burst >= 0)) {
+        const [bx, ba] = h.path[h.path.length - 1];
+        if (ba > G.camAlt - 60 && ba < top + 60) { sfx('gshatter', { v: geoVol(ba) }); geoBits(bx, ba, 10, 220, 2); for (let k = 0; k < 8; k++) puff(bx, ba, (Math.random() - 0.5) * 240, (Math.random() - 0.5) * 240, 0.5, 2.2, 'sparkle'); }
+      }
+      h.st = st;
+    } else if (h.type === 'geodeChime') {
+      const st = geodeChimeAt(h, G.t), was = h.st || st, f = 262 * Math.pow(2, ((Math.round(h.alt / 7) % 5) * 2) / 12);
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('ghum', { v: geoVol(h.alt), f });
+      if (st.r > 0 && !(was.r > 0) && vis) { sfx('gbell', { v: geoVol(h.alt), f }); if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 1.2); }
+      if (vis && st.tell > 0.3 && Math.random() < dt * 18) { const an = Math.random() * TWO_PI, rr = 50 + Math.random() * 30; puff(h.cx + Math.cos(an) * rr, h.ca + Math.sin(an) * rr, -Math.cos(an) * rr * 2, -Math.sin(an) * rr * 2, 0.45, 1.5, 'sparkle'); }
+      h.st = st;
+    }
+  }
+  geodeLight(dt, singe, glance);
+}
+// ---- singeing and glancing: brushing a beam's halo singes you (counted for the "never singed" mission: smoke, a
+// sizzle and sparks, nothing worse); the turbo ball touching the core sends the beam glancing off its glass (a shove
+// away from the beam, a ping and a flash of rainbow)
+function geodeLight(dt, singe, glance) {
+  const p = G.p;
+  if (glance && G.state === 'play') {
+    const { h, st } = glance, d = h.side, ux = d * Math.cos(st.ang), ua = Math.sin(st.ang), side = Math.sign((p.x - h.ox) * -ua + (p.alt - h.oa) * ux) || 1;
+    p.vx += -ua * side * 900 * dt; p.vy += ux * side * 500 * dt;
+    if (!G.geoGlanceT || G.t - G.geoGlanceT > 0.5) {
+      G.geoGlanceT = G.t; sfx('gglance'); G.stats.geoGlances = (G.stats.geoGlances || 0) + 1;
+      if (!G.geoGlancePop || G.t - G.geoGlancePop > 3) { G.geoGlancePop = G.t; chainEvent('Glanced off!', '#ffd6f6', 1.1); }
+      for (let k = 0; k < 14; k++) { const an = Math.random() * TWO_PI; puff(p.x, p.alt, Math.cos(an) * 200, Math.sin(an) * 200, 0.45, 2, k % 2 ? 'sparkle' : 'ember', [[255, 120, 200], [130, 236, 255], [255, 214, 120]][k % 3]); }
+    }
+  }
+  if (singe && G.state === 'play') {
+    if (!G.geoTouch) {
+      G.stats.singed = (G.stats.singed || 0) + 1;
+      sfx('gsinge'); vibrate(14); p.squash = Math.max(p.squash, 0.4);
+      chainEvent(G.stats.singed === 1 && advGoalHas('geodeUnsinged') ? 'Singed!' : 'Sizzle!', '#ffb0e6', 1.1);
+      for (let k = 0; k < 8; k++) puff(p.x + (Math.random() - 0.5) * 30, p.alt + (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 120, 40 + Math.random() * 90, 0.45, 1.6, 'ember', [255, 150, 220]);
+    }
+    G.geoTouch = true; G.geoSinge = 1;
+  } else G.geoTouch = false;
+  if (G.geoSinge > 0) {
+    G.geoSinge = Math.max(0, G.geoSinge - dt / 1.2);
+    if (Math.random() < dt * 16 * G.geoSinge) puff(p.x + (Math.random() - 0.5) * 26, p.alt - 6, (Math.random() - 0.5) * 30, 40 + Math.random() * 40, 0.8, 3 + Math.random() * 3, 'smoke');
+  }
+}
+
+// ---- heart geodes: little geodes cracked open on a glowing pink crystal heart, in risky spots, worth a big coin each,
+// and the stage's heart mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'heart') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.geodeHearts = (st.geodeHearts || 0) + 1, of = advGoalN('geodeHearts');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Heart geode ${n}/${of}!` : 'Heart geode!', '#ffd0f0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 150, 220];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 190, Math.sin(a) * 190, 0.55, 2.4, k % 3 ? 'ember' : 'sparkle', [[255, 140, 214], [200, 150, 255], [255, 230, 250]][k % 3]); }
+  geoBits(f.x, f.alt, 8, 200, 2);
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffd0f0', big: true, sub: 'heart geode' });
+  vibrate([20, 30, 20]); sfx('gheart');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'heart')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'heart');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'heart') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawGeodeHeartArt(ctx, G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the hearts found, and a beam (crossed out once
+// you got singed)
+ADV_GOALS.geodeHearts = { text: g => `Find all ${g.n} heart geodes`, done: (r, g) => (r.stats.geodeHearts || 0) >= g.n, any: true, prog: (g, st) => `${st.geodeHearts || 0}/${g.n}` };
+ADV_GOALS.geodeUnsinged = { text: () => 'Never get singed by a laser', done: r => r.clear && !r.stats.singed, prog: (g, st) => st.singed ? `singed ${st.singed}×` : '' };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'geodeHearts' || g.k === 'geodeUnsinged')) return;
+  const st = G.stats, T = G.t, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    ctx.save(); ctx.translate(xr - tw - 13, y); icon(); ctx.restore();
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'geodeHearts') { const n = st.geodeHearts || 0, got = n >= g.n; line(`${n}/${g.n}`, got ? '#ffd0f0' : '#ffe7b8', () => { ctx.translate(0, 1); ctx.scale(0.62, 0.62); drawGeodeHeartArt(ctx, T, 0, true); }); }
+    else if (g.k === 'geodeUnsinged') {
+      const bad = (st.singed || 0) > 0;
+      line(bad ? 'singed' : 'unsinged', bad ? '#ff9a7a' : '#ffe7b8', () => {
+        ctx.lineCap = 'round';
+        // a little prism with its beam
+        ctx.fillStyle = bad ? '#a07a9a' : '#ffb6e6'; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, 5); ctx.lineTo(-2, -7); ctx.lineTo(3, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        for (const [cc, w] of [['rgba(30,14,4,.85)', 4], [bad ? '#c8a0b8' : '#ff6ac8', 2.2]]) { ctx.strokeStyle = cc; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(1, -1); ctx.lineTo(9, -5); ctx.stroke(); }
+        if (bad) { ctx.strokeStyle = '#c0361c'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(-7, 7); ctx.lineTo(7, -7); ctx.stroke(); }
+      });
+    }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 16 plays it (its own shaft replaces the one advStart lays out, as the frost's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'geode' || (G.level && G.level.geode)) return;
+  G.level = createGeodeLevel(G.seed, st); G.geoSinge = 0; G.geoTouch = false;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Heart of the Geode ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the geode traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRGEO = { GEODE, GEODE_STAGE, geodeShapes, geodePrismAt, geodeShardAt, geodeBounceAt, geodeChimeAt, geodePathAt, geodeBeamLen, geodeDanger, createGeodeLevel, GEOC, scr: (x, a) => [sx(x), sy(a)] };
+// ---- the traps' art ----
+// Screen angle (y down) of a world direction at angle an above level, outward from a wall on side d
+const geoScrAng = (d, an) => Math.atan2(-Math.sin(an), d * Math.cos(an));
+// a round lump of the geode's crust (radius r round x, y): faceted, pitted, its rim catching the light
+function geoLump(c, x, y, r, sd) {
+  const P = []; for (let k = 0; k < 11; k++) { const a = k / 11 * TWO_PI + 0.2, q = r * (0.93 + 0.07 * hash2(k, sd)); P.push([x + Math.cos(a) * q, y + Math.sin(a) * q]); }
+  gBoss(c, P);
+  for (let k = 0; k < 5; k++) { const a = hash2(k, sd + 1) * TWO_PI, rr = r * 0.6 * hash2(k, sd + 2), px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr, pr = 1.1 + 1.5 * hash2(k, sd + 3); c.fillStyle = 'rgba(40,22,66,.5)'; c.beginPath(); c.arc(px, py, pr, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(240,224,255,.45)'; c.lineWidth = 0.7; c.beginPath(); c.arc(px, py, pr, 0.3, 2.4); c.stroke(); }
+  c.strokeStyle = 'rgba(246,232,255,.55)'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.84, 3.5, 4.75); c.stroke();
+}
+// a geode's rind broken open (centre x, y, radii rx, ry): a white agate ring, a hollow lined with tiny crystals, a pink glow
+function geoRind(c, x, y, rx, ry, rot, glow = 0.3) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.fillStyle = gLG(c, -rx, -ry, rx, ry, ['#fffaff', '#e2cef4', '#a684cc']); c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(120,80,170,.55)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(0, 0, rx * 0.86, ry * 0.86, 0, 0, TWO_PI); c.stroke();
+  c.fillStyle = gRG(c, rx * 0.15, ry * 0.15, Math.max(rx, ry) * 0.8, ['#e874c8', '#7a2a92', '#34104e']); c.beginPath(); c.ellipse(0, 0, rx * 0.72, ry * 0.72, 0, 0, TWO_PI); c.fill();
+  const n = Math.round((rx + ry) * 0.9);
+  for (let k = 0; k < n; k++) { const a = k / n * TWO_PI, ex = Math.cos(a) * rx * 0.72, ey = Math.sin(a) * ry * 0.72, w = 0.13 * (rx + ry) / 2; gPoly(c, [[ex + Math.cos(a + 1.6) * w, ey + Math.sin(a + 1.6) * w], [ex * 0.5, ey * 0.5], [ex + Math.cos(a - 1.6) * w, ey + Math.sin(a - 1.6) * w]]); c.fillStyle = k % 3 ? '#d8a2f6' : '#ffc4ea'; c.fill(); }
+  if (glow) { c.globalCompositeOperation = 'lighter'; c.fillStyle = gRG(c, 0, 0, Math.max(rx, ry) * 1.1, [`rgba(255,130,220,${glow})`, 'rgba(255,130,220,0)']); c.beginPath(); c.arc(0, 0, Math.max(rx, ry) * 1.1, 0, TWO_PI); c.fill(); c.globalCompositeOperation = 'source-over'; }
+  c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 0, rx * 0.95, ry * 0.95, 0, 3.4, 4.6); c.stroke();
+  c.restore();
+}
+// The Prism Laser's mount (a sprite per side, anchored on the wall at the trap's height): a faceted boss of grey-violet
+// geode crust half sunk in the wall, two amethyst druze crystals bristling from it, and the great rose prism crystal
+// jutting out of it to the tip the beam leaves from (the boss and the crystals are exactly their hitboxes).
+function geoPrismMount(d) {
+  return geoSprite('prism' + d, 76, 70, d > 0 ? 18 : 58, 36, c => {
+    const X = u => d * u, X2 = (u, v) => [d * u, v];
+    void X2;
+    geoLump(c, X(4), 2, 19, 41 + d);
+    geoRind(c, X(9), 0, 9, 12.5, d * -0.2, 0.35);
+    gCrystal(c, X(7), 7, geoScrAng(d, -0.62), 22, 10, GEO_AME, GEOP.ameEdge);
+    gCrystal(c, X(6), -9, geoScrAng(d, 0.78), 21, 9.5, GEO_AME, GEOP.ameEdge);
+    for (const [u, v, an, L, w] of [[0, 16, -1.2, 9, 4], [-2, -17, 1.3, 9, 4], [13, 12, -0.3, 7, 3.4]]) gCrystal(c, X(u), v, geoScrAng(d, an), L, w, GEO_AME, GEOP.ameEdge, 0, true, 0.7);
+    // the prism: a fat rose crystal out to the beam's tip (its foot in the boss)
+    gCrystal(c, X(7), 0, Math.atan2(-6, d * 34), 35, 17, GEO_PINK, GEOP.pinkEdge);
+  });
+}
+function drawGeodePrism(h) {
+  const X = GEODE.prism, d = h.side, T = G.t, st = h.st || geodePrismAt(h, T);
+  const lit = Math.max(st.charge * (0.55 + 0.45 * Math.sin(T * 40)), st.fire);
+  const tx = sx(h.ox), ty = sy(h.oa), beamAt = an => { const L = geodeBeamLen(h, an); return [sx(h.ox + d * Math.cos(an) * L), sy(h.oa + Math.sin(an) * L)]; };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // charging: the fan it will sweep glows faintly, a thin aim line flickers along its first angle, motes drawn in
+  if (st.charge > 0.02) {
+    const k = st.charge, fl = (0.45 + 0.55 * Math.abs(Math.sin(T * 37))) * (Math.sin(T * 23) > -0.75 ? 1 : 0.3);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const fan = [[tx, ty]]; for (let i = 0; i <= 8; i++) fan.push(beamAt(lerp(X.a0, X.a1, i / 8)));
+    gPoly(ctx, fan); ctx.fillStyle = gRG(ctx, tx, ty, 360 * s, [gCol(GEOP.beam, 0.1 * k), gCol(GEOP.beam, 0.04 * k), gCol(GEOP.beam, 0)]); ctx.fill();
+    const [ax, ay] = beamAt(X.a0);
+    ctx.setLineDash([8 * s, 6 * s]); ctx.lineDashOffset = -T * 90 * s;
+    ctx.strokeStyle = gCol([255, 160, 230], 0.8 * k * fl); ctx.lineWidth = (1 + 1.6 * k) * s; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ax, ay); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = gCol(GEOP.white, 0.5 * k * fl); ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ax, ay); ctx.stroke();
+    // its target on the far wall glints
+    ctx.restore();
+    geoTwinkle(ctx, ax, ay, (5 + 6 * k) * s, 0.7 * k * fl);
+    gGlow(ctx, tx, ty, (12 + 16 * k) * s, [255, 150, 230], 0.55 * k);
+    for (let i = 0; i < 5; i++) { const p = (T * 1.8 + i / 5) % 1, a = i * 1.3 + 0.4, rr = (1 - p) * 28 * s; geoTwinkle(ctx, tx + Math.cos(a) * rr, ty + Math.sin(a) * rr, (2 + 3 * p) * s, k * p); }
+  }
+  geoBlit(geoPrismMount(d), h.base, h.alt);
+  if (lit > 0.02) {   // the prism lit from within
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const bx = sx(h.base + d * 8), by = sy(h.alt + 1);
+    ctx.strokeStyle = gLG(ctx, bx, by, tx, ty, [gCol([255, 150, 230], 0.1 * lit), gCol(GEOP.hot, 0.85 * lit)]); ctx.lineWidth = (4 + 6 * lit) * s; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.restore();
+  }
+  // firing: a fat glossy beam swept down the fan, its halo, rainbow fringes, twisting filaments and light racing along;
+  // the fan it has already swept glows behind it
+  if (st.fire > 0.01) {
+    const a = st.fire, [ex, ey] = beamAt(st.ang), len = Math.hypot(ex - tx, ey - ty), ux = (ex - tx) / len, uy = (ey - ty) / len, nx = -uy, ny = ux;
+    const W = 2 * X.core * s * (0.75 + 0.25 * a) * (1 + 0.06 * Math.sin(T * 55));
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    if (st.sweep > 0.02) { const wake = [[tx, ty]]; for (let i = 0; i <= 6; i++) wake.push(beamAt(lerp(st.ang, X.a0, i / 6))); gPoly(ctx, wake); ctx.fillStyle = gRG(ctx, tx, ty, 380 * s, [gCol(GEOP.beam, 0.16 * a), gCol(GEOP.beam, 0.05 * a), gCol(GEOP.beam, 0)]); ctx.fill(); }
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = gCol([220, 90, 255], 0.22 * a); ctx.lineWidth = 2 * X.halo * s; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = gCol([255, 120, 220], 0.2 * a); ctx.lineWidth = 2 * X.halo * s * 0.6; ctx.stroke();
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'butt';
+    ctx.strokeStyle = gLG(ctx, tx + nx * W / 2, ty + ny * W / 2, tx - nx * W / 2, ty - ny * W / 2, ['#ffc6f0', '#ff5ec8', '#c42ea6', '#8a1a8c']); ctx.lineWidth = W;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const fr = 0.72 * W;
+    ctx.lineWidth = 1.6 * s; ctx.strokeStyle = 'rgba(120,230,255,.75)'; ctx.beginPath(); ctx.moveTo(tx + nx * fr, ty + ny * fr); ctx.lineTo(ex + nx * fr, ey + ny * fr); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,206,96,.6)'; ctx.beginPath(); ctx.moveTo(tx - nx * fr, ty - ny * fr); ctx.lineTo(ex - nx * fr, ey - ny * fr); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,242,255,.95)'; ctx.lineWidth = W * 0.34; ctx.beginPath(); ctx.moveTo(tx + nx * W * 0.08, ty + ny * W * 0.08); ctx.lineTo(ex + nx * W * 0.08, ey + ny * W * 0.08); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1 * s;
+    for (const ph of [0, Math.PI]) { ctx.beginPath(); for (let i = 0; i <= 22; i++) { const q = i / 22, w = Math.sin(q * len / (9 * s) - T * 30 + ph) * W * 0.3; i ? ctx.lineTo(tx + ux * len * q + nx * w, ty + uy * len * q + ny * w) : ctx.moveTo(tx, ty); } ctx.stroke(); }
+    ctx.restore();
+    for (let i = 0; i < 4; i++) { const p = (T * 2.4 + i / 4) % 1; geoTwinkle(ctx, tx + ux * len * p, ty + uy * len * p, 6 * s * a, 0.9 * a); }
+    // where it strikes the wall: a white-hot splash
+    gGlow(ctx, ex, ey, 34 * s, [255, 150, 230], 0.75 * a); geoTwinkle(ctx, ex, ey, 16 * s * (0.8 + 0.2 * Math.sin(T * 47)), a);
+    gGlow(ctx, tx, ty, 30 * s, [255, 170, 240], 0.7 * a); geoTwinkle(ctx, tx, ty, 14 * s * (0.8 + 0.2 * Math.sin(T * 40)), a);
+  }
+  ctx.restore();
+}
+
+// The Shard Burst's mount (a sprite per side): a smoky amethyst spar out of a crust collar in the wall, and the crown's
+// faceted core gem with its two short top crystals (each exactly its hitbox); the firing shards are drawn live.
+function geoShardMount(d) {
+  return geoSprite('shard' + d, 104, 66, d > 0 ? 22 : 82, 36, c => {
+    const X = u => d * u, X2 = (u, v) => [d * u, v], SP = ['#ecd4fa', '#ac80d4', '#7048a4', '#442672'];
+    void X2; geoLump(c, X(-7), -15, 16, 51 + d);
+    gCrystal(c, X(-6), -16, Math.atan2(12, d * 58), 62, 21, SP, '#341a5a');
+    for (const [u, v, an, L, w] of [[2, -26, 1.0, 11, 5], [4, -5, -0.6, 10, 4.6]]) gCrystal(c, X(u), v, geoScrAng(d, an), L, w, GEO_AME, GEOP.ameEdge, 0, true, 0.7);
+    gCrystal(c, X(62), -6, geoScrAng(d, 1.78), 21, 9, GEO_AME, GEOP.ameEdge);
+    gCrystal(c, X(68), -6, geoScrAng(d, 1.2), 18, 9, GEO_PINK, GEOP.pinkEdge);
+  });
+}
+function drawGeodeShard(h) {
+  const X = GEODE.shard, d = h.side, T = G.t, st = h.st || geodeShardAt(h, T), tell = st.tell, burst = st.fly >= 0;
+  const shake = burst ? 0 : tell * 1.8, jx = Math.sin(T * 71) * shake, ja = Math.cos(T * 63) * shake;
+  const cx = h.cx + jx, ca = h.alt + ja, cX = sx(cx), cY = sy(ca);
+  ctx.save(); ctx.lineCap = 'round';
+  gGlow(ctx, cX, cY, (34 + 22 * tell) * s, [230, 120, 255], 0.2 + 0.45 * tell * (burst ? 0.2 : 1));
+  // in flight: the shards loose along their rays, with light trails, and a ring of light where the crown burst
+  if (burst) {
+    const bp = st.fly, ring = (14 + bp * 300) * s, ra = 1 - smooth(0, 0.4, bp);
+    if (ra > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = gCol([255, 180, 240], 0.6 * ra); ctx.lineWidth = (3 * ra + 0.5) * s; ctx.beginPath(); ctx.arc(sx(h.cx), sy(h.alt), ring, 0, TWO_PI); ctx.stroke(); ctx.restore(); gGlow(ctx, sx(h.cx), sy(h.alt), 70 * s, [255, 210, 250], 0.6 * ra); }
+    h.rays.forEach((dm, i) => {
+      const an = X.angles[i], dd = 14 + X.v * bp; if (dd > dm) return;
+      const ux = d * Math.cos(an), ua = -Math.sin(an), hx = sx(h.cx + ux * (dd + X.len * 0.5)), hy = sy(h.alt + ua * (dd + X.len * 0.5)), tX = sx(h.cx + ux * (dd - X.len * 0.5)), tY = sy(h.alt + ua * (dd - X.len * 0.5));
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = gLG(ctx, tX, tY, tX - (hx - tX) * 1.6, tY - (hy - tY) * 1.6, [gCol([255, 170, 240], 0.7), gCol([255, 170, 240], 0)]); ctx.lineWidth = 8 * s; ctx.beginPath(); ctx.moveTo(tX, tY); ctx.lineTo(tX - (hx - tX) * 1.6, tY - (hy - tY) * 1.6); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.translate(tX, tY); ctx.scale(s, s); gCrystal(ctx, 0, 0, geoScrAng(d, -an), X.len + 1, 2 * X.r + 1, i % 2 ? GEO_PINK : GEO_AME, i % 2 ? GEOP.pinkEdge : GEOP.ameEdge, 0.35); ctx.restore();
+    });
+  }
+  geoBlit(geoShardMount(d), h.base, h.alt);
+  // the crown's shards round the core: whole, glowing hotter and trembling in the tell; stubs after, regrowing
+  ctx.save(); ctx.translate(cX, cY); ctx.scale(s, s);
+  X.angles.forEach((an, i) => {
+    const ux = d * Math.cos(an), uy = Math.sin(an), L = X.len * st.grow + 2;
+    gCrystal(ctx, ux * 8, uy * 8, geoScrAng(d, -an), L, (2 * X.r) * (0.65 + 0.35 * st.grow), i % 2 ? GEO_PINK : GEO_AME, i % 2 ? GEOP.pinkEdge : GEOP.ameEdge, burst ? 0 : tell * (0.6 + 0.4 * Math.sin(T * 30 + i)));
+  });
+  // the core: a faceted gem lit from the top left, its heart brightening and cracking through the tell
+  const R = [13, 11.5, 13.5, 12, 13, 11.5], V = R.map((q, k) => [Math.cos(k * TWO_PI / 6 + 0.25) * q, Math.sin(k * TWO_PI / 6 + 0.25) * q]);
+  for (let k = 0; k < 6; k++) { const p = V[k], q = V[(k + 1) % 6], m = (k + 0.5) * TWO_PI / 6 + 0.25, light = 0.5 + 0.5 * Math.cos(m + 2.36); gPoly(ctx, [[-2, -2], p, q]); ctx.fillStyle = gCol(gMix([92, 36, 146], [248, 196, 255], light)); ctx.fill(); }
+  gPoly(ctx, V); ctx.strokeStyle = GEOP.ameEdge; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.strokeStyle = 'rgba(70,24,110,.4)'; ctx.lineWidth = 0.7; ctx.beginPath(); for (const p of V) { ctx.moveTo(-2, -2); ctx.lineTo(p[0], p[1]); } ctx.stroke();
+  const e = burst ? 0.25 * (1 - smooth(0, 0.6, st.fly)) : 0.15 + tell * 0.85;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = gRG(ctx, 0, 0, 11, [gCol([255, 240, 255], e), gCol([255, 120, 230], e * 0.5), gCol([255, 120, 230], 0)]); ctx.beginPath(); ctx.arc(0, 0, 11, 0, TWO_PI); ctx.fill();
+  if (tell > 0.25 && !burst) {
+    const k = smooth(0.25, 1, tell); ctx.strokeStyle = gCol([255, 235, 255], 0.9 * k); ctx.lineWidth = 1.1;
+    for (let j = 0; j < 4; j++) { const a = j * 1.7 + 0.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 5 * k, Math.sin(a) * 5 * k); ctx.lineTo(Math.cos(a + 0.5) * 9 * k, Math.sin(a + 0.5) * 9 * k); ctx.lineTo(Math.cos(a + 0.2) * 12.5 * k, Math.sin(a + 0.2) * 12.5 * k); ctx.stroke(); }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(-1, -1, 8, 3.5, 4.6); ctx.stroke();
+  ctx.restore();
+  if (!burst && tell > 0.6) geoTwinkle(ctx, cX, cY, (8 + 10 * tell) * s, (tell - 0.6) * 2);
+  ctx.restore();
+}
+
+// The Ricochet Gem's pocket (a sprite per side): a geode half-shell bulging from the wall, its crust round an agate
+// rind, a druze-lined hollow facing out and down (the shell exactly its hitbox).
+function geoPocket(d) {
+  return geoSprite('pocket' + d, 56, 56, d > 0 ? 18 : 38, 28, c => {
+    const X = u => d * u;
+    geoLump(c, X(9), 0, 20, 61 + d);
+    geoRind(c, X(12), 1, 12.5, 15, d * -0.25, 0.45);
+  });
+}
+// a cut gem (round brilliant), radius r at (x, y) screen px: faceted crown, a table, its heart glowing
+function geoGem(x, y, r, rot, lit = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  const N = 8, P = []; for (let k = 0; k < N; k++) { const a = k / N * TWO_PI; P.push([Math.cos(a) * r, Math.sin(a) * r]); }
+  for (let k = 0; k < N; k++) { const p = P[k], q = P[(k + 1) % N], m = (k + 0.5) / N * TWO_PI + rot, light = 0.5 + 0.5 * Math.cos(m + 2.36); gPoly(ctx, [[0, 0], p, q]); ctx.fillStyle = gCol(gMix([170, 30, 120], [255, 214, 246], light)); ctx.fill(); }
+  const t = P.map(([px, py]) => [px * 0.5, py * 0.5]); gPoly(ctx, t); ctx.fillStyle = 'rgba(255,220,248,.55)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(120,20,90,.45)'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); for (let k = 0; k < N; k++) { ctx.moveTo(P[k][0], P[k][1]); ctx.lineTo(t[k][0], t[k][1]); } ctx.stroke();
+  gPoly(ctx, P); ctx.strokeStyle = GEOP.pinkEdge; ctx.lineWidth = 1 * s; ctx.stroke();
+  ctx.rotate(-rot); ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.4 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 3.5, 4.5); ctx.stroke();
+  ctx.restore();
+  if (lit > 0) gGlow(ctx, x, y, r * 2.4, [255, 140, 220], 0.4 * lit);
+}
+function drawGeodeBounce(h) {
+  const X = GEODE.bounce, d = h.side, T = G.t, st = h.st || geodeBounceAt(h, T), P = h.path.map(([x, a]) => [sx(x), sy(a)]);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // the tell: light races down the path the gem will take, leaving a dotted trail and a ring on every wall it will hit
+  if (st.tell > 0) {
+    const k = st.tell, run = h.plen * Math.min(1, k * 1.25);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let q = 6; q < run; q += 14) { const [x, a] = geodePathAt(h, q), al = 0.4 + 0.55 * (1 - Math.abs(q - run) / Math.max(1, run)); ctx.fillStyle = gCol([255, 170, 236], al * (0.7 + 0.3 * Math.sin(T * 20 + q * 0.1))); ctx.beginPath(); ctx.arc(sx(x), sy(a), 2.9 * s, 0, TWO_PI); ctx.fill(); ctx.fillStyle = gCol([255, 240, 252], al * 0.8); ctx.beginPath(); ctx.arc(sx(x), sy(a), 1.2 * s, 0, TWO_PI); ctx.fill(); }
+    ctx.restore();
+    const [hx, ha] = geodePathAt(h, run); geoTwinkle(ctx, sx(hx), sy(ha), 9 * s, 0.9);
+    for (let i = 1; i < P.length; i++) { if (h.path.slice(0, i).reduce((n, p, j) => n + (j ? Math.hypot(p[0] - h.path[j - 1][0], p[1] - h.path[j - 1][1]) : 0), 0) > run + 1) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = gCol([255, 150, 230], 0.6 * k); ctx.lineWidth = 1.5 * s; ctx.beginPath(); ctx.arc(P[i][0], P[i][1], (7 + 4 * Math.sin(T * 12)) * s, 0, TWO_PI); ctx.stroke(); ctx.restore(); }
+  }
+  geoBlit(geoPocket(d), h.base, h.alt);
+  // the gem at home in its pocket (glowing hotter through the tell), or in flight with a comet tail of light
+  const home = [sx(h.base + d * 13), sy(h.alt - 3)];
+  if (st.d < 0) { if (st.burst < 0 || st.burst > 0.6) geoGem(home[0], home[1], 7 * s, T * 0.6, 0.3 + st.tell); }
+  else {
+    const [x, a] = geodePathAt(h, st.d), gx = sx(x), gy = sy(a);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const tail = []; for (let q = 0; q <= 8; q++) { const [tx, ta] = geodePathAt(h, Math.max(0, st.d - q * 9)); tail.push([sx(tx), sy(ta)]); }
+    for (let q = 0; q < 8; q++) { ctx.strokeStyle = gCol([255, 150, 230], 0.5 * (1 - q / 8)); ctx.lineWidth = (2 * X.r - q * 2) * s * 0.8; ctx.beginPath(); ctx.moveTo(...tail[q]); ctx.lineTo(...tail[q + 1]); ctx.stroke(); }
+    ctx.restore();
+    gGlow(ctx, gx, gy, 30 * s, [255, 140, 220], 0.5);
+    geoGem(gx, gy, X.r * s, st.d * 0.05, 0);
+  }
+  ctx.restore();
+}
+
+// The Singing Crystal's mount (a sprite per side): a crust boss and three tall clear crystal pipes rising out and up
+// from it (exactly their hitboxes).
+function geoChimeMount(d) {
+  return geoSprite('chime' + d, 66, 84, d > 0 ? 20 : 46, 60, c => {
+    const X = u => d * u;
+    geoLump(c, X(8), 2, 17, 71 + d); geoRind(c, X(12), 6, 6, 7.5, d * 0.3, 0.25);
+    gCrystal(c, X(3), -8, Math.atan2(-31, d * 5), 32, 10, GEO_CLEAR, GEOP.clearEdge);
+    gCrystal(c, X(12), -2, Math.atan2(-31, d * 18), 36, 11, GEO_CLEAR, GEOP.clearEdge);
+    gCrystal(c, X(8), -4, Math.atan2(-46, d * 12), 49, 12.5, GEO_CLEAR, GEOP.clearEdge);
+    for (const [u, v, an, L, w] of [[16, 10, -0.5, 9, 4], [-2, 14, -1.3, 8, 3.6], [19, 0, 0.3, 7, 3.4]]) gCrystal(c, X(u), v, geoScrAng(d, an), L, w, GEO_AME, GEOP.ameEdge, 0, true, 0.7);
+  });
+}
+function drawGeodeChime(h) {
+  const X = GEODE.chime, d = h.side, T = G.t, st = h.st || geodeChimeAt(h, T), cX = sx(h.cx), cY = sy(h.ca);
+  ctx.save(); ctx.lineCap = 'round';
+  // the ripple: an arc of light spreading out and down across the shaft, rainbow-fringed (clipped to the shaft)
+  if (st.r > 0) {
+    const r = st.r * s, fade = 1 - smooth(0.85, 1, st.k), a0 = d > 0 ? 0 : Math.PI - X.span, a1 = d > 0 ? X.span : Math.PI, lo = h.ca - st.r - 10, hi = h.ca + 10;
+    ctx.save();
+    ctx.beginPath(); const L = [], R = []; for (let a = lo; a <= hi + 1; a += 12) { const [l, rr] = walls(a); L.push([sx(l), sy(a)]); R.push([sx(rr), sy(a)]); }
+    L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath(); ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = gCol([200, 130, 255], 0.22 * fade); ctx.lineWidth = 26 * s; ctx.beginPath(); ctx.arc(cX, cY, r, a0, a1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(130,236,255,.55)'; ctx.lineWidth = 1.6 * s; ctx.globalAlpha = fade; ctx.beginPath(); ctx.arc(cX, cY, r + 9 * s, a0, a1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,206,110,.5)'; ctx.beginPath(); ctx.arc(cX, cY, Math.max(1, r - 9 * s), a0, a1); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = gRG(ctx, cX, cY, r + 7 * s, ['#ffb8ec', '#ffb8ec', '#e070d8', '#fff0ff', '#b46ae6'], Math.max(0, r - 7 * s)); ctx.lineWidth = 2 * X.th * s; ctx.beginPath(); ctx.arc(cX, cY, r, a0, a1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,250,255,.95)'; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.arc(cX, cY, r - 1 * s, a0, a1); ctx.stroke();
+    ctx.restore();
+  }
+  // the hum: rings of light drawn in toward the pipes, the pipes trembling and glowing
+  const hum = st.tell, jit = hum > 0 ? Math.sin(T * 90) * hum * 0.8 : 0;
+  if (hum > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) { const p = (hum * 2 + i / 3) % 1, rr = (90 * (1 - p) + 12) * s; ctx.strokeStyle = gCol([220, 170, 255], 0.5 * p * hum); ctx.lineWidth = (1 + 2 * p) * s; ctx.beginPath(); ctx.arc(cX, cY, rr, 0, TWO_PI); ctx.stroke(); }
+    ctx.restore();
+  }
+  geoBlit(geoChimeMount(d), h.base + jit, h.alt);
+  const glow = Math.max(hum, st.r > 0 ? 1 - st.k : 0);
+  if (glow > 0.02) { gGlow(ctx, sx(h.base + d * 16), sy(h.alt + 30), 46 * s, [220, 170, 255], 0.55 * glow); geoTwinkle(ctx, sx(h.base + d * 20), sy(h.alt + 50), 9 * s * glow, glow); }
+  ctx.restore();
+}
+DRAW.geodePrism = drawGeodePrism; DRAW.geodeShard = drawGeodeShard; DRAW.geodeBounce = drawGeodeBounce; DRAW.geodeChime = drawGeodeChime;
+
+// shattered crystal bits: little amethyst or rose shards tumbling (from two cached sprites)
+let geoBitCv = null;
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles; if (additive || !geodeOn() || !ps.some(q => q.ex && q.ex.gs != null)) return base(additive);
+  G.particles = ps.filter(q => !(q.ex && q.ex.gs != null)); try { base(additive); } finally { G.particles = ps; }
+  if (!geoBitCv) geoBitCv = [GEO_AME, GEO_PINK].map((C, i) => { const cv = document.createElement('canvas'); cv.width = 48; cv.height = 24; const c = cv.getContext('2d'); c.scale(2, 2); gCrystal(c, 2, 6, 0, 20, 8, C, i ? GEOP.pinkEdge : GEOP.ameEdge); return cv; });
+  for (const q of ps) {
+    if (!(q.ex && q.ex.gs != null)) continue;
+    const t = clamp(q.life / q.max, 0, 1), r = q.size * s;
+    ctx.save(); ctx.globalAlpha = Math.min(1, t * 3); ctx.translate(sx(q.x), sy(q.alt)); ctx.rotate(q.ex.rot || 0); ctx.drawImage(geoBitCv[q.ex.gs ? 1 : 0], -r * 1.2, -r * 0.6, r * 2.4, r * 1.2); ctx.restore();
+  }
+}; }
+
+// The heart geode (inside its pickup circle): a little geode cracked open, its grey crust round a band of white agate,
+// a lining of tiny amethyst teeth and a glowing faceted rose heart in the hollow; it bobs and glints. hud: no bob.
+function drawGeodeHeartArt(c, t, ph, hud) {
+  const bob = hud ? 0 : Math.sin(t * 2.2 + ph) * 1.6, pulse = 0.5 + 0.5 * Math.sin(t * 3 + ph);
+  c.save(); c.translate(0, bob);
+  if (!hud) gGlow(c, 0, 0, 26, [255, 120, 210], 0.28 + 0.14 * pulse);
+  // the crust shell (lumpy), the agate band, the hollow
+  const sh = []; for (let k = 0; k < 11; k++) { const a = k / 11 * TWO_PI, r = 14.2 + 1.2 * Math.sin(k * 2.7 + 1); sh.push([Math.cos(a) * r, Math.sin(a) * r * 0.94]); }
+  gPoly(c, sh); c.fillStyle = gLG(c, -12, -12, 12, 12, ['#b8a8c4', '#76668a', '#4a3c5c']); c.fill(); c.strokeStyle = '#3a2c4a'; c.lineWidth = 1; c.stroke();
+  c.fillStyle = gLG(c, -9, -9, 9, 9, ['#ffffff', '#e6d4f6', '#a888cc']); c.beginPath(); c.ellipse(0, 0.5, 11, 10.4, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, 0, 1, 9, ['#5a2470', '#2a0c3e']); c.beginPath(); c.ellipse(0, 0.6, 8.6, 8.2, 0, 0, TWO_PI); c.fill();
+  for (let k = 0; k < 14; k++) { const a = k / 14 * TWO_PI, x0 = Math.cos(a) * 8.4, y0 = 0.6 + Math.sin(a) * 8; gPoly(c, [[x0 + Math.cos(a + 1.6) * 1.3, y0 + Math.sin(a + 1.6) * 1.3], [x0 - Math.cos(a) * 2.6, y0 - Math.sin(a) * 2.6], [x0 + Math.cos(a - 1.6) * 1.3, y0 + Math.sin(a - 1.6) * 1.3]]); c.fillStyle = k % 3 ? '#c98cf0' : '#ffb6e2'; c.fill(); }
+  // the heart: a faceted rose gem
+  c.save(); c.translate(0, 1.4);
+  const heart = () => { c.beginPath(); c.moveTo(0, 6.4); c.bezierCurveTo(-3, 4, -7.2, 1, -6.6, -2.6); c.bezierCurveTo(-6, -6.2, -1.6, -6.6, 0, -3.2); c.bezierCurveTo(1.6, -6.6, 6, -6.2, 6.6, -2.6); c.bezierCurveTo(7.2, 1, 3, 4, 0, 6.4); c.closePath(); };
+  heart(); c.fillStyle = gLG(c, -6, -6, 6, 6, ['#fff0fa', '#ff8fd2', '#e0388e', '#8e1c62']); c.fill();
+  c.save(); heart(); c.clip();
+  c.fillStyle = 'rgba(255,255,255,.35)'; gPoly(c, [[0, -3.2], [-6.6, -2.6], [-2.2, 1], [0, 6.4]]); c.fill();
+  c.fillStyle = 'rgba(110,10,70,.28)'; gPoly(c, [[0, -3.2], [6.6, -2.6], [2.2, 1], [0, 6.4]]); c.fill();
+  c.strokeStyle = 'rgba(150,20,90,.45)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(0, -3.2); c.lineTo(0, 6.4); c.moveTo(-6.6, -2.6); c.lineTo(-2.2, 1); c.lineTo(2.2, 1); c.lineTo(6.6, -2.6); c.stroke();
+  c.restore();
+  heart(); c.strokeStyle = GEOP.pinkEdge; c.lineWidth = 0.9; c.stroke();
+  c.save(); c.globalCompositeOperation = 'lighter'; heart(); c.fillStyle = `rgba(255,150,220,${0.15 + 0.3 * pulse})`; c.fill(); c.restore();
+  c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 1.1; c.lineCap = 'round'; c.beginPath(); c.moveTo(-4.6, -3.4); c.quadraticCurveTo(-4, -4.8, -2.4, -4.6); c.stroke();
+  c.restore();
+  // the crust's lit rim and a glint
+  c.strokeStyle = 'rgba(255,240,255,.55)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, 13, 3.6, 4.7); c.stroke();
+  c.restore();
+  if (!hud) { const g = Math.pow(Math.max(0, Math.sin(t * 1.7 + ph)), 6); if (g > 0.05) geoTwinkle(c, 5, -6 + bob, 7 * g, g); }
+}
+
+// ---- the geode's scene ----
+// blit a tile at its place (f: its parallax; y and x snapped to device pixels so stacked tiles never show a seam)
+function geoTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+let geoMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+const geoNeed = id => !GEOC.tiles.has(id);
+// The agate's colours section by section (five bands each), and the druze lining's crystals (0 amethyst, 1 rose, 2 clear,
+// 3 amethyst and rose, 4 all three): blended across each section's join so the wall changes colour on the way up.
+const GEO_SECPAL = {
+  'Geode Mouth': [[[222, 212, 232], [176, 160, 196], [240, 234, 244], [138, 120, 160], [198, 184, 216]], 0],
+  'Prism Hall': [[[236, 220, 250], [196, 160, 232], [255, 246, 236], [156, 112, 206], [226, 196, 246]], 0],
+  'Shard Gallery': [[[214, 200, 236], [150, 124, 190], [246, 240, 252], [110, 86, 150], [188, 170, 222]], 0],
+  'Ricochet Run': [[[250, 222, 236], [230, 170, 206], [255, 244, 232], [196, 120, 170], [240, 200, 224]], 3],
+  'Singing Chamber': [[[220, 226, 250], [170, 176, 236], [248, 250, 255], [128, 130, 200], [204, 210, 246]], 2],
+  'Echo Vault': [[[214, 222, 248], [168, 150, 226], [244, 246, 255], [120, 100, 190], [196, 214, 244]], 4],
+  'Rose Quartz Grotto': [[[255, 214, 232], [246, 164, 206], [255, 240, 246], [214, 110, 170], [252, 196, 224]], 1],
+  'Kaleidoscope Climb': [[[236, 214, 250], [255, 190, 220], [230, 250, 246], [170, 130, 220], [255, 228, 190]], 4],
+  'Prism Gauntlet': [[[200, 170, 230], [140, 96, 190], [226, 206, 246], [96, 58, 150], [176, 140, 218]], 0],
+  'Heart of the Geode': [[[255, 226, 240], [255, 180, 214], [255, 246, 226], [220, 130, 180], [255, 214, 190]], 3],
+};
+function geoSecAt(a) {
+  const ss = G.level.sections || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++;
+  const me = GEO_SECPAL[ss[i] && ss[i].name] || GEO_SECPAL['Geode Mouth'];
+  let k = 0, other = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 160) { k = 0.5 * smooth(ss[i + 1].a0 - 160, ss[i + 1].a0, a); other = GEO_SECPAL[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 160) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 160, a)); other = GEO_SECPAL[ss[i - 1].name]; }
+  return { bands: other ? me[0].map((q, j) => gMix(q, other[0][j], k)) : me[0], dz: me[1], dz2: other ? other[1] : me[1], k };
+}
+const GEO_DZ = [[GEOP.ame, GEOP.ameEdge], [GEOP.pink, GEOP.pinkEdge], [GEOP.clear, GEOP.clearEdge]];
+function geoDruzePal(a, r) {
+  const S = geoSecAt(a), dz = r < S.k ? S.dz2 : S.dz, q = (r * 7.31) % 1;
+  return GEO_DZ[dz === 3 ? (q < 0.6 ? 0 : 1) : dz === 4 ? (q < 0.45 ? 0 : q < 0.75 ? 1 : 2) : dz === 2 ? (q < 0.65 ? 2 : 0) : dz];
+}
+// the agate's bands, deepest first: [depth into the rock, colour index]
+const GEO_BANDS = [[31, 3], [28, 1], [25.4, 4], [22.8, 2], [20.4, 0], [18, 3], [15.8, 4], [13.6, 2], [11.6, 1]];
+const GEO_WB = 160;   // wall tile height
+
+// The wall rock of one tile (world units, y = -alt): the geode's own cross-section. A soft shadow cast into the shaft;
+// deep in, the grey-violet crust broken into faceted plates (each plate lit or shaded, its seams a furrow over a lit
+// ridge), cracks, little geode pockets glowing pink, sinking into deep violet; then the agate: nine bands following the
+// wall's facets, wobbling and pinching, each a gradient of its section's colours with a furrow and a lit ridge at its
+// edge; then the druze bed and the lining of crystals along the shaft (a back row, big crystals, a front row, every tip on
+// the collision line), their faces lit from the top left.
+function geoWallPaint(c, side, a0, a1, x0, x1) {
+  const into = side ? 1 : -1, wx = a => walls(a)[side], A0 = a0 - 10, A1 = a1 + 10, sd = side * 131 + 7;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  const P = (d, a) => [wx(a) + into * d, -a];
+  const curve = f => { const r = []; for (let a = A0; a <= A1 + 0.1; a += 3) r.push(P(f(a), a)); return r; };
+  const outer = side ? x1 + 4 : x0 - 4, midA = (a0 + a1) / 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the shadow on the shaft side (soft, no line)
+  for (const [lw, al] of [[24, 0.06], [12, 0.08], [5, 0.1]]) { c.strokeStyle = `rgba(30,10,52,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  // the crust
+  const [cx0] = P(30, midA), [cx1] = P(290, midA);
+  c.fillStyle = gLG(c, cx0, 0, cx1, 0, ['#8a7a9c', '#5e4e74', '#3a2e50', '#21182f']); c.fillRect(Math.min(x0, x1) - 8, -A1 - 8, Math.abs(x1 - x0) + 16, A1 - A0 + 16);
+  const CD = 27, CA = 25, cor = (u, v) => [30 + u * CD + 10 * (hash2(u * 977 + v, 3301 + sd) - 0.5), v * CA + 10 * (hash2(u * 613 + v, 3302 + sd) - 0.5)];
+  for (let v = Math.floor(A0 / CA) - 1; v <= Math.ceil(A1 / CA); v++) for (let u = 0; u < 10; u++) {
+    const q = [cor(u, v), cor(u + 1, v), cor(u + 1, v + 1), cor(u, v + 1)], S = q.map(([d, a]) => P(d, a)), dm = 30 + (u + 0.5) * CD, fade = clamp(1 - dm / 300, 0.12, 0.9), hh = hash2(u * 31 + v, 3303 + sd);
+    gPoly(c, S); c.fillStyle = gCol(gMix([132, 116, 150], [70, 56, 92], hh), 0.55 * fade); c.fill();
+    const lit = hash2(u * 17 + v, 3304 + sd) < 0.5;
+    gPoly(c, [S[0], S[1], S[2]]); c.fillStyle = lit ? `rgba(236,222,255,${0.13 * fade})` : `rgba(22,10,38,${0.2 * fade})`; c.fill();
+    gPoly(c, [S[0], S[2], S[3]]); c.fillStyle = lit ? `rgba(22,10,38,${0.12 * fade})` : `rgba(236,222,255,${0.07 * fade})`; c.fill();
+    gPair(c, [S[3], S[0], S[1]], `rgba(30,16,48,${0.55 * fade})`, `rgba(226,206,246,${0.2 * fade})`, 1.1, 0.9);
+  }
+  // cracks into the crust, a branch off some
+  for (let r = Math.floor(A0 / 58) - 1; r * 58 < A1 + 58; r++) {
+    const hj = hash2(r, 3311 + sd); if (hj < 0.4) continue;
+    const ca = r * 58 + 50 * hash2(r, 3312 + sd), d0 = 52 + 70 * hash2(r, 3313 + sd), cp = [];
+    for (let q = 0; q <= 5; q++) cp.push([d0 + q * (9 + 6 * hash2(q, r + 3314)), ca + (q % 2 ? 3 : -2) - q * 4 * (hash2(r, 3315) - 0.5)]);
+    const sp = cp.map(([d, a]) => P(d, a)), fade = clamp(1 - d0 / 260, 0.25, 0.8);
+    gPair(c, sp, `rgba(24,10,40,${0.7 * fade})`, `rgba(230,206,250,${0.28 * fade})`, 1.2, 1);
+    if (hj > 0.75) gPair(c, [sp[2], P(cp[2][0] + 7, cp[2][1] - 9), P(cp[2][0] + 10, cp[2][1] - 17)], `rgba(24,10,40,${0.6 * fade})`, `rgba(230,206,250,${0.22 * fade})`, 1, 0.9);
+  }
+  // little geode pockets in the crust: a rind, a white agate ring, a hollow lined with tiny crystals and a pink glow
+  for (let r = Math.floor(A0 / 74) - 1; r * 74 < A1 + 74; r++) {
+    if (hash2(r, 3321 + sd) < 0.42) continue;
+    const pa = r * 74 + 60 * hash2(r, 3322 + sd), pd = 62 + 150 * hash2(r, 3323 + sd), R = 5 + 7 * hash2(r, 3324 + sd), [px, py] = P(pd, pa), fade = clamp(1.15 - pd / 230, 0.35, 1);
+    c.save(); c.globalAlpha = fade; c.translate(px, py);
+    c.fillStyle = gLG(c, -R, -R, R, R, ['#a898b8', '#6a5a80', '#3e3054']); c.beginPath(); c.ellipse(0, 0, R * 1.35, R * 1.2, 0.3, 0, TWO_PI); c.fill();
+    c.fillStyle = gLG(c, -R, -R, R, R, ['#ffffff', '#e2d0f2', '#a284c6']); c.beginPath(); c.ellipse(0, 0, R * 1.08, R * 0.95, 0.3, 0, TWO_PI); c.fill();
+    c.fillStyle = gRG(c, R * 0.15, R * 0.15, R, ['#e070c4', '#7a2a8e', '#3a1250']); c.beginPath(); c.ellipse(0, 0, R * 0.84, R * 0.72, 0.3, 0, TWO_PI); c.fill();
+    for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI, ex = Math.cos(an) * R * 0.8, ey = Math.sin(an) * R * 0.68; gPoly(c, [[ex + Math.cos(an + 1.6) * R * 0.14, ey + Math.sin(an + 1.6) * R * 0.14], [ex * 0.55, ey * 0.55], [ex + Math.cos(an - 1.6) * R * 0.14, ey + Math.sin(an - 1.6) * R * 0.14]]); c.fillStyle = k % 3 ? '#d6a0f4' : '#ffc6ea'; c.fill(); }
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = gRG(c, 0, 0, R * 2.6, ['rgba(255,120,220,.3)', 'rgba(255,120,220,.08)', 'rgba(255,120,220,0)']); c.beginPath(); c.arc(0, 0, R * 2.6, 0, TWO_PI); c.fill();
+    c.globalCompositeOperation = 'source-over'; c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(0, 0, R * 1.2, R * 1.06, 0.3, 3.4, 4.6); c.stroke();
+    c.restore();
+  }
+  // deeper in, the rock sinks into deep violet (it meets the plain fill drawn past the tile)
+  c.fillStyle = gLG(c, P(70, midA)[0], 0, P(285, midA)[0], 0, ['rgba(33,24,47,0)', 'rgba(33,24,47,.55)', 'rgba(33,24,47,1)']); c.fillRect(Math.min(x0, x1) - 8, -A1 - 8, Math.abs(x1 - x0) + 16, A1 - A0 + 16);
+  // the agate bands
+  const cols = [A0, (A0 + A1) / 2, A1].map(a => geoSecAt(a).bands);
+  GEO_BANDS.forEach(([b, ci], k) => {
+    const bf = a => b + 1.5 * Math.sin(a / 29 + k * 1.7 + side * 3) + 0.9 * Math.sin(a / 11.3 + k * 2.3) + 0.5 * Math.sin(a / 5.1 + k), cv = curve(bf);
+    const g = c.createLinearGradient(0, -A0, 0, -A1); cols.forEach((B, j) => g.addColorStop(j / 2, gCol(gMix(B[ci], [255, 255, 255], k === 8 ? 0.1 : 0))));
+    c.beginPath(); cv.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); for (let i = pts.length - 1; i >= 0; i--) c.lineTo(...pts[i]); c.closePath();
+    c.fillStyle = g; c.fill();
+    // a soft shade on its deep side and the band's edge: a furrow and a lit ridge
+    const dk = gMix(cols[1][ci], [40, 16, 70], 0.55);
+    gPair(c, cv, gCol(dk, 0.55), 'rgba(255,250,255,.32)', 1.1, 0.8);
+    if (ci === 2 && k % 2) { c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 0.7; c.beginPath(); curve(a => bf(a) - 1.6).forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
+  });
+  // the druze bed, then the lining: two rows of sharp crystal teeth (each a slender pyramid, its lit half facing the top
+  // left, a ridge down its middle, its own deep hue at the edge) and now and then a bigger whole crystal, every tip on the
+  // collision line
+  const bed = curve(a => 10.4 + 0.6 * Math.sin(a / 7.3)), lip = curve(() => 2.2);
+  c.beginPath(); bed.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); for (let i = lip.length - 1; i >= 0; i--) c.lineTo(...lip[i]); c.closePath();
+  c.fillStyle = gLG(c, P(11, midA)[0], 0, P(2, midA)[0], 0, ['#3a1a5e', '#5a2a88', '#2a0e46']); c.fill();
+  const tipAt = (a, jit) => { const [px] = P(0, a), sl = (wx(a + 2) - wx(a - 2)) / 4, nl = Math.hypot(1, sl), nx = -into / nl, ny = -into * sl / nl; return [px - nx * 0.3, -a - ny * 0.3, Math.atan2(ny, nx) + jit]; };
+  const tooth = (a, L, W, jit, r) => {
+    const [tx, ty, an] = tipAt(a, jit), [C, E] = geoDruzePal(a, r), ux = Math.cos(an), uy = Math.sin(an), vx = -uy, vy = ux;
+    const bx = tx - ux * L, by = ty - uy * L, l = [bx + vx * W / 2, by + vy * W / 2], rr = [bx - vx * W / 2, by - vy * W / 2], m = [bx - ux * 1.5, by - uy * 1.5];
+    const litL = (vx * -0.6 + vy * -0.8) > 0;   // which half faces the light
+    gPoly(c, [l, [tx, ty], m]); c.fillStyle = litL ? C[0] : C[2]; c.fill();
+    gPoly(c, [rr, [tx, ty], m]); c.fillStyle = litL ? C[2] : C[0]; c.fill();
+    gPoly(c, [[lerp(l[0], tx, 0.15), lerp(l[1], ty, 0.15)], [tx, ty], [lerp(m[0], tx, 0.2), lerp(m[1], ty, 0.2)]]); c.fillStyle = litL ? 'rgba(255,255,255,.35)' : 'rgba(40,10,70,.25)'; c.fill();
+    c.strokeStyle = E; c.lineWidth = 0.55; gPoly(c, [l, [tx, ty], rr]); c.stroke();
+    c.globalAlpha = 0.5; c.beginPath(); c.moveTo(m[0], m[1]); c.lineTo(tx, ty); c.stroke(); c.globalAlpha = 1;
+  };
+  const sp = 3.6;
+  for (let i = Math.floor((A0 - 20) / sp); i * sp < A1 + 20; i++) { const h = hash2(i, 3331 + sd); tooth(i * sp + sp * 0.6 * (h - 0.5), 8 + 3 * h, 4.4 + 2 * hash2(i, 3332 + sd), (hash2(i, 3333 + sd) - 0.5) * 1.1, hash2(i, 3334 + sd)); }
+  for (let i = Math.floor((A0 - 30) / 30); i * 30 < A1 + 30; i++) {
+    if (hash2(i, 3335 + sd) < 0.3) continue;
+    const a = i * 30 + 20 * hash2(i, 3336 + sd), [tx, ty, an] = tipAt(a, (hash2(i, 3339 + sd) - 0.5) * 0.6), L = 12 + 4 * hash2(i, 3337 + sd), [C, E] = geoDruzePal(a, hash2(i, 3340 + sd));
+    gCrystal(c, tx - Math.cos(an) * L, ty - Math.sin(an) * L, an, L, 6 + 2.5 * hash2(i, 3338 + sd), C, E, 0, false, 0.6);
+  }
+  for (let i = Math.floor((A0 - 20) / sp); i * sp < A1 + 20; i++) { const h = hash2(i, 3341 + sd); tooth(i * sp + sp * 0.5 + sp * 0.5 * (h - 0.5), 5 + 3.5 * h, 3.6 + 2 * hash2(i, 3342 + sd), (hash2(i, 3343 + sd) - 0.5) * 1.3, hash2(i, 3344 + sd)); }
+  c.restore();
+}
+function drawGeodeWalls() {
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = G.t, P = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / GEO_WB), j1 = Math.floor(top / GEO_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const id = `w${side}_${j}`, need = j <= j1;
+      if (!need && (geoMade || !geoNeed(id))) continue;
+      if (geoNeed(id)) geoMade++;
+      const a0 = j * GEO_WB, a1 = a0 + GEO_WB;
+      let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+      const x0 = side ? lo - 30 : lo - 300, x1 = side ? hi + 300 : hi + 30;
+      const Tl = geoTile(id, x0, x1, a0, a1, c => geoWallPaint(c, side, a0, a1, x0, x1));
+      if (!need) continue;
+      geoTileBlit(Tl);
+      // past the tile, the deep rock in plain colour out to the screen's edge
+      const y0 = sy(a1) - 1, hh = GEO_WB * s + 2;
+      ctx.fillStyle = '#21182f';
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + P) ctx.fillRect(xe, y0, cssW + 30 + P - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - P) ctx.fillRect(-30 - P, y0, xe + 30 + P, hh); }
+    }
+    // glints running over the druze tips
+    for (let i = Math.floor(bot / 23); i * 23 < top; i++) {
+      const ph = hash2(i, 3351 + side) * 6.283, g = Math.pow(Math.max(0, Math.sin(T * (0.7 + 0.5 * hash2(i, 3352 + side)) + ph)), 16);
+      if (g < 0.06) continue;
+      const a = i * 23 + 23 * hash2(i, 3353 + side), d = 1 + 9 * hash2(i, 3354 + side), x = walls(a)[side] + (side ? d : -d);
+      geoTwinkle(ctx, sx(x), sy(a), (3 + 6 * g) * s, g);
+    }
+  }
+}
+
+// ---- the backdrop: calm and pushed back ----
+// far (0.12): the cavern's back wall in violet haze, broad soft facets and giant translucent crystal columns growing out
+// of it at a slant, a few seen end-on (hexagonal heads); mid (0.32): crust ledges jutting from behind the walls with
+// crystal clusters on them and druze hanging under them; rainbow-fringed shafts of light falling between; glitter.
+const GEO_FAR = 0.12, GEO_MID = 0.32, GEO_BB = 320;
+function geoXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+// a giant far crystal column (foot x, y, pointing along ang): three long faces shaded across the column (the top one lit),
+// a pointed termination, edges in a lighter tint of its own colour, all translucent in the haze
+function geoColumn(c, x, y, ang, len, wid, C, E, a) {
+  const hw = wid / 2, sh = len * 0.82;
+  c.save(); c.globalAlpha = a; c.translate(x, y); c.rotate(ang);
+  const face = (y0, y1, c0, c1) => { gPoly(c, [[0, y0], [sh, y0 * 1.04], [sh, y1 * 1.04], [0, y1]]); c.fillStyle = gLG(c, 0, y0, 0, y1, [c0, c1]); c.fill(); };
+  face(-hw, -hw * 0.3, C[0], C[1]); face(-hw * 0.3, hw * 0.3, C[1], C[2]); face(hw * 0.3, hw, C[2], C[3]);
+  gPoly(c, [[sh, -hw * 1.04], [len, 0], [sh, -hw * 0.31]]); c.fillStyle = C[0]; c.fill();
+  gPoly(c, [[sh, -hw * 0.31], [len, 0], [sh, hw * 0.31]]); c.fillStyle = C[1]; c.fill();
+  gPoly(c, [[sh, hw * 0.31], [len, 0], [sh, hw * 1.04]]); c.fillStyle = C[3]; c.fill();
+  c.strokeStyle = E; c.lineWidth = 1.2; c.lineJoin = 'round';
+  c.beginPath(); c.moveTo(0, -hw * 0.3); c.lineTo(sh, -hw * 0.31); c.lineTo(len, 0); c.moveTo(0, hw * 0.3); c.lineTo(sh, hw * 0.31); c.lineTo(len, 0); c.stroke();
+  gPoly(c, [[0, -hw], [sh, -hw * 1.04], [len, 0], [sh, hw * 1.04], [0, hw]]); c.stroke();
+  c.restore();
+}
+function geoFarPaint(c, a0, a1, x0, x1) {
+  const A0 = a0 - 10, A1 = a1 + 10;
+  // the back wall's broad facets
+  const CW = 78, CH = 64, cor = (u, v) => [u * CW + 30 * (hash2(u * 389 + v, 3401) - 0.5), v * CH + 26 * (hash2(u * 211 + v, 3402) - 0.5)];
+  for (let v = Math.floor(A0 / CH) - 1; v <= Math.ceil(A1 / CH); v++) for (let u = Math.floor(x0 / CW) - 1; u <= Math.ceil(x1 / CW); u++) {
+    const q = [cor(u, v), cor(u + 1, v), cor(u + 1, v + 1), cor(u, v + 1)].map(([x, a]) => [x, -a]), hh = hash2(u * 53 + v, 3403);
+    gPoly(c, q); c.fillStyle = hh < 0.5 ? `rgba(196,160,236,${0.03 + 0.04 * hh})` : `rgba(20,8,40,${0.03 + 0.05 * (hh - 0.5)})`; c.fill();
+    gPoly(c, [q[0], q[1], q[2]]); c.fillStyle = 'rgba(214,186,250,.025)'; c.fill();
+    gPair(c, [q[3], q[0], q[1]], 'rgba(36,18,66,.09)', 'rgba(210,180,250,.045)', 1.6, 1.4);
+  }
+  // huge geodes broken open in the back wall, faint in the haze: rings of agate round a druze-lined hollow
+  for (let i = Math.floor((A0 - 260) / 520); i * 520 < A1 + 260; i++) {
+    if (hash2(i, 3421) < 0.3) continue;
+    const gx = 90 + 220 * hash2(i, 3422), gy = -(i * 520 + 300 * hash2(i, 3423)), rx = 100 + 70 * hash2(i, 3424), ry = rx * (1.15 + 0.2 * hash2(i, 3425)), rot = (hash2(i, 3426) - 0.5) * 0.6;
+    c.save(); c.translate(gx, gy); c.rotate(rot);
+    const RC = [[150, 120, 190, 0.1], [214, 190, 240, 0.09], [120, 90, 170, 0.1], [240, 200, 236, 0.08], [170, 130, 210, 0.1], [236, 220, 250, 0.08]];
+    RC.forEach(([r, g, b, a], k) => { const q = 1 - k * 0.07; c.fillStyle = `rgba(${r},${g},${b},${a})`; c.beginPath(); c.ellipse(0, 0, rx * q, ry * q, 0, 0, TWO_PI); c.fill(); });
+    c.fillStyle = 'rgba(26,10,48,.22)'; c.beginPath(); c.ellipse(0, 0, rx * 0.56, ry * 0.56, 0, 0, TWO_PI); c.fill();
+    const n = 34; for (let k = 0; k < n; k++) { const a = k / n * TWO_PI, ex = Math.cos(a) * rx * 0.57, ey = Math.sin(a) * ry * 0.57, L = 0.14 + 0.1 * hash2(k, i + 3427); gPoly(c, [[ex + Math.cos(a + 1.6) * 6, ey + Math.sin(a + 1.6) * 6], [ex * (1 - L), ey * (1 - L)], [ex + Math.cos(a - 1.6) * 6, ey + Math.sin(a - 1.6) * 6]]); c.fillStyle = k % 2 ? 'rgba(210,170,250,.16)' : 'rgba(250,200,240,.12)'; c.fill(); }
+    c.strokeStyle = 'rgba(240,220,255,.1)'; c.lineWidth = 3; c.beginPath(); c.ellipse(0, 0, rx * 0.97, ry * 0.97, 0, 3.3, 4.8); c.stroke();
+    c.restore();
+  }
+  const FC = ['#b8a0dc', '#8c70ba', '#6a4e9a', '#4e367a'], FE = 'rgba(214,190,250,.5)', FP = ['#d4aed6', '#a87cb6', '#80589a', '#5e3e7e'];
+  // the columns: rooted beyond the shaft's sides, slanting up and in
+  for (let i = Math.floor((A0 - 420) / 120); i * 120 < A1 + 60; i++) {
+    if (hash2(i, 3411) < 0.5) continue;
+    const side = hash2(i, 3412) < 0.5 ? 0 : 1, d = side ? -1 : 1, ra = i * 120 + 80 * hash2(i, 3413), rx = side ? WORLD_W + 30 + 60 * hash2(i, 3414) : -30 - 60 * hash2(i, 3414);
+    const an = (0.5 + 0.55 * hash2(i, 3415)), len = 240 + 220 * hash2(i, 3416), wid = 46 + 40 * hash2(i, 3417), sa = Math.atan2(-Math.sin(an), d * Math.cos(an));
+    geoColumn(c, rx, -ra, sa, len, wid * 1.2, hash2(i, 3418) < 0.25 ? FP : FC, FE, 0.3 + 0.1 * hash2(i, 3419));
+    if (hash2(i, 3420) < 0.6) geoColumn(c, rx + d * 18, -ra + 30, sa - d * 0.3, len * 0.55, wid * 0.7, FC, FE, 0.28);
+  }
+}
+function geoMidPaint(c, a0, a1) {
+  const A0 = a0 - 10, A1 = a1 + 10, MC = ['#ead6fa', '#b896e0', '#8a64bc', '#5e3c92'], ME = '#4a2a78', MP2 = ['#f6d4ee', '#d4a2d6', '#a874b8', '#7a4e94'];
+  // clusters of crystals bursting out of mounds on the back wall, kept toward the sides (each mound a soft swell of the
+  // wall with a shadow round its foot, the crystals fanning out of its crown)
+  for (let i = Math.floor((A0 - 120) / 130); i * 130 < A1 + 120; i++) {
+    if (hash2(i, 3441) < 0.25) continue;
+    const side = hash2(i, 3442) < 0.5 ? 0 : 1, d = side ? -1 : 1, x = side ? WORLD_W - 34 - 80 * hash2(i, 3444) : 34 + 80 * hash2(i, 3444), y = -(i * 130 + 100 * hash2(i, 3443)), R = 22 + 16 * hash2(i, 3445);
+    c.fillStyle = gRG(c, x, y + R * 0.2, R * 1.9, ['rgba(26,10,46,.18)', 'rgba(26,10,46,.07)', 'rgba(26,10,46,0)']); c.beginPath(); c.arc(x, y + R * 0.2, R * 1.9, 0, TWO_PI); c.fill();
+    c.fillStyle = gRG(c, x - R * 0.3, y - R * 0.3, R * 1.1, ['rgba(130,100,170,.7)', 'rgba(96,70,138,.55)', 'rgba(80,56,120,0)']); c.beginPath(); c.ellipse(x, y, R * 1.1, R * 0.6, 0, 0, TWO_PI); c.fill();
+    const n = 5 + Math.floor(5 * hash2(i, 3449)), list = [];
+    for (let k = 0; k < n; k++) list.push([-Math.PI / 2 + (hash2(i * 13 + k, 3451) - 0.5) * 2.4, 18 + 40 * hash2(i * 13 + k, 3452) * (k === 0 ? 1.4 : 1), 8 + 8 * hash2(i * 13 + k, 3453), hash2(i * 13 + k, 3454)]);
+    list.sort((p, q) => Math.abs(q[0] + Math.PI / 2) - Math.abs(p[0] + Math.PI / 2));   // the outer ones first, the upright ones in front
+    for (const [an, len, w, h] of list) gCrystal(c, x + Math.cos(an) * R * 0.4, y + Math.sin(an) * R * 0.3, an, len, w, h < 0.3 ? MP2 : MC, ME, 0, false, 1);
+    void d;
+  }
+}
+function drawGeodeBackground() {
+  geoCacheCheck(); geoMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = geoXSpan();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, ['#5a3e86', '#432c6a', '#2a1a46']); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // a soft rose glow from above in the far haze
+  gGlow(ctx, ox + playW * 0.3, -H * 0.1, H * 0.9, [255, 150, 220], 0.12);
+  const layer = (f, tag, paint, B) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${j}`, need = j <= Math.floor(pa1 / B);
+      if (!need && (geoMade || !geoNeed(id))) continue;
+      if (geoNeed(id)) geoMade++;
+      const Tl = geoTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1));
+      if (need) geoTileBlit(Tl, f);
+    }
+  };
+  layer(GEO_FAR, 'f', geoFarPaint, GEO_BB);
+  // each section's own light in the haze (the agate's colours of the section in view)
+  { const S = geoSecAt(G.camAlt + viewH / 2), q = S.bands[1]; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = gLG(ctx, 0, Y0, 0, Y1, [gCol(q, 0.1), gCol(q, 0.03), gCol(q, 0)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore(); }
+  // the haze between the layers
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, ['rgba(120,84,170,.2)', 'rgba(70,44,110,.24)', 'rgba(40,22,70,.3)']); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // shafts of prismatic light falling from the top left, each with a cyan and a gold fringe
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const cx = ox + playW * (0.12 + 0.34 * i) + Math.sin(T * 0.11 + i * 2.1) * 26 * s + ((G.camAlt * 0.03 * s) % (playW * 0.34)) * 0, w0 = (26 + 14 * i) * s, w1 = (110 + 30 * (i % 2)) * s, sl = H * 0.42;
+    const al = 0.055 + 0.02 * Math.sin(T * 0.4 + i * 1.7);
+    gPoly(ctx, [[cx - w0, Y0], [cx + w0, Y0], [cx + w1 + sl, Y1], [cx - w1 + sl, Y1]]);
+    ctx.fillStyle = gLG(ctx, 0, Y0, 0, Y1, [`rgba(255,206,246,${al})`, `rgba(220,170,255,${al * 0.5})`, 'rgba(200,150,255,0)']); ctx.fill();
+    ctx.lineWidth = 2.2 * s;
+    ctx.strokeStyle = gLG(ctx, 0, Y0, 0, Y1, [`rgba(120,230,255,${al * 1.1})`, 'rgba(120,230,255,0)']); ctx.beginPath(); ctx.moveTo(cx - w0, Y0); ctx.lineTo(cx - w1 + sl, Y1); ctx.stroke();
+    ctx.strokeStyle = gLG(ctx, 0, Y0, 0, Y1, [`rgba(255,214,120,${al * 1.1})`, 'rgba(255,214,120,0)']); ctx.beginPath(); ctx.moveTo(cx + w0, Y0); ctx.lineTo(cx + w1 + sl, Y1); ctx.stroke();
+  }
+  ctx.restore();
+  layer(GEO_MID, 'm', (c, a0, a1) => geoMidPaint(c, a0, a1), 300);
+  ctx.fillStyle = 'rgba(52,30,84,.14)'; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  drawGeodeMotes();
+}
+// glitter in the air: specks of lilac, rose and cyan twinkling as they turn; streaking when you fly flat out
+MOTE_DRIFT.gsparkle = [-5, 9];
+{ const base = moteKind; moteKind = function (m, a) { return geodeOn() ? 'gsparkle' : base(m, a); }; }
+function drawGeodeMotes() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const streak = G.state === 'play' ? clamp(Math.abs(G.p.vy) - 220, 0, 400) * 0.04 * s : 0, T = G.t;
+  for (const m of motes) {
+    const col = m.r < 0.45 ? [226, 190, 255] : m.r < 0.78 ? [255, 176, 226] : [170, 236, 255];
+    const mx = ox + m.x * playW + Math.sin(T * 0.35 + m.ph) * 10 * s, y = m.y, r = m.sz * 0.7 * s, len = streak * m.depth;
+    const tw = Math.pow(Math.max(0, Math.sin(T * (0.8 + 0.9 * m.r) + m.ph * 3)), 8), a = (0.2 + 0.35 * m.depth);
+    if (len > 2) { ctx.strokeStyle = gCol(col, a * 0.6); ctx.lineWidth = r; ctx.beginPath(); ctx.moveTo(mx, y); ctx.lineTo(mx, y - len); ctx.stroke(); continue; }
+    ctx.fillStyle = gCol(col, a * (0.5 + 0.5 * tw)); ctx.beginPath(); ctx.arc(mx, y, r * 0.75, 0, TWO_PI); ctx.fill();
+    if (tw > 0.2) geoTwinkle(ctx, mx, y, r * (2 + 5 * tw), tw * m.depth * 0.9);
+  }
+  ctx.restore();
+}
+
+// ---- the Heart of the Geode: the finish's chamber ----
+// Over the landing the shaft opens onto a great geode broken open in the back wall: rings of agate (grey crust, cream,
+// lavender, white, rose) round a hollow lined with three rows of amethyst crystals all pointing in, and cradled on a fan of
+// tall amethyst columns rising from the hollow's floor, the Heart itself: a giant faceted rose crystal heart, glowing from
+// within, a sheen sweeping its facets, twinkles turning round it; on the clear it blazes and throws rays of light.
+const GEO_HEART = { y: 290, R: 64 };   // its centre above the landing, and its half width
+function geoHeartPts(R, n = 10) {
+  const segs = [[[0, 0.97], [-0.45, 0.6], [-1.09, 0.15], [-1, -0.39]], [[-1, -0.39], [-0.91, -0.94], [-0.24, -1], [0, -0.48]], [[0, -0.48], [0.24, -1], [0.91, -0.94], [1, -0.39]], [[1, -0.39], [1.09, 0.15], [0.45, 0.6], [0, 0.97]]], out = [];
+  for (const [p0, p1, p2, p3] of segs) for (let i = 0; i < n; i++) { const t = i / n, u = 1 - t; out.push([0, 1].map(k => (u * u * u * p0[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k] + t * t * t * p3[k]) * R)); }
+  return out;
+}
+function geoChamberSprite() {
+  return geoSprite('chamber', 430, 650, 215, 590, c => {
+    const cy = -GEO_HEART.y + 10, RX = 196, RY = 262;
+    // the rings of agate
+    const ring = [['#7a6a90', '#4e4066'], ['#a898bc', '#6e5c88'], ['#f6ecf8', '#c8b4dc'], ['#d6b8f0', '#9a74c8'], ['#ffffff', '#dcc8ee'], ['#ffc8e6', '#d688b8'], ['#e4ccf6', '#a888d0'], ['#fff6f0', '#d8c4dc']];
+    ring.forEach(([lt, dk], k) => { const q = 1 - k * 0.032; c.fillStyle = gLG(c, -RX, cy - RY, RX, cy + RY, [lt, dk]); c.beginPath(); c.ellipse(0, cy, RX * q, RY * q, 0, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(70,30,100,.35)'; c.lineWidth = 1; c.stroke(); });
+    c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = 1.6; for (const q of [0.92, 0.84]) { c.beginPath(); c.ellipse(0, cy, RX * q, RY * q, 0, 3.4, 4.7); c.stroke(); }
+    // the hollow: deep violet, warmer and brighter toward the Heart
+    const hx = RX * 0.74, hy = RY * 0.74;
+    c.fillStyle = gRG(c, 0, cy - 10, hy, ['#8a3aa6', '#5a2280', '#2e0e50']); c.beginPath(); c.ellipse(0, cy, hx, hy, 0, 0, TWO_PI); c.fill();
+    // its lining: three rows of crystals pointing in (the outer the biggest)
+    for (const [n, r0, L0, W0, pal] of [[40, 1.0, 40, 15, 0], [52, 0.88, 28, 11, 1], [66, 0.78, 18, 8, 2]]) {
+      for (let k = 0; k < n; k++) {
+        const an = (k + (pal % 2) * 0.5) / n * TWO_PI, h = hash2(k * 7 + pal, 3501), ex = Math.cos(an) * hx * r0, ey = cy + Math.sin(an) * hy * r0, inA = Math.atan2(cy - ey, -ex) + (h - 0.5) * 0.6;
+        const C = pal === 1 && h < 0.3 ? GEOP.pink : GEOP.ame, E = C === GEOP.pink ? GEOP.pinkEdge : GEOP.ameEdge;
+        gCrystal(c, ex - Math.cos(inA) * 6, ey - Math.sin(inA) * 6, inA, L0 * (0.55 + 0.9 * hash2(k * 3 + pal, 3503)), W0 * (0.8 + 0.4 * hash2(k, 3502 + pal)), C, E, 0, pal === 2, 1);
+      }
+    }
+    // the cradle: tall amethyst columns fanning up from the hollow's floor; the Heart sits in among their tips
+    const hc = -GEO_HEART.y, R = GEO_HEART.R, fl = cy + hy * 0.92;
+    for (const [x, an, L, W] of [[-46, -2.1, 172, 30], [44, -1.02, 178, 30], [-18, -1.8, 150, 26], [20, -1.3, 152, 26], [0, -1.57, 140, 24]]) gCrystal(c, x, fl, an, L, W, GEOP.ame, GEOP.ameEdge, 0, false, 1.4);
+    // the Heart: faceted rose crystal
+    const HP = geoHeartPts(R), cx0 = -R * 0.12, cy0 = hc - R * 0.2;
+    gPoly(c, HP.map(([x, y]) => [x, y + hc])); c.fillStyle = gLG(c, -R, hc - R, R, hc + R, ['#ffd6f0', '#ff7ac4', '#d23a8e', '#7a1656']); c.fill();
+    for (let k = 0; k < HP.length; k += 4) {
+      const a = HP[k], b = HP[(k + 4) % HP.length], ax = a[0], ay = a[1] + hc, bx = b[0], by = b[1] + hc, nx = by - ay, ny = ax - bx, L = Math.hypot(nx, ny) || 1, f = (-nx * 0.6 - ny * 0.8) / L;
+      gPoly(c, [[ax, ay], [bx, by], [lerp(bx, cx0, 0.45), lerp(by, cy0, 0.45)], [lerp(ax, cx0, 0.45), lerp(ay, cy0, 0.45)]]);
+      c.fillStyle = f > 0 ? `rgba(255,236,250,${0.45 * f})` : `rgba(100,8,64,${-0.5 * f})`; c.fill();
+    }
+    const tb = HP.filter((_, k) => k % 4 === 0).map(([x, y]) => [lerp(x, cx0, 0.45), lerp(y + hc, cy0, 0.45)]);
+    gPoly(c, tb); c.fillStyle = 'rgba(255,200,236,.3)'; c.fill();
+    c.strokeStyle = 'rgba(150,20,90,.4)'; c.lineWidth = 1; c.beginPath(); HP.forEach(([x, y], k) => { if (k % 4) return; c.moveTo(x, y + hc); c.lineTo(tb[k / 4][0], tb[k / 4][1]); }); c.stroke();
+    gPoly(c, tb); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1; c.stroke();
+    gPoly(c, HP.map(([x, y]) => [x, y + hc])); c.strokeStyle = GEOP.pinkEdge; c.lineWidth = 2.2; c.lineJoin = 'round'; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 3.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(-R * 0.78, hc - R * 0.42); c.quadraticCurveTo(-R * 0.7, hc - R * 0.8, -R * 0.36, hc - R * 0.78); c.stroke();
+    // small crystals round its foot, in front of the cradle
+    for (const [x, an, L, W, pk] of [[-30, -2.4, 34, 12, 1], [32, -0.7, 36, 12, 0], [-8, -1.9, 28, 10, 0], [12, -1.15, 30, 10, 1], [-58, -2.7, 26, 10, 0], [60, -0.4, 24, 9, 1]]) gCrystal(c, x, fl + 4, an, L, W, pk ? GEOP.pink : GEOP.ame, pk ? GEOP.pinkEdge : GEOP.ameEdge, 0, false, 1);
+  });
+}
+function drawGeodeChamber() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'geode')) return;
+  const E = a.end; if (sy(E + 600) > H + 40 || sy(E - 70) < -40) return;
+  const T = G.t, pay = a.clearT >= 0 ? smooth(0, 1.2, a.clearT) : 0, hx = sx(WORLD_W / 2), hy = sy(E + GEO_HEART.y), R = GEO_HEART.R * s;
+  const pulse = 0.5 + 0.5 * Math.sin(T * 2.2);
+  gGlow(ctx, hx, hy, (230 + 90 * pay) * s, [220, 110, 240], 0.25 + 0.2 * pay);
+  geoBlit(geoChamberSprite(), WORLD_W / 2, E);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  // the Heart glowing from within, a sheen sweeping its facets
+  ctx.save(); ctx.translate(hx, hy); gPoly(ctx, geoHeartPts(R)); ctx.clip();
+  ctx.fillStyle = gRG(ctx, -R * 0.1, -R * 0.1, R * 1.2, [`rgba(255,230,250,${0.12 + 0.08 * pulse + 0.2 * pay})`, `rgba(255,120,210,${0.06 + 0.1 * pay})`, 'rgba(255,120,210,0)']); ctx.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+  const sw = ((T * 0.35) % 1.6 - 0.3) * R * 3 - R * 1.5;
+  ctx.fillStyle = gLG(ctx, sw - R * 0.4, -R, sw + R * 0.4, R, ['rgba(255,255,255,0)', 'rgba(255,255,255,.4)', 'rgba(255,255,255,0)']); ctx.fillRect(-R * 1.2, -R * 1.2, R * 2.4, R * 2.4);
+  ctx.restore();
+  // rays on the clear
+  if (pay > 0.01) {
+    const fade = pay * (1 - 0.6 * smooth(3, 7, a.clearT));
+    for (let k = 0; k < 14; k++) {
+      const an = k / 14 * TWO_PI + T * 0.25, L = (260 + 60 * Math.sin(k * 2.3 + T)) * s, w = 0.07;
+      gPoly(ctx, [[hx, hy], [hx + Math.cos(an - w) * L, hy + Math.sin(an - w) * L], [hx + Math.cos(an + w) * L, hy + Math.sin(an + w) * L]]);
+      ctx.fillStyle = gRG(ctx, hx, hy, L, [`rgba(255,200,240,${0.28 * fade})`, `rgba(255,170,230,${0.1 * fade})`, 'rgba(255,170,230,0)']); ctx.fill();
+    }
+  }
+  ctx.restore();
+  gGlow(ctx, hx, hy, (110 + 20 * pulse + 60 * pay) * s, [255, 130, 214], 0.16 + 0.08 * pulse + 0.18 * pay);
+  for (let k = 0; k < 7; k++) { const an = T * 0.6 + k / 7 * TWO_PI, rr = (R / s * 1.35 + 8 * Math.sin(T * 1.3 + k)) * s, tw = 0.5 + 0.5 * Math.sin(T * 3 + k * 2); geoTwinkle(ctx, hx + Math.cos(an) * rr, hy + Math.sin(an) * rr * 0.9, (4 + 5 * tw) * s, 0.4 + 0.5 * tw); }
+  // glints on the lining
+  for (let k = 0; k < 10; k++) { const g = Math.pow(Math.max(0, Math.sin(T * 0.9 + k * 2.7)), 10); if (g < 0.05) continue; const an = k / 10 * TWO_PI + 0.3; geoTwinkle(ctx, hx + Math.cos(an) * 128 * s, sy(E + GEO_HEART.y - 10) + Math.sin(an) * 172 * s, (4 + 7 * g) * s, g); }
+}
+function drawGeodeMidground() { drawGeodeChamber(); }
+
+// ---- the landing: two polished agate slices slide out of the walls to meet under you (their bands curving round the
+// tip, a druze seam glittering down the middle, a crust rind under them, a crust bracket at each wall), and a crystal
+// lantern (a cluster of clear crystals glowing from within) on a crust boss at each wall over the landing. (Decoration
+// only: nothing here has a hitbox.)
+function geoLantern(d) {
+  return geoSprite('lamp' + d, 60, 80, d > 0 ? 10 : 50, 56, c => {
+    const X = u => d * u;
+    gBoss(c, [[X(-10), -8], [X(8), -12], [X(19), -2], [X(17), 12], [X(4), 20], [X(-10), 18]]);
+    gCrystal(c, X(6), -4, Math.atan2(-44, d * 14), 46, 13, GEOP.clear, GEOP.clearEdge);
+    gCrystal(c, X(12), 0, Math.atan2(-30, d * 26), 34, 11, GEOP.clear, GEOP.clearEdge);
+    gCrystal(c, X(2), -2, Math.atan2(-34, -d * 4), 30, 10, GEOP.pink, GEOP.pinkEdge);
+    gCrystal(c, X(14), 6, Math.atan2(-6, d * 22), 18, 7, GEOP.ame, GEOP.ameEdge);
+  });
+}
+function drawGeodeDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0;
+  const th = 18 * s, bandC = ['#fff8f2', '#d8c0f0', '#ffd0ea', '#b490dc', '#fff2fb', '#e8a8d8', '#9c70cc'];
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, root = w + side * 16, tip = lerp(w - side * 6, meet - side * 0.5, e), X0 = sx(root), Xt = sx(tip), dir = -side;
+    if (Math.abs(Xt - X0) < 2) continue;
+    // the slot in the wall
+    ctx.fillStyle = 'rgba(30,12,48,.9)'; ctx.fillRect(Math.min(sx(w), X0) - 2 * s, y - 3 * s, Math.abs(X0 - sx(w)) + 4 * s, th + 6 * s);
+    // the slice: nested bands to a rounded tip
+    const slab = ins => { const x0 = X0, x1 = Xt - dir * ins, rr = Math.max(1, th / 2 - ins); ctx.beginPath(); ctx.moveTo(x0, y + ins); ctx.lineTo(x1 - dir * rr, y + ins); ctx.arc(x1 - dir * rr, y + th / 2, rr, -Math.PI / 2, Math.PI / 2, dir < 0); ctx.lineTo(x0, y + th - ins); ctx.closePath(); };
+    slab(0); ctx.fillStyle = gLG(ctx, 0, y, 0, y + th, ['#b8a8cc', '#7a6a92', '#4a3c62']); ctx.fill();
+    bandC.forEach((col, k) => { const ins = 1.6 * s + k * 0.95 * s; if (th / 2 - ins < 0.8) return; slab(ins); ctx.fillStyle = col; ctx.fill(); });
+    // the druze seam down its middle, glittering
+    ctx.strokeStyle = '#6a2c96'; ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.moveTo(X0, y + th / 2); ctx.lineTo(Xt - dir * th * 0.55, y + th / 2); ctx.stroke();
+    ctx.strokeStyle = '#d8a0f6'; ctx.lineWidth = 0.8 * s; ctx.setLineDash([1.5 * s, 2.5 * s]); ctx.stroke(); ctx.setLineDash([]);
+    slab(0); ctx.strokeStyle = '#3e2c58'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    // its polished top catching the light
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(X0, y + 1.6 * s); ctx.lineTo(Xt - dir * th * 0.5, y + 1.6 * s); ctx.stroke();
+    for (let k = 0; k < 3; k++) { const u = (T * 0.25 + k / 3 + (side + 1) * 0.1) % 1, g = Math.sin(u * Math.PI); geoTwinkle(ctx, lerp(X0, Xt, u), y + 2 * s, (3 + 4 * g) * s, g * (0.5 + 0.5 * pay)); }
+    // the crust bracket under it at the wall
+    const bx = sx(w), P2 = [[bx + side * 4 * s, y + th - 1 * s], [bx - dir * 0 - side * 0, y + th + 2 * s], [bx - side * 20 * s * Math.max(0.3, e), y + th], [bx - side * 6 * s, y + th + 26 * s], [bx + side * 6 * s, y + th + 30 * s]];
+    gBoss(ctx, P2, GEOP.rock, GEOP.rockEdge, s);
+    // the crystal lantern over the landing
+    const lx = w, la = E + 52, fl = 0.85 + 0.15 * Math.sin(T * 2.6 + side);
+    gGlow(ctx, sx(lx - side * 18), sy(la + 22), 90 * s, [236, 190, 255], (0.22 + 0.25 * pay) * fl);
+    geoBlit(geoLantern(-side), lx, la);
+    gGlow(ctx, sx(lx - side * 14), sy(la + 20), 22 * s, [255, 240, 255], (0.45 + 0.4 * pay) * fl);
+  }
+  ctx.restore();
+}
+// the clear: the Heart blazes, glitter bursts out of it and the lining
+function geodeHeartBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  const hx = WORLD_W / 2, ha = a.end + GEO_HEART.y;
+  for (let k = 0; k < 36; k++) { const an = Math.random() * TWO_PI, v = 90 + Math.random() * 240; puff(hx + Math.cos(an) * 30, ha + Math.sin(an) * 30, Math.cos(an) * v, Math.sin(an) * v, 0.9 + Math.random() * 0.8, 1.6 + Math.random() * 1.6, k % 3 ? 'ember' : 'sparkle', [[255, 140, 214], [200, 150, 255], [255, 230, 250]][k % 3]); }
+  for (let k = 0; k < 8; k++) puff(hx + (Math.random() - 0.5) * 220, ha + (Math.random() - 0.5) * 260, 0, 20, 0.7, 12 + Math.random() * 8, 'star');
+  sfx('gfinish');
+}
+
+// ---- light, speed and the foreground ----
+// The geode's light: a deep violet vignette (never black), rose light from above, and the Heart's glow rising as you near
+// the finish
+function drawGeodeLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.52, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.52, Math.max(cssW, H) * 0.78);
+  vg.addColorStop(0, 'rgba(30,8,52,0)'); vg.addColorStop(1, 'rgba(30,8,52,.42)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const topG = ctx.createLinearGradient(0, 0, 0, H * 0.45); topG.addColorStop(0, 'rgba(255,170,230,.06)'); topG.addColorStop(1, 'rgba(255,170,230,0)'); ctx.fillStyle = topG; ctx.fillRect(X0, Y0, WW, H * 0.45 - Y0);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'geode') {
+    const ha = a.end + GEO_HEART.y, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,140,220,${(0.12 + 0.12 * pay) * k})`); g.addColorStop(0.5, `rgba(200,120,255,${0.05 * k})`); g.addColorStop(1, 'rgba(200,120,255,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: violet and rose wisps streaming past along the walls and through the shaft
+function drawGeodeSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 6 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 3601), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 3602) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol(j < 0.5 ? [230, 160, 255] : [255, 180, 230], (0.05 + 0.17 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(18 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 3603)), len = (14 + 46 * hash2(i, 3604)) * (0.5 + 1.4 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 3605)) + hash2(i, 3606) * H * 2) % (H + 200)) - 100;
+    ctx.strokeStyle = gCol([240, 214, 255], 0.04 + 0.15 * k * hash2(i, 3607)); ctx.lineWidth = 1 + 1.4 * hash2(i, 3608) * k;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: big crystals close to the camera jutting in from the screen's edges (backlit, deep violet with lit rims),
+// fading back whenever a trap or you are near them so they never hide anything
+function geoFgSprite(side, v) {
+  return geoSprite(`fg${side}_${v}`, 110, 170, side ? 100 : 10, 85, c => {
+    const d = side ? -1 : 1, X = u => d * u, FG = ['#c49ae2', '#8250b0', '#552a80', '#341656'], FE = '#2a1046';
+    gBoss(c, [[X(-12), -60], [X(10), -50], [X(18), -14], [X(12), 30], [X(16), 62], [X(-12), 70]], ['#7a6a90', '#4c3e64', '#2e2442'], '#261c38', 1.4);
+    const set = [[[12, -20, -0.5, 70, 24], [14, 18, 0.35, 56, 20], [8, -48, -1.0, 40, 15], [10, 46, 0.9, 36, 14]], [[12, 0, -0.15, 78, 26], [10, -36, -0.8, 48, 18], [12, 36, 0.6, 44, 17]], [[14, -8, -0.35, 62, 22], [12, 30, 0.25, 72, 22], [6, -44, -1.2, 34, 14]]][v];
+    for (const [u, y, an, L, W] of set) gCrystal(c, X(u), y, Math.atan2(Math.sin(an), d * Math.cos(an)), L, W, FG, FE, 0, false, 1.5);
+  });
+}
+function drawGeodeForeground() {
+  const f = 1.35, slot = 330, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 3611) < 0.45) continue;
+    const side = hash2(i, 3612) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 3613) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.2 + 0.72 * smooth(40, 220, dist);
+    const S = geoFgSprite(side, Math.floor(hash2(i, 3614) * 3));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (geodeOn()) drawGeodeBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (geodeOn()) drawGeodeMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (geodeOn()) drawGeodeWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (geodeOn()) drawGeodeLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (geodeOn()) drawGeodeDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (geodeOn()) drawGeodeSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (geodeOn()) drawGeodeForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (geodeOn() && !boss) geodeHeartBurst(); }; }
 // (game slot: Amethyst Geode, island level 16)
 // (game slot: Fossil Bonepit, island level 21)
 // (game slot: Shipwreck Hold, island level 22)
