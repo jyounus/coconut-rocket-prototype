@@ -6145,6 +6145,173 @@ const hollowpalmStats = { seeds: 0, traps: 0, searches: 0, worst: 0, bugs: 0, pi
 }
 const hollowpalmSummary = () => `PASS: Hollow Palm: ${hollowpalmStats.seeds} layouts × ${hollowpalmStats.len} m, only its own traps (${Object.entries(hollowpalmStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${hollowpalmStats.minW.toFixed(0)}+ wide, wall slope ${hollowpalmStats.slope.toFixed(2)} (max ${HP.RULES.maxWallSlope}); sap stubs leave ${hollowpalmStats.sapLane.toFixed(0)}+ lanes and their blobs only fall (${hollowpalmStats.drop.toFixed(0)} at most), beaks never spear upward and leave ${hollowpalmStats.peckLane.toFixed(0)}+, crabs' lunges ${hollowpalmStats.crabLane.toFixed(0)}+, owls' wings only sweep down and leave ${hollowpalmStats.owlLane.toFixed(0)}+; beats ${hollowpalmStats.beatGap.toFixed(0)}+ apart; pickups ${hollowpalmStats.pick.toFixed(1)}+ from any reach; ${hollowpalmStats.traps} beats × 6 phases flown clean of sap and ${hollowpalmStats.bugs} jewel beetles grabbed by the widest pilot (${hollowpalmStats.searches} searches, slowest ${hollowpalmStats.worst.toFixed(1)} s)`;
 // (test slot: Hollow Palm, island level 41)
+// ---------- Adventure: Idol's Climb (island level 6), an authored stage with its own traps ----------
+// As the Anthill Underworks' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which
+// only move phases and looks), then every beat and every golden monkey idol flown by a time-space search for the widest
+// pilot on the traps' own clocks from 6 start phases. Lethal: the offering arms, bowls and falling fire, the monkeys'
+// ledges, monkeys and durians, the golden hands. The gold leaf only pushes (never lethal), so the searches fly through it.
+const ID = new Function(regions.join('\n') + '\nreturn { createIdolsLevel, idolsShapes, idolsDanger, idolsEnd, idolsPourAt, idolsLip, idolsMonkeyAt, idolsHandAt, idolsHandPts, idolsLeafSheets, IDOLS, IDOLS_STAGE, IDOLS_TYPES, ADV_IDOLS, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const idolsStats = { seeds: 0, traps: 0, searches: 0, worst: 0, idols: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, pourLane: Infinity, monkeyLane: Infinity, handLane: Infinity, lamps: 0, lampReach: 0 };
+{
+  const R = ID.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = ID.ADV_IDOLS, X = ID.IDOLS;
+  const ifail = (rule, d) => fail('idols: ' + rule, d);
+  if (st0.theme !== 'idols' || !(st0.reward > 0)) ifail("Idol's Climb is a themed stage with a reward", JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'idolsGold' && g.n === 3) || !st0.goals.some(g => g.k === 'idolsLamps' && g.n > 0)) ifail('three missions: the Sun Crown, 3 golden monkey idols and the offering lamps', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * ID.UNITS_PER_M - ID.idolsEnd()) > 1e-6) ifail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: offerings, then monkeys, then hands, then gold leaf, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { pourPair: 'idolsPour', monkeyPair: 'idolsMonkey', monkeyPour: 'idolsMonkey', handPair: 'idolsHand', handMonkey: 'idolsHand', handPour: 'idolsHand', leafPair: 'idolsLeaf', leafMonkey: 'idolsLeaf', leafPour: 'idolsLeaf', leafHand: 'idolsLeaf' };
+    const S = ID.IDOLS_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) ifail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) ifail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+      else if (kind === b && o.E && firsts[b].E && o.E > firsts[b].E + 1e-9) ifail('gold leaf never sheds slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'idolsPour,idolsMonkey,idolsHand,idolsLeaf') ifail("the idol teaches offerings, then monkeys, then hands, then gold leaf", seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) ifail('the climb has a breather', '');
+    if (!S[S.length - 1].finish) ifail('the stage ends at the Sun Crown', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (ID.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) ID.idolsShapes(h, t, S); return S; };
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.idolsDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = ID.createIdolsLevel(ID.advSeed(st), st), hz = [], fr = [];
+    idolsStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) ifail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) ifail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    idolsStats.len = level.end / 10;
+    for (const h of hz) if (!ID.IDOLS_TYPES.has(h.type)) ifail('the idol only has its own traps', h.type);
+    for (const h of hz) idolsStats.kinds[h.type] = (idolsStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); idolsStats.beatGap = Math.min(idolsStats.beatGap, g); if (g < 0) ifail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) ifail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) ifail('the Sun Crown below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      idolsStats.minW = Math.min(idolsStats.minW, r - l); idolsStats.slope = Math.max(idolsStats.slope, l2 - l, r - r2);
+    }
+    if (idolsStats.minW < R.minWidth) ifail('the shaft is never narrower than minWidth', idolsStats.minW.toFixed(1));
+    if (idolsStats.slope > R.maxWallSlope) ifail('the walls never step in faster than maxWallSlope', idolsStats.slope.toFixed(2));
+    const straight = (h, lo, hi, which) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); for (const w of which) { const want = w === 'base' ? h.base : h.far, got = (w === 'base') === (h.side > 0) ? l : r; if (Math.abs(got - want) > 0.5) return false; } } return true; };
+    for (const h of hz) {
+      const lane = (S, d) => { const [l, r] = level.walls(h.alt); return d > 0 ? r - reachOf(S, d) : -reachOf(S, d) - l; };
+      if (h.type === 'idolsPour') {
+        const S = [], SP = []; for (let t = 0; t < h.P; t += 0.02) ID.idolsShapes(h, t, ID.idolsPourAt(h, t).fall ? SP : S);
+        const ln = lane(S, h.side); idolsStats.pourLane = Math.min(idolsStats.pourLane, ln); if (ln < W + 40) ifail('an offering leaves the far lane open between pours', `${h.alt} ${ln.toFixed(0)}`);
+        if (lane(SP, h.side) > W - 10) ifail('while it pours the flung fire shuts the far side (it is a timing trap)', `${h.alt}`);
+        let open = 0; for (let t = 0; t < h.P; t += 0.02) if (!ID.idolsPourAt(h, t).fall) open += 0.02; if (open < 3) ifail('an offering stays quiet long enough to pass', `${h.alt} ${open.toFixed(1)}`);
+        if (!straight(h, h.alt - 200, h.alt + 30, ['base', 'far'])) ifail('the walls are straight where an offering pours', `${h.alt}`);
+        let pa = Infinity; for (let t = 0; t < h.P; t += 0.02) { const st = ID.idolsPourAt(h, t); if (st.fall && st.fall[1] < st.fall[0] - 1e-9) ifail('falling fire only falls', `${h.alt}`); }
+      }
+      if (h.type === 'idolsMonkey') {
+        if (!(h.a1 < h.a0 - 100)) ifail('a monkey only ever throws down', `${h.alt}`);
+        for (let q = 0; q <= 1; q += 0.05) { const x = h.x0 + (h.x1 - h.x0) * q, a = h.a0 + (h.a1 - h.a0) * q, [l, r] = level.walls(a); if (x - X.monkey.r < l - 0.5 || x + X.monkey.r > r + 0.5) ifail('a durian stays between the walls', `${h.alt}`); }
+        const S = []; ID.idolsShapes(h, 0, S, 'still'); const ln = lane(S, h.side); idolsStats.monkeyLane = Math.min(idolsStats.monkeyLane, ln); if (ln < W + 120) ifail('a monkey ledge leaves the shaft wide open', `${h.alt}`);
+        if (!straight(h, h.alt - 170, h.alt + 50, ['base', 'far'])) ifail('the walls are straight where a monkey throws', `${h.alt}`);
+      }
+      if (h.type === 'idolsHand') {
+        const S = [], SD = []; for (let t = 0; t < h.P; t += 0.02) ID.idolsShapes(h, t, ID.idolsHandAt(h, t).ph === 'rest' ? S : SD);
+        const ln = lane(S, h.side); idolsStats.handLane = Math.min(idolsStats.handLane, ln); if (ln < W + 120) ifail('a golden hand standing up leaves the shaft wide open', `${h.alt} ${ln.toFixed(0)}`);
+        if (lane(SD, h.side) > W - 10) ifail('a golden hand slapped down shuts the shaft (it is a timing trap)', `${h.alt}`);
+        if (!straight(h, h.alt - 20, h.alt + h.L + 20, ['base'])) ifail('the wall is straight where a golden hand stands', `${h.alt}`);
+        let up = 0; for (let t = 0; t < h.P; t += 0.02) up = Math.max(up, ID.idolsHandAt(h, t).th); if (up > Math.PI / 2 + 1e-9) ifail('a golden hand never leans out over its own wall', `${h.alt}`);
+      }
+      if (h.type === 'idolsLeaf') {
+        if (ID.idolsShapes(h, 0.7, []).length) ifail('gold leaf is never lethal', `${h.alt}`);
+        for (let t = 0; t < 12; t += 0.05) for (const q of ID.idolsShapes(h, t, [], 'push')) { const [l, r] = level.walls(q.a); if (q.x - q.r < l - 0.5 || q.x + q.r > r + 0.5) ifail('gold leaf stays between the walls', `${h.alt}`); }
+      }
+    }
+    // the offering lamps: on plain wall, clear of every trap's reach, and lit by a pilot flying by safely
+    if (level.lamps.length < st0.goals.find(g => g.k === 'idolsLamps').n + 2) ifail('there are spare offering lamps for the lamp mission', `${level.lamps.length}`);
+    for (const lp of level.lamps) {
+      const [l, r] = level.walls(lp.alt), into = lp.side ? -1 : 1, px = (lp.side ? r : l) + into * (W / 2 + 6), reach = Math.abs(px - lp.x);
+      idolsStats.lampReach = Math.max(idolsStats.lampReach, reach); if (reach > X.lamp.reach - 10) ifail('an offering lamp is lit by a pilot flying safely by its wall', `${lp.alt}`);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < lp.alt && h.hi + 220 > lp.alt) for (const q of ID.idolsDanger(h)) dd = Math.min(dd, ID.shapeDist(q, px, lp.alt));
+      if (dd < W / 2 + 30) ifail('offering lamps sit clear of the traps', `${lp.alt}`);
+      if (!k) idolsStats.lamps++;
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = ID.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) ifail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the idols, the Shrine's sun of coconuts)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(ID.laneSize().w / 2 + 6 + ID.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of ID.idolsDanger(h)) dd = Math.min(dd, ID.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) idolsStats.pick = Math.min(idolsStats.pick, dd);
+      if (dd < need - 0.5) ifail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < ID.pickR(fr[i]) + ID.pickR(fr[j]) + ID.PICK_GAP - 0.01) ifail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'idolsIdol').length !== 3) ifail('the idol holds exactly 3 golden monkey idols', `${fr.filter(f => f.kind === 'idolsIdol').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) ifail('the idol keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      idolsStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        idolsStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) ifail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.idolsDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else idolsStats.worst = Math.max(idolsStats.worst, tm);
+      }
+    }
+    // every golden monkey idol can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'idolsIdol')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        idolsStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < ID.COCO_R + W / 2 - 4);
+        if (tm < 0) ifail('every golden monkey idol can be grabbed and escaped by the widest pilot', `idol at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      idolsStats.idols++;
+    }
+  }
+}
+const idolsSummary = () => `PASS: Idol's Climb: ${idolsStats.seeds} layouts × ${idolsStats.len} m, only its own traps (${Object.entries(idolsStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${idolsStats.minW.toFixed(0)}+ wide, wall slope ${idolsStats.slope.toFixed(2)} (max ${ID.RULES.maxWallSlope}); offerings leave ${idolsStats.pourLane.toFixed(0)}+ lanes between pours and shut while pouring, monkey ledges ${idolsStats.monkeyLane.toFixed(0)}+, hands standing ${idolsStats.handLane.toFixed(0)}+ and shut when slapped, gold leaf never lethal; ${idolsStats.lamps} offering lamps lit from ${idolsStats.lampReach.toFixed(0)} away; beats ${idolsStats.beatGap.toFixed(0)}+ apart; pickups ${idolsStats.pick.toFixed(1)}+ from any reach; ${idolsStats.traps} beats × 6 phases and ${idolsStats.idols} golden idols flown by the widest pilot (${idolsStats.searches} searches, slowest ${idolsStats.worst.toFixed(1)} s)`;
 // (test slot: Idol's Climb, island level 6)
 // ---------- Adventure: Snapjaw Swamp (island level 8), an authored stage with its own traps ----------
 // As the Anthill Underworks' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which
@@ -6505,4 +6672,5 @@ console.log(anthillSummary());
 console.log(pagodaSummary());
 console.log(snapjawSummary());
 console.log(basaltSummary());
+console.log(idolsSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
