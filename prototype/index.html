@@ -16447,7 +16447,7 @@ function mfInfo() {
   if (MF.info || MF.failed || MF.busy.info) return;
   MF.busy.info = true;
   fetch(MUSIC_DIR + 'tracks.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(j => { MF.info = j; voiceLoad('menu'); }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
+    .then(j => { MF.info = j; voiceLoad('menu'); musInfoMore(); }).catch(() => { MF.failed = true; }).finally(() => { MF.busy.info = false; });
 }
 const mfUrl = (name, file) => `${MUSIC_DIR}${file}.mp4${MF.info && MF.info[name] && MF.info[name].v ? `?v=${MF.info[name].v}` : ''}`;
 function mfFetch(url, key) {
@@ -16480,10 +16480,10 @@ const mfGet = name => { if (MF.info) mfLoad(name, mfUrl(name, mfKey(name)), mfKe
 // on the menu once the menu's own music is ready, so nothing heavy happens as a run starts (on a phone, decoding it
 // then froze the first seconds); its zones' reverbs are made then too.
 function mfKeep(want) {
-  const keep = new Set(['menu', GAME_TRACK, want].filter(Boolean).flatMap(n => voiceKeys(n)));
+  const keep = new Set(['menu', musPreTrack(), want].filter(Boolean).flatMap(n => voiceKeys(n)));   // (the run track ahead: musPreTrack)
   for (const k of Object.keys(MF.bufs)) if (!keep.has(k) && !SND.players.some(p => p.keys && p.keys.includes(k) && p.src)) delete MF.bufs[k];
   if (want) voiceLoad(want);
-  if (want === 'menu' && voiceKeys('menu').every(k => MF.bufs[k])) { voiceLoad(GAME_TRACK); zoneWarm(); }
+  if (want === 'menu' && voiceKeys('menu').every(k => MF.bufs[k])) { voiceLoad(musPreTrack()); zoneWarm(); }
 }
 function zoneWarm() { const c = SND.ctx; for (const z of ZONES) { const r = zoneSound(z); if (r.on.space) spaceIR(c, r.spaceSize, r.spaceDark); } }
 mfInfo();   // (fetch the track list, and with it the menu's file, as the page opens)
@@ -16508,6 +16508,62 @@ const fxRate = r => r.on.pitch ? Math.pow(2, r.pitch / 12) : 1;
 // pitch (the tempo kept), and its own added instruments (an added part of the gameplay track with zone: 'caves' plays
 // only there). A zone's recipe: the track recipe's effects plus tempo (percent faster or slower).
 const GAME_TRACK = 'jungle', ZONES = ['jungle', 'caves', 'magma'], ZONE_LABEL = { jungle: 'Jungle', caves: 'Caves', magma: 'Magma' };
+// ---- the mood-group soundtracks (2026-10-28): each adventure level plays its group's own track ----
+// The registry: every track the game has, by its name in tracks.json and the settings (the studio's edits, effects and
+// lead picks are kept per track name). The classic four (menu, the gameplay track 'jungle', and the old caves and
+// magma, the same score in other keys) stay as they were; the mood-group tracks are rendered from
+// tools/music/tracks/<name>.mjs (see tools/music/GROUPS.md and COMPOSER_BRIEF.md). MUS_TRACKS gives each its short
+// label for the music lab and sound studio tabs.
+const MUS_TRACKS = { ruins: 'Ruins', reef: 'Reef', works: 'Machines', carnival: 'Carnival', spooky: 'Spooky', sky: 'Sky',
+  burrows: 'Burrows', frost: 'Frost', forge: 'Forge', boss: 'Boss' };
+// Which track each adventure level plays (by level id). A level not listed takes its region's track (MUS_REGION), a
+// boss level the boss track, anything else the gameplay track. Endless runs always play the gameplay track.
+const MUS_LEVEL = {
+  1: 'jungle', 2: 'jungle', 3: 'jungle',
+  4: 'ruins', 6: 'ruins', 21: 'ruins', 23: 'ruins', 38: 'ruins', 40: 'ruins',
+  11: 'reef', 12: 'reef', 22: 'reef', 24: 'reef',
+  13: 'works', 26: 'works', 27: 'works', 28: 'works',
+  29: 'carnival', 30: 'carnival', 31: 'carnival', 32: 'carnival', 33: 'carnival',
+  7: 'spooky', 8: 'spooky', 34: 'spooky', 35: 'spooky',
+  25: 'sky', 36: 'sky', 37: 'sky',
+  5: 'burrows', 10: 'burrows', 39: 'burrows', 41: 'burrows',
+  16: 'frost', 17: 'frost', 18: 'frost',
+  14: 'forge', 19: 'forge',
+  9: 'boss', 15: 'boss', 20: 'boss',
+};
+const MUS_REGION = { jungle: 'jungle', beach: 'jungle', temple: 'ruins', fossil: 'ruins', vault: 'ruins', sandstorm: 'ruins', pagoda: 'ruins',
+  lagoon: 'reef', shipwreck: 'reef', cascade: 'reef', mine: 'works', clockwork: 'works', lab: 'works', organ: 'works',
+  pinball: 'carnival', candy: 'carnival', cheese: 'carnival', toybox: 'carnival', carnival: 'carnival', bog: 'spooky', lighthouse: 'spooky', wizard: 'spooky',
+  cliffs: 'sky', starfall: 'sky', beanstalk: 'sky', hive: 'burrows', grotto: 'burrows', anthill: 'burrows', hollowpalm: 'burrows',
+  crystal: 'frost', frost: 'frost', storm: 'frost', caves: 'forge', magma: 'forge' };
+// every run track (a change between two of them joins the new one at its main theme, see schedMusic)
+const MUS_RUNS = new Set([GAME_TRACK, 'caves', 'magma', ...Object.keys(MUS_TRACKS)]);
+const musLevelTrack = lv => !lv ? GAME_TRACK : MUS_LEVEL[lv.id] || (lv.boss ? 'boss' : MUS_REGION[lv.region]) || GAME_TRACK;
+// a track the game can play now: rendered and listed in tracks.json (a group whose track isn't made yet plays the
+// gameplay track meanwhile)
+const musHas = name => name === GAME_TRACK || !!(MF.info && MF.info[name]);
+// the track this run plays: its adventure level's, or the gameplay track
+const musRunTrack = () => { const t = musLevelTrack(G && G.adv ? G.adv.lv : null); return musHas(t) ? t : GAME_TRACK; };
+// the run track to have decoded ahead while on the menus: on the adventure's screens the level picked (or last played),
+// elsewhere the gameplay track (so a run starts without waiting for a decode)
+function musPreTrack() {
+  if (G && G.adv) return musRunTrack();
+  if (currentScreen !== 'advMap' && currentScreen !== 'advSelect' && currentScreen !== 'advDone') return GAME_TRACK;
+  const id = (ISL && ISL.sel) || advData.at, t = musLevelTrack(ISL_BY[id]);
+  return musHas(t) ? t : GAME_TRACK;
+}
+// Each mood-group track's details are in its own audio/music/<name>.json (tracks.json holds the classic four), so the
+// composers of different tracks never edit the same file: fetched after tracks.json, each joining MF.info as it arrives.
+function musInfoMore() {
+  for (const n of Object.keys(MUS_TRACKS)) if (!MF.info[n]) fetch(`${MUSIC_DIR}${n}.json`, { cache: 'no-cache' }).then(r => r.ok ? r.json() : null)
+    .then(j => { if (!j || !MF.info || MF.info[n]) return; MF.info[n] = j; if (currentScreen === 'studioScreen') stRender(); else if (currentScreen === 'musicLab') labRender(); }).catch(() => {});
+}
+// a track's key against the classic D minor (tonal sound effects follow it)
+const musKeyTr = name => KEY_TR[name] ?? (MF.info && MF.info[name] && MF.info[name].keyTr) ?? 0;
+// the tracks the music lab and the sound studio list: the menu and gameplay track, then every other one rendered
+const musTrackList = () => Object.keys(TRACK_NAMES).filter(n => n === 'menu' || n === GAME_TRACK || (MF.info && MF.info[n]));
+// (debug builds, ?debug: the headless music checks read the music's own state through this, see tools/music)
+if (/[?&]debug\b/.test(location.search)) window.CRMUS = { ev: src => eval(src) };   // eslint-disable-line no-eval
 // (beyond the track's effects a zone has: bass cut, a focus band, a filter sweep, phaser, flanger, ring mod, lo-fi,
 // tremolo, auto-pan, stereo width, its own reverb, a pump and a stutter on the beat, background beds (rumble, air,
 // drips), a mix of the recorded instruments, a muffle that closes as the monster nears, and how fast it glides in)
@@ -16807,7 +16863,7 @@ function schedMusic() {
   if (!MF.failed) { mfInfo(); if (want) mfKeep(want); }
   const wks = want ? voiceKeys(want) : [], waiting = want && !MF.failed && !(MF.info && wks.every(k => MF.bufs[k])) && !wks.some(k => MF.tries[k] >= 4);   // (the recorded track isn't decoded yet)
   if ((cur ? cur.name : null) !== want && !waiting) {
-    const runs = n => n === 'jungle' || n === 'caves' || n === 'magma';
+    const runs = n => MUS_RUNS.has(n);
     let at = now + 0.05, X = 2.4;
     if (cur) {
       const sp = 60 / cur.tr.bpm / 4, toBar = (16 - cur.step % 16) % 16;
@@ -16820,7 +16876,7 @@ function schedMusic() {
     }
     SND.quick = false;
     if (want) {
-      const from = srcOf(want), keys = voiceKeys(want), fi = MF.info && keys.every(k => MF.bufs[k]) && MF.info[from], synth = TRACKS[want], fx = fxOf(want);
+      const from = srcOf(want), keys = voiceKeys(want), fi = MF.info && keys.every(k => MF.bufs[k]) && MF.info[from], synth = TRACKS[want] || TRACKS[GAME_TRACK], fx = fxOf(want);   // (a mood-group track has no synthesised score: its files missing, the gameplay score plays)
       const zr = want === GAME_TRACK ? zoneSound(SND.zone) : null, zt = fi && zr ? zoneTempo(zr) : 1, rate = fi ? fxRate(fx) * zt : 1;
       const tr = fi ? { bpm: fi.bpm * rate, vol: FILE_VOL } : synth;
       const bus = c.createGain(), send = c.createGain(), joinBars = cur && runs(cur.name) && runs(want) ? (fi ? Math.round(fi.join / (240 / fi.bpm)) : synth.join || 0) : 0;
@@ -16877,8 +16933,8 @@ function audioTick(dt) {
   const c = SND.ctx;
   if (!c) return;
   let want = 'menu';
-  if (G && currentScreen === null && !homeScene()) want = G.state === 'dead' ? null : GAME_TRACK;
-  else if (currentScreen === 'pause' && G) want = GAME_TRACK;
+  if (G && currentScreen === null && !homeScene()) want = G.state === 'dead' ? null : musRunTrack();   // (an adventure level plays its own track: musRunTrack)
+  else if (currentScreen === 'pause' && G) want = musRunTrack();
   else if (currentScreen === 'ad' || currentScreen === 'musicLab' || currentScreen === 'sfxLab' || currentScreen === 'studioScreen') want = null;
   if (G) SND.zone = ZONES[G.zone || 0];   // (the gameplay track's zone sound follows the run)
   // after a restart the track that was playing plays on from where it is
@@ -17036,7 +17092,7 @@ function sfFile(name, o) {
 function sfKeyRate(o) {
   const tr = o.track || (o.z != null ? GAME_TRACK : SND.track || 'menu'), from = srcOf(tr);
   const zr = tr === GAME_TRACK ? zoneSound(o.z != null ? ZONES[o.z] : SND.zone) : null;   // (a zone's pitch moves the key)
-  return Math.pow(2, ((KEY_TR[from] || 0) + (zr && zr.on.pitch ? zr.pitch : 0)) / 12) * fxRate(fxOf(tr));
+  return Math.pow(2, (musKeyTr(from) + (zr && zr.on.pitch ? zr.pitch : 0)) / 12) * fxRate(fxOf(tr));
 }
 // Each effect can be shaped in the debug effects lab (saved in the settings, used in the game): its volume, pitch,
 // brightness (a low-pass), bass cut (a high-pass), room (the hall), echo and length (a fade out).
@@ -42629,7 +42685,7 @@ function labLoad() {   // the selected track's stems
 const labReady = () => { const fi = labInfo(); return !!fi && fi.stems.every(st => MF.bufs[labKey(st)]); };
 function labRender() {
   const fi = labInfo();
-  $('labTracks').innerHTML = Object.keys(TRACK_NAMES).map(n => `<button role="tab" aria-selected="${n === LAB.track}" data-track="${n}">${TRACK_NAMES[n]}</button>`).join('');
+  $('labTracks').innerHTML = musTrackList().map(n => `<button role="tab" aria-selected="${n === LAB.track}" data-track="${n}">${TRACK_NAMES[n]}</button>`).join('');
   const names = { intro: 'Intro', A: 'Theme', B: 'Lift', climax: 'Climax', break: 'Breather', build: 'Build' };
   $('labMarks').innerHTML = fi ? fi.sections.map((sc, i) => `<button data-at="${sc.at}" data-i="${i}">${names[sc.name] || sc.name}</button>`).join('') : '';
   $('labLead').innerHTML = ['brass', 'piano'].map(l => `<button role="radio" aria-checked="${leadOf(LAB.track) === l}" data-lead="${l}">${l === 'brass' ? 'Brass' : 'Piano'}</button>`).join('');
@@ -42651,6 +42707,7 @@ const FX_UI = [
   { k: 'drive', name: 'Drive', sub: 'Grit and warmth', sl: [['drive', 'Amount', 0, 1, 0.05, pct]] },
 ];
 const TRACK_NAMES = { menu: 'Menu', jungle: 'Gameplay' };   // (the gameplay track keeps its old name, jungle, in the settings)
+Object.assign(TRACK_NAMES, MUS_TRACKS, { caves: 'Caves', magma: 'Magma' });   // (and every other track: listed once rendered, see musTrackList)
 // a zone's sound, in groups: tempo and pitch (each kept apart from the other), tone, movement, space, texture, the
 // beat, background beds and how it behaves (the instrument mix is drawn after it)
 const beatsTxt = v => `${v} beat${v === 1 ? '' : 's'}`, FX_OF = k => FX_UI.find(f => f.k === k);
@@ -42692,7 +42749,7 @@ const ZM_UI = [['vol', 'Volume', 0, 1.5, 0.05, pct], ['tone', 'Brightness', 0.2,
 function labFxRender() {
   const r = fxOf(LAB.track), src = srcOf(LAB.track);
   $('labSrc').hidden = $('labSrcHead').hidden = LAB.track === 'menu';
-  $('labSrc').innerHTML = [LAB.track, ...Object.keys(TRACK_NAMES).filter(n => n !== LAB.track && n !== 'menu')].slice(0, 4).map(n => `<button role="radio" aria-checked="${src === n}" data-src="${n === LAB.track ? '' : n}">${n === LAB.track ? 'Its own' : TRACK_NAMES[n]}</button>`).join('');
+  $('labSrc').innerHTML = [LAB.track, ...musTrackList().filter(n => n !== LAB.track && n !== 'menu')].map(n => `<button role="radio" aria-checked="${src === n}" data-src="${n === LAB.track ? '' : n}">${n === LAB.track ? 'Its own' : TRACK_NAMES[n]}</button>`).join('');
   $('labFx').innerHTML = FX_UI.map(f => `<div class="fxrow${r.on[f.k] ? '' : ' off'}"><label class="fxhead"><span><b>${f.name}</b><small>${f.sub}</small></span><input type="checkbox" class="switch" data-on="${f.k}"${r.on[f.k] ? ' checked' : ''}></label>${f.sl.map(([k, nm, mn, mx, st, fmt]) => `<label class="fxsl"><span>${nm}</span><input type="range" data-k="${k}" min="${mn}" max="${mx}" step="${st}" value="${r[k]}"><output>${fmt(r[k])}</output></label>`).join('')}</div>`).join('');
   $('labDry').setAttribute('aria-pressed', LAB.dry);
 }
@@ -42945,6 +43002,7 @@ function barInfo(track, b) {   // a bar's section (and where it starts and ends)
   const bl = 240 / fi.bpm; let si = 0;
   fi.sections.forEach((sc, i) => { if (sc.at <= b * bl + 1e-3) si = i; });
   const sec = fi.sections[si], start = Math.round(sec.at / bl), end = fi.sections[si + 1] ? Math.round(fi.sections[si + 1].at / bl) : fi.bars;
+  const H = fi.harmony && fi.harmony[b]; if (H) return { sec: sec.name, start, end, chord: H.c, tones: H.t, scale: H.s || H.t };   // (a mood-group track lists its own chords and key per bar)
   const list = SEC_CH[sec.name] || SEC_CH.intro, up = (SEC_UP[sec.name] || 0) + (KEY_TR[f] || 0), [r, q] = CH_DEF[list[(b - start) % list.length]], root = (r + up + 24) % 12;
   return { sec: sec.name, start, end, chord: NOTE_NAMES[root] + q, tones: [root, (root + (q ? 3 : 4)) % 12, (root + 7) % 12], scale: [0, 2, 3, 5, 7, 8, 10, 11].map(x => (x + 2 + up + 24) % 12) };
 }
@@ -43044,7 +43102,7 @@ function stRender() {
   if (STU.roll) stRollRender();
 }
 function stMusicRender() {
-  $('stTracks').innerHTML = Object.keys(TRACK_NAMES).map(n => `<button role="tab" aria-selected="${n === STU.track}" data-track="${n}">${TRACK_NAMES[n]}</button>`).join('');
+  $('stTracks').innerHTML = musTrackList().map(n => `<button role="tab" aria-selected="${n === STU.track}" data-track="${n}">${TRACK_NAMES[n]}</button>`).join('');
   $('stZoneBar').hidden = STU.track !== GAME_TRACK;
   $('stZones').innerHTML = [null, ...ZONES].map(z => `<button aria-pressed="${z === STU.zone}" data-zone="${z || ''}">${z ? ZONE_LABEL[z] : 'Every zone'}</button>`).join('');
   $('stLoop').setAttribute('aria-pressed', String(!!STU.loop && !STU.roll));
