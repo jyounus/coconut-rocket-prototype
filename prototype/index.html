@@ -7607,6 +7607,435 @@ const ADV_SHIPWRECK = { name: 'Shipwreck Hold', theme: 'shipwreck', seed: 'isl-2
   goals: [{ k: 'finish', text: 'Reach the captain\'s cabin' }, { k: 'shipwreckCompass', n: 3 }, { k: 'shipwreckGap', n: 3 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Shipwreck Hold, island level 22)
+/* LEVELGEN:BEGIN */
+// ---------- Cursed Treasure Vault (island level 23): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Sunken Temple (see createTempleLevel): a calm smugglers' cove, then one new trap at a time,
+// each taught alone and slow before it is combined (the Coin Falls, the Mimic Hall, the Skull Crypt, the Heaving Hoard),
+// a breather (the Jewel Grotto), the Captain's Gauntlet, then the Captain's Hoard itself and its finish. Its own shaft
+// (dark plum rock banked with pressed gold), its own traps and its own look (G.theme 'vault', see the vault drawing);
+// it runs pinned to the jungle (pinJungle) like the temple, so nothing of the endless zones shows up.
+// The traps (every one leaves a lane or a timing that the widest pilot fits through):
+// - vaultAval (Coin Avalanche): a heap of gold on a rock ledge high on a wall, a catch ledge `drop` below it. Every P s
+//   the heap trembles and sheds a few coins (`tell` s), then pours off the lip in a column for `pour` s; the coins fall
+//   (g) onto the catch ledge. The column only kills while coins are in it (it falls from above, never rises); the ledges
+//   and heaps always hurt. The lane on the far side is always open.
+// - vaultChest (Treasure Chest / Mimic Chest): a chest on a rock ledge. A real chest bursts into coins when you fly
+//   into it (the stage's chest mission); a mimic looks almost the same (tells: teeth on its rim, drool, red eyes in the
+//   dark of its lid). Every P s a mimic drools and its lid creaks (`tell` s), then it flips open and lashes its tongue
+//   out across the shaft (`reach`). A mimic's body, lid and tongue hurt; every ledge hurts.
+// - vaultSkull (Cursed Skull): a skeleton's arm reaching out of the gold holds up a jewel (a cursed ruby, the stage's
+//   collectible, or a curse-fire lantern). A pirate skull trailing green fire circles it once a lap, then stops facing
+//   out (chattering, `tell` s) and lunges `L` straight out along that line before it drifts back. Skull, arm and
+//   lantern hurt.
+// - vaultSurge (Gold Surge, this stage's own): the cursed hoard in a wall wakes. Every P s the bank high on a wall
+//   bulges and glints (`tell` s), then a swell of gold with jewel eyes heaves out `out` from the wall and rolls down it
+//   `len` (at `v`, from above, never rising) before it sinks back. The swell hurts; the far lane is always open.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const VAULT = {
+  relief: [7, 4, 2], lump: 10,                       // wall relief: three swells, plus a bank of coins bulging here and there
+  aval: { len: 86, catchLen: 104, drop: 330, cw: 17, g: 1500, tell: 0.9, pour: 1.1, ease: 340 },
+  chest: { len: 72, cx: 38, hw: 25, bh: 25, k: 1.5, halo: 18, reach: 106, T: { tell: 0.85, open: 0.12, lash: 0.2, hold: 0.45, back: 0.35, shut: 0.25 }, ease: 320 },
+  skull: { cx: 70, R: 46, L: 42, k: 1.2, T: { tell: 0.75, lunge: 0.18, hold: 0.14, back: 0.45 }, ease: 330 },
+  surge: { len: 420, out: 118, Rs: 60, v: 330, tell: 0.85, sink: 0.35, ease: 380 },
+  chiliGap: 470, end: 380, chestWorth: 5,
+};
+const VAULT_TYPES = new Set(['vaultAval', 'vaultChest', 'vaultSkull', 'vaultSurge']);
+// The stage, bottom to top (as TEMPLE_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). ruby: that skull holds a cursed ruby (3 in all).
+const VAULT_STAGE = [
+  { name: 'Smugglers\' Cove', w: 376, len: 1000, calm: true },
+  { name: 'Coin Falls', w: 362, beats: [[480, 'aval', { side: 1, P: 4.6 }], [560, 'chest', {}], [480, 'aval', { side: -1, P: 4.4, ph: 0.4 }],
+    [620, 'avalPair', { P: 4.4 }], [760, 'aval', { side: 1, P: 4.1, ph: 0.2 }], [600, 'avalPair', { P: 4.0, ph: 0.6 }], [700, 'aval', { side: -1, P: 3.9, ph: 0.7 }]], tail: 600 },
+  { name: 'Mimic Hall', w: 366, beats: [[520, 'mimic', { side: -1, P: 4.4 }], [560, 'chest', {}], [560, 'mimic', { side: 1, P: 4.2, ph: 0.4 }],
+    [620, 'chestPair', { P: 4.2 }], [700, 'mimicAval', { P: 4.0 }], [740, 'chestPair', { P: 3.9, ph: 0.3 }], [700, 'mimic', { side: -1, P: 3.9, ph: 0.6 }]], tail: 600 },
+  { name: 'Skull Crypt', w: 378, beats: [[520, 'skull', { side: 1, P: 4.4 }], [620, 'skull', { side: -1, P: 4.2, ph: 0.4 }], [640, 'skullPair', { P: 4.2 }],
+    [760, 'skullChest', { P: 4.0 }], [700, 'skull', { side: 1, P: 4.0, ph: 0.6, ruby: true }], [660, 'skullAval', { P: 3.9 }], [720, 'skullPair', { P: 3.9, ph: 0.5 }]], tail: 620 },
+  { name: 'Heaving Hoard', w: 362, beats: [[520, 'surge', { side: 1, P: 5.0 }], [640, 'surge', { side: -1, P: 4.8, ph: 0.4 }], [640, 'surgePair', { P: 4.8 }],
+    [960, 'surgeSkull', { P: 4.6, ruby: true }], [780, 'surgeChest', { P: 4.6 }], [700, 'surgeAval', { P: 4.4 }], [760, 'surgePair', { P: 4.4, ph: 0.7 }]], tail: 620 },
+  { name: 'Jewel Grotto', w: 384, len: 1400, calm: true },
+  { name: 'Captain\'s Gauntlet', w: 362, beats: [[520, 'avalPair', { P: 3.9 }], [720, 'chestPair', { P: 3.8 }], [700, 'skullPair', { P: 3.9 }],
+    [820, 'surgeChest', { P: 4.4, ph: 0.3 }], [700, 'mimicAval', { P: 3.7, ph: 0.5 }], [760, 'surgeSkull', { P: 4.4, ph: 0.6, ruby: true }], [820, 'surgePair', { P: 4.4, ph: 0.2 }],
+    [980, 'skullChest', { P: 3.8, ph: 0.4 }], [700, 'aval', { side: -1, P: 3.8 }], [720, 'surgeAval', { P: 4.3, ph: 0.55 }], [700, 'chestPair', { P: 3.7, ph: 0.7 }],
+    [700, 'skullAval', { P: 3.8, ph: 0.6 }], [900, 'avalPair', { P: 3.7, ph: 0.4 }], [760, 'skullChest', { P: 3.7, ph: 0.2 }], [720, 'mimic', { side: 1, P: 3.7, ph: 0.8 }]], tail: 780 },
+  { name: 'The Captain\'s Hoard', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height, from the layout alone
+const vaultEnd = () => { let y = 0; for (const sec of VAULT_STAGE) { if (sec.finish) return y + VAULT.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// A coin avalanche on its clock: the tell (0..1), how full the heap is (1 .. 0.35 after a pour, refilling), and the
+// falling column as depths below the lip: head (how far the first coins have fallen) and tail (the last ones).
+function vaultAvalState(h, t) {
+  const A = VAULT.aval, u = pmod(t / h.P + h.ph, 1) * h.P, fall = Math.sqrt(2 * A.drop / A.g), ts = h.P - A.tell - A.pour - fall, te = ts + A.pour;
+  const tell = u >= ts - A.tell && u < ts ? (u - (ts - A.tell)) / A.tell : 0;
+  const head = u >= ts ? Math.min(A.drop, 0.5 * A.g * (u - ts) ** 2) : 0, tail = u >= te ? Math.min(A.drop, 0.5 * A.g * (u - te) ** 2) : 0;
+  const fill = u >= ts && u < te ? 1 - 0.65 * smooth(ts, te, u) : 0.35 + 0.65 * smooth(0, 1.2, pmod(u - te, h.P));
+  return { tell, head, tail, pouring: head > tail + 0.5, fill, u, ts, te };
+}
+// the lip the coins pour off and the column's middle (x), for a trap on side `side` (1: on the left wall)
+const vaultAvalX = h => h.base + h.side * (VAULT.aval.len - 6);
+// the two ledges with their heaps (fitted to the drawing): the hoard ledge at h.alt, the catch ledge drop below
+function vaultAvalRock(S, h, fill = 1) {
+  const A = VAULT.aval, d = h.side, b = h.base, T = h.alt, C = h.alt - A.drop;
+  S.push({ k: 's', x0: b - d * 14, a0: T - 7, x1: b + d * (A.len - 9), a1: T - 6, r: 8 });
+  S.push({ k: 's', x0: b - d * 8, a0: T - 20, x1: b + d * A.len * 0.42, a1: T - 15, r: 11 });
+  S.push({ k: 's', x0: b + d * 12, a0: T + 3 + 6 * fill, x1: b + d * (A.len - 26), a1: T + 3 + 6 * fill, r: 5 + 9 * fill });
+  S.push({ k: 's', x0: b - d * 14, a0: C - 7, x1: b + d * (A.catchLen - 9), a1: C - 6, r: 8 });
+  S.push({ k: 's', x0: b - d * 8, a0: C - 20, x1: b + d * A.catchLen * 0.42, a1: C - 15, r: 11 });
+  S.push({ k: 's', x0: b + d * 30, a0: C + 4, x1: b + d * (A.len - 2), a1: C + 4, r: 9 });
+  vaultBracket(S, b, d, T, A.len); vaultBracket(S, b, d, C, A.catchLen);
+  return S;
+}
+function vaultAvalColumn(S, h, st) {
+  if (!st.pouring) return S;
+  const x = vaultAvalX(h), top = h.alt - 2 - st.tail, bot = h.alt - 2 - st.head;
+  S.push({ k: 's', x0: x, a0: Math.min(bot, top - 0.1), x1: x, a1: top, r: VAULT.aval.cw });
+  return S;
+}
+
+// what holds a ledge to the wall (fitted to its drawing): a buttress of rock running down the wall under its root and
+// an iron strut from the wall up to its underside
+function vaultBracket(S, b, d, A, len) {
+  S.push({ k: 's', x0: b + d * 1, a0: A - 26, x1: b + d * 0, a1: A - 50, r: 6 });
+  S.push({ k: 's', x0: b + d * 3, a0: A - 44, x1: b + d * len * 0.4, a1: A - 15, r: 3 });
+  return S;
+}
+// A chest's ledge (fitted to its drawing): the slab along its top and its thick root against the wall
+function vaultChestLedge(S, h) {
+  const C = VAULT.chest, d = h.side, b = h.base, A = h.alt;
+  S.push({ k: 's', x0: b - d * 14, a0: A - 7, x1: b + d * (C.len - 9), a1: A - 6, r: 8 });
+  S.push({ k: 's', x0: b - d * 8, a0: A - 20, x1: b + d * C.len * 0.42, a1: A - 15, r: 11 });
+  return vaultBracket(S, b, d, A, C.len);
+}
+// the chest's body (a real one bursts when this touches you; a mimic's bites)
+function vaultChestBody(S, h) {
+  const C = VAULT.chest, x = h.base + h.side * C.cx, r = 15 * C.k / 1.3, a = h.alt + C.bh * 0.77;
+  S.push({ k: 's', x0: x - (C.hw - r), a0: a, x1: x + (C.hw - r), a1: a, r });
+  return S;
+}
+// where touching a real chest cracks it open: its body and a generous halo round it (a bump or a fly-past from the
+// side or above will do: you never have to land on it)
+function vaultChestTrigger(S, h) {
+  const q = vaultChestBody([], h)[0];
+  S.push({ ...q, r: q.r + VAULT.chest.halo });
+  return S;
+}
+// A mimic on its clock: the tell (0..1), how far its lid is thrown open (0..1) and how far its tongue is out (0..1)
+function vaultMimicState(h, t) {
+  const T = VAULT.chest.T, u = pmod(t / h.P + h.ph, 1) * h.P, rest = h.P - T.tell - T.open - T.lash - T.hold - T.back - T.shut;
+  if (u < rest) return { tell: 0, open: 0, ext: 0, u };
+  let v = u - rest;
+  if (v < T.tell) return { tell: v / T.tell, open: 0.16 * smooth(0, 1, v / T.tell), ext: 0, u };
+  v -= T.tell;
+  if (v < T.open) return { tell: 1, open: 0.16 + 0.84 * smooth(0, 1, v / T.open), ext: 0, u };
+  v -= T.open;
+  if (v < T.lash) return { tell: 1, open: 1, ext: smooth(0, 1, v / T.lash), u, lashing: 1 };
+  v -= T.lash;
+  if (v < T.hold) return { tell: 1, open: 1, ext: 1, u, lashing: 1 };
+  v -= T.hold;
+  if (v < T.back) return { tell: 0, open: 1, ext: 1 - smooth(0, 1, v / T.back), u };
+  v -= T.back;
+  return { tell: 0, open: 1 - smooth(0, 1, v / T.shut), ext: 0, u };
+}
+// the tongue's centre line at ext (0..1), world points from the mouth out (N + 1 of them)
+function vaultTongue(h, ext, t, N = 8) {
+  const C = VAULT.chest, kk = C.k / 1.3, d = h.side, mx = h.base + d * (C.cx + 14 * kk), ma = h.alt + 21 * kk, Lt = C.reach * ext, out = [];
+  for (let i = 0; i <= N; i++) { const v = i / N; out.push([mx + d * v * Lt, ma + Math.sin(v * Math.PI) * 7 * ext + Math.sin(t * 15 - v * 7) * v * 4 * ext]); }
+  return out;
+}
+const vaultTongueR = v => 6.5 - 2 * v;
+// the mimic's lid tip when thrown open by `open` (its hinge at the back corner of the box)
+function vaultLid(h, open) {
+  const C = VAULT.chest, d = h.side, hx = h.base + d * (C.cx - C.hw), ha = h.alt + C.bh, ang = open * 1.15, L = C.hw * 2;
+  return [hx, ha, hx + d * Math.cos(ang) * L, ha + Math.sin(ang) * L];
+}
+function vaultMimicBody(S, h, st, t) {
+  vaultChestBody(S, h);
+  if (st.open > 0.2) { const [hx, ha, lx, la] = vaultLid(h, st.open); S.push({ k: 's', x0: hx, a0: ha + 4, x1: lx, a1: la, r: 6.5 }); }
+  if (st.ext > 0.02) {
+    const P = vaultTongue(h, st.ext, t);
+    for (let i = 0; i < 8; i += 2) S.push({ k: 's', x0: P[i][0], a0: P[i][1], x1: P[i + 2][0], a1: P[i + 2][1], r: vaultTongueR(i / 8) });
+    S.push({ k: 'c', x: P[8][0], a: P[8][1], r: 6.5 });
+  }
+  return S;
+}
+
+// A cursed skull on its clock: its angle round the jewel (world: 0 = +x, a up), how far it is lunging out (0..1), its
+// tell (chatter, 0..1). One lap from its lunge angle back to it, then the tell, the lunge, a hold and the drift back.
+function vaultSkullState(h, t) {
+  const K = VAULT.skull, T = K.T, u = pmod(t / h.P + h.ph, 1) * h.P, lap = h.P - T.tell - T.lunge - T.hold - T.back;
+  if (u < lap) { const q = u / lap, e = q < 0.12 ? q * q / 0.24 : q > 0.88 ? 0.88 - (1 - q) * (1 - q) / 0.24 : q - 0.06; return { ang: h.th + h.dir * Math.PI * 2 * e / 0.88, ext: 0, tell: 0, u }; }
+  let v = u - lap;
+  if (v < T.tell) return { ang: h.th, ext: -0.08 * smooth(0, 1, v / T.tell), tell: v / T.tell, u };
+  v -= T.tell;
+  if (v < T.lunge) return { ang: h.th, ext: -0.08 + 1.08 * smooth(0, 1, v / T.lunge), tell: 1, u, lunging: 1 };
+  v -= T.lunge;
+  if (v < T.hold) return { ang: h.th, ext: 1, tell: 1, u, lunging: 1 };
+  v -= T.hold;
+  return { ang: h.th, ext: 1 - smooth(0, 1, v / T.back), tell: 0, u };
+}
+function vaultSkullPos(h, st) { const K = VAULT.skull, R = K.R + K.L * st.ext; return [h.cx + Math.cos(st.ang) * R, h.alt + Math.sin(st.ang) * R]; }
+// the skull at (x, a), fitted to its drawing (scale K.k): cranium and jaw, and the tricorn's brim
+function vaultSkullBody(S, x, a) {
+  const k = VAULT.skull.k / 1.2;
+  S.push({ k: 's', x0: x, a0: a + 2 * k, x1: x, a1: a - 4 * k, r: 15 * k });
+  S.push({ k: 's', x0: x - 11 * k, a0: a + 19 * k, x1: x + 9 * k, a1: a + 21 * k, r: 6 * k });
+  return S;
+}
+// the skeleton's arm out of the gold, holding its jewel up at (cx, alt); a lantern's cage when it holds a lantern
+function vaultSkullArm(S, h) {
+  const d = h.side, b = h.base;
+  S.push({ k: 's', x0: b - d * 8, a0: h.alt - 40, x1: b + d * (VAULT.skull.cx * 0.55), a1: h.alt - 30, r: 8 });
+  S.push({ k: 's', x0: b + d * (VAULT.skull.cx * 0.55), a0: h.alt - 30, x1: h.cx - d * 4, a1: h.alt - 21, r: 6.5 });
+  if (!h.ruby) S.push({ k: 's', x0: h.cx, a0: h.alt - 10, x1: h.cx, a1: h.alt + 8, r: 10 });
+  return S;
+}
+
+// A gold surge on its clock: how far the swell stands out of the wall (0..1), its height (where its middle is) and its
+// tell. It grows at the top through the tell, rolls down at VAULT.surge.v, then sinks back at the bottom.
+function vaultSurgeState(h, t) {
+  const U = VAULT.surge, u = pmod(t / h.P + h.ph, 1) * h.P, roll = U.len / U.v, rest = h.P - U.tell - roll - U.sink;
+  if (u < rest) return { out: 0, a: h.top, tell: 0, u };
+  let v = u - rest;
+  if (v < U.tell) return { out: 0.32 * smooth(0, 1, v / U.tell), a: h.top, tell: v / U.tell, u };
+  v -= U.tell;
+  if (v < roll) { const q = v / roll; return { out: 0.32 + 0.68 * smooth(0, 0.18, q), a: h.top - U.len * (q * 0.85 + 0.15 * smooth(0, 1, q)), tell: 0, u, rolling: q }; }
+  v -= roll;
+  return { out: 1 - smooth(0, 1, v / U.sink), a: h.alt, tell: 0, u };
+}
+// the swell at (out, a): a round heave of coins out of the wall, fitted to its drawing
+function vaultSurgeBody(S, h, st) {
+  const U = VAULT.surge, o = U.out * st.out; if (o < 3) return S;
+  const R = Math.min(U.Rs, 18 + o * 0.6);
+  S.push({ k: 'c', x: h.base + h.side * (o - R), a: st.a, r: R });
+  return S;
+}
+
+// Every collision shape of a vault trap at time t, fitted to its drawing. kind: undefined for the lethal ones, 'body'
+// the solid parts only (the rock and anything that sits there, never a moving reach).
+function vaultShapes(h, t, S = [], kind) {
+  if (h.type === 'vaultAval') { const st = vaultAvalState(h, t); vaultAvalRock(S, h, st.fill); if (kind !== 'body') vaultAvalColumn(S, h, st); }
+  else if (h.type === 'vaultChest') { vaultChestLedge(S, h); if (h.mimic) { if (kind === 'body') vaultChestBody(S, h); else vaultMimicBody(S, h, vaultMimicState(h, t), t); } }
+  else if (h.type === 'vaultSkull') { vaultSkullArm(S, h); if (kind !== 'body') vaultSkullBody(S, ...vaultSkullPos(h, vaultSkullState(h, t))); }
+  else if (h.type === 'vaultSurge') { if (kind !== 'body') vaultSurgeBody(S, h, vaultSurgeState(h, t)); }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): the ledges with full heaps and the whole column, a
+// mimic's open lid and its tongue at full stretch (and its whole box), a skull round its ring and along every lunge
+// line it might take, a surge all the way down its stroke.
+function vaultDanger(h) {
+  const S = [];
+  if (h.type === 'vaultAval') { vaultAvalRock(S, h, 1); const x = vaultAvalX(h); S.push({ k: 's', x0: x, a0: h.alt - 2, x1: x, a1: h.alt - VAULT.aval.drop, r: VAULT.aval.cw }); }
+  else if (h.type === 'vaultChest') { vaultChestLedge(S, h); vaultChestBody(S, h); if (h.mimic) for (const t of [0, 0.1, 0.2, 0.3]) vaultMimicBody(S, h, { open: 1, ext: 1 }, t); }
+  else if (h.type === 'vaultSkull') {
+    vaultSkullArm(S, h);
+    for (let k = 0; k < 24; k++) vaultSkullBody(S, ...vaultSkullPos(h, { ang: k / 24 * Math.PI * 2, ext: 0 }));
+    for (let k = 0; k <= 6; k++) vaultSkullBody(S, ...vaultSkullPos(h, { ang: h.th, ext: k / 6 }));
+  } else if (h.type === 'vaultSurge') for (let a = h.alt; a <= h.top + 0.1; a += 30) vaultSurgeBody(S, h, { out: 1, a });
+  return S;
+}
+
+// The Cursed Treasure Vault's shaft, laid out in full from VAULT_STAGE (the seed only nudges looks and phases). It
+// answers the same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createVaultLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x7A017) >>> 0), V0 = VAULT;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of VAULT_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = vaultEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the banks' relief on a side: three slow swells and a bulging bank of coins now and then, eased flat where a trap is
+  // mounted (so it sits on a flat face) and over the launch. Never steeper than RULES.maxWallSlope.
+  const ph0 = (seed & 0xfff) / 0xfff * 6.283;
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 60 && a < f.a1 + 60) k = Math.max(k, smooth(f.a0 - 60, f.a0, a) * (1 - smooth(f.a1, f.a1 + 60, a))); return k; };
+  const lumpAt = (a, side) => { const i = Math.round(a / 260), j = hash2(i, (seed & 0xffff) + 97 + side * 13); if (j < 0.45) return 0; const c = i * 260 + (j - 0.7) * 80, u = (a - c) / 100; return Math.abs(u) < 1 ? V0.lump * (0.6 + 0.4 * j) * (1 - u * u) * (1 - u * u) : 0; };
+  const reliefAt = (a, side) => {
+    const p = ph0 + side * 2.3, [l0, l1, l2] = V0.relief;
+    const r = l0 * (0.5 + 0.5 * Math.sin(a / 67 + p)) + l1 * (0.5 + 0.5 * Math.sin(a / 31 + p * 1.6)) + l2 * (0.5 + 0.5 * Math.sin(a / 13 + p * 2.7)) + lumpAt(a, side);
+    return r * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function vWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function vOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = vWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  const wallOf = d => d > 0 ? -1 : 1;   // (a trap on the left wall, d 1, flattens side 0)
+  const make = {
+    aval(A, o) {
+      const X = V0.aval, d = o.side || pick(); flat(A - X.drop - 40, A + 40, wallOf(d));
+      return [{ type: 'vaultAval', side: d, alt: A, P: o.P, ph: o.ph ?? ph(), lo: A - X.drop - 30, hi: A + 44, ease: X.ease }];
+    },
+    avalPair(A, o) {   // avalanches on facing walls 260 apart, half a cycle out of step: one pours while the other refills
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.aval(A, { side: d, P: o.P, ph: p0 }), ...make.aval(A + 260, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    chest(A, o) {      // a real chest alone (teaching: they burst into coins)
+      const d = o.side || pick(); flat(A - 30, A + 50, o.mimic ? 0 : wallOf(d));
+      return [{ type: 'vaultChest', side: d, alt: A, mimic: !!o.mimic, P: o.P || 4.4, ph: o.ph ?? ph(), lo: A - 30, hi: A + 48, ease: o.mimic ? V0.chest.ease : 0 }];
+    },
+    mimic(A, o) { return make.chest(A, { ...o, mimic: true }); },
+    chestPair(A, o) {  // a real chest and a mimic on facing walls 230 apart (which is which: the seed's)
+      const d = pick(), realFirst = rng() < 0.5;
+      return [...make.chest(A, { side: d, mimic: !realFirst, P: o.P, ph: o.ph }), ...make.chest(A + 230, { side: -d, mimic: realFirst, P: o.P, ph: (o.ph ?? ph()) + 0.5 })];
+    },
+    mimicAval(A, o) {  // a mimic, an avalanche on the far wall above it
+      const d = pick();
+      return [...make.mimic(A, { side: d, P: o.P, ph: o.ph }), ...make.aval(A + 120 + V0.aval.drop, { side: -d, P: o.P + 0.3 })];
+    },
+    skull(A, o) {
+      const d = o.side || pick(); flat(A - 130, A + 130, 0);
+      return [{ type: 'vaultSkull', side: d, alt: A, P: o.P, ph: o.ph ?? ph(), dir: pick(), tilt: [-0.5, -0.25, 0][Math.floor(rng() * 3)], ruby: !!o.ruby, lo: A - 120, hi: A + 120, ease: V0.skull.ease }];
+    },
+    skullPair(A, o) {  // skulls on facing walls 300 apart, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.skull(A, { side: d, P: o.P, ph: p0 }), ...make.skull(A + 300, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    skullChest(A, o) { // a skull, a real chest on the far wall just above its ring (a dare)
+      const d = pick();
+      return [...make.skull(A, { side: d, P: o.P, ph: o.ph }), ...make.chest(A + 170, { side: -d })];
+    },
+    skullAval(A, o) {  // an avalanche, a skull on the far wall above it
+      const d = pick();
+      return [...make.aval(A, { side: d, P: o.P + 0.4, ph: o.ph }), ...make.skull(A + 260, { side: -d, P: o.P })];
+    },
+    surge(A, o) {
+      const U = V0.surge, d = o.side || pick(); flat(A - 70, A + U.len + 70, wallOf(d));
+      return [{ type: 'vaultSurge', side: d, alt: A, top: A + U.len, P: o.P, ph: o.ph ?? ph(), lo: A - U.Rs - 10, hi: A + U.len + U.Rs + 10, ease: U.ease }];
+    },
+    surgePair(A, o) {  // surges down facing walls, staggered, half a cycle out of step: a slalom
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.surge(A, { side: d, P: o.P, ph: p0 }), ...make.surge(A + 240, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    surgeSkull(A, o) { // a surge rolling down one wall, a skull on the other near its foot
+      const d = pick();
+      return [...make.surge(A, { side: d, P: o.P, ph: o.ph }), ...make.skull(A + 140, { side: -d, P: o.P - 0.6, ruby: o.ruby })];
+    },
+    surgeChest(A, o) { // a surge, and a real chest and a mimic on the far wall beside its stroke
+      const d = pick();
+      return [...make.surge(A, { side: d, P: o.P, ph: o.ph }), ...make.chest(A + 60, { side: -d, mimic: true, P: o.P - 0.7 }), ...make.chest(A + 330, { side: -d })];
+    },
+    surgeAval(A, o) {  // an avalanche pours on one wall while the surge rolls down the other
+      const d = pick();
+      return [...make.surge(A, { side: -d, P: o.P, ph: (o.ph ?? ph()) + 0.25 }), ...make.aval(A + 380, { side: d, P: o.P, ph: o.ph })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, vault: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions
+  for (const b of beats) for (const h of b.hs) {
+    const [L, R] = vOpening(h.lo, h.hi);
+    h.L = L; h.R = R; h.base = h.side > 0 ? L : R;
+    if (h.type === 'vaultAval') h.x = vaultAvalX(h);
+    else if (h.type === 'vaultChest') h.x = h.base + h.side * V0.chest.cx;
+    else if (h.type === 'vaultSkull') { h.cx = h.base + h.side * V0.skull.cx; h.x = h.cx; h.th = (h.side > 0 ? 0 : Math.PI) + h.side * h.tilt; }
+    else if (h.type === 'vaultSurge') h.x = h.base + h.side * V0.surge.out * 0.5;
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, vaultDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = vWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = vWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = vWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  // the middle of the lane on the far side of a trap reaching `reach` out from its wall
+  const farLane = (h, reach, a) => { const [l, r] = vWalls(a), e = h.base + h.side * reach; return h.side > 0 ? (e + r) / 2 : (l + e) / 2; };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + V0.end - 120, 0.5);
+    else {   // the Grotto: a ring of coconuts round the middle (a big coin at each quarter), then a weave
+      const cA = sc.a0 + 360, cx = mid(cA);
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 92, cA + Math.sin(an) * 92, k % 4 ? 'coco' : 'gold', { clear: -Infinity }); }
+      weave(sc.a0 + 560, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way (the open lane past it); a skull holding a ruby keeps it as the dare
+  let rubies = 0;
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      if (h.type === 'vaultAval') { const x = farLane(h, V0.aval.catchLen + 10, h.alt - 150); column(x, h.lo - 40, 3, 40, { clear: 30 }); add(farLane(h, V0.aval.len, h.alt), h.hi + 30, 'coco', { clear: 30 }); }
+      else if (h.type === 'vaultChest') { if (h.mimic) { const x = farLane(h, V0.chest.cx + 14 * V0.chest.k / 1.3 + V0.chest.reach + 8, h.alt + 20); column(x, h.lo - 50, 2, 44, { clear: 30 }); } else add(h.base + h.side * (V0.chest.cx + 48), h.alt + 40, 'coco', { clear: 30 }); }
+      else if (h.type === 'vaultSkull') {
+        const x = farLane(h, V0.skull.cx + V0.skull.R + V0.skull.L + 20, h.alt); column(x, h.lo - 10, 2, 44, { clear: 30 }); add(x, h.hi + 10, 'coco', { clear: 30 });
+        if (h.ruby) { fruit.push({ x: h.cx, alt: h.alt + 4, kind: 'vaultRuby', ruby: true, clear: -Infinity }); rubies++; }
+      } else if (h.type === 'vaultSurge') { const x = farLane(h, V0.surge.out + 6, h.alt + 200); column(x, h.alt + 40, 4, 60, { clear: 30 }); }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(h => h.hi)) + 90, a1 = Math.min(...next.hs.map(h => h.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+    void top;
+  }
+  // the chili line (as the temple's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= V0.chiliGap + 130; j++) if (spots[j].a - last >= V0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < V0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: vWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, vault: true, sections: secs, beats, top: topA, rubies,
+    chests: out.filter(h => h.type === 'vaultChest' && !h.mimic).length,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 23): its own shaft (createVaultLevel), the vault look (G.theme), its missions (the
+// captain's hoard, 3 cursed rubies, 6 real chests cracked open) and its length in metres (from the layout).
+const ADV_VAULT = { name: 'Cursed Treasure Vault', theme: 'vault', seed: 'isl-23-vault', reward: 240, target: 0, len: vaultEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the captain\'s hoard' }, { k: 'vaultRuby', n: 3 }, { k: 'vaultChests', n: 6 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Cursed Treasure Vault, island level 23)
 // (LEVELGEN slot: Cascade Falls, island level 24)
 // (LEVELGEN slot: Gull Cliffs, island level 25)
@@ -36350,7 +36779,7 @@ const ISLAND = {
   more: [
     { id: 21, name: 'Fossil Bonepit', region: 'fossil', pilot: 'dachshund', perk: 'Digs up bones: buried bones become bonus coins', stage: 'fossil' },
     { id: 22, name: 'Shipwreck Hold', region: 'shipwreck', pilot: 'puffer', perk: 'Puffs up so the kraken lets go once', stage: 'shipwreck' },
-    { id: 23, name: 'Cursed Treasure Vault', region: 'vault', pilot: 'piggy', perk: 'Sniffs out mimics: they glow red' },
+    { id: 23, name: 'Cursed Treasure Vault', region: 'vault', pilot: 'piggy', perk: 'Sniffs out mimics: they glow red', stage: 'vault' },
     { id: 24, name: 'Cascade Falls', region: 'cascade', pilot: 'duck', perk: 'Swims straight up the falls' },
     { id: 25, name: 'Gull Cliffs', region: 'cliffs', pilot: 'penguin', perk: 'Gulls ignore a fellow seabird' },
     { id: 26, name: 'Clockwork Tower', region: 'clockwork', pilot: 'robot', perk: 'A wind-up key pauses time for a second' },
@@ -36430,6 +36859,7 @@ ADV_STAGES.lagoon = ADV_LAGOON;   // (island level 11, Hidden Lagoon: see create
 ADV_STAGES.bog = ADV_BOG;   // (island level 7, Murk Mire: see createBogLevel)
 ADV_STAGES.fossil = ADV_FOSSIL;   // (island level 21, Fossil Bonepit: see createFossilLevel)
 ADV_STAGES.shipwreck = ADV_SHIPWRECK;   // (island level 22, Shipwreck Hold: see createShipwreckLevel)
+ADV_STAGES.vault = ADV_VAULT;   // (island level 23, Cursed Treasure Vault: see createVaultLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -55542,6 +55972,1728 @@ ADV_GOALS.shipwreckGap = { text: g => `Slip through ${g.n} broadside gaps as the
 // play-testing hook (only with ?debug in the URL): the hold's shapes and clocks for scripts
 if (/[?&]debug\b/.test(location.search)) window.CRS = { SHIPWRECK, SHIPWRECK_STAGE, shipwreckShapes, shipwreckCannonState, shipwreckAnchorState, shipwreckKrakenState, shipwreckSlingPos, shipwreckDanger, createShipwreckLevel, cache: SHIPWRECK_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Shipwreck Hold, island level 22)
+// ---------- the Cursed Treasure Vault (island level 23): its look, traps, chests, rubies and sounds ----------
+// The stage's shaft and traps are laid out by createVaultLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'vault': a pirate hoard so big it fills a sea cave to the roof. Dark plum rock banked thick with
+// pressed gold coins, chests, goblets and jewels; warm gold glitter everywhere, cut by cold green curse-fire (the skulls,
+// their lanterns, the cursed hoard's eyes); far mountains of gold receding into a violet haze (nothing of it shows
+// anywhere else: Daily and Practice never set a theme).
+// Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left, every edge a darker shade of its own
+// colour (never black), detail as line pairs (a dark furrow under a lit ridge), sheen strokes and soft glows.
+// Performance: everything static (the walls' banks, the backdrop's layers, ledges, heaps, chests' boxes, the finish's
+// set) is drawn once into cached canvases at the screen's pixel density (tiles down the height, rendered a little ahead
+// of the camera, one per frame) and blitted; coins in flight are blits of a cached coin in 8 flip frames.
+const VP = {
+  gold: { lit: '#fff6c0', hi: '#ffd860', mid: '#e0a028', lo: '#9a5a10', deep: '#5e3008' },
+  rock: [[132, 100, 132], [86, 60, 94], [52, 34, 62], [28, 16, 36]],
+  curse: [93, 255, 158], warm: [255, 214, 120], ruby: [255, 70, 110], plum: [58, 40, 60],
+  pal: { bgTop: [84, 56, 78], bgBot: [34, 22, 42], far: [98, 70, 82], far2: [116, 84, 72], wall: [58, 40, 60], wallIn: [16, 9, 20], rim: [255, 206, 96] },
+};
+const VAULT_GEMS = { ruby: ['#ffd0d8', '#ff3a5a', '#8a0a2a'], sapph: ['#d8ecff', '#3a7aff', '#14206a'], emer: ['#d8ffe8', '#2ad07a', '#0a5a34'], amet: ['#f0d8ff', '#b44aff', '#4a1478'] };
+const VAULT_GEMK = ['ruby', 'sapph', 'emer', 'amet'];
+const vaultOn = () => !!(G && G.theme === 'vault');
+{ const base = pal; pal = function (key, a) { return vaultOn() && VP.pal[key] ? VP.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function vaultLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function vaultRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function vaultGlow(x, y, r, col, a, c = ctx) { if (a < 0.004 || r < 0.5) return; c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = vaultRG(x, y, r, [rgbaA(col, a), rgbaA(col, a * 0.32), rgbaA(col, 0)], c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.restore(); }
+function vaultSheen(x, y, r, a = 0.45, from = 3.5, to = 4.9, c = ctx) { c.save(); c.strokeStyle = `rgba(255,255,255,${a})`; c.lineWidth = Math.max(0.8, r * 0.16); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.68, from, to); c.stroke(); c.restore(); }
+const vaultLift = (c, k) => c.map(v => clamp(v + k, 0, 255));
+const vaultCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+function vaultEll(c, x, y, rx, ry, fill, rot = 0) { c.fillStyle = fill; c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); c.fill(); }
+// a smooth closed blob through pts (midpoint quadratics)
+function vaultBlob(c, pts) {
+  const N = pts.length, m = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  c.beginPath(); c.moveTo(...m(pts[N - 1], pts[0]));
+  for (let i = 0; i < N; i++) { const p = pts[i], q = pts[(i + 1) % N]; c.quadraticCurveTo(p[0], p[1], ...m(p, q)); }
+  c.closePath();
+}
+// a four-point twinkle (additive)
+function vaultTwinkle(c, x, y, r, a, col = [255, 250, 220]) {
+  if (a < 0.03) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = vaultCol(col, a);
+  c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.22, y - r * 0.22); c.lineTo(x + r, y); c.lineTo(x + r * 0.22, y + r * 0.22); c.lineTo(x, y + r); c.lineTo(x - r * 0.22, y + r * 0.22); c.lineTo(x - r, y); c.lineTo(x - r * 0.22, y - r * 0.22); c.closePath(); c.fill();
+  c.restore();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function vaultCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0);
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const VAULT_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map() };
+function vaultCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (VAULT_CACHE.key !== key) { VAULT_CACHE.key = key; VAULT_CACHE.walls.clear(); VAULT_CACHE.layers.clear(); VAULT_CACHE.sprites.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function vaultSprite(name, w, h, draw) {
+  let sp = VAULT_CACHE.sprites.get(name);
+  if (!sp) { sp = vaultCanvas(w, h); draw(sp.c, sp.w, sp.h); VAULT_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// is the pilot Penny the piggy bank (she sniffs out mimics: they glow red for her, the perk)?
+const vaultSniffer = () => { const pl = pilot(); return !!(pl && pl.character && pl.character.id === 'piggy'); };
+const vaultVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the gold itself: a doubloon (skull stamped on it), drawn once in 8 flip frames and blitted wherever coins fly ----
+const VAULT_COIN_R = 6;
+function vaultCoinFrames() {
+  return vaultSprite('coins', 16 * 8 * s, 16 * s, c => {
+    const G0 = VP.gold;
+    for (let f = 0; f < 8; f++) {
+      const fl = Math.cos(f / 8 * Math.PI), ry = Math.max(0.16, Math.abs(fl)), face = fl >= 0, R = VAULT_COIN_R * s;
+      c.save(); c.translate((f * 16 + 8) * s, 8 * s);
+      // the milled rim seen edge-on under it, then the face
+      vaultEll(c, 0, R * 0.16 * (1 - ry) + 0.6 * s, R, R * ry, G0.deep);
+      vaultEll(c, 0, 0, R, R * ry, vaultLG(-R, -R * ry, R, R * ry, face ? [G0.lit, G0.hi, G0.mid, G0.lo] : [G0.hi, G0.mid, G0.lo], c));
+      c.strokeStyle = 'rgba(120,64,10,.85)'; c.lineWidth = 0.7 * s; c.beginPath(); c.ellipse(0, 0, R, R * ry, 0, 0, TWO_PI); c.stroke();
+      if (ry > 0.45) {
+        c.strokeStyle = 'rgba(150,84,14,.75)'; c.lineWidth = 0.6 * s; c.beginPath(); c.ellipse(0, 0, R * 0.72, R * 0.72 * ry, 0, 0, TWO_PI); c.stroke();
+        // a little skull stamped in the middle (two eyes, a jaw line)
+        vaultEll(c, 0, -R * 0.08 * ry, R * 0.34, R * 0.3 * ry, face ? 'rgba(170,98,16,.7)' : 'rgba(140,80,14,.6)');
+        vaultEll(c, -R * 0.13, -R * 0.1 * ry, R * 0.08, R * 0.08 * ry, G0.lit); vaultEll(c, R * 0.13, -R * 0.1 * ry, R * 0.08, R * 0.08 * ry, G0.lit);
+        c.strokeStyle = 'rgba(255,250,220,.9)'; c.lineWidth = 0.6 * s; c.beginPath(); c.ellipse(0, 0, R * 0.86, R * 0.86 * ry, 0, 3.5, 5.6); c.stroke();
+      } else { c.strokeStyle = 'rgba(255,248,200,.85)'; c.lineWidth = 0.7 * s; c.beginPath(); c.moveTo(-R * 0.8, -R * ry * 0.4); c.lineTo(R * 0.6, -R * ry * 0.6); c.stroke(); }
+      c.restore();
+    }
+  });
+}
+// blit one coin at screen (x, y): r its radius (world units), spin its flip angle
+function vaultCoin(x, y, r, spin, alpha = 1) {
+  const sp = vaultCoinFrames(), f = ((Math.floor(pmod(spin, Math.PI * 2) / (Math.PI * 2) * 16) % 16) + 16) % 16, fr = f < 8 ? f : 15 - f, k = r / VAULT_COIN_R;
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(sp.cv, fr * 16 * s * dpr, 0, 16 * s * dpr, 16 * s * dpr, x - 8 * s * k, y - 8 * s * k, 16 * s * k, 16 * s * k);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+
+// ---- sounds (synth) ----
+const VAULT_SFX = {
+  // a heap trembling: a nervous shiver of clinking coins
+  vashiver: (t, B, v) => { for (let i = 0; i < 9; i++) vTone(B, t + i * 0.08 + Math.random() * 0.03, 2400 + Math.random() * 1800, { type: 'triangle', v: 0.02 * v, dur: 0.05 }); vNoise(B, t, { type: 'highpass', f: 5000, v: 0.025 * v, dur: 0.8, a: 0.3 }); },
+  // the pour: a long jingling rush of gold
+  vapour: (t, B, v) => { vNoise(B, t, { f: 3800, q: 0.8, v: 0.08 * v, dur: 1.2, a: 0.05 }); vNoise(B, t, { type: 'lowpass', f: 700, v: 0.05 * v, dur: 1.1, a: 0.1 }); for (let i = 0; i < 18; i++) vTone(B, t + i * 0.06 + Math.random() * 0.04, 2000 + Math.random() * 2600, { type: 'sine', v: 0.022 * v, dur: 0.06 }); },
+  // a real chest bursting: a creak, a pop and a jackpot run of coins
+  vachest: (t, B) => { vNoise(B, t, { f: 700, q: 2, v: 0.08, dur: 0.12 }); vTone(B, t, 160, { f2: 90, glide: 0.1, type: 'square', lp: 900, v: 0.06, dur: 0.12 }); [76, 79, 83, 86, 88, 91, 95].forEach((m, i) => vTone(B, t + 0.06 + i * 0.045, mf(m), { type: 'triangle', v: 0.05, dur: 0.18 })); for (let i = 0; i < 10; i++) vTone(B, t + 0.1 + i * 0.03, 2600 + Math.random() * 2000, { type: 'sine', v: 0.03, dur: 0.05 }); },
+  // a mimic drooling: a wet slurp and a creaking lid
+  vmdrool: (t, B, v) => { vTone(B, t, 300, { f2: 120, glide: 0.35, type: 'sine', v: 0.05 * v, dur: 0.38 }); vNoise(B, t + 0.1, { type: 'lowpass', f: 1200, f2: 400, v: 0.04 * v, dur: 0.3 }); vTone(B, t + 0.35, 120, { f2: 190, glide: 0.4, type: 'sawtooth', lp: 900, v: 0.035 * v, dur: 0.45, vib: [18, 30] }); },
+  // the lash: a lid's clack and a whip of a tongue
+  vmlash: (t, B, v) => { vNoise(B, t, { f: 1800, q: 1.2, v: 0.1 * v, dur: 0.06 }); vTone(B, t, 220, { f2: 70, glide: 0.08, type: 'square', lp: 1200, v: 0.07 * v, dur: 0.09 }); vNoise(B, t + 0.08, { f: 900, f2: 3000, q: 1.5, v: 0.08 * v, dur: 0.22 }); },
+  // a skull's teeth chattering before it lunges
+  vschatter: (t, B, v) => { for (let i = 0; i < 9; i++) { vNoise(B, t + i * 0.07, { f: 2400, q: 6, v: 0.06 * v, dur: 0.02 }); vTone(B, t + i * 0.07, 900, { f2: 600, glide: 0.02, type: 'square', lp: 2000, v: 0.02 * v, dur: 0.03 }); } },
+  // the lunge: a ghostly whoosh and a cackle of fire
+  vslunge: (t, B, v) => { vNoise(B, t, { f: 600, f2: 2400, q: 1, v: 0.09 * v, dur: 0.3 }); [70, 66, 70, 66].forEach((m, i) => vTone(B, t + 0.05 + i * 0.07, mf(m), { type: 'sawtooth', lp: 1500, v: 0.03 * v, dur: 0.07, vib: [30, 12] })); },
+  // the hoard waking: a deep rumble under a rising clatter
+  vutell: (t, B, v) => { vTone(B, t, 50, { f2: 70, glide: 0.8, type: 'sawtooth', lp: 200, v: 0.07 * v, dur: 0.85, a: 0.2 }); for (let i = 0; i < 8; i++) vTone(B, t + 0.2 + i * 0.07, 1500 + i * 220, { type: 'triangle', v: 0.018 * v, dur: 0.05 }); },
+  // the surge rolling: a roaring avalanche of gold
+  vuroll: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 900, f2: 500, v: 0.11 * v, dur: 1.3, a: 0.06 }); vNoise(B, t, { f: 3200, q: 0.9, v: 0.06 * v, dur: 1.2, a: 0.1 }); vTone(B, t, 62, { f2: 45, glide: 1.2, type: 'triangle', v: 0.06 * v, dur: 1.2 }); },
+  // a cursed ruby: a dark magic chime that resolves bright
+  vruby: (t, B) => { [69, 72, 76, 81, 84, 88].forEach((m, i) => vTone(B, t + i * 0.06, mf(m), { type: i < 2 ? 'triangle' : 'sine', v: 0.06, dur: 0.5, vib: i < 2 ? [6, 8] : null })); vNoise(B, t + 0.1, { type: 'highpass', f: 6500, v: 0.035, dur: 0.8 }); },
+  // Penny sniffing out a mimic: two quick snuffles
+  vsniff: (t, B) => { for (let i = 0; i < 2; i++) vNoise(B, t + i * 0.12, { f: 1400, q: 3, v: 0.06, dur: 0.07 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = VAULT_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1);
+}; }
+
+// ---- loose coins in flight (the vault's own particles: they tumble, bounce once off a ledge and fade) ----
+function vaultFling(x, a, vx, va, life, r = 1, floor = -Infinity) { const D = G.vtCoins || (G.vtCoins = []); if (D.length > 150) D.shift(); D.push({ x, a, vx, va, life, max: life, r, spin: Math.random() * 6.3, w: (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 10), floor }); }
+function vaultBurst(x, a, n, sp = 1, up = 1) { for (let i = 0; i < n; i++) { const an = Math.PI * (0.1 + 0.8 * Math.random()); vaultFling(x + (Math.random() - 0.5) * 16, a, Math.cos(an) * (60 + Math.random() * 160) * sp, Math.sin(an) * (120 + Math.random() * 200) * sp * up, 0.8 + Math.random() * 0.5, 0.8 + Math.random() * 0.5); } }
+function updateVaultCoins(dt) {
+  const D = G.vtCoins; if (!D) return;
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    q.va -= 900 * dt; q.vx *= 1 - dt * 0.6; q.x += q.vx * dt; q.a += q.va * dt; q.spin += q.w * dt;
+    if (q.a < q.floor && q.va < 0) { q.a = q.floor; q.va *= -0.35; q.vx *= 0.6; q.floor = -Infinity; }
+  }
+}
+function drawVaultCoins() {
+  const D = G.vtCoins; if (!D || !D.length) return;
+  for (const q of D) {
+    const y = sy(q.a); if (y < -20 || y > H + 20) continue;
+    vaultCoin(sx(q.x), y, VAULT_COIN_R * q.r, q.spin, Math.min(1, q.life / q.max * 3));
+  }
+}
+
+// ---- the traps at play ----
+CAUSES.vaultAval = 'Buried by a coin avalanche';
+CAUSES.vaultChest = 'Eaten by a mimic chest';
+CAUSES.vaultSkull = 'Spooked by a cursed skull';
+CAUSES.vaultSurge = 'Swallowed by the cursed hoard';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'vaultAval' ? [255, 210, 90] : cause === 'vaultChest' ? [255, 90, 120] : cause === 'vaultSkull' ? [93, 255, 158] : cause === 'vaultSurge' ? [255, 190, 70] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!VAULT_TYPES.has(h.type)) return base(h);
+  return vaultShapes(h, G.t).map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.vault) { updateVaultTraps(dt); updateVaultCoins(dt); } base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.vault) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && VAULT_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// a real chest cracked open by flying into it: coins burst out, the lid flies back (the chest mission)
+function vaultCrack(h) {
+  h.burst = G.t;
+  const st = G.stats, n = st.vaultChests = (st.vaultChests || 0) + 1, of = advGoalN('vaultChests'), worth = VAULT.chestWorth, x = h.x, a = h.alt + 24;
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? (n <= of ? `Treasure chest ${n}/${of}!` : 'Treasure chest!') : 'Treasure chest!', '#ffe9a0', 1.3);
+  vaultBurst(x, a, 26, 1.1, 1.1);
+  for (let k = 0; k < 12; k++) { const an = k / 12 * TWO_PI; puff(x, a, Math.cos(an) * 160, Math.sin(an) * 160, 0.45, 2.2, 'sparkle'); }
+  puff(x, a, 0, 30, 0.5, 14, 'star');
+  addPop(`+${worth}`, x, a + 14, { col: '#ffe14a', big: true, sub: 'treasure chest' });
+  G.flash = Math.max(G.flash, 0.18); G.flashCol = [255, 220, 120];
+  vibrate([12, 20, 12]); sfx('vachest');
+}
+function updateVaultTraps(dt) {
+  const top = G.camAlt + viewH;
+  for (const h of G.hazards) {
+    if (!VAULT_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'vaultAval') {
+      const st = vaultAvalState(h, G.t), was = h.st || st, x = vaultAvalX(h);
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('vashiver', { v: vaultVol(h.alt) });
+      if (vis && st.pouring && !was.pouring) sfx('vapour', { v: vaultVol(h.alt - 150) });
+      // a few coins tipping off the lip through the tell; a spray kicked up where the column lands on the catch ledge
+      if (vis && st.tell > 0.15 && Math.random() < dt * 7) vaultFling(x + (Math.random() - 0.5) * 10, h.alt + 4, h.side * (10 + Math.random() * 20), 10, 1.0, 0.8, h.alt - VAULT.aval.drop + 6);
+      if (vis && st.head >= VAULT.aval.drop - 1 && st.tail < VAULT.aval.drop && Math.random() < dt * 34) { const an = Math.PI * (0.15 + 0.7 * Math.random()); vaultFling(x + (Math.random() - 0.5) * 20, h.alt - VAULT.aval.drop + 8, Math.cos(an) * 110, Math.sin(an) * 150, 0.55, 0.7 + Math.random() * 0.4); }
+      h.st = st;
+    } else if (h.type === 'vaultChest') {
+      if (!h.mimic) {
+        if (h.burst == null && G.state === 'play' && vaultChestTrigger([], h).some(q => shapeHits(q))) vaultCrack(h);
+        if (vis && h.burst == null && Math.random() < dt * 1.5) puff(h.x + (Math.random() - 0.5) * 30, h.alt + 30 + Math.random() * 10, 0, 6, 0.6, 3, 'glint');
+        continue;
+      }
+      const st = vaultMimicState(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('vmdrool', { v: vaultVol(h.alt) });
+      if (vis && st.lashing && !was.lashing) { sfx('vmlash', { v: vaultVol(h.alt) }); if (Math.abs(h.alt - G.p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.5); }
+      // Penny sniffs a mimic out as it comes into view (once each)
+      if (vis && !h.sniffed && vaultSniffer() && h.alt < G.camAlt + viewH * 0.9 && G.state === 'play') { h.sniffed = true; sfx('vsniff'); if (!G.vtSniffPop || G.t - G.vtSniffPop > 4) { G.vtSniffPop = G.t; chainEvent('Sniff sniff... a mimic!', '#ff9aa8', 1.1); } }
+      h.st = st;
+    } else if (h.type === 'vaultSkull') {
+      const st = vaultSkullState(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('vschatter', { v: vaultVol(h.alt) });
+      if (vis && st.lunging && !was.lunging) sfx('vslunge', { v: vaultVol(h.alt) });
+      h.st = st;
+    } else if (h.type === 'vaultSurge') {
+      const st = vaultSurgeState(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('vutell', { v: vaultVol(h.top) });
+      if (vis && st.rolling != null && was.rolling == null) { sfx('vuroll', { v: vaultVol(h.top - 150) }); if (Math.abs(h.top - G.p.alt) < viewH * 0.7) G.shake = Math.max(G.shake, 2); }
+      // coins tumbling off the swell's lower front as it rolls, and spilling out of the bank through the tell
+      const U = VAULT.surge, o = U.out * st.out;
+      if (vis && st.rolling != null && Math.random() < dt * 40) vaultFling(h.base + h.side * (o * (0.3 + 0.6 * Math.random())), st.a - 30 - Math.random() * 20, h.side * (40 + Math.random() * 90), -40 - Math.random() * 80, 0.7, 0.7 + Math.random() * 0.5);
+      if (vis && st.tell > 0.1 && Math.random() < dt * 12) vaultFling(h.base + h.side * (4 + Math.random() * 20), h.top + (Math.random() - 0.5) * 60, h.side * (30 + Math.random() * 50), 40 + Math.random() * 60, 0.8, 0.7);
+      h.st = st;
+    }
+  }
+}
+// ---- the vault's traps, drawn (each to its hitbox capsules) ----
+// A cached piece of a trap's static art: drawn once at the screen's scale in the trap's own frame (x out from the wall
+// along d, y down), anchored at (0, 0); blitted with vaultPiece(sp, X, Y).
+function vaultRockPiece(name, d, x0, x1, y0, y1, draw) {
+  const key = name + (d > 0 ? 'L' : 'R');
+  let sp = VAULT_CACHE.sprites.get(key);
+  if (!sp) {
+    sp = vaultCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = d > 0 ? -x0 * s : x1 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(d * s, s); sp.c.lineJoin = 'round'; sp.c.lineCap = 'round'; draw(sp.c);
+    VAULT_CACHE.sprites.set(key, sp);
+  }
+  return sp;
+}
+function vaultPiece(sp, X, Y, dx = 0) { ctx.drawImage(sp.cv, X - sp.ax + dx, Y - sp.ay, sp.w, sp.h); }
+// a soft additive glow blitted from a cached disc (cheap: no gradient built per frame)
+function vaultGlowS(x, y, r, col, a) {
+  if (a < 0.004 || r < 0.5) return;
+  const sp = vaultSprite('glow' + col.join(','), 64, 64, c => { c.fillStyle = vaultRG(32, 32, 32, [vaultCol(col, 1), vaultCol(col, 0.32), vaultCol(col, 0)], c); c.fillRect(0, 0, 64, 64); });
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, a); ctx.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); ctx.restore();
+}
+// plum stone lit from above: a slab's colours (top lit .. underside deep)
+const VAULT_STONE = ['#a888b0', '#6e4c78', '#432a50', '#26142e'];
+// a faceted gem (world units in c's frame)
+function vaultGem(c, x, y, r, kind) {
+  const C = VAULT_GEMS[kind];
+  c.save(); c.translate(x, y);
+  const oct = []; for (let i = 0; i < 8; i++) { const a = i / 8 * TWO_PI + Math.PI / 8; oct.push([Math.cos(a) * r, Math.sin(a) * r * 0.86]); }
+  c.fillStyle = vaultRG(-r * 0.4, -r * 0.45, r * 1.5, C, c); c.beginPath(); oct.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.fill();
+  c.strokeStyle = C[2]; c.lineWidth = Math.max(0.5, r * 0.18); c.stroke();
+  const tb = oct.map(([px, py]) => [px * 0.5, py * 0.5]);
+  c.fillStyle = vaultLG(-r * 0.5, -r * 0.5, r * 0.5, r * 0.5, [C[0], C[1]], c); c.beginPath(); tb.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = Math.max(0.4, r * 0.12);
+  c.beginPath(); for (let i = 0; i < 8; i++) { c.moveTo(tb[i][0], tb[i][1]); c.lineTo(oct[i][0], oct[i][1]); } c.stroke();
+  vaultEll(c, -r * 0.3, -r * 0.32, r * 0.22, r * 0.12, 'rgba(255,255,255,.9)', -0.6);
+  c.restore();
+}
+// a heap of gold coins sitting on a ledge top: base from x0 to x1 at y (y down), peak height hg (ported from the concept)
+function vaultHeap(c, x0, x1, y, hg, seed) {
+  const r = mulberry32(seed), mx = (x0 + x1) / 2, wd = x1 - x0, G0 = VP.gold;
+  const shape = () => { c.beginPath(); c.moveTo(x0, y); c.bezierCurveTo(x0 + wd * 0.15, y - hg * 0.55, mx - wd * 0.28, y - hg, mx, y - hg); c.bezierCurveTo(mx + wd * 0.28, y - hg, x1 - wd * 0.15, y - hg * 0.55, x1, y); c.closePath(); };
+  shape(); c.fillStyle = vaultRG(mx - wd * 0.15, y - hg * 0.8, Math.max(wd, hg) * 0.9, [G0.hi, G0.mid, G0.lo], c); c.fill();
+  c.save(); shape(); c.clip();
+  const rows = Math.max(2, Math.round(hg / 3.4));
+  for (let row = 0; row < rows + 1; row++) {
+    const yy = y - row * 3.4 - 1, n = Math.ceil(wd / 5) + 1;
+    for (let i = 0; i < n; i++) {
+      const xx = x0 + (i + (row % 2) * 0.5) * 5 + (r() - 0.5) * 2, rx = 2.6 + r() * 0.6, ry = 1.1 + r() * 0.5, rot = (r() - 0.5) * 0.6;
+      vaultEll(c, xx, yy + 0.5, rx, ry, G0.lo, rot); vaultEll(c, xx, yy, rx, ry, r() < 0.3 ? G0.hi : G0.mid, rot);
+      c.strokeStyle = 'rgba(255,248,200,.8)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(xx, yy, rx * 0.8, ry * 0.7, rot, 3.6, 5.6); c.stroke();
+    }
+  }
+  c.fillStyle = vaultLG(0, y - hg, 0, y, ['rgba(255,240,180,.0)', 'rgba(110,50,10,.35)'], c); c.fillRect(x0 - 2, y - hg - 2, wd + 4, hg + 4);
+  c.restore();
+  shape(); c.strokeStyle = 'rgba(130,70,12,.8)'; c.lineWidth = 0.8; c.stroke();
+  c.strokeStyle = 'rgba(255,250,210,.75)'; c.lineWidth = 1.2; c.beginPath();
+  c.moveTo(x0 + wd * 0.18, y - hg * 0.55); c.bezierCurveTo(mx - wd * 0.2, y - hg, mx - wd * 0.1, y - hg, mx + wd * 0.05, y - hg * 0.99); c.stroke();
+  for (let k = 0; k < 3; k++) { const q = 0.25 + r() * 0.5, cx = lerp(x0, x1, q), cy = y - hg * Math.sin(q * Math.PI) * 0.92; vaultEll(c, cx, cy - 2, 1.4, 3, G0.mid, 0.3); vaultEll(c, cx - 0.4, cy - 2.2, 0.6, 2.2, G0.lit, 0.3); }
+  if (hg > 10) for (let k = 0; k < 2; k++) vaultGem(c, lerp(x0, x1, 0.3 + 0.35 * k + (r() - 0.5) * 0.1), y - hg * (0.35 + 0.2 * r()), 2 + r(), VAULT_GEMK[(seed + k) % 4]);
+}
+// a rock ledge out of the bank (frame: x out from the wall, y down, its top at y 0): plum stone crusted with gold on top,
+// chipped, a furrow and a lit ridge along its face, a gem or two set in it, a pearl string or a chain hanging under it
+// what holds a ledge to the wall (matches vaultBracket's shapes): a buttress of rock growing down the wall under the
+// ledge's root, and an iron strut bolted to the wall propping up its underside
+function vaultBracketArt(c, len, seed) {
+  const r = mulberry32(seed + 7);
+  const rock = () => { c.beginPath(); c.moveTo(-16, 16); c.lineTo(12, 18); c.quadraticCurveTo(8, 34, 6, 44); c.quadraticCurveTo(4, 53, -2, 58); c.quadraticCurveTo(-9, 61, -16, 60); c.closePath(); };
+  rock(); c.fillStyle = vaultLG(-16, 0, 12, 0, ['#4a2c56', '#6e4a7c', '#82608e'], c); c.fill();
+  c.save(); rock(); c.clip();
+  c.fillStyle = vaultLG(0, 18, 0, 60, ['rgba(20,8,26,.0)', 'rgba(20,8,26,.45)'], c); c.fillRect(-16, 16, 30, 46);
+  for (let i = 0; i < 3; i++) { const y = 26 + i * 10 + r() * 4; c.strokeStyle = 'rgba(26,10,32,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-14, y); c.lineTo(-4, y + 2); c.lineTo(6 - i * 2, y + 1); c.stroke(); c.strokeStyle = 'rgba(214,184,224,.3)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-14, y - 1.2); c.lineTo(-4, y + 0.8); c.lineTo(6 - i * 2, y - 0.2); c.stroke(); }
+  c.restore();
+  c.strokeStyle = 'rgba(214,180,226,.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(11, 20); c.quadraticCurveTo(7.5, 34, 5.6, 44); c.stroke();
+  // the iron strut: a flat bar from a wall plate up to a plate under the slab, rivets at both ends
+  const x0 = 3, y0 = 44, x1 = len * 0.4, y1 = 15, an = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0);
+  c.save(); c.translate(x0, y0); c.rotate(an);
+  c.fillStyle = vaultLG(0, -2.6, 0, 2.6, ['#9aa4b4', '#5a6272', '#2e3240'], c); c.beginPath(); c.roundRect(-2, -2.4, L + 4, 4.8, 1.6); c.fill();
+  c.fillStyle = 'rgba(232,238,248,.55)'; c.fillRect(0, -2, L, 0.9);
+  c.fillStyle = 'rgba(150,70,40,.35)'; for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(L * (0.2 + r() * 0.6), 0.8, 2 + r() * 2, 1, 0, 0, TWO_PI); c.fill(); }
+  c.restore();
+  const plate = (x, y, w, h) => { c.fillStyle = vaultLG(x, y, x, y + h, ['#8a94a4', '#4a5262'], c); c.beginPath(); c.roundRect(x, y, w, h, 1.4); c.fill(); for (const [px, py] of [[x + 2, y + 2], [x + w - 2, y + h - 2]]) { c.fillStyle = vaultRG(px - 0.4, py - 0.4, 1.4, ['#f4f6fa', '#9aa2b0', '#3a404c'], c); c.beginPath(); c.arc(px, py, 1.25, 0, TWO_PI); c.fill(); } };
+  plate(-3, 39, 7, 11); plate(x1 - 5, 11.5, 10, 5);
+}
+function vaultLedgeArt(c, len, seed, hang = 1) {
+  const r = mulberry32(seed), th = 30;
+  vaultBracketArt(c, len, seed);
+  const body = () => { c.beginPath(); c.moveTo(-16, -2); c.lineTo(len - 9, -2); c.quadraticCurveTo(len, -1, len - 1, 6); c.quadraticCurveTo(len - 3, 13, len - 12, 14); c.quadraticCurveTo(len * 0.55, 17, len * 0.38, th - 4); c.quadraticCurveTo(len * 0.2, th + 2, 2, th + 4); c.lineTo(-16, th + 6); c.closePath(); };
+  body(); c.fillStyle = vaultLG(0, -2, 0, th + 4, VAULT_STONE, c); c.fill();
+  c.save(); body(); c.clip();
+  // strata: angular cracks drawn as line pairs, chips knocked out of the underside
+  for (let i = 0; i < 4; i++) { const x = 4 + r() * (len - 24), y = 5 + r() * 8, l = 6 + r() * 10; c.strokeStyle = 'rgba(30,14,36,.6)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.5, y + 3); c.lineTo(x + l, y + 1.5); c.stroke(); c.strokeStyle = 'rgba(210,180,220,.35)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x, y - 1); c.lineTo(x + l * 0.5, y + 2); c.lineTo(x + l, y + 0.5); c.stroke(); }
+  c.fillStyle = 'rgba(24,10,30,.35)'; c.beginPath(); c.ellipse(len * 0.4, th, len * 0.5, 9, 0, 0, TWO_PI); c.fill();
+  c.restore();
+  body(); c.strokeStyle = '#2a1434'; c.lineWidth = 1; c.stroke();
+  // the gold crust on top: coins pressed in along the lip, lit on their upper rims
+  for (let x = -12; x < len - 6; x += 4.2) { const y = -2 + (r() - 0.5) * 1.2, rx = 2.5 + r() * 0.6; vaultEll(c, x, y + 0.7, rx, 1.3, VP.gold.deep); vaultEll(c, x, y, rx, 1.3, r() < 0.4 ? VP.gold.hi : VP.gold.mid); }
+  c.strokeStyle = 'rgba(255,240,190,.85)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(-14, -3); c.lineTo(len - 9, -3); c.quadraticCurveTo(len - 1, -2.4, len - 1, 4); c.stroke();
+  c.strokeStyle = 'rgba(30,12,36,.7)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-10, 6); c.quadraticCurveTo(len * 0.5, 8.5, len - 8, 8); c.stroke();
+  c.strokeStyle = 'rgba(200,170,214,.35)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-10, 7.4); c.quadraticCurveTo(len * 0.5, 9.9, len - 8, 9.4); c.stroke();
+  vaultGem(c, len * 0.3 + r() * 10, 13 + r() * 4, 2.2, VAULT_GEMK[seed % 4]);
+  // something hanging off its underside: a string of pearls, or a short gold chain with a locket
+  if (hang) {
+    const x0 = len * 0.25, x1 = len * 0.62, sag = 10 + r() * 6;
+    if (seed % 2) for (let k = 0; k <= 8; k++) { const q = k / 8, px = lerp(x0, x1, q), py = 14 - Math.abs(q - 0.4) * 4 + Math.sin(q * Math.PI) * sag; c.fillStyle = vaultRG(px - 0.5, py - 0.6, 2, ['#ffffff', '#efe6f0', '#b8a8c0'], c); c.beginPath(); c.arc(px, py, 1.6, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(140,120,150,.7)'; c.lineWidth = 0.4; c.stroke(); }
+    else { const cx = len * 0.48; for (let k = 0; k < 4; k++) { c.strokeStyle = k % 2 ? VP.gold.mid : VP.gold.hi; c.lineWidth = 1.1; c.beginPath(); c.ellipse(cx, 14 + k * 3.4, k % 2 ? 0.8 : 1.5, 2, 0, 0, TWO_PI); c.stroke(); } c.fillStyle = vaultRG(cx - 1, 28.5, 4, [VP.gold.lit, VP.gold.mid, VP.gold.lo], c); c.beginPath(); c.ellipse(cx, 29.5, 3, 3.6, 0, 0, TWO_PI); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.6; c.stroke(); vaultGem(c, cx, 29.5, 1.3, 'ruby'); }
+  }
+}
+
+// ---- Coin Avalanche ----
+function vaultAvalHeapSprite(d, lvl, len) {
+  return vaultRockPiece('avheap' + lvl, d, -16, len + 6, -50, 6, c => {
+    const hg = 34 * (0.35 + 0.65 * lvl / 5);
+    vaultHeap(c, 6, len - 2, 0, hg, 311 + lvl);
+    // a chest buried in the top of the heap, its lid ajar, and a cutlass hilt sticking out
+    c.save(); c.translate(len * 0.32, -hg * 0.8); c.rotate(-0.12);
+    c.fillStyle = vaultLG(0, -9, 0, 4, ['#c88a4a', '#8e5428', '#4e2a12'], c); c.beginPath(); c.roundRect(-9, -8, 18, 10, 1.5); c.fill(); c.strokeStyle = '#3e200c'; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = vaultLG(-2, 0, 2, 0, [VP.gold.lit, VP.gold.mid, VP.gold.lo], c); c.fillRect(-6, -8, 2.4, 10); c.fillRect(3.6, -8, 2.4, 10);
+    c.restore();
+    c.save(); c.translate(len * 0.62, -hg * 0.75); c.rotate(0.35);
+    c.strokeStyle = '#7a8496'; c.lineWidth = 2.6; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -12); c.stroke(); c.strokeStyle = '#e8ecf4'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-0.6, -1); c.lineTo(-0.6, -11); c.stroke();
+    c.fillStyle = vaultLG(-5, 0, 5, 0, [VP.gold.lit, VP.gold.hi, VP.gold.lo], c); c.beginPath(); c.roundRect(-5.5, -13.5, 11, 2.6, 1.2); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.5; c.stroke();
+    c.strokeStyle = '#6a3a1a'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, -14); c.lineTo(0, -20); c.stroke(); vaultGem(c, 0, -21.5, 2, 'ruby');
+    c.restore();
+  });
+}
+function drawVaultAval(h) {
+  vaultCacheCheck();
+  const A = VAULT.aval, d = h.side, st = h.st || vaultAvalState(h, G.t), T = G.t, X = sx(h.base), Y = sy(h.alt), C = sy(h.alt - A.drop), lx = sx(vaultAvalX(h));
+  const jig = st.tell * Math.sin(T * 60) * 1.2 * s;
+  // the warning: a warm haze down the column's path through the tell, the column's glow while it pours
+  if (st.tell > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = vaultLG(lx - 22 * s, 0, lx + 22 * s, 0, ['rgba(255,200,90,0)', `rgba(255,214,110,${0.16 * st.tell})`, 'rgba(255,200,90,0)']); ctx.fillRect(lx - 22 * s, Y, 44 * s, C - Y); ctx.restore(); }
+  if (st.pouring) {
+    const yt = sy(h.alt - 2 - st.tail), yb = sy(h.alt - 2 - st.head);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    // two soft layers (a wide faint one, a narrow bright core), each feathered at the column's head and tail
+    const fe = Math.min(40 * s, Math.abs(yb - yt) * 0.3);
+    for (const [w0, w1, al] of [[16, 24, 0.16], [7, 11, 0.26]]) {
+      const g = ctx.createLinearGradient(0, yt, 0, yb); g.addColorStop(0, 'rgba(255,220,120,0)'); g.addColorStop(Math.min(0.45, fe / Math.max(1, yb - yt)), `rgba(255,226,140,${al})`); g.addColorStop(Math.max(0.55, 1 - fe / Math.max(1, yb - yt)), `rgba(255,230,150,${al})`); g.addColorStop(1, 'rgba(255,220,120,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(lx - w0 * s, yt); ctx.lineTo(lx + w0 * s, yt); ctx.lineTo(lx + w1 * s, yb); ctx.lineTo(lx - w1 * s, yb); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // the falling coins: each released off the lip at its own moment through the pour, falling under gravity onto the
+  // catch ledge (inside the column's hitbox; the outer ones spin wider)
+  if (st.head > 0 && st.tail < A.drop) {
+    const N = 64, u = st.u;
+    for (let i = 0; i < N; i++) {
+      const s0 = st.ts + A.pour * i / N, dt = u - s0; if (dt < 0) break;
+      const q = hash2(i, 1601), q2 = hash2(i, 1602), dep = 0.5 * A.g * dt * dt * (0.9 + 0.2 * q2); if (dep > A.drop - 4) continue;
+      const x = vaultAvalX(h) + (q - 0.5) * 20 + Math.sin(dt * 7 + i) * 2.5;
+      vaultCoin(sx(x), sy(h.alt - 2 - dep), VAULT_COIN_R * (0.85 + 0.35 * q2), T * (9 + 8 * q) + i);
+      if (i % 11 === 0) vaultTwinkle(ctx, sx(x), sy(h.alt - 2 - dep), 4 * s, 0.7);
+    }
+  }
+  // the catch ledge and its heap, the hoard ledge and its heap (at how full it is), trembling through the tell
+  vaultPiece(vaultRockPiece('avcatch', d, -16, A.catchLen + 4, -22, 62, c => { vaultLedgeArt(c, A.catchLen, 41, 0); vaultHeap(c, 30, A.len, 0, 12, 377); }), X, C);
+  vaultPiece(vaultRockPiece('avledge', d, -16, A.len + 4, -4, 62, c => vaultLedgeArt(c, A.len, 37)), X, Y);
+  const lvl = clamp(Math.round((st.fill - 0.35) / 0.65 * 5), 0, 5);
+  vaultPiece(vaultAvalHeapSprite(d, lvl, A.len), X, Y, jig);
+  if (st.tell > 0.1) { ctx.strokeStyle = `rgba(255,230,160,${st.tell * 0.8})`; ctx.lineWidth = 1.2 * s; ctx.lineCap = 'round'; for (const k of [-1, 1]) { const x = sx(h.base + d * A.len * (0.5 + 0.3 * k)); ctx.beginPath(); ctx.moveTo(x - 3 * s, Y - 36 * s); ctx.lineTo(x + 2 * s, Y - 44 * s); ctx.moveTo(x + 4 * s, Y - 34 * s); ctx.lineTo(x + 9 * s, Y - 41 * s); ctx.stroke(); } }
+  for (let k = 0; k < 3; k++) vaultTwinkle(ctx, sx(h.base + d * A.len * (0.25 + 0.25 * k)), Y - (12 + 16 * st.fill * Math.sin((0.25 + 0.25 * k) * Math.PI)) * s, 3.4 * s, Math.max(0, Math.sin(T * 1.8 + k * 2.1 + h.alt)) ** 8 * 0.9);
+}
+
+// ---- Treasure Chest / Mimic Chest ----
+// the chest at (0, 0) bottom middle, facing +x in its own frame (y down, world units): open 0..1 (the lid's angle),
+// tell 0..1, mimic (teeth, red wood, eyes, drool), tongue points (world, already mapped to this frame) or null
+function vaultChestArt(open, tell, T, mimic, empty, tongue, k = VAULT.chest.k) {
+  const W2 = 17 * k, BH = 17 * k, LH = 10 * k, G0 = VP.gold;
+  const WOOD = mimic ? ['#c86a44', '#8e3a26', '#521c12'] : ['#cf9452', '#94592a', '#522c12'], EDGE = mimic ? '#4a160c' : '#4a260c';
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // contact shadow on the ledge
+  ctx.fillStyle = 'rgba(26,10,30,.4)'; ctx.beginPath(); ctx.ellipse(0, 1, W2 + 5, 3, 0, 0, TWO_PI); ctx.fill();
+  const ang = -open * (mimic ? 1.15 : 1.9);
+  // the inside, behind the lid: a red maw for a mimic, glittering gold (or bare boards once emptied) for a real one
+  if (open > 0.01) {
+    ctx.fillStyle = mimic ? vaultRG(0, -BH, 22 * k, ['#b01c40', '#600a22', '#2e0612']) : empty ? vaultRG(0, -BH, 22 * k, ['#8a5a30', '#5a3418', '#3a1e0c']) : vaultRG(0, -BH, 22 * k, ['#fff0a8', '#e0a032', '#7a4210']);
+    const lx = -W2 + Math.cos(ang) * W2 * 2, ly = -BH + Math.sin(ang) * W2 * 2;
+    ctx.beginPath(); ctx.moveTo(-W2, -BH); ctx.lineTo(W2, -BH); ctx.lineTo(lx, ly); ctx.closePath(); ctx.fill();
+    if (mimic && open > 0.3) {   // the gullet: a dark throat and a glistening uvula
+      ctx.fillStyle = 'rgba(40,4,16,.7)'; ctx.beginPath(); ctx.ellipse(-W2 * 0.35, -BH - 4 * k, 5 * k, 3 * k * open, -0.4, 0, TWO_PI); ctx.fill();
+    }
+  }
+  // the box (cached): planks with grain and knots, iron corner straps and bands studded with rivets, gold trim, a lock
+  const bx = vaultChestBoxSprite(mimic, k); ctx.drawImage(bx.cv, -W2 - 4, -BH - 4, W2 * 2 + 8, BH + 8);
+  // the lock's glint (and a mimic's gums and lower teeth, bigger and wetter the wider it gapes)
+  if (!mimic) vaultTwinkle(ctx, -2 * k, -BH + 2.5 * k, 3.4 * k, Math.max(0, Math.sin(T * 1.7 + 1)) ** 8);
+  if (mimic) {
+    const g = Math.min(1, open * 2.5);
+    if (g > 0.02) { ctx.fillStyle = vaultLG(0, -BH - 3 * k, 0, -BH + 1, ['#ff7aa0', '#c02a56']); ctx.beginPath(); ctx.moveTo(-W2 + 1, -BH + 0.5); for (let i = 0; i <= 8; i++) ctx.lineTo(-W2 + 1 + i * (W2 * 2 - 2) / 8, -BH - (i % 2 ? 1.2 : 2.4) * k * g); ctx.lineTo(W2 - 1, -BH + 0.5); ctx.closePath(); ctx.fill(); }
+    vaultChestTeeth(ctx, -W2, -BH + 0.5, W2 * 2, -1, k, 1 + 0.5 * g);
+  }
+  // the eyes glaring out of the dark under the lid
+  if (mimic && (open > 0.04 || tell > 0.05)) {
+    const ey = -BH - 6 * k * Math.min(1, open * 2 + 0.3), eo = Math.min(1, open * 3 + tell * 0.6);
+    for (const ex of [-6 * k, 1 * k]) { ctx.fillStyle = `rgba(255,${80 + 60 * (1 - eo)},60,${0.5 + 0.5 * eo})`; ctx.beginPath(); ctx.ellipse(ex, ey, 2.4 * k, 1.6 * k * eo + 0.3, 0.15, 0, TWO_PI); ctx.fill(); ctx.fillStyle = '#ffeec0'; ctx.beginPath(); ctx.arc(ex - 0.6, ey - 0.4, 0.6 * k, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.restore();
+}
+function drawVaultChestLid(open, mimic, empty, k = VAULT.chest.k) {
+  const W2 = 17 * k, BH = 17 * k, LH = 10 * k, sp = vaultChestLidSprite(mimic, k);
+  ctx.save(); ctx.translate(-W2, -BH); ctx.rotate(-open * (mimic ? 1.15 : 1.9));
+  ctx.drawImage(sp.cv, -4, -LH - 4, W2 * 2 + 8, LH + 4 + 8 * k);
+  if (mimic && open > 0.05) vaultChestTeeth(ctx, 0, -0.5, W2 * 2, 1, k, 1 + 0.5 * Math.min(1, open * 2.5), 1);
+  ctx.restore();
+}
+// a row of fangs along a rim (dir -1 points up from the box's rim, +1 hangs down from the lid's); g grows them as it gapes
+function vaultChestTeeth(c, x0, y, w, dir, k, g, off = 0) {
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    const tx = x0 + 2.5 * k + i * (w - 5 * k) / (n - 1), big = (i + off) % 3 === 0, th = (big ? 5.4 : 3.6) * k * g, tw = (big ? 2.4 : 1.8) * k;
+    c.fillStyle = vaultLG(0, y, 0, y + dir * th, ['#e8d4b0', '#fffcf2'], c); c.beginPath(); c.moveTo(tx - tw, y); c.quadraticCurveTo(tx - tw * 0.3, y + dir * th * 0.6, tx, y + dir * th); c.quadraticCurveTo(tx + tw * 0.5, y + dir * th * 0.5, tx + tw, y); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(150,110,80,.8)'; c.lineWidth = 0.5; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.ellipse(tx - tw * 0.35, y + dir * th * 0.35, 0.45 * k, th * 0.2, 0, 0, TWO_PI); c.fill();
+  }
+}
+const vaultRivet = (c, x, y, r) => { c.fillStyle = vaultRG(x - r * 0.35, y - r * 0.35, r * 1.2, ['#f6f8fc', '#9aa2b2', '#343a48'], c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); };
+function vaultChestWood(c, x0, y0, w, h, rows, mimic, seed) {
+  const r = mulberry32(seed), ph = h / rows;
+  for (let j = 0; j < rows; j++) {
+    const y = y0 + j * ph;
+    // grain: long wavy line pairs following the plank, a knot or two with rings
+    for (let q = 0; q < 3; q++) { const gy = y + ph * (0.25 + q * 0.25) + (r() - 0.5), am = 0.6 + r() * 0.8, f = 0.1 + r() * 0.08, p0 = r() * 6; c.strokeStyle = mimic ? 'rgba(70,14,8,.4)' : 'rgba(70,32,8,.38)'; c.lineWidth = 0.55; c.beginPath(); for (let x = x0; x <= x0 + w; x += 2) { const yy = gy + Math.sin(x * f + p0) * am; x === x0 ? c.moveTo(x, yy) : c.lineTo(x, yy); } c.stroke(); }
+    if (r() < 0.8) { const kx = x0 + w * (0.2 + r() * 0.6), ky = y + ph * 0.5; for (let q = 3; q > 0; q--) { c.strokeStyle = q === 1 ? 'rgba(50,16,6,.7)' : 'rgba(80,36,10,.35)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(kx, ky, 1.1 * q + 0.4, 0.55 * q + 0.3, 0, 0, TWO_PI); c.stroke(); } }
+    // plank seams: a dark groove with a lit lip under it, and the plank's top catching the light
+    c.fillStyle = 'rgba(255,226,180,.16)'; c.fillRect(x0, y + 0.6, w, ph * 0.28);
+    if (j) { c.strokeStyle = 'rgba(40,12,4,.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x0, y); c.lineTo(x0 + w, y); c.stroke(); c.strokeStyle = 'rgba(255,220,170,.3)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(x0, y + 1); c.lineTo(x0 + w, y + 1); c.stroke(); }
+  }
+}
+function vaultChestBoxSprite(mimic, k) {
+  const W2 = 17 * k, BH = 17 * k, G0 = VP.gold;
+  return vaultSprite('chbox' + (mimic ? 'm' : 'r') + k, (W2 * 2 + 8) * s, (BH + 8) * s, c => {
+    c.scale(s, s); c.translate(W2 + 4, BH + 4); c.lineJoin = 'round'; c.lineCap = 'round';
+    const WOOD = mimic ? ['#d27650', '#9a4028', '#561c10'] : ['#d89a56', '#9a5e2c', '#562e12'], EDGE = mimic ? '#4a160c' : '#4a260c';
+    const box = () => { c.beginPath(); c.roundRect(-W2, -BH, W2 * 2, BH, 2.5); };
+    box(); c.fillStyle = vaultLG(0, -BH, 0, 0, WOOD, c); c.fill();
+    c.save(); box(); c.clip();
+    vaultChestWood(c, -W2, -BH, W2 * 2, BH, 3, mimic, mimic ? 71 : 72);
+    c.fillStyle = vaultLG(0, -BH * 0.4, 0, 0, ['rgba(40,12,6,0)', 'rgba(40,12,6,.4)'], c); c.fillRect(-W2, -BH * 0.4, W2 * 2, BH * 0.4);
+    c.fillStyle = vaultLG(-W2, 0, W2, 0, ['rgba(255,230,190,.18)', 'rgba(255,230,190,0)', 'rgba(30,8,4,0)', 'rgba(30,8,4,.3)'], c); c.fillRect(-W2, -BH, W2 * 2, BH);
+    c.restore();
+    box(); c.strokeStyle = EDGE; c.lineWidth = 1; c.stroke();
+    // iron bands up the front, each studded with rivets
+    for (const bx of [-W2 * 0.62, W2 * 0.62]) {
+      c.fillStyle = vaultLG(bx - 2.2 * k, 0, bx + 2.2 * k, 0, ['#a8b0be', '#6a7282', '#3a404e'], c); c.fillRect(bx - 2.2 * k, -BH, 4.4 * k, BH);
+      c.fillStyle = 'rgba(240,244,250,.5)'; c.fillRect(bx - 2.2 * k, -BH, 0.8, BH);
+      for (const ry of [0.2, 0.5, 0.8]) vaultRivet(c, bx, -BH * ry, 0.85 * k);
+    }
+    // iron corner straps: an L at each bottom corner, a cap at each top one
+    for (const sx2 of [-1, 1]) {
+      c.fillStyle = vaultLG(0, -7 * k, 0, 0, ['#9aa2b2', '#4a5262'], c);
+      c.beginPath(); c.moveTo(sx2 * W2, 0); c.lineTo(sx2 * (W2 - 7 * k), 0); c.lineTo(sx2 * (W2 - 7 * k), -2.6 * k); c.lineTo(sx2 * (W2 - 2.6 * k), -2.6 * k); c.lineTo(sx2 * (W2 - 2.6 * k), -7 * k); c.lineTo(sx2 * W2, -7 * k); c.closePath(); c.fill();
+      vaultRivet(c, sx2 * (W2 - 1.4 * k), -1.4 * k, 0.7 * k); vaultRivet(c, sx2 * (W2 - 5 * k), -1.3 * k, 0.6 * k); vaultRivet(c, sx2 * (W2 - 1.3 * k), -5.2 * k, 0.6 * k);
+      c.fillStyle = vaultLG(0, -BH, 0, -BH + 5 * k, ['#9aa2b2', '#4a5262'], c); c.fillRect(sx2 > 0 ? W2 - 2.6 * k : -W2, -BH, 2.6 * k, 5 * k); vaultRivet(c, sx2 * (W2 - 1.3 * k), -BH + 2.6 * k, 0.6 * k);
+    }
+    // gold trim: a rail along the rim and the foot, lit along their tops
+    for (const [y, hh] of [[-BH, 2 * k], [-2 * k, 2 * k]]) { c.fillStyle = vaultLG(0, y, 0, y + hh, [G0.lit, G0.hi, G0.lo], c); c.beginPath(); c.roundRect(-W2 - 0.5, y, W2 * 2 + 1, hh, 1); c.fill(); c.strokeStyle = 'rgba(94,48,8,.8)'; c.lineWidth = 0.5; c.stroke(); }
+    if (mimic) { // a mimic: splintered, gouged boards (it chews), and a red stain round the keyhole
+      c.strokeStyle = 'rgba(40,6,4,.75)'; c.lineWidth = 0.9; for (const [x, y] of [[-W2 * 0.3, -BH * 0.62], [W2 * 0.25, -BH * 0.35]]) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + 2 * k, y + 1.2 * k); c.lineTo(x + 3 * k, y + 0.2 * k); c.lineTo(x + 5 * k, y + 1.6 * k); c.stroke(); }
+    }
+    // the lock: a gold shield-shaped plate over the seam, a keyhole, a rim of rivets
+    const ly = -BH + 0.5;
+    c.beginPath(); c.moveTo(-4.4 * k, ly); c.lineTo(4.4 * k, ly); c.lineTo(4.4 * k, ly + 6 * k); c.quadraticCurveTo(4 * k, ly + 9.5 * k, 0, ly + 11 * k); c.quadraticCurveTo(-4 * k, ly + 9.5 * k, -4.4 * k, ly + 6 * k); c.closePath();
+    c.fillStyle = vaultLG(-4 * k, ly, 4 * k, ly + 11 * k, [G0.lit, G0.hi, G0.mid, G0.lo], c); c.fill(); c.strokeStyle = G0.deep; c.lineWidth = 0.7; c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.8)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(-3.6 * k, ly + 1); c.lineTo(-3.6 * k, ly + 6 * k); c.stroke();
+    for (const [x, y] of [[-3 * k, ly + 1.6 * k], [3 * k, ly + 1.6 * k], [0, ly + 9.2 * k]]) vaultRivet(c, x, y, 0.55 * k);
+    c.fillStyle = mimic ? '#300404' : '#2a1006'; c.beginPath(); c.arc(0, ly + 4.4 * k, 1.3 * k, 0, TWO_PI); c.fill(); c.beginPath(); c.moveTo(-0.7 * k, ly + 4.6 * k); c.lineTo(-1.1 * k, ly + 7.6 * k); c.lineTo(1.1 * k, ly + 7.6 * k); c.lineTo(0.7 * k, ly + 4.6 * k); c.fill();
+    if (mimic) { c.fillStyle = 'rgba(160,10,30,.45)'; c.beginPath(); c.ellipse(0.4 * k, ly + 9 * k, 1 * k, 2.6 * k, 0, 0, TWO_PI); c.fill(); }
+  });
+}
+function vaultChestLidSprite(mimic, k) {
+  const W2 = 17 * k, LH = 10 * k, G0 = VP.gold;
+  return vaultSprite('chlid' + (mimic ? 'm' : 'r') + k, (W2 * 2 + 8) * s, (LH + 4 + 8 * k) * s, c => {
+    c.scale(s, s); c.translate(4, LH + 4); c.lineJoin = 'round'; c.lineCap = 'round';
+    const WOOD = mimic ? ['#ee9064', '#9a4028', '#561c10'] : ['#f0b674', '#9a5e2c', '#562e12'], EDGE = mimic ? '#4a160c' : '#4a260c';
+    const lid = () => { c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -LH * 0.4); c.quadraticCurveTo(0, -LH, W2 * 0.4, -LH); c.lineTo(W2 * 1.6, -LH); c.quadraticCurveTo(W2 * 2, -LH, W2 * 2, -LH * 0.4); c.lineTo(W2 * 2, 0); c.closePath(); };
+    lid(); c.fillStyle = vaultLG(0, -LH, 0, 0, WOOD, c); c.fill();
+    c.save(); lid(); c.clip(); vaultChestWood(c, 0, -LH, W2 * 2, LH, 2, mimic, mimic ? 73 : 74); c.restore();
+    lid(); c.strokeStyle = EDGE; c.lineWidth = 1; c.stroke();
+    // iron bands over the dome with rivets, a gold rail along its rim, a hasp hanging over the lock
+    for (const bx of [W2 - W2 * 0.62, W2 + W2 * 0.62]) { c.fillStyle = vaultLG(bx - 2.2 * k, 0, bx + 2.2 * k, 0, ['#a8b0be', '#6a7282', '#3a404e'], c); c.fillRect(bx - 2.2 * k, -LH + 0.6, 4.4 * k, LH - 0.6); vaultRivet(c, bx, -LH * 0.55, 0.8 * k); }
+    c.fillStyle = vaultLG(0, -2 * k, 0, 0, [G0.lit, G0.hi, G0.lo], c); c.beginPath(); c.roundRect(-0.5, -2 * k, W2 * 2 + 1, 2 * k, 1); c.fill(); c.strokeStyle = 'rgba(94,48,8,.8)'; c.lineWidth = 0.5; c.stroke();
+    c.fillStyle = vaultLG(W2 - 2.4 * k, 0, W2 + 2.4 * k, 0, [G0.lit, G0.mid, G0.lo], c); c.beginPath(); c.roundRect(W2 - 2.4 * k, -4.6 * k, 4.8 * k, 5.2 * k, 1.2); c.fill(); c.strokeStyle = G0.deep; c.lineWidth = 0.5; c.stroke();
+    c.strokeStyle = 'rgba(255,244,214,.75)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(2, -LH * 0.5); c.quadraticCurveTo(2, -LH + 1.5, W2 * 0.5, -LH + 1.5); c.lineTo(W2 * 1.5, -LH + 1.5); c.stroke();
+    if (mimic) vaultChestTeeth(c, 0, -0.5, W2 * 2, 1, k, 0.75, 1); // shut, its upper fangs still peek over the rim
+  });
+}
+function drawVaultChest(h) {
+  vaultCacheCheck();
+  const C = VAULT.chest, d = h.side, T = G.t, X = sx(h.base), Y = sy(h.alt);
+  vaultPiece(vaultRockPiece('chledge' + (h.mimic ? 'm' : 'r'), d, -16, C.len + 4, -4, 62, c => vaultLedgeArt(c, C.len, h.mimic ? 53 : 54)), X, Y);
+  const cx = sx(h.x), cy = Y - 1.5 * s;
+  if (!h.mimic) {
+    const burst = h.burst != null, since = burst ? G.t - h.burst : 0, open = burst ? Math.min(1, since / 0.15) : 0.02 * Math.max(0, Math.sin(T * 2 + h.alt));
+    if (!burst) vaultGlowS(cx, cy - 18 * s, 40 * s, VP.warm, 0.3 + 0.08 * Math.sin(T * 2.2 + h.alt));
+    else if (since < 0.6) vaultGlowS(cx, cy - 20 * s, 70 * s, VP.warm, 0.7 * (1 - since / 0.6));
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(d * s, s);
+    vaultChestArt(open, 0, T, false, burst, null);
+    // a real chest's hint: gold glittering in the crack under its lid
+    if (!burst) { const B = 17 * C.k; ctx.fillStyle = vaultLG(0, -B - 2, 0, -B + 1, ['rgba(255,240,160,.0)', 'rgba(255,236,150,.9)']); ctx.fillRect(-B + 4, -B - 1.5, B * 2 - 8, 2); }
+    drawVaultChestLid(open, false, burst);
+    ctx.restore();
+    if (!burst) for (let q = 0; q < 2; q++) vaultTwinkle(ctx, cx + (q ? 13 : -15) * s * d, cy - (36 + 5 * q) * s, 4 * s, Math.max(0, Math.sin(T * 2 + q * 2.4 + h.alt)) ** 6);
+    return;
+  }
+  const st = h.st || vaultMimicState(h, T);
+  // Penny's nose: the mimic glows red for her (the perk); for everyone, a red haze where the tongue will reach in the tell
+  if (vaultSniffer()) vaultGlowS(cx, cy - 18 * s, (46 + 6 * Math.sin(T * 5)) * s, [255, 50, 70], 0.5 + 0.15 * Math.sin(T * 5));
+  if (st.tell > 0.05) {
+    const P = vaultTongue(h, 1, T);
+    ctx.save(); ctx.setLineDash([3 * s, 6 * s]); ctx.lineDashOffset = -T * 30 * s; ctx.strokeStyle = `rgba(255,90,110,${0.55 * st.tell})`; ctx.lineWidth = 2 * s; ctx.lineCap = 'round';
+    ctx.beginPath(); P.forEach(([x, a], i) => i ? ctx.lineTo(sx(x), sy(a)) : ctx.moveTo(sx(x), sy(a))); ctx.stroke(); ctx.restore();
+  }
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(d * s, s);
+  const jit = st.tell > 0 ? Math.sin(T * 40) * 0.6 * st.tell : 0; ctx.translate(jit, 0);
+  vaultChestArt(st.open, st.tell, T, true, false, null);
+  ctx.restore();
+  // the tongue lashing out: a fat pink tube with a dark furrow down its middle, lit along its top, bumpy, a round tip
+  if (st.ext > 0.02) {
+    const P = vaultTongue(h, st.ext, T), N = P.length - 1, L = [], R2 = [];
+    for (let i = 0; i <= N; i++) {
+      const [x, a] = P[i], [x2, a2] = P[Math.min(N, i + 1)], [x1, a1] = P[Math.max(0, i - 1)], tx = x2 - x1, ta = a2 - a1, m = Math.hypot(tx, ta) || 1, nx = -ta / m, na = tx / m, w = vaultTongueR(i / N) * (i === 0 ? 1.1 : 1);
+      L.push([sx(x + nx * w), sy(a + na * w)]); R2.push([sx(x - nx * w), sy(a - na * w)]);
+    }
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const tube = () => { ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = N; i >= 0; i--) ctx.lineTo(R2[i][0], R2[i][1]); ctx.closePath(); };
+    const [tx0, ty0] = [sx(P[0][0]), sy(P[0][1])];
+    tube(); ctx.fillStyle = vaultLG(0, ty0 - 8 * s, 0, ty0 + 8 * s, ['#ffb0cc', '#ea4a80', '#9a1a4a']); ctx.fill(); ctx.strokeStyle = '#7a1238'; ctx.lineWidth = 1 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,20,60,.6)'; ctx.lineWidth = 1 * s; ctx.beginPath(); P.forEach(([x, a], i) => i < N && (i ? ctx.lineTo(sx(x), sy(a)) : ctx.moveTo(sx(x), sy(a)))); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,235,245,.75)'; ctx.lineWidth = 1.1 * s; ctx.beginPath(); L.forEach(([x, y], i) => i > 0 && i < N && (i > 1 ? ctx.lineTo(x, y + 1.6 * s) : ctx.moveTo(x, y + 1.6 * s))); ctx.stroke();
+    for (let i = 1; i < N; i++) { const [x, a] = P[i]; vaultEll(ctx, sx(x) + (i % 2 ? 2 : -2) * s, sy(a) + (i % 2 ? -1.5 : 1.5) * s, 0.9 * s, 0.9 * s, 'rgba(255,200,220,.9)'); }
+    const [ex, ea] = P[N]; const R = 6.5 * s, x = sx(ex), y = sy(ea);
+    ctx.fillStyle = vaultRG(x - R * 0.3, y - R * 0.4, R * 1.3, ['#ffc8dc', '#ec4a84', '#9a1a4a']); ctx.beginPath(); ctx.arc(x, y, R, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#7a1238'; ctx.lineWidth = 1 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(122,18,56,.7)'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(x - d * R * 0.2, y - R * 0.7); ctx.quadraticCurveTo(x + d * R * 0.3, y, x - d * R * 0.2, y + R * 0.7); ctx.stroke();
+    vaultSheen(x, y, R, 0.6);
+    ctx.restore();
+  }
+  ctx.save(); ctx.translate(cx + (st.tell > 0 ? Math.sin(T * 40) * 0.6 * st.tell * s : 0), cy); ctx.scale(d * s, s);
+  drawVaultChestLid(st.open, true, false);
+  // drool dripping from its lip through the tell (and while it gapes)
+  const dr = Math.max(st.tell, st.open > 0.3 ? 0.8 : 0, 0.25);
+  for (const [dx, ph] of [[8, 0], [-6, 0.45]]) {
+    const q = pmod(T * 0.9 + ph + h.alt * 0.01, 1), len = 3 + q * 12 * dr, by = -17 * VAULT.chest.k + 1;
+    ctx.strokeStyle = `rgba(200,255,220,${0.75 * dr})`; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(dx, by); ctx.quadraticCurveTo(dx + 0.5, by + len * 0.6, dx, by + len); ctx.stroke();
+    vaultEll(ctx, dx, by + len + 1.3, 1.5 * dr + 0.3, 1.9 * dr + 0.3, `rgba(210,255,225,${0.8 * dr})`); vaultEll(ctx, dx - 0.4, by + len + 0.8, 0.5, 0.5, 'rgba(255,255,255,.9)');
+  }
+  ctx.restore();
+}
+
+// ---- Cursed Skull ----
+// a green curse flame (additive), flickering; s0 = height (world units in the current frame)
+function vaultCurseFlame(x, y, s0, T, ph = 0, a = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 3; k++) {
+    const f = 1 - k * 0.28, sw = Math.sin(T * 9 + ph + k * 2) * s0 * 0.12, hh = s0 * f * (0.9 + 0.15 * Math.sin(T * 13 + ph + k));
+    ctx.fillStyle = k === 0 ? `rgba(93,255,158,${0.45 * a})` : k === 1 ? `rgba(150,255,190,${0.5 * a})` : `rgba(225,255,235,${0.6 * a})`;
+    ctx.beginPath(); ctx.moveTo(x - s0 * 0.32 * f, y); ctx.quadraticCurveTo(x - s0 * 0.4 * f, y - hh * 0.5, x + sw, y - hh);
+    ctx.quadraticCurveTo(x + s0 * 0.4 * f, y - hh * 0.5, x + s0 * 0.32 * f, y); ctx.quadraticCurveTo(x, y + s0 * 0.12, x - s0 * 0.32 * f, y); ctx.fill();
+  }
+  ctx.restore();
+}
+// the skull itself (concept port, richer): ivory cranium in a battered plum tricorn, sockets aglow, chattering jaw
+function vaultSkullArt(T, chatter, flare, face, k) {
+  ctx.save(); ctx.scale(face * k, k); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  vaultCurseFlame(-4, -8, 17, T, 0.3, 0.9); vaultCurseFlame(5, -10, 13, T, 1.7, 0.8);
+  const jy = 7 + chatter * 2.4;
+  ctx.fillStyle = vaultLG(0, jy - 2, 0, jy + 7, ['#fff4dc', '#d8c29a', '#9a8460']);
+  ctx.beginPath(); ctx.moveTo(-8, jy - 1); ctx.quadraticCurveTo(-8.5, jy + 6.5, 0, jy + 7); ctx.quadraticCurveTo(8.5, jy + 6.5, 8, jy - 1); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#7a6444'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.strokeStyle = 'rgba(122,100,68,.8)'; ctx.lineWidth = 0.7; ctx.beginPath(); for (let q = -2; q <= 2; q++) { ctx.moveTo(q * 2.6, jy - 0.5); ctx.lineTo(q * 2.6, jy + 2.5); } ctx.stroke();
+  const cr = () => { ctx.beginPath(); ctx.moveTo(-9, 8); ctx.bezierCurveTo(-15, 4, -14, -13, 0, -13); ctx.bezierCurveTo(14, -13, 15, 4, 9, 8); ctx.quadraticCurveTo(0, 10.5, -9, 8); ctx.closePath(); };
+  cr(); ctx.fillStyle = vaultRG(-4, -7, 20, ['#fffaf0', '#efe0c0', '#b8a07a']); ctx.fill();
+  ctx.save(); cr(); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(93,255,158,.28)'; ctx.beginPath(); ctx.ellipse(0, 9, 14, 7, 0, 0, TWO_PI); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(150,120,80,.25)'; ctx.beginPath(); ctx.ellipse(-9, 3, 4, 5, 0.3, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,96,60,.85)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(6, -12); ctx.lineTo(4, -8); ctx.lineTo(7, -5); ctx.lineTo(5, -2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(6.8, -12); ctx.lineTo(4.8, -8); ctx.lineTo(7.8, -5); ctx.stroke();
+  ctx.restore();
+  cr(); ctx.strokeStyle = '#8a7250'; ctx.lineWidth = 1; ctx.stroke();
+  vaultSheen(-1, -4, 12, 0.55, 3.4, 4.6);
+  for (const dd of [-1, 1]) vaultEll(ctx, dd * 5, -1.5, 4.6, 4.2, '#3a2230', dd * 0.15);
+  // the cartoon eyes: green pinpricks that flare lime when it is about to lunge
+  const ec = flare > 0.3 ? [184, 255, 90] : VP.curse;
+  for (const dd of [-1, 1]) { ctx.fillStyle = vaultCol(ec, 0.35 + 0.4 * flare); ctx.beginPath(); ctx.arc(dd * 5 + 0.3, -1.4, 3.4, 0, TWO_PI); ctx.fill(); ctx.fillStyle = vaultCol(vaultLift(ec, 60)); ctx.beginPath(); ctx.ellipse(dd * 5 + 0.5, -1.2, 1.6 + flare, 2 + flare * 0.6, 0, 0, TWO_PI); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(dd * 5 - 0.3, -2.4, 0.7, 0, TWO_PI); ctx.fill(); }
+  if (flare > 0.3) { ctx.strokeStyle = '#5a3e2a'; ctx.lineWidth = 1.4; for (const dd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(dd * 8.5, -7); ctx.lineTo(dd * 2.2, -5.2); ctx.stroke(); } }
+  ctx.fillStyle = '#4a2a30'; ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(-1.6, 5.6); ctx.lineTo(1.6, 5.6); ctx.closePath(); ctx.fill();
+  for (let q = -2; q <= 2; q++) { ctx.fillStyle = q === 1 ? '#ffd860' : '#fffaf0'; ctx.beginPath(); ctx.roundRect(q * 2.6 - 1.2, 6.2, 2.4, 2.6, 0.6); ctx.fill(); ctx.strokeStyle = q === 1 ? '#9a5a10' : 'rgba(122,100,68,.7)'; ctx.lineWidth = 0.5; ctx.stroke(); }
+  // the tricorn at a jaunty angle, gold-trimmed, a gold skull badge
+  ctx.save(); ctx.translate(-1, -11); ctx.rotate(-0.18);
+  ctx.fillStyle = vaultLG(0, -9, 0, 3, ['#8a4a6a', '#5a2244', '#34102a']);
+  ctx.beginPath(); ctx.moveTo(-17, 1); ctx.quadraticCurveTo(-12, -2, -8, -8); ctx.quadraticCurveTo(0, -12, 8, -8); ctx.quadraticCurveTo(12, -2, 17, 1); ctx.quadraticCurveTo(0, -3, -17, 1); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#3a0e26'; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.strokeStyle = '#ffd860'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-17, 1); ctx.quadraticCurveTo(0, -3, 17, 1); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,230,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-8, -7.5); ctx.quadraticCurveTo(0, -11, 7, -8); ctx.stroke();
+  vaultEll(ctx, 0, -5, 2, 2, '#ffd860'); vaultEll(ctx, -0.5, -5.5, 0.7, 0.7, '#fff8d0');
+  ctx.restore();
+  ctx.restore();
+}
+// the skeleton's arm reaching out of the gold, palm up under the jewel (frame: x out from the wall, y down, the jewel at
+// (cx, 0)): a gold cuff where it leaves the coins, bones as line pairs, knuckles; a lantern's bail in its fist if lantern
+function vaultArmArt(c, cx, lantern) {
+  const bone = (x0, y0, x1, y1, w) => {
+    c.strokeStyle = '#8a7250'; c.lineWidth = w + 1.6; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    c.strokeStyle = vaultLG(x0, y0 - w, x0, y0 + w, ['#fffaf0', '#e8d8b4', '#b8a07a'], c); c.lineWidth = w; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    for (const [x, y] of [[x0, y0], [x1, y1]]) { c.fillStyle = vaultRG(x - w * 0.2, y - w * 0.3, w * 0.9, ['#fffaf0', '#e0cca4', '#a8906a'], c); c.beginPath(); c.arc(x, y, w * 0.62, 0, TWO_PI); c.fill(); c.strokeStyle = '#8a7250'; c.lineWidth = 0.7; c.stroke(); }
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(lerp(x0, x1, 0.2), lerp(y0, y1, 0.2) - w * 0.25); c.lineTo(lerp(x0, x1, 0.8), lerp(y0, y1, 0.8) - w * 0.25); c.stroke();
+  };
+  const el = [cx * 0.55, 30], hand = [cx - 4, 21];
+  // upper arm out of the bank, then the two forearm bones side by side
+  bone(-6, 40, el[0], el[1], 7);
+  bone(el[0], el[1] - 1.5, hand[0], hand[1] - 1.5, 3.6); bone(el[0] + 1, el[1] + 2.2, hand[0] + 1, hand[1] + 2, 3.2);
+  // the gold cuff where the arm leaves the coins (and a few coins spilling round it)
+  c.save(); c.translate(1, 38); c.rotate(-0.15);
+  c.fillStyle = vaultLG(0, -6, 0, 6, [VP.gold.lit, VP.gold.hi, VP.gold.mid, VP.gold.lo], c); c.beginPath(); c.roundRect(-3, -6.5, 7, 13, 2); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.7; c.stroke();
+  vaultGem(c, 0.5, 0, 2, 'emer');
+  c.restore();
+  for (let k = 0; k < 5; k++) { const x = -6 + k * 3.4, y = 47 + (k % 2) * 1.5; vaultEll(c, x, y + 0.6, 2.8, 1.3, VP.gold.deep); vaultEll(c, x, y, 2.8, 1.3, k % 2 ? VP.gold.hi : VP.gold.mid); }
+  // the hand: palm cupped up, finger bones curling round the jewel (or a fist on the lantern's bail)
+  c.fillStyle = vaultRG(hand[0] - 1, hand[1] - 2, 7, ['#fffaf0', '#e0cca4', '#a8906a'], c); c.beginPath(); c.ellipse(hand[0] + 1, hand[1], 6.5, 4, -0.15, 0, TWO_PI); c.fill(); c.strokeStyle = '#8a7250'; c.lineWidth = 0.8; c.stroke();
+  const fingers = lantern ? [[-4, 0.2], [-1, 0.1], [2, 0], [5, -0.1]] : [[-5, -0.5], [-1.5, -0.25], [2, 0], [5.5, 0.3]];
+  for (const [fx, fa] of fingers) {
+    const x0 = hand[0] + fx, y0 = hand[1] - 2.5, x1 = x0 + Math.sin(fa) * 5, y1 = y0 - 5.5, x2 = x1 + Math.sin(fa * 2) * 3 + (fx < 0 ? 1.5 : -1.5), y2 = y1 - 3;
+    c.strokeStyle = '#8a7250'; c.lineWidth = 3.2; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.strokeStyle = '#efe0c0'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.fillStyle = '#fffaf0'; c.beginPath(); c.arc(x1, y1, 1.2, 0, TWO_PI); c.fill();
+  }
+  if (lantern) {   // the curse lantern: a gold cage on a bail, glass panes, a domed cap
+    const lx = cx, ly = 0;
+    c.strokeStyle = VP.gold.lo; c.lineWidth = 1.4; c.beginPath(); c.arc(lx, ly - 13, 4, Math.PI, 0); c.stroke();
+    c.fillStyle = 'rgba(160,255,200,.22)'; c.beginPath(); c.roundRect(lx - 7, ly - 9, 14, 17, 3); c.fill();
+    c.strokeStyle = vaultLG(lx - 8, 0, lx + 8, 0, [VP.gold.lit, VP.gold.mid, VP.gold.lo], c); c.lineWidth = 1.6;
+    c.beginPath(); for (const bx of [-7, -2.3, 2.3, 7]) { c.moveTo(lx + bx, ly - 9); c.lineTo(lx + bx, ly + 8); } c.stroke();
+    c.fillStyle = vaultLG(lx, ly - 14, lx, ly - 8, [VP.gold.lit, VP.gold.hi, VP.gold.lo], c); c.beginPath(); c.moveTo(lx - 8.5, ly - 8); c.quadraticCurveTo(lx, ly - 17, lx + 8.5, ly - 8); c.closePath(); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = vaultLG(lx, ly + 7, lx, ly + 11, [VP.gold.hi, VP.gold.lo], c); c.beginPath(); c.roundRect(lx - 8.5, ly + 7, 17, 3.5, 1.5); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.7; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(lx - 5, ly - 6); c.lineTo(lx - 5, ly + 4); c.stroke();
+  }
+}
+function drawVaultSkull(h) {
+  vaultCacheCheck();
+  const K = VAULT.skull, d = h.side, T = G.t, st = h.st || vaultSkullState(h, T), cxs = sx(h.cx), cys = sy(h.alt);
+  const flash = st.tell, lunge = Math.max(0, st.ext);
+  // the ring it circles (a faint dashed orbit of curse light), and through the tell the line it will lunge along
+  ctx.save(); ctx.setLineDash([3 * s, 5 * s]); ctx.lineDashOffset = -T * 12 * s; ctx.strokeStyle = vaultCol(VP.curse, 0.2 + 0.4 * flash); ctx.lineWidth = (1.2 + flash) * s;
+  ctx.beginPath(); ctx.arc(cxs, cys, K.R * s, 0, TWO_PI); ctx.stroke();
+  if (flash > 0.02 || lunge > 0.02) {
+    const ex = Math.cos(h.th), ea = Math.sin(h.th), a0 = K.R, a1 = K.R + K.L + 16;
+    ctx.strokeStyle = vaultCol([184, 255, 120], 0.7 * Math.max(flash, lunge * 0.5)); ctx.lineWidth = 2.4 * s; ctx.setLineDash([5 * s, 4 * s]);
+    ctx.beginPath(); ctx.moveTo(cxs + ex * a0 * s, cys - ea * a0 * s); ctx.lineTo(cxs + ex * a1 * s, cys - ea * a1 * s); ctx.stroke();
+  }
+  ctx.restore();
+  // the arm and what it holds
+  vaultPiece(vaultRockPiece('arm' + (h.ruby ? 'r' : 'l'), d, -12, K.cx + 12, -20, 52, c => vaultArmArt(c, K.cx, !h.ruby)), sx(h.base), cys);
+  if (!h.ruby) { vaultGlowS(cxs, cys, 46 * s, VP.curse, 0.35 + 0.08 * Math.sin(T * 7 + h.alt)); ctx.save(); ctx.translate(cxs, cys + 6 * s); ctx.scale(s, s); vaultCurseFlame(0, 0, 13, T, h.alt); ctx.restore(); }
+  // the skull: its fire trail behind it round the ring, or a smear of fire along its lunge
+  const [x, a] = vaultSkullPos(h, st), X = sx(x), Y = sy(a);
+  if (st.ext <= 0.01 && st.tell <= 0) for (let q = 6; q >= 1; q--) { const an = st.ang - h.dir * q * 0.17, R = K.R * s; vaultGlowS(cxs + Math.cos(an) * R, cys - Math.sin(an) * R, (13 - q) * s, VP.curse, 0.55 * (1 - q / 7)); }
+  if (lunge > 0.05) for (let q = 1; q <= 4; q++) { const bx = x - Math.cos(h.th) * q * 8 * lunge, ba = a - Math.sin(h.th) * q * 8 * lunge; vaultGlowS(sx(bx), sy(ba), (13 - q * 1.5) * s, VP.curse, 0.5 * lunge); }
+  vaultGlowS(X, Y, 34 * s, VP.curse, 0.3 + 0.35 * Math.max(flash, lunge));
+  const chatter = st.tell > 0 || st.ext > 0.3 ? Math.abs(Math.sin(T * 40)) : 0.15 * Math.abs(Math.sin(T * 4));
+  const face = st.ext > 0.01 || st.tell > 0 ? (Math.cos(h.th) >= 0 ? 1 : -1) : (-Math.sin(st.ang) * h.dir >= 0 ? 1 : -1);
+  const bob = Math.sin(T * 3 + h.alt) * 1.2 * s;
+  ctx.save(); ctx.translate(X + (st.tell > 0 ? Math.sin(T * 50) * 0.8 * s : 0), Y + bob); ctx.scale(s, s); vaultSkullArt(T, chatter, Math.max(flash, lunge), face, K.k); ctx.restore();
+}
+
+// ---- Gold Surge: the cursed hoard heaving out of the wall ----
+// the swell at full heave, drawn once (frame: x out from the wall to `out`, y down, its middle at y 0): a dome of coins
+// packed in rows that follow its curve (each lit on its upper lip), gems mixed in, lit along its upper-left shoulder,
+// shaded underneath, a crest of coins standing on edge along its top
+function vaultSurgeSprite(d) {
+  const U = VAULT.surge, O = U.out, R = U.Rs;
+  return vaultRockPiece('surge', d, -12, O + 6, -R - 10, R + 10, c => {
+    const dome = () => { c.beginPath(); c.moveTo(-12, -R - 4); c.bezierCurveTo(O * 0.45, -R - 2, O + 2, -R * 0.55, O, 0); c.bezierCurveTo(O + 2, R * 0.55, O * 0.45, R + 2, -12, R + 4); c.closePath(); };
+    dome(); c.fillStyle = vaultRG(O * 0.35, -R * 0.4, O * 1.05, [VP.gold.hi, VP.gold.mid, VP.gold.lo, VP.gold.deep], c); c.fill();
+    c.save(); dome(); c.clip();
+    const r = mulberry32(911);
+    for (let yy = -R - 4; yy < R + 6; yy += 3.6) {
+      const half = Math.sqrt(Math.max(0, 1 - (yy / (R + 4)) ** 2)), xe = -12 + (O + 12) * half;
+      for (let x = -10 + (Math.round(yy) % 2) * 2.5; x < xe + 3; x += 5) {
+        const sh = clamp(1 - (xe - x) / (O * 0.9), 0, 1), rot = (r() - 0.5) * 0.6, rx = 2.6 + r() * 0.6;
+        vaultEll(c, x, yy + 0.6, rx, 1.4, VP.gold.deep, rot); vaultEll(c, x, yy, rx, 1.4, r() < 0.3 ? VP.gold.hi : r() < 0.8 ? VP.gold.mid : VP.gold.lo, rot);
+        if (yy < R * 0.3) { c.strokeStyle = `rgba(255,248,200,${0.45 + 0.4 * sh})`; c.lineWidth = 0.5; c.beginPath(); c.ellipse(x, yy, rx * 0.8, 1, rot, 3.5, 5.7); c.stroke(); }
+      }
+    }
+    for (let k = 0; k < 9; k++) vaultGem(c, 6 + r() * (O - 20), (r() - 0.5) * R * 1.5, 2 + r() * 1.6, VAULT_GEMK[k % 4]);
+    // the shading: dark toward the wall and underneath, light on its upper shoulder
+    c.fillStyle = vaultLG(-12, 0, 30, 0, ['rgba(40,14,30,.7)', 'rgba(40,14,30,0)'], c); c.fillRect(-14, -R - 6, 46, R * 2 + 12);
+    c.fillStyle = vaultLG(0, R * 0.1, 0, R + 4, ['rgba(80,30,10,0)', 'rgba(80,30,10,.45)'], c); c.fillRect(-14, 0, O + 20, R + 8);
+    c.fillStyle = vaultRG(O * 0.45, -R * 0.55, R * 0.8, ['rgba(255,250,210,.35)', 'rgba(255,250,210,0)'], c); c.fillRect(-14, -R - 6, O + 20, R * 2 + 12);
+    c.restore();
+    dome(); c.strokeStyle = 'rgba(120,64,10,.85)'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,215,.8)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(0, -R - 3); c.bezierCurveTo(O * 0.45, -R - 1.5, O * 0.9, -R * 0.6, O - 1, -R * 0.12); c.stroke();
+    // coins standing on edge along the crest
+    for (let k = 0; k < 7; k++) { const q = 0.12 + k * 0.12, x = -12 + (O + 12) * Math.sin(q * Math.PI / 2) * 0.98, y = -(R + 4) * Math.cos(q * Math.PI / 2) - 1; vaultEll(c, x, y, 1.5, 3, VP.gold.mid, 0.4 + q); vaultEll(c, x - 0.4, y - 0.3, 0.6, 2.2, VP.gold.lit, 0.4 + q); }
+  });
+}
+function drawVaultSurge(h) {
+  vaultCacheCheck();
+  const U = VAULT.surge, d = h.side, T = G.t, st = h.st || vaultSurgeState(h, T), X = sx(h.base);
+  // the telegraph: chevrons of curse light racing down the wall along the stroke through the tell
+  if (st.tell > 0 || (st.out > 0 && st.rolling == null && st.a === h.top)) {
+    const k = st.tell;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.fillStyle = vaultLG(X, 0, X + d * 70 * s, 0, [vaultCol(VP.warm, 0.18 * k), vaultCol(VP.warm, 0)]); ctx.fillRect(Math.min(X, X + d * 70 * s), sy(h.top + 40), 70 * s, (U.len + 40) * s);
+    for (let q = 0; q < 5; q++) {
+      const v = pmod(T * 1.6 - q / 5, 1), a = h.top - U.len * v, y = sy(a), al = Math.sin(v * Math.PI) * k;
+      ctx.strokeStyle = vaultCol(VP.curse, 0.6 * al); ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.moveTo(X + d * 10 * s, y - 8 * s); ctx.lineTo(X + d * 26 * s, y); ctx.lineTo(X + d * 42 * s, y - 8 * s); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (st.out <= 0.005) return;
+  const o = U.out * st.out, R = Math.min(U.Rs, 18 + o * 0.6), sp = vaultSurgeSprite(d), Y = sy(st.a) + (st.tell > 0 ? Math.sin(T * 45) * 0.8 * s : 0);
+  // the swell (its cached dome squashed to how far it heaves out), then its face: jewel eyes and a coin-toothed grin
+  const kx = o / U.out, ky = R / U.Rs;
+  ctx.save(); ctx.translate(X, Y); ctx.scale(kx, ky); ctx.drawImage(sp.cv, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
+  const awake = smooth(0.25, 0.6, st.out);
+  if (awake > 0.01) {
+    ctx.save(); ctx.translate(X + d * o * 0.62 * s, Y); ctx.scale(d * s * (0.6 + 0.4 * st.out), s * ky);
+    // the grin: a dark plum maw with gold coin teeth, gaping as it rolls
+    const gape = 4 + 6 * Math.max(0, Math.min(1, (st.rolling ?? 0) * 3)) + Math.sin(T * 12) * 1.2;
+    ctx.globalAlpha = awake;
+    ctx.fillStyle = vaultLG(0, 8, 0, 16 + gape, ['#5a1a3a', '#2e0a20']); ctx.beginPath(); ctx.moveTo(-16, 10); ctx.quadraticCurveTo(0, 12 + gape * 1.6, 16, 9); ctx.quadraticCurveTo(0, 13, -16, 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#7a3a12'; ctx.lineWidth = 1; ctx.stroke();
+    for (let q = 0; q < 5; q++) { const tx = -11 + q * 5.5, ty = 10.6 + Math.sin(q / 4 * Math.PI) * 1.2; vaultEll(ctx, tx, ty + 1.2, 2.2, 1.6, VP.gold.hi); vaultEll(ctx, tx - 0.5, ty + 0.8, 0.9, 0.6, VP.gold.lit); }
+    // brows of heaped coins and the eyes: big emeralds burning curse-green, pupils fixed on you
+    for (const ex of [-9, 8]) {
+      const er = 6;
+      ctx.fillStyle = 'rgba(70,24,10,.5)'; ctx.beginPath(); ctx.ellipse(ex, -7, er + 2.2, er + 1.6, 0, 0, TWO_PI); ctx.fill();
+      ctx.fillStyle = vaultRG(ex - 2, -9, er * 1.4, ['#e8ffe8', '#3ae08a', '#0a6a3a']); ctx.beginPath(); ctx.ellipse(ex, -7, er, er * 0.9, 0, 0, TWO_PI); ctx.fill();
+      ctx.strokeStyle = '#0a5a34'; ctx.lineWidth = 0.9; ctx.stroke();
+      const lk = clamp((G.p.alt - st.a) / 200, -1, 1);
+      ctx.fillStyle = '#103a24'; ctx.beginPath(); ctx.ellipse(ex - 1.5, -7 - lk * 2, 1.8, 3.4, 0, 0, TWO_PI); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex - 2.4, -9.5, 1.1, 0, TWO_PI); ctx.fill();
+      ctx.strokeStyle = VP.gold.lo; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ex - 7, -14 + (ex < 0 ? -1 : 2)); ctx.lineTo(ex + 6, -15 + (ex < 0 ? 2 : -1)); ctx.stroke();
+      ctx.strokeStyle = VP.gold.hi; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(ex - 7, -15 + (ex < 0 ? -1 : 2)); ctx.lineTo(ex + 6, -16 + (ex < 0 ? 2 : -1)); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    for (const ex of [-9, 8]) vaultGlowS(X + d * (o * 0.62 + ex * (0.6 + 0.4 * st.out)) * s, Y - 7 * s * ky, 16 * s, VP.curse, 0.55 * awake);
+  }
+  for (let q = 0; q < 3; q++) vaultTwinkle(ctx, X + d * o * (0.3 + 0.25 * q) * s, Y - (R * 0.6 - q * 14) * s, 4 * s, Math.max(0, Math.sin(T * 3 + q * 2.1)) ** 6);
+}
+DRAW.vaultAval = drawVaultAval; DRAW.vaultChest = drawVaultChest; DRAW.vaultSkull = drawVaultSkull; DRAW.vaultSurge = drawVaultSurge;
+// ---- the vault's scene ----
+// Walls: dark plum rock banked thick with pressed gold (the edge drawn is exactly the collision line): rows of coins
+// lying tilted in the bank, each lit on its upper lip, thinning back into the rock; coin stacks, goblets, crowns, chest
+// corners, cutlass hilts, pearl strings, old bones and jewels pressed in among them; deeper in, the plum rock in angular
+// facets and strata (line pairs). Along the shaft a real lip: the bank's packed rim, lit where it faces up, shaded where
+// it overhangs, chipped, with coins standing on edge. What is pressed in changes with the section (heaps of loose gold
+// in the Coin Falls, chests in the Mimic Hall, bones in the Skull Crypt, jewels in the Grotto...). All drawn once into
+// cached tiles (VAULT_TILE high, both sides) and blitted.
+const VAULT_TILE = 200;
+const VAULT_FLAVOUR = {
+  'Smugglers\' Cove':      { bank: 0.8, stacks: 0.8, gems: 0.5, cups: 0.4, chests: 0.3, bones: 0.2, rock: 0.6 },
+  'Coin Falls':            { bank: 1.25, stacks: 1.3, gems: 0.5, cups: 0.5, chests: 0.3, bones: 0.2, rock: 0.3 },
+  'Mimic Hall':            { bank: 1.0, stacks: 0.7, gems: 0.6, cups: 0.6, chests: 1.4, bones: 0.3, rock: 0.4 },
+  'Skull Crypt':           { bank: 0.85, stacks: 0.5, gems: 0.6, cups: 0.5, chests: 0.4, bones: 1.5, rock: 0.7 },
+  'Heaving Hoard':         { bank: 1.35, stacks: 1.0, gems: 0.8, cups: 0.7, chests: 0.5, bones: 0.3, rock: 0.2 },
+  'Jewel Grotto':          { bank: 0.9, stacks: 0.6, gems: 1.8, cups: 0.8, chests: 0.5, bones: 0.2, rock: 0.5 },
+  'Captain\'s Gauntlet':   { bank: 1.1, stacks: 0.9, gems: 0.7, cups: 0.7, chests: 0.8, bones: 0.8, rock: 0.4 },
+  'The Captain\'s Hoard':  { bank: 1.3, stacks: 1.2, gems: 1.2, cups: 1.2, chests: 1.0, bones: 0.4, rock: 0.3 },
+};
+function vaultFlavour(a) {
+  const S = G.level && G.level.sections; if (!S) return VAULT_FLAVOUR['Smugglers\' Cove'];
+  let sc = S[0]; for (const q of S) if (a >= q.a0) sc = q;
+  return VAULT_FLAVOUR[sc.name] || VAULT_FLAVOUR['Smugglers\' Cove'];
+}
+// the play-space x range (world) the cached art covers: the screen plus room for the zoom pulling back
+const vaultSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function vaultWallTile(side, k) {
+  const C = VAULT_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = vaultRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+// small treasures pressed into the bank (c's frame is the tile's, in css px; x, y the spot, k = s)
+function vaultCoinStack(c, x, y, n, lean, k) {
+  const rx = 5 * k, th = 2.1 * k, G0 = VP.gold;
+  for (let i = 0; i < n; i++) {
+    const cx = x + lean * i * 0.6 * k + Math.sin(i * 2.7) * 0.5 * k, cy = y - i * th;
+    c.fillStyle = vaultLG(cx - rx, 0, cx + rx, 0, ['#fff2b0', '#f0b838', '#b8721a', '#7a4410'], c); c.fillRect(cx - rx, cy - th, rx * 2, th);
+    c.fillStyle = 'rgba(90,46,8,.6)'; c.fillRect(cx - rx, cy - 0.5 * k, rx * 2, 0.5 * k);
+  }
+  const tx = x + lean * (n - 1) * 0.6 * k, ty = y - n * th;
+  vaultEll(c, tx, ty, rx, 2 * k, vaultLG(tx - rx, ty - 2 * k, tx + rx, ty + 2 * k, [G0.lit, G0.hi, G0.mid], c));
+  c.strokeStyle = G0.lo; c.lineWidth = 0.6 * k; c.beginPath(); c.ellipse(tx, ty, rx * 0.7, 1.3 * k, 0, 0, TWO_PI); c.stroke();
+  c.strokeStyle = 'rgba(255,255,240,.9)'; c.lineWidth = 0.7 * k; c.beginPath(); c.ellipse(tx, ty, rx, 2 * k, 0, 3.4, 5.4); c.stroke();
+}
+function vaultGoblet(c, x, y, k, gem) {
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.fillStyle = vaultLG(-5, 0, 5, 0, [G0.lit, G0.hi, G0.lo], c);
+  c.beginPath(); c.moveTo(-5, -12); c.quadraticCurveTo(-5, -4, -1, -3); c.lineTo(-1, 1); c.lineTo(-4, 3); c.lineTo(4, 3); c.lineTo(1, 1); c.lineTo(1, -3); c.quadraticCurveTo(5, -4, 5, -12); c.closePath(); c.fill();
+  c.strokeStyle = G0.deep; c.lineWidth = 0.7; c.stroke(); vaultEll(c, 0, -12, 5, 1.4, '#7a1a2a');
+  c.strokeStyle = 'rgba(255,255,240,.8)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-3.6, -10.5); c.quadraticCurveTo(-3.6, -5.5, -1.4, -4.5); c.stroke();
+  vaultGem(c, 0, -7, 1.6, gem);
+  c.restore();
+}
+function vaultCrown(c, x, y, k, rot) {
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k, k);
+  c.fillStyle = vaultLG(0, -7, 0, 3, [G0.lit, G0.hi, G0.lo], c);
+  c.beginPath(); c.moveTo(-7, 3); c.lineTo(-7, -4); c.lineTo(-4, -1); c.lineTo(0, -7); c.lineTo(4, -1); c.lineTo(7, -4); c.lineTo(7, 3); c.closePath(); c.fill();
+  c.strokeStyle = G0.deep; c.lineWidth = 0.7; c.stroke(); vaultGem(c, 0, 0.5, 1.6, 'ruby');
+  for (const px of [-7, 0, 7]) vaultEll(c, px, px ? -4.5 : -7.5, 1, 1, '#fff8ee');
+  c.restore();
+}
+function vaultChestCorner(c, x, y, k, dir) {   // the corner of a buried chest poking out of the gold
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.scale(-dir * k, k); c.rotate(0.12);
+  c.fillStyle = vaultLG(0, -10, 0, 8, ['#cf9452', '#94592a', '#522c12'], c); c.beginPath(); c.roundRect(-14, -10, 20, 18, 2); c.fill(); c.strokeStyle = '#4a260c'; c.lineWidth = 0.8; c.stroke();
+  c.strokeStyle = 'rgba(50,16,6,.55)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-14, -2); c.lineTo(6, -2); c.stroke(); c.strokeStyle = 'rgba(255,220,180,.3)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-14, -1); c.lineTo(6, -1); c.stroke();
+  c.fillStyle = vaultLG(-2, 0, 2, 0, [G0.lit, G0.mid, G0.lo], c); c.fillRect(-4, -10, 3.4, 18); c.fillRect(2.6, -10, 3.4, 18);
+  vaultEll(c, -2.3, -6, 0.8, 0.8, G0.lit); vaultEll(c, -2.3, 4, 0.8, 0.8, G0.lit);
+  c.restore();
+}
+function vaultBones(c, x, y, k, rot) {   // a little skull and a crossed bone, old and ivory
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k, k);
+  c.strokeStyle = '#8a7250'; c.lineWidth = 3.4; c.beginPath(); c.moveTo(-8, 5); c.lineTo(8, -3); c.stroke(); c.strokeStyle = '#efe0c0'; c.lineWidth = 2; c.beginPath(); c.moveTo(-8, 5); c.lineTo(8, -3); c.stroke();
+  for (const [bx, by] of [[-8, 5], [8, -3]]) { vaultEll(c, bx, by - 1, 1.6, 1.6, '#efe0c0'); vaultEll(c, bx, by + 1, 1.6, 1.6, '#e0cca4'); }
+  c.fillStyle = vaultRG(-1.5, -3, 7, ['#fffaf0', '#e8d8b4', '#a8906a'], c); c.beginPath(); c.ellipse(0, -1, 5, 4.6, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#8a7250'; c.lineWidth = 0.7; c.stroke();
+  vaultEll(c, -1.8, -1, 1.3, 1.4, '#4a2a30'); vaultEll(c, 1.8, -1, 1.3, 1.4, '#4a2a30'); c.fillStyle = '#efe0c0'; c.fillRect(-2.4, 2.6, 4.8, 2);
+  c.strokeStyle = 'rgba(120,96,60,.8)'; c.lineWidth = 0.5; c.beginPath(); for (let q = -1; q <= 1; q++) { c.moveTo(q * 1.4, 2.6); c.lineTo(q * 1.4, 4.6); } c.stroke();
+  c.restore();
+}
+function vaultRenderWallTile(side, k) {
+  const a0 = k * VAULT_TILE - 4, a1 = (k + 1) * VAULT_TILE + 4, dir = side ? 1 : -1, wx = a => side ? rightWall(a) : leftWall(a);
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = vaultSpan(), xa = side ? reach - 18 : s0, xb = side ? s1 : reach + 18;
+  const sp = vaultCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c;
+  sp.xa = xa; sp.a1 = a1;
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 70, A1 = a1 + 70, fl = vaultFlavour((a0 + a1) / 2);
+  const pts = []; for (let a = A0; a <= A1 + 3; a += 3) pts.push([X(wx(a)), Y(a), a]);
+  const at = (a, d) => [X(wx(a) + dir * d), Y(a)];
+  const trace = (off = 0) => { c.beginPath(); pts.forEach(([x, y], i) => { const xx = x + dir * off * s; i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); };
+  const edge = side ? X(xb) + 40 : X(xa) - 40, G0 = VP.gold;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // ---- the rock: deep plum, a little lighter toward the shaft (wide soft strokes following the edge: it never tiles)
+  const body = () => { c.beginPath(); c.moveTo(edge, Y(A0)); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(edge, Y(A1 + 3)); c.closePath(); };
+  body(); c.fillStyle = 'rgb(30,16,38)'; c.fill();
+  c.save(); body(); c.clip();
+  for (const [lw, col] of [[280, 'rgba(52,30,62,.6)'], [170, 'rgba(66,40,76,.5)'], [96, 'rgba(84,54,92,.45)']]) { c.strokeStyle = col; c.lineWidth = lw * s; trace(lw / 2); c.stroke(); }
+  // angular facets of rock deeper in, lit on their upper-left planes, each with a furrow and a lit arris
+  for (let r = Math.floor(A0 / 52) - 1; r * 52 < A1 + 52; r++) for (let j = 0; j < 4; j++) {
+    const hj = hash2(r * 4 + j, 2101 + side); if (hj < 0.3 * (1 - fl.rock * 0.5)) continue;
+    const ac = r * 52 + 26 + (hash2(r * 4 + j, 2102) - 0.5) * 30 + (j % 2) * 26, d = 60 + j * 42 + (hash2(r * 4 + j, 2103) - 0.5) * 20, w = (18 + 16 * hj) * s, hh = (14 + 10 * hash2(r * 4 + j, 2104)) * s, [x, y] = at(ac, d), fade = clamp(1 - d / 240, 0.2, 1);
+    c.fillStyle = `rgba(130,98,140,${0.16 * fade})`; c.beginPath(); c.moveTo(x - w, y + hh * 0.2); c.lineTo(x - w * 0.3, y - hh); c.lineTo(x + w * 0.8, y - hh * 0.6); c.lineTo(x + w * 0.2, y + hh * 0.1); c.closePath(); c.fill();
+    c.strokeStyle = `rgba(14,6,20,${0.5 * fade})`; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x - w, y + hh * 0.2); c.lineTo(x + w * 0.2, y + hh * 0.1); c.lineTo(x + w, y + hh * 0.7); c.stroke();
+    c.strokeStyle = `rgba(200,170,214,${0.22 * fade})`; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x - w * 0.3, y - hh); c.lineTo(x + w * 0.8, y - hh * 0.6); c.stroke();
+  }
+  // strata cracks (line pairs) and veins of gold threading the rock
+  for (let i = Math.floor(A0 / 23); i * 23 < A1; i++) {
+    const hj = hash2(i, 2111 + side); if (hj < 0.45) continue;
+    const a = i * 23 + 10 * hash2(i, 2112), d = 40 + 150 * hash2(i, 2113), len = (8 + 16 * hash2(i, 2114)) * s, [x, y] = at(a, d);
+    if (hj > 0.9) { c.strokeStyle = 'rgba(224,160,40,.35)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + dir * len, y + len * 0.3, x + dir * len * 2, y - len * 0.2); c.stroke(); c.strokeStyle = 'rgba(255,240,180,.3)'; c.lineWidth = 0.6 * s; c.stroke(); continue; }
+    c.strokeStyle = 'rgba(14,6,20,.6)'; c.lineWidth = 1.1 * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x + dir * len * 0.5, y + len * 0.4); c.lineTo(x + dir * len, y + len * 0.2); c.stroke();
+    c.strokeStyle = 'rgba(170,140,184,.3)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + dir * len * 0.5, y + len * 0.4 - s); c.lineTo(x + dir * len, y + len * 0.2 - s); c.stroke();
+  }
+  // ---- the bank of gold: rows of coins lying tilted, packed tight at the shaft and thinning back into the rock
+  const depthAt = a => fl.bank * (26 + 9 * Math.sin(a / 57 + side * 1.7) + 6 * Math.sin(a / 23 + side) + 5 * hash2(Math.floor(a / 90), 2121 + side));
+  // the bank's dark bed: a warm brown under the coins so gaps never show plum
+  c.strokeStyle = 'rgba(90,46,16,.95)'; c.lineWidth = 2 * fl.bank * 26 * s; trace(0); c.stroke();
+  c.strokeStyle = 'rgba(60,28,20,.6)'; c.lineWidth = 2 * fl.bank * 36 * s; trace(0); c.stroke();
+  const coins = [[], [], [], []], lips = [];
+  for (let row = Math.floor(A0 / 3.4); row * 3.4 < A1; row++) {
+    const a = row * 3.4, D = depthAt(a);
+    for (let j = 0; j * 5.2 < D + 8; j++) {
+      const d = j * 5.2 + (row % 2) * 2.6 + (hash2(row * 13 + j, 2131 + side) - 0.5) * 1.6;
+      if (d > D - 6 && hash2(row * 7 + j, 2132 + side) < (d - D + 6) / 14) continue;
+      const [x, y] = at(a + (hash2(row, j + side * 50) - 0.5) * 1.2, d + 1.5), q = hash2(row * 11 + j, 2133 + side), rot = (hash2(row * 5 + j, 2134) - 0.5) * 0.5;
+      const sh = clamp(d / (D + 6), 0, 1);
+      coins[0].push([x, y + 0.9 * s, rot]);
+      coins[q < 0.32 ? 1 : q < 0.82 ? 2 : 3].push([x, y, rot, sh]);
+      if (sh < 0.75) lips.push([x, y, rot, sh]);
+    }
+  }
+  const RX = 3 * s, RY = 1.6 * s;
+  for (const [i, col] of [[0, G0.deep], [3, G0.lo], [2, G0.mid], [1, G0.hi]]) { c.fillStyle = col; c.beginPath(); for (const [x, y, rot] of coins[i]) { c.moveTo(x + RX, y); c.ellipse(x, y, RX, RY, rot, 0, TWO_PI); } c.fill(); }
+  c.strokeStyle = 'rgba(255,248,200,.8)'; c.lineWidth = 0.55 * s; c.beginPath(); for (const [x, y, rot] of lips) { c.moveTo(x + Math.cos(3.4 + rot) * RX * 0.84, y + Math.sin(3.4 + rot) * RY * 0.84); c.ellipse(x, y, RX * 0.84, RY * 0.8, rot, 3.4, 5.9); } c.stroke();
+  // depth: the bank sinks back into shadow, and dark rock breaks through it in places
+  c.strokeStyle = 'rgba(30,14,36,.42)'; c.lineWidth = 22 * s; trace(fl.bank * 34 + 6); c.stroke();
+  c.strokeStyle = 'rgba(30,14,36,.3)'; c.lineWidth = 14 * s; trace(fl.bank * 26 + 4); c.stroke();
+  for (let i = Math.floor(A0 / 70); i * 70 < A1; i++) {
+    if (hash2(i, 2141 + side) > 0.35 * fl.rock + 0.05) continue;
+    const a = i * 70 + 30 * hash2(i, 2142), d = 14 + 10 * hash2(i, 2143), [x, y] = at(a, d), w = (9 + 8 * hash2(i, 2144)) * s, hh = w * 0.75;
+    // an angular boulder of plum rock: its outline of 6 jittered corners, a lit top-left facet, a shadowed lower facet,
+    // a crack (a furrow under a lit ridge), coins lodged against its foot
+    const P6 = []; for (let q = 0; q < 6; q++) { const an = q / 6 * TWO_PI + 0.3 + 0.3 * hash2(i * 6 + q, 2146), rr = 0.8 + 0.3 * hash2(i * 6 + q, 2145); P6.push([x + Math.cos(an) * w * rr, y + Math.sin(an) * hh * rr]); }
+    const poly = pp => { c.beginPath(); pp.forEach(([px, py], j) => j ? c.lineTo(px, py) : c.moveTo(px, py)); c.closePath(); };
+    poly(P6); c.fillStyle = vaultLG(x - w, y - hh, x + w, y + hh, ['#7a5888', '#4e3260', '#2e1a3c'], c); c.fill();
+    const ctr = [x - w * 0.15, y - hh * 0.1];
+    poly([P6[3], P6[4], ctr]); c.fillStyle = 'rgba(190,160,206,.35)'; c.fill(); poly([P6[4], P6[5], ctr]); c.fillStyle = 'rgba(160,130,180,.22)'; c.fill();
+    poly([P6[0], P6[1], ctr]); c.fillStyle = 'rgba(20,6,28,.35)'; c.fill(); poly([P6[1], P6[2], ctr]); c.fillStyle = 'rgba(20,6,28,.25)'; c.fill();
+    poly(P6); c.strokeStyle = '#2a1436'; c.lineWidth = 0.9 * s; c.stroke();
+    c.strokeStyle = 'rgba(230,206,240,.55)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(...P6[3]); c.lineTo(...P6[4]); c.lineTo(...P6[5]); c.stroke();
+    c.strokeStyle = 'rgba(20,6,28,.6)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(x - w * 0.2, y - hh * 0.5); c.lineTo(x + w * 0.1, y); c.lineTo(x - w * 0.05, y + hh * 0.4); c.stroke();
+    c.strokeStyle = 'rgba(200,170,214,.35)'; c.lineWidth = 0.6 * s; c.beginPath(); c.moveTo(x - w * 0.2 + s, y - hh * 0.5); c.lineTo(x + w * 0.1 + s, y); c.stroke();
+    for (let q = 0; q < 4; q++) { const cx2 = x + (q - 1.5) * w * 0.5, cy2 = y + hh * 0.85 + (q % 2) * s; vaultEll(c, cx2, cy2 + 0.8 * s, 3 * s, 1.5 * s, VP.gold.lo); vaultEll(c, cx2, cy2, 3 * s, 1.5 * s, q % 2 ? VP.gold.mid : VP.gold.hi); }
+  }
+  // ---- treasures pressed into the bank (one or two per slot, picked by the section's flavour)
+  for (let i = Math.floor(A0 / 48); i * 48 < A1; i++) {
+    const hj = hash2(i, 2151 + side), a = i * 48 + 24 + (hash2(i, 2152 + side) - 0.5) * 24, [x, y] = at(a, 13 + 8 * hash2(i, 2153 + side));
+    const w = { stacks: fl.stacks, gems: fl.gems, cups: fl.cups, chests: fl.chests * 0.6, bones: fl.bones * 0.7 }, tot = Object.values(w).reduce((p, q) => p + q, 0) + 1.2;
+    let pick = hj * tot, kind = null; for (const [kk, v] of Object.entries(w)) { if (pick < v) { kind = kk; break; } pick -= v; }
+    if (!kind) continue;
+    if (kind === 'stacks') { const n = 2 + Math.floor(hash2(i, 2154) * 2); for (let q = 0; q < n; q++) vaultCoinStack(c, x + dir * (q * 9 - 6) * s, y + (q % 2) * 3 * s + 6 * s, 4 + Math.floor(hash2(i * 3 + q, 2155) * 6), dir * 0.4 * (q - 1), s); }
+    else if (kind === 'gems') { c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = vaultRG(x, y, 20 * s, ['rgba(255,160,210,.22)', 'rgba(255,160,210,0)'], c); c.fillRect(x - 20 * s, y - 20 * s, 40 * s, 40 * s); c.restore(); for (let q = 0; q < 4; q++) vaultGem(c, x + (hash2(i * 4 + q, 2156) - 0.5) * 14 * s, y + (hash2(i * 4 + q, 2157) - 0.5) * 12 * s, (2.6 + 1.6 * hash2(i * 4 + q, 2158)) * s, VAULT_GEMK[pmod(i + q, 4)]); }
+    else if (kind === 'cups') { if (hash2(i, 2159) < 0.5) vaultGoblet(c, x, y + 4 * s, s * 1.1, VAULT_GEMK[pmod(i, 4)]); else vaultCrown(c, x, y, s * 1.1, (hash2(i, 2160) - 0.5) * 0.8); }
+    else if (kind === 'chests') vaultChestCorner(c, x + dir * 4 * s, y, s, dir);
+    else vaultBones(c, x, y, s * 1.05, (hash2(i, 2161) - 0.5) * 1.2);
+  }
+  c.restore();
+  // ---- the lip: the packed rim of the bank along the shaft, lit where it faces up, shaded where it overhangs, chipped
+  const lipW = a => 4.4 + 1.2 * Math.sin(a * 0.051 + side * 2) + 0.8 * Math.sin(a * 0.137 + side);
+  const inner = pts.map(([x, y, a]) => [x + dir * lipW(a) * s, y]);
+  const lipPath = () => { trace(0); for (let i = inner.length - 1; i >= 0; i--) c.lineTo(...inner[i]); c.closePath(); };
+  lipPath(); c.fillStyle = vaultLG(0, 0, 0, 1, [side ? '#e6ac34' : '#c88c26', side ? '#e6ac34' : '#c88c26'], c); c.fill();
+  c.save(); lipPath(); c.clip();
+  // the rim's own coins, packed on edge: short arcs (a furrow under a lit ridge)
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const [x, y, a] = pts[i]; if (hash2(i + Math.floor(A0), 2171 + side) < 0.25) continue;
+    c.strokeStyle = 'rgba(120,64,10,.7)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x + dir * 0.6 * s, y + 1.2 * s); c.lineTo(x + dir * lipW(a) * s, y + 1.6 * s); c.stroke();
+    c.strokeStyle = 'rgba(255,246,200,.5)'; c.lineWidth = 0.6 * s; c.beginPath(); c.moveTo(x + dir * 0.6 * s, y); c.lineTo(x + dir * lipW(a) * s, y + 0.4 * s); c.stroke();
+  }
+  // chips knocked out of the rim (a notch in shadow with its lit upper facet)
+  for (let i = Math.floor(A0 / 26); i * 26 < A1; i++) {
+    if (hash2(i, 2172 + side) > 0.4) continue;
+    const aa = i * 26 + 10 * hash2(i, 2173), [x, y] = at(aa, 0), w = (3 + 3 * hash2(i, 2174)) * s;
+    c.fillStyle = 'rgba(90,40,10,.75)'; c.beginPath(); c.moveTo(x, y - w); c.lineTo(x + dir * w * 0.9, y); c.lineTo(x, y + w * 0.6); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,240,190,.8)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x, y - w); c.lineTo(x + dir * w * 0.9, y); c.stroke();
+  }
+  c.restore();
+  // the furrow behind the rim, its lit arris where it faces up and the light (top left), the edge in its own darker hue
+  c.strokeStyle = 'rgba(90,40,12,.75)'; c.lineWidth = 1.4 * s; c.beginPath(); inner.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0, a] = pts[i - 1], [x1, y1] = pts[i], slope = (x1 - x0) * dir;   // > 0: the wall steps out into the shaft going up (it faces up)
+    const lit = clamp(0.35 + (side ? 0.35 : 0.1) + slope * 0.25 / s, 0, 1);
+    if (lit < 0.05) continue;
+    c.strokeStyle = `rgba(255,244,196,${0.75 * lit})`; c.lineWidth = 1.3 * s; c.beginPath(); c.moveTo(x0 + dir * 1 * s, y0); c.lineTo(x1 + dir * 1 * s, y1); c.stroke();
+    void a;
+  }
+  trace(0); c.strokeStyle = 'rgba(110,56,10,.9)'; c.lineWidth = 1 * s; c.stroke();
+  // coins standing on edge along the rim here and there, and a few loose ones caught on it
+  for (let i = Math.floor(A0 / 17); i * 17 < A1; i++) {
+    if (hash2(i, 2175 + side) > 0.45) continue;
+    const aa = i * 17 + 8 * hash2(i, 2176), [x, y] = at(aa, 2.6);
+    vaultEll(c, x, y, 1.6 * s, 3 * s, G0.lo, dir * 0.35); vaultEll(c, x - dir * 0.3 * s, y - 0.3 * s, 1.1 * s, 2.5 * s, G0.hi, dir * 0.35); vaultEll(c, x - dir * 0.5 * s, y - 0.8 * s, 0.4 * s, 1.6 * s, G0.lit, dir * 0.35);
+  }
+  return sp;
+}
+// the wall's outline for clipping the live light over it (screen)
+function vaultWallPath(side, bot, top) {
+  const wx = side ? rightWall : leftWall, edge = side ? cssW + 60 + drawPad * s : -60 - drawPad * s;
+  ctx.moveTo(edge, sy(bot)); for (let a = bot; a <= top + 8; a += 8) ctx.lineTo(sx(wx(a)), sy(a)); ctx.lineTo(edge, sy(top + 8)); ctx.closePath();
+}
+function drawVaultWalls() {
+  vaultCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = VAULT_TILE;
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = vaultWallTile(side, k);
+    ctx.drawImage(t.cv, ox + t.xa * s, sy(t.a1), t.w, t.h);
+  }
+  // render one tile ahead each frame (above the screen, where you are heading), so new gold never stalls a frame
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!VAULT_CACHE.walls.has(side + ':' + k)) { vaultWallTile(side, k); done = true; break; } if (done) break; }
+  // the live glitter on the gold: twinkles winking along the banks (seeded spots, each on its own clock)
+  for (let a = Math.floor(bot / 19) * 19; a < top; a += 19) for (const side of [0, 1]) {
+    const hj = hash2(a / 19, 2181 + side); if (hj > 0.55) continue;
+    const aa = a + 12 * hash2(a / 19, 2182), d = 3 + 22 * hash2(a / 19, 2183), x = sx((side ? rightWall(aa) : leftWall(aa)) + (side ? 1 : -1) * d);
+    vaultTwinkle(ctx, x, sy(aa), (2.6 + 2 * hj) * s, Math.max(0, Math.sin(G.t * (1.2 + hj) + a)) ** 10 * 0.95);
+  }
+}
+
+// ---- the backdrop: the hoard filling the sea cave, pushed far back (calm, violet-hazed, lower in contrast): three
+// parallax layers drawn once per tile and blitted: the far cave (0.06) with dunes of gold under drapes of rock, the middle
+// (0.18) with treasure-laden shelves (a giant chest, a ship's wheel, crossed cutlasses, a goblet, a wreck's mast), the near
+// rock (0.38) leaning in from the edges, veined with gold and hung with chains. Glints wink over the gold live.
+const VAULT_LAYERS = [{ f: 0.06, LT: 560, id: 0 }, { f: 0.18, LT: 480, id: 1 }, { f: 0.38, LT: 420, id: 2 }];
+function vaultLayerTile(L, k) {
+  const C = VAULT_CACHE.layers, key = L.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = vaultSpan(), pa0 = k * L.LT - 3, pa1 = (k + 1) * L.LT + 3;
+  t = vaultCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1; t.glints = []; t.fires = [];
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  t.c.lineJoin = 'round'; t.c.lineCap = 'round';
+  // each slot's pieces are drawn into its own tile and its neighbours' (so nothing is ever cut at a tile's edge); the
+  // live glints and fires are kept only by the tile they fall in
+  const col = { glints: [], fires: [] };
+  if (L.id === 0) for (let kk = k - 1; kk <= k + 2; kk++) vaultBgColumns(t.c, L, kk, X, Y, x0, x1);
+  for (let kk = k - 1; kk <= k + 1; kk++) vaultDrawLayer(t.c, L, kk, X, Y, x0, x1, col);
+  const inT = a => a >= pa0 && a < pa1;
+  t.glints = col.glints.filter(g => inT(g[1])); t.fires = col.fires.filter(f => inT(f[1]));
+  if (L.id < 2) { t.c.globalCompositeOperation = 'source-atop'; t.c.fillStyle = L.id ? 'rgba(70,46,84,.24)' : 'rgba(76,50,90,.42)'; t.c.fillRect(0, 0, t.w, t.h); t.c.globalCompositeOperation = 'source-over'; }
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// ---- the backdrop's pieces (drawn into the layers' cached tiles; c in tile css px, positions already mapped) ----
+// a heap of treasure: a lumpy mound of coins lit from the top left, rows of coins (lit lips) following it, a soft sheen
+// on its lit shoulder, a shaded right flank, gems sprinkled in it; x, y its base centre (px), rw its half width, hg its
+// height (px); glints (world x, layer height) are pushed through toW
+function vaultBgMound(c, x, y, rw, hg, seed, glints, toW, gem = 0.5) {
+  const r = mulberry32(seed), N = 18, top = [];
+  for (let q = 0; q <= N; q++) { const u = q / N, e = Math.sin(Math.PI * u) ** 0.85 * (1 + 0.1 * Math.sin(u * 11 + seed) + 0.06 * Math.sin(u * 27 + seed * 2)); top.push([x - rw + 2 * rw * u, y - hg * e]); }
+  const path = () => { c.beginPath(); c.moveTo(x - rw - 6, y + 2); top.forEach(([px, py]) => c.lineTo(px, py)); c.lineTo(x + rw + 6, y + 2); c.closePath(); };
+  path(); c.fillStyle = vaultLG(x - rw * 0.4, y - hg, x + rw * 0.3, y, ['#f6d890', '#d8a24a', '#9c6428', '#5e3418'], c); c.fill();
+  c.save(); path(); c.clip();
+  // rows of coins lying in it: batched colours (shadowed rims, bodies, bright ones, lit lips)
+  const step = Math.max(2.6, 3.6 * s), cw = 3.1 * s, ch = 1.3 * s, B = [], Hh = [], L = [];
+  for (let yy = y; yy > y - hg - 4; yy -= step) {
+    const row = Math.round((y - yy) / step);
+    for (let xx = x - rw + (row % 2) * cw; xx < x + rw; xx += cw * 1.85) { const jx = xx + (r() - 0.5) * cw * 0.6, jy = yy + (r() - 0.5) * step * 0.4; (r() < 0.3 ? Hh : B).push([jx, jy]); if (r() < 0.55) L.push([jx, jy]); }
+  }
+  c.fillStyle = 'rgba(110,60,20,.55)'; c.beginPath(); for (const [px, py] of B) { c.moveTo(px + cw, py + ch * 0.7); c.ellipse(px, py + ch * 0.7, cw, ch, 0, 0, TWO_PI); } c.fill();
+  c.fillStyle = 'rgba(232,180,84,.75)'; c.beginPath(); for (const [px, py] of B) { c.moveTo(px + cw, py); c.ellipse(px, py, cw, ch, 0, 0, TWO_PI); } c.fill();
+  c.fillStyle = 'rgba(255,226,140,.85)'; c.beginPath(); for (const [px, py] of Hh) { c.moveTo(px + cw, py); c.ellipse(px, py, cw, ch, 0, 0, TWO_PI); } c.fill();
+  c.strokeStyle = 'rgba(255,248,210,.6)'; c.lineWidth = 0.5 * s; c.beginPath(); for (const [px, py] of L) { c.moveTo(px - cw * 0.7, py - ch * 0.2); c.quadraticCurveTo(px, py - ch * 1.1, px + cw * 0.7, py - ch * 0.2); } c.stroke();
+  // volume: the sheen on its lit shoulder, its right flank and foot in shade, a crease or two
+  c.fillStyle = vaultRG(x - rw * 0.32, y - hg * 0.72, rw * 0.7, ['rgba(255,250,220,.5)', 'rgba(255,240,190,.12)', 'rgba(255,240,190,0)'], c); c.fillRect(x - rw - 8, y - hg - 8, rw * 2 + 16, hg + 12);
+  c.fillStyle = vaultLG(x - rw * 0.1, 0, x + rw, 0, ['rgba(60,24,30,0)', 'rgba(60,24,30,.45)'], c); c.fillRect(x - rw, y - hg - 8, rw * 2 + 8, hg + 12);
+  c.fillStyle = vaultLG(0, y - hg * 0.35, 0, y, ['rgba(60,24,30,0)', 'rgba(60,24,30,.4)'], c); c.fillRect(x - rw - 8, y - hg, rw * 2 + 16, hg + 4);
+  for (let q = 0; q < 2; q++) { const u = 0.3 + 0.35 * q + (r() - 0.5) * 0.1, yy = y - hg * (0.35 + 0.2 * r()); c.strokeStyle = 'rgba(110,56,20,.45)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x - rw * (0.9 - u * 0.5), yy + hg * 0.12); c.quadraticCurveTo(x - rw + 2 * rw * u, yy - hg * 0.08, x - rw + 2 * rw * (u + 0.3), yy + hg * 0.1); c.stroke(); }
+  c.restore();
+  // its rim catching the light on the left, gems in it
+  c.strokeStyle = 'rgba(255,246,200,.8)'; c.lineWidth = 1.3 * s; c.beginPath(); top.slice(2, Math.round(N * 0.55)).forEach(([px, py], i) => i ? c.lineTo(px, py + 1) : c.moveTo(px, py + 1)); c.stroke();
+  const ng = Math.round((2 + rw / s / 25) * gem);
+  for (let q = 0; q < ng; q++) { const u = 0.15 + 0.7 * r(), e = Math.sin(Math.PI * u) ** 0.85, gx = x - rw + 2 * rw * u, gy = y - hg * e * (0.2 + 0.7 * r()); c.save(); c.translate(gx, gy); c.scale(s, s); vaultGem(c, 0, 0, 2 + 1.6 * r(), VAULT_GEMK[Math.floor(r() * 4)]); c.restore(); }
+  if (glints) for (let q = 0; q < 3; q++) { const u = 0.2 + 0.6 * r(); glints.push([toW[0](x - rw + 2 * rw * u), toW[1](y - hg * Math.sin(Math.PI * u) * (0.6 + 0.35 * r())), 1 + r()]); }
+  return top;
+}
+// treasure props (in c's frame at x, y px, scale k × s): a sea chest, a round shield, a ship's wheel, a cutlass
+function vaultBgChest(c, x, y, k, rot, open) {
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k * s, k * s);
+  if (open) { c.fillStyle = vaultLG(0, -40, 0, -18, ['#a86a3c', '#5a2e16'], c); c.beginPath(); c.moveTo(-22, -18); c.lineTo(-24, -36); c.quadraticCurveTo(0, -46, 22, -38); c.lineTo(22, -18); c.closePath(); c.fill(); c.fillStyle = 'rgba(120,20,40,.7)'; c.beginPath(); c.moveTo(-19, -19); c.lineTo(-21, -33); c.quadraticCurveTo(0, -41, 19, -34); c.lineTo(19, -19); c.closePath(); c.fill(); vaultHeap(c, -22, 22, -17, 12, 2501 + Math.round(x)); }
+  c.fillStyle = vaultLG(0, -18, 0, 0, ['#c98a50', '#8a5028', '#4e2810'], c); c.beginPath(); c.roundRect(-22, -18, 44, 18, 2); c.fill(); c.strokeStyle = '#3e1e08'; c.lineWidth = 0.9; c.stroke();
+  c.strokeStyle = 'rgba(60,24,8,.5)'; c.lineWidth = 0.7; for (const yy of [-12, -6]) { c.beginPath(); c.moveTo(-22, yy); c.lineTo(22, yy); c.stroke(); }
+  if (!open) { c.fillStyle = vaultLG(0, -28, 0, -18, ['#d89a5a', '#8a5028'], c); c.beginPath(); c.moveTo(-22, -18); c.quadraticCurveTo(-22, -28, -12, -28); c.lineTo(12, -28); c.quadraticCurveTo(22, -28, 22, -18); c.closePath(); c.fill(); c.strokeStyle = '#3e1e08'; c.stroke(); c.strokeStyle = 'rgba(255,230,190,.5)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-19, -21); c.quadraticCurveTo(-19, -26, -11, -26); c.lineTo(10, -26); c.stroke(); }
+  for (const bx of [-15, 12]) { c.fillStyle = vaultLG(bx, 0, bx + 3, 0, [G0.hi, G0.lo], c); c.fillRect(bx, open ? -18 : -28, 3, open ? 18 : 28); }
+  c.fillStyle = vaultLG(-3, -20, 3, -13, [G0.lit, G0.lo], c); c.fillRect(-3, -20, 6, 7); vaultEll(c, 0, -16.5, 1, 1, '#3e1e08');
+  c.restore();
+}
+function vaultShield(c, x, y, k, rot, field) {
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k * s, k * s);
+  c.fillStyle = vaultRG(-5, -6, 22, [G0.lit, G0.hi, G0.lo], c); c.beginPath(); c.arc(0, 0, 16, 0, TWO_PI); c.fill(); c.strokeStyle = G0.deep; c.lineWidth = 0.9; c.stroke();
+  c.fillStyle = vaultRG(-4, -4, 16, field, c); c.beginPath(); c.arc(0, 0, 12.5, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(255,240,190,.55)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-9, 0); c.lineTo(9, 0); c.moveTo(0, -9); c.lineTo(0, 9); c.stroke();
+  c.fillStyle = vaultRG(-1.5, -1.5, 5, [G0.lit, G0.mid, G0.lo], c); c.beginPath(); c.arc(0, 0, 4, 0, TWO_PI); c.fill();
+  for (let q = 0; q < 8; q++) { const a = q / 8 * TWO_PI; vaultEll(c, Math.cos(a) * 14.3, Math.sin(a) * 14.3, 0.9, 0.9, G0.lit); }
+  c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, 14, 3.5, 4.6); c.stroke();
+  c.restore();
+}
+function vaultWheel(c, x, y, k, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k * s, k * s); c.lineCap = 'round';
+  c.strokeStyle = '#4a2610'; c.lineWidth = 4.2; c.beginPath(); for (let q = 0; q < 8; q++) { const a = q / 8 * TWO_PI; c.moveTo(Math.cos(a) * 5, Math.sin(a) * 5); c.lineTo(Math.cos(a) * 25, Math.sin(a) * 25); } c.stroke();
+  c.strokeStyle = '#a8683a'; c.lineWidth = 2.6; c.stroke();
+  c.strokeStyle = '#4a2610'; c.lineWidth = 5; c.beginPath(); c.arc(0, 0, 17, 0, TWO_PI); c.stroke(); c.strokeStyle = '#b8783e'; c.lineWidth = 3.4; c.stroke();
+  c.strokeStyle = 'rgba(255,220,170,.6)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 17.6, 3.4, 4.8); c.stroke();
+  c.fillStyle = vaultRG(-1.5, -1.5, 7, [VP.gold.lit, VP.gold.mid, VP.gold.lo], c); c.beginPath(); c.arc(0, 0, 5.5, 0, TWO_PI); c.fill();
+  c.restore();
+}
+function vaultSword(c, x, y, k, rot) {
+  const G0 = VP.gold;
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(k * s, k * s); c.lineCap = 'round';
+  c.fillStyle = vaultLG(-2, 0, 2, 0, ['#ffffff', '#c8d4e8', '#7a88a0'], c); c.beginPath(); c.moveTo(-2, 0); c.quadraticCurveTo(-3, -24, 2, -40); c.quadraticCurveTo(3.5, -22, 2.4, 0); c.closePath(); c.fill(); c.strokeStyle = '#5a6680'; c.lineWidth = 0.6; c.stroke();
+  c.fillStyle = vaultLG(-7, 0, 7, 0, [G0.lit, G0.mid, G0.lo], c); c.beginPath(); c.roundRect(-7, 0, 14, 3, 1.4); c.fill();
+  c.strokeStyle = '#5a2a14'; c.lineWidth = 2.6; c.beginPath(); c.moveTo(0, 3); c.lineTo(0, 11); c.stroke();
+  vaultEll(c, 0, 12.5, 2.4, 2.4, G0.hi); vaultEll(c, -0.6, 11.9, 0.8, 0.8, G0.lit);
+  c.restore();
+}
+// a warm brazier flame (the backdrop's light), live
+function vaultWarmFlame(x, y, s0, T, ph = 0, a = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 3; k++) {
+    const f = 1 - k * 0.28, hh = s0 * f * (0.9 + 0.15 * Math.sin(T * 13 + ph + k));
+    ctx.fillStyle = k === 0 ? `rgba(255,140,50,${0.5 * a})` : k === 1 ? `rgba(255,206,100,${0.55 * a})` : `rgba(255,250,220,${0.7 * a})`;
+    ctx.beginPath(); ctx.moveTo(x - s0 * 0.36 * f, y); ctx.quadraticCurveTo(x - s0 * 0.42 * f, y - hh * 0.5, x + Math.sin(T * 9 + ph + k) * s0 * 0.1, y - hh); ctx.quadraticCurveTo(x + s0 * 0.42 * f, y - hh * 0.5, x + s0 * 0.36 * f, y); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+// a brazier's iron bowl on its tripod (c, at x, y px: the bowl's rim) and its pool of light (cached, additive)
+function vaultBgBrazier(c, x, y, k, curse) {
+  const R = 70 * k * s;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = vaultRG(x, y, R, [curse ? 'rgba(93,255,158,.22)' : 'rgba(255,190,100,.3)', curse ? 'rgba(93,255,158,.06)' : 'rgba(255,190,100,.08)', 'rgba(0,0,0,0)'], c); c.fillRect(x - R, y - R, R * 2, R * 2); c.restore();
+  c.save(); c.translate(x, y); c.scale(k * s, k * s); c.lineCap = 'round';
+  c.strokeStyle = '#3a2a3a'; c.lineWidth = 2.2; c.beginPath(); c.moveTo(-6, 4); c.lineTo(-10, 22); c.moveTo(6, 4); c.lineTo(10, 22); c.moveTo(0, 5); c.lineTo(0, 22); c.stroke();
+  c.fillStyle = vaultLG(-10, -2, 10, 8, ['#8a7a8a', '#4a3a4e', '#2a1e2e'], c); c.beginPath(); c.moveTo(-11, -1); c.lineTo(11, -1); c.quadraticCurveTo(9, 7, 0, 7); c.quadraticCurveTo(-9, 7, -11, -1); c.fill();
+  c.fillStyle = curse ? 'rgba(160,255,200,.9)' : 'rgba(255,220,140,.9)'; c.beginPath(); c.ellipse(0, -1, 10, 2, 0, 0, TWO_PI); c.fill();
+  c.restore();
+}
+// the cave's side rock in layer 1: its edge (world x) at layer height pa for side (0 left, 1 right), continuous
+const vaultSideRock = (side, pa) => { const e = side ? (cssW - ox) / s : -ox / s, ph = side ? 2.1 : 0; return e + (side ? -1 : 1) * (52 + 16 * Math.sin(pa / 97 + ph) + 9 * Math.sin(pa / 37 + ph * 2) + 4 * Math.sin(pa / 13 + ph)); };
+// layer 0's columns of rock, each holding a terrace up off the one below (stalactite met stalagmite: the cave is all one
+// rock); drawn for every slot before any terrace, so they stand behind the hoards
+function vaultBgColumns(c, L, k, X, Y, x0, x1) {
+  const LT = L.LT, base = k * LT, a0 = base + 70 + 40 * hash2(k, 2601);
+  // a column of rock or two holding it up off the terrace below (stalactite met stalagmite): the cave is all one rock
+  for (let q = 0; q < 2; q++) {
+    if (hash2(q, 2630 + k) < 0.4) continue;
+    const cx = lerp(x0 + 30, x1 - 30, (q + 0.15 + 0.7 * hash2(q, 2631 + k)) / 2), top = a0 - 30, bot = a0 - LT + 70, w = 12 + 8 * hash2(q, 2632 + k), wa2 = w * 0.55;
+    const col = () => { c.beginPath(); c.moveTo(X(cx - w * 1.6), Y(top)); c.quadraticCurveTo(X(cx - wa2), Y(top - 40), X(cx - wa2), Y((top + bot) / 2)); c.quadraticCurveTo(X(cx - wa2), Y(bot + 30), X(cx - w * 1.8), Y(bot)); c.lineTo(X(cx + w * 1.8), Y(bot)); c.quadraticCurveTo(X(cx + wa2), Y(bot + 30), X(cx + wa2), Y((top + bot) / 2)); c.quadraticCurveTo(X(cx + wa2), Y(top - 40), X(cx + w * 1.6), Y(top)); c.closePath(); };
+    col(); c.fillStyle = vaultLG(X(cx - w), 0, X(cx + w), 0, ['#7a5a88', '#4e3260', '#2a1838'], c); c.fill();
+    c.strokeStyle = 'rgba(214,180,226,.35)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(cx - wa2 + 1.5), Y(top - 30)); c.lineTo(X(cx - wa2 + 1.5), Y(bot + 30)); c.stroke();
+    for (let r = 0; r < 4; r++) { const y = lerp(top - 20, bot + 20, (r + 0.5) / 4); c.strokeStyle = 'rgba(26,10,34,.45)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(cx - wa2), Y(y)); c.lineTo(X(cx), Y(y - 4)); c.lineTo(X(cx + wa2), Y(y - 1)); c.stroke(); }
+  }
+}
+function vaultDrawLayer(c, L, k, X, Y, x0, x1, t) {
+  const id = L.id, LT = L.LT, base = k * LT, wa = (base + LT / 2) / L.f, fl = vaultFlavour(wa), toW = [px => px / s + x0, py => (Y(0) - py) / s];
+  const sec = (() => { const S = G.level && G.level.sections; if (!S) return ''; let n = S[0].name; for (const q of S) if (wa >= q.a0) n = q.name; return n; })();
+  const curse = sec === 'Skull Crypt' || sec === 'Captain\'s Gauntlet';
+  if (id === 0) {
+    // the far cavern: one terrace of rock across the cave per slot, heaped with treasure, its underside dripping
+    // stalactites over the terrace below; braziers on it pooling light; muted by distance (the layer's haze)
+    const a0 = base + 70 + 40 * hash2(k, 2601), tl = [];
+    for (let x = x0 - 20; x <= x1 + 20; x += 16) tl.push([x, a0 + 5 * Math.sin(x / 41 + k) + 3 * Math.sin(x / 13 + k * 2)]);
+    const und = tl.map(([x, a], i) => [x, a - 40 - 12 * Math.sin(x / 57 + k * 3) - 6 * hash2(i, 2602 + k)]);
+    const terr = () => { c.beginPath(); tl.forEach(([x, a], i) => i ? c.lineTo(X(x), Y(a)) : c.moveTo(X(x), Y(a))); for (let i = und.length - 1; i >= 0; i--) c.lineTo(X(und[i][0]), Y(und[i][1])); c.closePath(); };
+    // stalactites hanging under it (drawn first, behind the terrace's face)
+    for (let i = 1; i < und.length - 1; i += 2) {
+      if (hash2(i, 2603 + k) < 0.35) continue;
+      const [x, a] = und[i], w = 7 + 9 * hash2(i, 2604 + k), len = 20 + 70 * hash2(i, 2605 + k);
+      c.fillStyle = vaultLG(X(x - w), 0, X(x + w), 0, ['#6a4a78', '#4a2e58', '#2e1a3a'], c); c.beginPath(); c.moveTo(X(x - w), Y(a + 3)); c.quadraticCurveTo(X(x - w * 0.3), Y(a - len * 0.55), X(x), Y(a - len)); c.quadraticCurveTo(X(x + w * 0.35), Y(a - len * 0.5), X(x + w), Y(a + 3)); c.fill();
+      c.strokeStyle = 'rgba(214,180,226,.4)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(x - w * 0.7), Y(a)); c.quadraticCurveTo(X(x - w * 0.3), Y(a - len * 0.5), X(x - 1), Y(a - len + 4)); c.stroke();
+      vaultEll(c, X(x), Y(a - len - 2), 1.2 * s, 1.6 * s, 'rgba(255,226,160,.7)');
+    }
+    terr(); c.fillStyle = vaultLG(0, Y(a0 + 6), 0, Y(a0 - 50), ['#8a6896', '#5a3a6a', '#341e42'], c); c.fill();
+    c.save(); terr(); c.clip();
+    for (let i = 0; i < tl.length; i += 2) { const [x, a] = tl[i]; c.strokeStyle = 'rgba(30,12,40,.5)'; c.lineWidth = 1.1 * s; c.beginPath(); c.moveTo(X(x), Y(a - 4)); c.lineTo(X(x + 7), Y(a - 18)); c.lineTo(X(x + 2), Y(a - 34)); c.stroke(); c.strokeStyle = 'rgba(214,180,226,.25)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(X(x + 1.5), Y(a - 4)); c.lineTo(X(x + 8.5), Y(a - 18)); c.stroke(); }
+    c.restore();
+    c.strokeStyle = 'rgba(230,200,240,.5)'; c.lineWidth = 1.2 * s; c.beginPath(); tl.forEach(([x, a], i) => i ? c.lineTo(X(x), Y(a - 1)) : c.moveTo(X(x), Y(a - 1))); c.stroke();
+    // the hoard on the terrace: 2-3 big heaps, props half buried in them, braziers in the gaps
+    const nH = 2 + (hash2(k, 2606) < 0.5 ? 1 : 0), big = sec === 'Heaving Hoard' || sec === 'The Captain\'s Hoard' ? 1.25 : 1;
+    const props = [['chest', fl.chests], ['cup', fl.cups], ['shield', 0.5 + fl.bones * 0.4], ['wheel', 0.35], ['sword', 0.4 + fl.bones * 0.3], ['gems', fl.gems * 0.6]];
+    const pick = q => { const tot = props.reduce((p, v) => p + v[1], 0); let v = hash2(q, 2607 + k) * tot; for (const [n, w] of props) { if (v < w) return n; v -= w; } return 'chest'; };
+    for (let h = 0; h < nH; h++) {
+      const cx = lerp(x0 + 60, x1 - 60, (h + 0.5) / nH + (hash2(h, 2608 + k) - 0.5) * 0.18), rw = (80 + 60 * hash2(h, 2609 + k)) * big, hg = (70 + 90 * hash2(h, 2610 + k)) * big;
+      const by = Y(a0) + 2 * s;
+      vaultBgMound(c, X(cx), by, rw * s, hg * s, 2611 + k * 7 + h, t.glints, toW, 0.6 + fl.gems * 0.4);
+      // two props half buried in it, then a little slope of coins over their feet
+      for (let q = 0; q < 2; q++) {
+        const u = 0.3 + 0.4 * q + (hash2(q + h * 2, 2612 + k) - 0.5) * 0.15, px = X(cx - rw + 2 * rw * u), py = by - hg * s * Math.sin(Math.PI * u) ** 0.85 * (0.55 + 0.25 * hash2(q, 2613 + k)), kind = pick(h * 2 + q), rot = (hash2(q + h, 2614 + k) - 0.5) * 0.8;
+        if (kind === 'chest') vaultBgChest(c, px, py + 8 * s, 1.1, rot * 0.5, hash2(q, 2615 + k) < 0.5);
+        else if (kind === 'cup') { if (hash2(q, 2616 + k) < 0.5) vaultGoblet(c, px, py + 4 * s, s * 2, VAULT_GEMK[(h + q) % 4]); else vaultCrown(c, px, py, s * 1.9, rot); }
+        else if (kind === 'shield') vaultShield(c, px, py, 1.1, rot, hash2(q, 2617 + k) < 0.5 ? ['#d8505a', '#9a2a3a', '#5a1022'] : ['#5a7ad8', '#2a3a9a', '#141e5a']);
+        else if (kind === 'wheel') vaultWheel(c, px, py - 6 * s, 1, rot);
+        else if (kind === 'sword') vaultSword(c, px, py + 6 * s, 1.2, rot * 1.2);
+        else for (let g = 0; g < 4; g++) { c.save(); c.translate(px + (g - 1.5) * 6 * s, py + (g % 2) * 4 * s); c.scale(s, s); vaultGem(c, 0, 0, 3.4, VAULT_GEMK[(g + q) % 4]); c.restore(); }
+        vaultBgMound(c, px + 2 * s, py + 12 * s, 26 * s, 10 * s, 2618 + k * 5 + q + h * 2, null, null, 0);
+      }
+      if (sec === 'Coin Falls' && h === 0) {   // a stream of coins pouring off the terrace's lip
+        const fx = X(cx + rw * 0.8);
+        for (let q = 0; q < 26; q++) { const yy = Y(a0 - 40) + q * 7 * s, xx = fx + Math.sin(q * 1.9) * 3 * s; vaultEll(c, xx, yy, 2.6 * s, 1.2 * s, q % 2 ? '#f0c060' : '#c88a30'); }
+      }
+    }
+    for (let b = 0; b < 2; b++) { if (hash2(b, 2619 + k) < 0.35) continue; const bx = lerp(x0 + 60, x1 - 60, (b + 1) / (nH + 1) + (hash2(b, 2620 + k) - 0.5) * 0.1); vaultBgBrazier(c, X(bx), Y(a0 + 22), 1, curse); t.fires.push([bx, a0 + 22, curse ? 1 : 0, 0.8]); }
+  } else if (id === 1) {
+    // the cave's side walls of plum rock (continuous), and shelves growing out of them heaped with treasure
+    for (const side of [0, 1]) {
+      const edge = side ? x1 + 40 : x0 - 40, dd = side ? 1 : -1, pts = []; for (let a = base - 12; a <= base + LT + 12; a += 8) pts.push([vaultSideRock(side, a), a]);
+      c.beginPath(); c.moveTo(X(edge), Y(base - 12)); pts.forEach(([x, a]) => c.lineTo(X(x), Y(a))); c.lineTo(X(edge), Y(base + LT + 12)); c.closePath();
+      c.fillStyle = vaultLG(X(edge), 0, X(pts[0][0]), 0, ['#24142e', '#3a2448', '#5a3c68'], c); c.fill();
+      for (let i = 0; i < pts.length; i += 3) { const [x, a] = pts[i]; c.strokeStyle = 'rgba(24,10,32,.5)'; c.lineWidth = 1.1 * s; c.beginPath(); c.moveTo(X(x + dd * 4), Y(a)); c.lineTo(X(x + dd * 18), Y(a - 9)); c.lineTo(X(x + dd * 30), Y(a - 4)); c.stroke(); }
+      c.strokeStyle = 'rgba(214,180,226,.4)'; c.lineWidth = 1.3 * s; c.beginPath(); pts.forEach(([x, a], i) => i ? c.lineTo(X(x), Y(a)) : c.moveTo(X(x), Y(a))); c.stroke();
+    }
+    const rock = [86, 60, 96];
+    for (let i = 0; i < 2; i++) {
+      const left = (k + i) % 2 === 0, side = left ? 0 : 1, a = base + LT * (0.25 + 0.5 * i) + (hash2(k * 2 + i, 2221) - 0.5) * 70, dd = left ? 1 : -1;
+      const root = vaultSideRock(side, a), ex = root - dd * 30, tip = root + dd * (70 + 50 * hash2(k * 2 + i, 2222));
+      const sd = k * 2 + i, und = []; for (let q = 0; q <= 8; q++) { const u = q / 8, x = lerp(tip - dd * 6, root, u); und.push([x, a - 10 - 22 * u * u - 4 * Math.sin(u * 9 + sd)]); }
+      // the shelf and its buttress sweeping down into the side rock (it grows out of the wall)
+      const shelf = () => { c.beginPath(); c.moveTo(X(ex), Y(a + 6)); c.lineTo(X(tip - dd * 10), Y(a + 4)); c.quadraticCurveTo(X(tip + dd * 6), Y(a + 1), X(tip - dd * 2), Y(a - 8)); for (const [x, y] of und) c.lineTo(X(x), Y(y)); c.quadraticCurveTo(X(root - dd * 2), Y(a - 60), X(vaultSideRock(side, a - 110) - dd * 6), Y(a - 110)); c.lineTo(X(ex), Y(a - 110)); c.closePath(); };
+      shelf(); c.fillStyle = vaultLG(0, Y(a + 6), 0, Y(a - 90), [vaultCol(vaultLift(rock, 40)), vaultCol(rock), vaultCol(vaultLift(rock, -40))], c); c.fill();
+      c.save(); shelf(); c.clip();
+      for (let q = 1; q < 5; q++) { const x = lerp(tip, root, q / 5); c.strokeStyle = vaultCol(vaultLift(rock, -40), 0.6); c.lineWidth = 1.1 * s; c.beginPath(); c.moveTo(X(x), Y(a + 2)); c.lineTo(X(x + dd * 8), Y(a - 12)); c.lineTo(X(x + dd * 2), Y(a - 30)); c.stroke(); c.strokeStyle = vaultCol(vaultLift(rock, 50), 0.35); c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(X(x + dd * 2), Y(a + 2)); c.lineTo(X(x + dd * 10), Y(a - 12)); c.stroke(); }
+      c.fillStyle = vaultLG(0, Y(a - 10), 0, Y(a - 100), ['rgba(30,12,40,0)', 'rgba(30,12,40,.45)'], c); c.fillRect(0, Y(a - 8), (x1 - x0) * s, 100 * s);
+      c.restore();
+      for (let q = 1; q < 6; q += 2) { const [x, y] = und[q], L2 = 6 + 12 * hash2(q, 2242 + sd); c.fillStyle = vaultCol(vaultLift(rock, -26)); c.beginPath(); c.moveTo(X(x - 4), Y(y + 2)); c.quadraticCurveTo(X(x - 1.5), Y(y - L2 * 0.6), X(x), Y(y - L2)); c.quadraticCurveTo(X(x + 1.5), Y(y - L2 * 0.6), X(x + 4), Y(y + 2)); c.fill(); }
+      c.strokeStyle = vaultCol(vaultLift(rock, 80), 0.55); c.lineWidth = 1.3 * s; c.beginPath(); c.moveTo(X(root), Y(a + 5)); c.lineTo(X(tip - dd * 10), Y(a + 3)); c.quadraticCurveTo(X(tip + dd * 5), Y(a + 0.5), X(tip - dd * 1), Y(a - 6)); c.stroke();
+      // the hoard on it: a heap with one big piece in it, a brazier near the wall now and then
+      const hx = lerp(root, tip, 0.55), rw = Math.abs(tip - root) * 0.45;
+      vaultBgMound(c, X(hx), Y(a + 4), rw * s, (24 + 18 * hash2(sd, 2243)) * s, 2244 + sd, t.glints, toW, 0.6 + fl.gems * 0.4);
+      const kind = Math.floor(hash2(sd, 2223) * 5), px = X(lerp(root, tip, 0.72)), py = Y(a + 18);
+      if (kind === 0) vaultWheel(c, px, py, 0.9, 0.3);
+      else if (kind === 1) { vaultSword(c, px - 4 * s, py + 6 * s, 1, -0.3 * dd); vaultSword(c, px + 4 * s, py + 6 * s, 1, 0.35 * dd); }
+      else if (kind === 2) vaultGoblet(c, px, py + 6 * s, s * 1.8, VAULT_GEMK[sd & 3]);
+      else if (kind === 3) vaultShield(c, px, py, 0.9, 0.2 * dd, ['#d8505a', '#9a2a3a', '#5a1022']);
+      else vaultBgChest(c, px, py + 10 * s, 0.9, -0.1 * dd, true);
+      vaultBgMound(c, px, py + 10 * s, 20 * s, 7 * s, 2245 + sd, null, null, 0);
+      if (hash2(sd, 2224) < 0.45) { const bx = lerp(root, tip, 0.2); vaultBgBrazier(c, X(bx), Y(a + 26), 0.8, curse); t.fires.push([bx, a + 26, curse ? 1 : 0, 0.65]); }
+    }
+  } else {
+    // the near rock leaning in from beyond the edges (seen when the view pulls back)
+    for (const left of [true, false]) {
+      const ex = left ? x0 - 20 : x1 + 20, dd = left ? 1 : -1, ph = left ? 0 : 2, r0 = 53;
+      const pts = []; for (let a = base - 10; a <= base + LT + 10; a += 10) pts.push([ex + dd * (r0 + 13 * Math.sin(a / 233 + ph * 1.3) + 20 * Math.sin(a / 61 + ph) + 6 * Math.sin(a / 17 + ph * 3)), a]);
+      c.beginPath(); c.moveTo(X(ex - dd * 30), Y(base - 10)); pts.forEach(([x, a]) => c.lineTo(X(x), Y(a))); c.lineTo(X(ex - dd * 30), Y(base + LT + 10)); c.closePath();
+      c.fillStyle = vaultLG(X(ex), 0, X(ex + dd * (r0 + 40)), 0, ['#2a1834', '#3e2648', '#523460'], c); c.fill();
+    }
+  }
+}
+function drawVaultBackground() {
+  vaultCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t;
+  ctx.fillStyle = vaultLG(0, 0, 0, H, [vaultCol([84, 56, 80]), vaultCol([56, 36, 62]), vaultCol([32, 20, 40])]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // warm gold light welling up from the hoard below, a cooler violet high in the cave
+  vaultGlowS(ox + playW * 0.5, H * 1.05, playW * 1.1, [255, 190, 110], 0.14);
+  for (const L of VAULT_LAYERS) {
+    const base = G.camAlt * L.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / L.LT); k * L.LT < pa1; k++) {
+      const t = vaultLayerTile(L, k), y = H - (t.pa1 - base) * s;
+      ctx.drawImage(t.cv, ox + t.xa * s, y, t.w, t.h);
+      for (const [gx, ga, gk] of t.glints) { const yy = H - (ga - base) * s; if (yy < Y0 || yy > Y1) continue; vaultTwinkle(ctx, sx(gx), yy, 3 * s * gk, Math.max(0, Math.sin(T * 1.4 + gx * 0.7 + ga)) ** 10 * (L.id ? 0.7 : 0.45), [255, 230, 160]); }
+      for (const [fx, fa, fk, fs] of t.fires) { const yy = H - (fa - base) * s; if (yy < Y0 - 40 || yy > Y1 + 40) continue; vaultGlowS(sx(fx), yy - 4 * s, 34 * s * fs, fk ? VP.curse : [255, 170, 80], 0.3 + 0.07 * Math.sin(T * 8 + fx)); ctx.save(); ctx.translate(sx(fx), yy); ctx.scale(s * fs, s * fs); if (fk) vaultCurseFlame(0, 0, 15, T, fx, 0.75); else vaultWarmFlame(0, 0, 15, T, fx, 0.85); ctx.restore(); }
+    }
+    if (L.id === 0) drawVaultShafts();
+  }
+  drawVaultMotes();
+}
+// soft shafts of light falling slantwise through the cave from cracks far above, glinting motes turning in them
+function drawVaultShafts() {
+  const sp = vaultSprite('shaft', 90, 400, c => {
+    c.fillStyle = vaultLG(0, 0, 90, 0, ['rgba(255,236,190,0)', 'rgba(255,236,190,.5)', 'rgba(255,246,214,.85)', 'rgba(255,236,190,.5)', 'rgba(255,236,190,0)'], c); c.fillRect(0, 0, 90, 400);
+    c.globalCompositeOperation = 'destination-in'; c.fillStyle = vaultLG(0, 0, 0, 400, ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, 90, 400);
+  });
+  const T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 2; i++) {
+    const x = ox + playW * (0.28 + 0.44 * i) + Math.sin(T * 0.13 + i * 2) * 18 * s, ang = (i ? -1 : 1) * 0.2, w = (70 + 30 * i) * s, h = H * 1.25, al = 0.1 + 0.03 * Math.sin(T * 0.5 + i);
+    ctx.save(); ctx.translate(x, -H * 0.1); ctx.rotate(ang); ctx.globalAlpha = al; ctx.drawImage(sp.cv, -w / 2, 0, w, h); ctx.globalAlpha = 1;
+    for (let q = 0; q < 9; q++) { const u = pmod(T * (0.03 + 0.02 * hash2(q, 2701 + i)) + hash2(q, 2702 + i), 1), my = u * h * 0.85, mx = (hash2(q, 2703 + i) - 0.5) * w * 0.6 + Math.sin(T * 0.8 + q) * 4 * s; vaultTwinkle(ctx, mx, my, (2 + 2 * hash2(q, 2704)) * s, Math.sin(u * Math.PI) * (0.4 + 0.5 * Math.max(0, Math.sin(T * 2.2 + q * 1.7)) ** 4), [255, 240, 200]); }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// gold dust drifting up through the cave (the motes), and a few green curse sparks among it
+MOTE_DRIFT.vdust = [-18, -40];
+{ const base = moteKind; moteKind = function (m, a) { return vaultOn() ? 'vdust' : base(m, a); }; }
+function drawVaultMotes() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  let i = 0;
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 0.9 + m.ph) * 8 * s, y = m.y, r = (0.8 + m.sz * 1.1) * m.depth * s, curse = (i++ % 7) === 0;
+    const tw = 0.4 + 0.6 * Math.max(0, Math.sin(G.t * 2.4 + m.ph * 3)) ** 3;
+    ctx.fillStyle = curse ? `rgba(120,255,170,${0.5 * m.depth * tw})` : `rgba(255,224,140,${0.55 * m.depth * tw})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+    if (tw > 0.85 && m.depth > 0.6) vaultTwinkle(ctx, x, y, r * 3, (tw - 0.85) * 4, curse ? [160, 255, 200] : [255, 240, 190]);
+  }
+  ctx.restore();
+}
+// the midground (0.55): treasure shelves reaching in from beyond the screen edge, heaped with gold, a pearl string or a
+// chain hanging off their noses (drawn for the left side; mirrored for the right)
+function vaultShelfSprite(v) {
+  return vaultSprite('shelf' + v, 220, 120, c => {
+    c.translate(170, 40); c.lineCap = 'round'; c.lineJoin = 'round';
+    const shelf = () => vaultBlob(c, [[-170, -10], [-110, -12], [-40, -8], [16, -4], [40, 4], [30, 14], [-10, 18], [-80, 22], [-170, 26]]);
+    // the rock it grows out of: a buttress swelling down the wall under its root, and an iron chain from its tip up to a
+    // ring bolted in the wall
+    const but = () => vaultBlob(c, [[-170, 10], [-60, 16], [-40, 22], [-66, 40], [-104, 58], [-140, 74], [-170, 78]]);
+    but(); c.fillStyle = vaultLG(-170, 10, -60, 70, ['#5a3e66', '#3a2448', '#22142c'], c); c.fill();
+    c.save(); but(); c.clip(); for (let q = 0; q < 3; q++) { const y0 = 30 + q * 14; c.strokeStyle = 'rgba(24,10,32,.5)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(-168, y0); c.lineTo(-120, y0 + 4); c.lineTo(-80 - q * 14, y0 + 2); c.stroke(); } c.restore();
+    c.strokeStyle = 'rgba(200,170,214,.3)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-44, 24); c.quadraticCurveTo(-80, 50, -138, 72); c.stroke();
+    for (let q = 0; q <= 9; q++) { const t = q / 9, px = lerp(24, -120, t), py = lerp(2, -34, t) + Math.sin(t * Math.PI) * 9; c.strokeStyle = q % 2 ? '#6a7282' : '#9aa2b2'; c.lineWidth = 1.3; c.beginPath(); q % 2 ? c.ellipse(px, py, 1.2, 3.4, -0.25 - 1.3, 0, TWO_PI) : c.ellipse(px, py, 3.6, 2, -0.25, 0, TWO_PI); c.stroke(); }
+    c.fillStyle = vaultRG(-121, -35, 4, ['#c8d0dc', '#6a7282', '#2e3240'], c); c.beginPath(); c.arc(-122, -34, 3.4, 0, TWO_PI); c.fill();
+    shelf(); c.fillStyle = vaultLG(-40, -12, -20, 22, ['#7a5a86', '#4a305a', '#2a1838'], c); c.fill();
+    c.save(); shelf(); c.clip();
+    for (let q = 0; q < 4; q++) { const x0 = -150 + q * 46; c.strokeStyle = 'rgba(24,10,32,.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0, -6); c.lineTo(x0 + 9, 6); c.lineTo(x0 + 4, 18); c.stroke(); c.strokeStyle = 'rgba(200,170,214,.3)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x0 + 2, -6); c.lineTo(x0 + 11, 6); c.stroke(); }
+    c.restore();
+    shelf(); c.strokeStyle = '#2e1a3a'; c.lineWidth = 1; c.stroke();
+    vaultHeap(c, -160, 20 + (v % 2) * 8, -6, 18 + 6 * (v % 3), 2300 + v);
+    if (v % 2) for (let k = 0; k <= 10; k++) { const q = k / 10, px = lerp(-20, 28, q), py = 12 + Math.sin(q * Math.PI) * (22 + v * 3); c.fillStyle = vaultRG(px - 0.5, py - 0.6, 2.4, ['#ffffff', '#efe6f0', '#b8a8c0'], c); c.beginPath(); c.arc(px, py, 1.9, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(140,120,150,.7)'; c.lineWidth = 0.5; c.stroke(); }
+    else { vaultCoinStack(c, -70, -10, 6, 0.3, 1); vaultCoinStack(c, -58, -9, 4, -0.2, 1); vaultGoblet(c, -30, -14, 1.2, VAULT_GEMK[v % 4]); }
+  });
+}
+function drawVaultMidground() {
+  vaultCacheCheck();
+  const f = 0.55, slot = 300, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  ctx.save(); ctx.globalAlpha = 0.8;
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 2401); if (r < 0.4) continue;
+    const side = hash2(i, 2402) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = vaultShelfSprite(1 + (i & 3));
+    if (y + 120 * s < -20 || y - 60 * s > H) continue;
+    const nose = (12 + 26 * r) * s, x = side ? cssW - nose : nose;
+    ctx.save(); ctx.translate(x, y); if (side) ctx.scale(-1, 1);
+    ctx.drawImage(sp.cv, -170 * s, -40 * s, 220 * s, 120 * s); ctx.restore();
+  }
+  ctx.restore();
+}
+// speed: gold glints streaking past along the banks and through the shaft
+function drawVaultSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 6 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 21), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 22) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = vaultCol(j < 0.7 ? [255, 214, 120] : [255, 245, 210], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(16 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 7)), len = (14 + 46 * hash2(i, 8)) * (0.5 + 1.4 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 9)) + hash2(i, 10) * H * 2) % (H + 200)) - 100;
+    ctx.strokeStyle = vaultCol([255, 236, 190], 0.02 + 0.08 * k * hash2(i, 11)); ctx.lineWidth = 1 + 1.4 * hash2(i, 12) * k;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: heavy gold chains hanging in front at the screen edges from beyond the top of the screen, a hook, a
+// lantern or a locket at the end, swaying (each drawn once, then blitted turned by its sway; warm, never black)
+function vaultChainSprite(v) {
+  return vaultSprite('chain' + v, 40, 320, c => {
+    c.translate(20, 0); c.lineCap = 'round'; c.lineJoin = 'round';
+    const L = 200 + 80 * hash2(v, 2501), n = Math.floor(L / 7);
+    for (let q = 0; q < n; q++) {
+      const y = q * 7, side = q % 2;
+      if (side) { c.fillStyle = vaultLG(-1.5, 0, 1.5, 0, ['#d89a3a', '#8a5418'], c); c.fillRect(-1.6, y - 4, 3.2, 8); c.strokeStyle = '#6a3a10'; c.lineWidth = 0.6; c.strokeRect(-1.6, y - 4, 3.2, 8); }
+      else { c.strokeStyle = '#6a3a10'; c.lineWidth = 3.6; c.beginPath(); c.ellipse(0, y, 3.6, 5, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = '#d89a3a'; c.lineWidth = 2.2; c.stroke(); c.strokeStyle = 'rgba(255,240,190,.75)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, y, 3.6, 5, 0, 3.4, 4.6); c.stroke(); }
+    }
+    const ey = n * 7 + 4;
+    if (v % 2) {   // a hook
+      c.strokeStyle = '#6a3a10'; c.lineWidth = 4.4; c.beginPath(); c.moveTo(0, ey - 4); c.lineTo(0, ey + 10); c.arc(-6, ey + 10, 6, 0, Math.PI * 0.9); c.stroke();
+      c.strokeStyle = '#c88a30'; c.lineWidth = 2.6; c.stroke(); c.strokeStyle = 'rgba(255,240,190,.7)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-0.8, ey - 2); c.lineTo(-0.8, ey + 9); c.stroke();
+    } else {      // a locket with a gem
+      c.fillStyle = vaultRG(-2, ey + 6, 9, [VP.gold.lit, VP.gold.hi, VP.gold.lo], c); c.beginPath(); c.ellipse(0, ey + 8, 7, 8.5, 0, 0, TWO_PI); c.fill(); c.strokeStyle = VP.gold.deep; c.lineWidth = 0.9; c.stroke();
+      c.strokeStyle = 'rgba(150,84,14,.7)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(0, ey + 8, 5, 6.4, 0, 0, TWO_PI); c.stroke();
+      vaultGem(c, 0, ey + 8, 3, VAULT_GEMK[v % 4]); vaultSheen(0, ey + 8, 7, 0.55, 3.5, 4.6, c);
+    }
+  });
+}
+function drawVaultForeground() {
+  vaultCacheCheck();
+  const f = 1.3, slot = 360, baseA = G.camAlt * f, T = G.t, first = Math.floor((baseA - 320) / slot), last = Math.ceil((baseA + viewH + 300) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, G.seed + 93) < 0.55) continue;
+    const side = hash2(i, G.seed + 94) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = vaultChainSprite(1 + (i & 3));
+    if (y + 320 * s < -20 || y - 20 > H) continue;
+    const x = side ? ox + playW - 6 * s : ox + 6 * s, sw = Math.sin(T * 0.7 + i) * 0.04;
+    ctx.save(); ctx.translate(x, y - 340 * s); ctx.rotate(sw); ctx.scale(s * 1.15, s * 1.15); ctx.drawImage(sp.cv, -20, 0, 40, 320); ctx.restore();
+  }
+}
+// The vault's light: a plum vignette, warm gold welling up from below, curse-green near the skulls' lanterns, and the
+// captain's hoard blazing as you near the finish (green turning gold on the clear: the curse broken).
+function drawVaultLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75);
+  vg.addColorStop(0, 'rgba(26,8,30,0)'); vg.addColorStop(1, 'rgba(26,8,30,.34)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const bG = ctx.createLinearGradient(0, H * 0.55, 0, H); bG.addColorStop(0, 'rgba(255,200,110,0)'); bG.addColorStop(1, 'rgba(255,200,110,.06)'); ctx.fillStyle = bG; ctx.fillRect(X0, H * 0.55, WW, H * 0.45 + P);
+  ctx.restore();
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 200), k = clamp(1 - Math.abs(a.end + 200 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) { vaultGlowS(cssW / 2, y, Math.max(cssW, H) * 0.75, [255, 214, 130], (0.14 + 0.16 * pay) * k); vaultGlowS(cssW / 2, y, Math.max(cssW, H) * 0.5, VP.curse, 0.08 * (1 - pay) * k); }
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (vaultOn()) drawVaultBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (vaultOn()) drawVaultMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (vaultOn()) drawVaultWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (vaultOn()) drawVaultLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (vaultOn()) drawVaultSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (vaultOn()) drawVaultForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { base(); if (vaultOn()) drawVaultCoins(); }; }
+// ---- the finish: the Captain's Hoard ----
+// The shaft opens into the heart of the vault: a great cavern heaped to the roof with gold, mountains of it receding into
+// a warm haze, a colossal treasure chest thrown open behind, spilling over. On a throne of chests on top of the biggest
+// heap sits Captain Goldtooth, the skeleton pirate who cursed the hoard: green curse-fire in his sockets, his tricorn
+// and feather, a gold tooth, his cutlass across his knees. Clear the stage and the curse breaks: his eyes turn from
+// green to warm gold, he tips his hat to you, the braziers flare gold and coins rain down. The deck: two plum stone
+// shelves banked with gold growing out of the walls to meet under you.
+const VAULT_THRONE = 150;   // the throne's seat above the deck (he sits high, never hidden behind a pilot on the deck)
+function vaultChamberRender(E) {
+  const key = 'chamber' + E; let sp = VAULT_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 120, A1 = E + 900;
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = xl - 24, xb = xr + 24;
+  sp = vaultCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1;
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s, G0 = VP.gold, mid = (xl + xr) / 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the cavern's back: dark plum high up, warming to amber round the hoard
+  c.fillStyle = vaultLG(0, Y(A1), 0, Y(E), ['#24122c', '#4a2a48', '#8a5a4a', '#c08a50'], c); c.fillRect(0, 0, sp.w, sp.h);
+  c.fillStyle = vaultRG(X(mid), Y(E + 260), 340 * s, ['rgba(255,220,140,.45)', 'rgba(255,190,110,.18)', 'rgba(255,190,110,0)'], c); c.fillRect(0, 0, sp.w, sp.h);
+  // the cavern roof: big drapes of plum rock, gold glinting on the edges that face the hoard's glow
+  for (let i = 0; i < 9; i++) {
+    const x = lerp(xa, xb, (i + 0.5) / 9 + (hash2(i, 2601) - 0.5) * 0.06), top = A1 + 10, len = 110 + 140 * hash2(i, 2602) + Math.abs(i - 4) * 26, w = 22 + 16 * hash2(i, 2603), toL = x > mid ? -1 : 1;
+    const path = () => { c.beginPath(); c.moveTo(X(x - w * 1.6), Y(top)); c.bezierCurveTo(X(x - w), Y(top - len * 0.6), X(x - w * 0.3), Y(top - len), X(x), Y(top - len)); c.bezierCurveTo(X(x + w * 0.3), Y(top - len), X(x + w), Y(top - len * 0.6), X(x + w * 1.6), Y(top)); c.closePath(); };
+    path(); c.fillStyle = vaultLG(X(x - w), 0, X(x + w), 0, toL > 0 ? ['#3a2040', '#2a1430', '#5a3448'] : ['#5a3448', '#2a1430', '#3a2040'], c); c.fill();
+    c.strokeStyle = 'rgba(30,12,30,.8)'; c.lineWidth = 1.2 * s; c.stroke();
+    c.strokeStyle = 'rgba(255,214,130,.45)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(x + toL * w * 1.2), Y(top - len * 0.25)); c.bezierCurveTo(X(x + toL * w * 0.8), Y(top - len * 0.7), X(x + toL * w * 0.3), Y(top - len + 4), X(x), Y(top - len + 2)); c.stroke();
+    vaultEll(c, X(x), Y(top - len - 3), 1.6 * s, 2.2 * s, 'rgba(255,230,160,.8)');
+  }
+  // far mountains of gold receding into a warm haze (three ranks, nearer = richer, more contrast)
+  for (const [rank, base, hgt, col, al] of [[0, E + 330, 150, [200, 150, 96], 0.7], [1, E + 220, 170, [222, 162, 70], 0.85], [2, E + 110, 150, [236, 172, 56], 1]]) {
+    for (let q = 0; q < 4 + rank; q++) {
+      const cx = lerp(xa, xb, (q + 0.3 + 0.4 * hash2(q, 2610 + rank)) / (4 + rank)), rw = (90 - rank * 10) + 50 * hash2(q, 2611 + rank), top = base + hgt * (0.5 + 0.5 * hash2(q, 2612 + rank));
+      const dune = () => { c.beginPath(); c.moveTo(X(cx - rw), Y(base - 40)); c.quadraticCurveTo(X(cx - rw * 0.35), Y(top - 6), X(cx), Y(top)); c.quadraticCurveTo(X(cx + rw * 0.35), Y(top - 8), X(cx + rw), Y(base - 40)); c.closePath(); };
+      dune(); c.fillStyle = vaultLG(0, Y(top), 0, Y(base - 40), [vaultCol(vaultLift(col, 40), al), vaultCol(col, al), vaultCol(vaultLift(col, -50), al)], c); c.fill();
+      c.save(); dune(); c.clip();
+      for (let k = 0; k < 50 + rank * 30; k++) { const x = cx - rw + hash2(k, 2620 + q + rank * 9) * rw * 2, a = base - 40 + hash2(k, 2621 + q + rank * 9) * (top - base + 40); vaultEll(c, X(x), Y(a), (1.8 + rank * 0.5) * s, (0.8 + rank * 0.2) * s, vaultCol(vaultLift(col, 50 + rank * 6), 0.55)); }
+      c.restore();
+      c.strokeStyle = vaultCol(vaultLift(col, 70), 0.6 * al); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(cx - rw * 0.55), Y(top - (top - base) * 0.4)); c.quadraticCurveTo(X(cx - rw * 0.25), Y(top - 2), X(cx), Y(top)); c.stroke();
+    }
+    c.fillStyle = `rgba(255,214,150,${0.2 - rank * 0.07})`; c.fillRect(0, Y(base + hgt + 60), sp.w, (hgt + 140) * s);
+  }
+  // the colossal chest behind the throne, lid thrown back, gold welling over its lip
+  const kx = X(mid + 10), ky = Y(E + 250);
+  c.save(); c.translate(kx, ky); c.scale(s, s);
+  c.fillStyle = vaultRG(0, -40, 160, ['rgba(255,226,150,.5)', 'rgba(255,200,120,0)'], c); c.fillRect(-170, -200, 340, 280);
+  // its lid (open, leaning back)
+  c.fillStyle = vaultLG(0, -130, 0, -56, ['#a86a3c', '#7a4424', '#4a2412'], c); c.beginPath(); c.moveTo(-104, -56); c.lineTo(-96, -118); c.quadraticCurveTo(0, -150, 96, -118); c.lineTo(104, -56); c.closePath(); c.fill(); c.strokeStyle = '#3a1a0a'; c.lineWidth = 1.4; c.stroke();
+  for (const bx of [-70, -4, 62]) { c.fillStyle = vaultLG(bx, 0, bx + 12, 0, [G0.hi, G0.mid, G0.lo], c); c.beginPath(); c.moveTo(bx, -58); c.lineTo(bx + 1, -128 + Math.abs(bx) * 0.12); c.lineTo(bx + 13, -129 + Math.abs(bx) * 0.12); c.lineTo(bx + 12, -58); c.closePath(); c.fill(); }
+  c.strokeStyle = 'rgba(255,220,170,.35)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-94, -116); c.quadraticCurveTo(0, -146, 94, -116); c.stroke();
+  c.fillStyle = 'rgba(60,20,30,.7)'; c.beginPath(); c.moveTo(-96, -62); c.quadraticCurveTo(0, -80, 96, -62); c.lineTo(96, -56); c.lineTo(-96, -56); c.closePath(); c.fill();   // the lid's red velvet lining
+  // the gold welling up out of it
+  vaultHeap(c, -104, 104, -54, 48, 2630);
+  // its box
+  c.fillStyle = vaultLG(0, -56, 0, 30, ['#c08452', '#8a5230', '#5a2e16', '#3a1a0a'], c); c.beginPath(); c.roundRect(-110, -58, 220, 90, 5); c.fill(); c.strokeStyle = '#3a1a0a'; c.lineWidth = 1.4; c.stroke();
+  for (const yy of [-30, 0]) { c.strokeStyle = 'rgba(40,14,6,.55)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-110, yy); c.lineTo(110, yy); c.stroke(); c.strokeStyle = 'rgba(255,220,180,.28)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-110, yy + 1.4); c.lineTo(110, yy + 1.4); c.stroke(); }
+  for (const bx of [-76, 64]) { c.fillStyle = vaultLG(bx, 0, bx + 12, 0, [G0.lit, G0.mid, G0.lo], c); c.fillRect(bx, -58, 12, 90); for (let q = 0; q < 4; q++) vaultEll(c, bx + 6, -50 + q * 24, 1.6, 1.6, G0.lit); }
+  c.fillStyle = vaultLG(-14, -56, 14, -20, [G0.lit, G0.hi, G0.lo], c); c.beginPath(); c.roundRect(-14, -58, 28, 34, 4); c.fill(); c.strokeStyle = G0.deep; c.lineWidth = 1; c.stroke();
+  vaultEll(c, 0, -44, 4, 4.5, '#3a1a0a'); c.fillStyle = '#3a1a0a'; c.fillRect(-1.6, -44, 3.2, 10);
+  vaultSheen(-60, -10, 70, 0.18, 3.6, 4.4, c);
+  c.restore();
+  // the hoard round the throne: a broad mountain of coins, gems strewn on it, cups and crowns
+  const hx = X(mid), hy = Y(E + VAULT_THRONE - 30);
+  c.save(); c.translate(hx, hy); c.scale(s, s);
+  vaultHeap(c, -200, 200, 120, 112, 2640);
+  vaultHeap(c, -150, -40, 40, 26, 2641); vaultHeap(c, 40, 160, 44, 30, 2642);
+  // the throne: a stack of chests and a gilded high-backed chair on top
+  c.fillStyle = vaultLG(0, -100, 0, 0, ['#a8305a', '#7a1a40', '#4a0a24'], c); c.beginPath(); c.moveTo(-34, 0); c.lineTo(-34, -78); c.quadraticCurveTo(-34, -112, 0, -116); c.quadraticCurveTo(34, -112, 34, -78); c.lineTo(34, 0); c.closePath(); c.fill(); c.strokeStyle = '#3a0618'; c.lineWidth = 1.2; c.stroke();   // its velvet back
+  c.strokeStyle = vaultLG(-40, 0, 40, 0, [G0.lo, G0.hi, G0.lit, G0.mid, G0.lo], c); c.lineWidth = 6; c.beginPath(); c.moveTo(-36, 0); c.lineTo(-36, -78); c.quadraticCurveTo(-36, -115, 0, -119); c.quadraticCurveTo(36, -115, 36, -78); c.lineTo(36, 0); c.stroke();   // the gilt frame
+  c.strokeStyle = 'rgba(255,250,210,.8)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-38, -10); c.lineTo(-38, -78); c.quadraticCurveTo(-38, -116, -4, -120); c.stroke();
+  vaultCrown(c, 0, -124, 1.6, 0); vaultGem(c, -36, -80, 4, 'emer'); vaultGem(c, 36, -80, 4, 'emer');
+  for (let q = 0; q < 5; q++) { c.strokeStyle = 'rgba(60,4,24,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-24 + q * 12, -10); c.lineTo(-24 + q * 12, -96 + Math.abs(q - 2) * 4); c.stroke(); }
+  // the seat: a fat chest he sits on
+  c.fillStyle = vaultLG(0, -14, 0, 18, ['#c08452', '#8a5230', '#4a2412'], c); c.beginPath(); c.roundRect(-44, -12, 88, 30, 4); c.fill(); c.strokeStyle = '#3a1a0a'; c.lineWidth = 1.1; c.stroke();
+  c.fillStyle = vaultLG(0, -16, 0, -8, [G0.lit, G0.mid], c); c.fillRect(-46, -14, 92, 5);
+  for (const bx of [-30, 24]) { c.fillStyle = vaultLG(bx, 0, bx + 6, 0, [G0.hi, G0.lo], c); c.fillRect(bx, -12, 6, 30); }
+  c.restore();
+  c.restore();
+  // fade the bottom into the shaft below
+  c.globalCompositeOperation = 'destination-in'; c.fillStyle = vaultLG(0, Y(E - 120), 0, Y(A1), ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.5)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, sp.w, sp.h); c.globalCompositeOperation = 'source-over';
+  sp.xl = xl; sp.xr = xr; sp.mid = mid;
+  VAULT_CACHE.sprites.set(key, sp);
+  return sp;
+}
+// Captain Goldtooth himself (live: he breathes, his curse-fire flickers, his jaw grins; on the clear his eyes turn gold
+// and he tips his hat). Frame: his hips on the seat at (0, 0), y down, in world units.
+function vaultCaptainBody(c) {
+  const G0 = VP.gold;
+  // legs: thigh bones forward over the seat, shins down, big cuffed boots
+  for (const d of [-1, 1]) {
+    c.strokeStyle = '#8a7250'; c.lineWidth = 6; c.beginPath(); c.moveTo(d * 8, -2); c.lineTo(d * 16, 2); c.lineTo(d * 18, 22); c.stroke();
+    c.strokeStyle = '#efe0c0'; c.lineWidth = 4; c.stroke();
+    c.fillStyle = vaultLG(0, 18, 0, 34, ['#5a3a50', '#3a2034', '#22101e'], c); c.beginPath(); c.moveTo(d * 12, 18); c.lineTo(d * 24, 18); c.lineTo(d * 25, 30); c.quadraticCurveTo(d * 34, 31, d * 34, 36); c.lineTo(d * 12, 36); c.closePath(); c.fill(); c.strokeStyle = '#1e0c1a'; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = vaultLG(0, 14, 0, 22, ['#6a4a60', '#3a2034'], c); c.beginPath(); c.roundRect(d > 0 ? 10 : -26, 14, 16, 7, 2); c.fill();
+    vaultEll(c, d * 18, 26, 2.4, 2, G0.hi);   // a gold buckle
+  }
+  // the coat: a long plum frock coat with gold braid and buttons, flaring over the seat
+  c.fillStyle = vaultLG(-20, -50, 20, 10, ['#8a3a6a', '#5a1a44', '#2e0a22'], c);
+  c.beginPath(); c.moveTo(-14, -46); c.quadraticCurveTo(-22, -20, -30, 8); c.lineTo(-10, 4); c.lineTo(-6, -20); c.lineTo(6, -20); c.lineTo(10, 4); c.lineTo(30, 8); c.quadraticCurveTo(22, -20, 14, -46); c.closePath(); c.fill(); c.strokeStyle = '#2a0a1e'; c.lineWidth = 1; c.stroke();
+  c.strokeStyle = G0.hi; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-14, -45); c.quadraticCurveTo(-21, -20, -29, 7); c.moveTo(14, -45); c.quadraticCurveTo(21, -20, 29, 7); c.stroke();
+  c.strokeStyle = 'rgba(255,220,255,.25)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-12, -42); c.quadraticCurveTo(-17, -24, -22, -4); c.stroke();
+  // the ribcage under the open coat (ivory bones as line pairs)
+  c.fillStyle = 'rgba(40,14,34,.9)'; c.beginPath(); c.moveTo(-8, -46); c.lineTo(8, -46); c.lineTo(6, -20); c.lineTo(-6, -20); c.closePath(); c.fill();
+  for (let q = 0; q < 4; q++) { const y = -42 + q * 5.5; c.strokeStyle = '#8a7250'; c.lineWidth = 2.6; c.beginPath(); c.moveTo(-7 + q * 0.4, y); c.quadraticCurveTo(0, y + 2.4, 7 - q * 0.4, y); c.stroke(); c.strokeStyle = '#efe0c0'; c.lineWidth = 1.5; c.stroke(); }
+  c.strokeStyle = '#efe0c0'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -46); c.lineTo(0, -20); c.stroke();
+  // the sash and the belt with a great gold buckle; the cutlass across his knees
+  c.fillStyle = vaultLG(0, -24, 0, -14, ['#ff5a7a', '#c0204a', '#7a0a2a'], c); c.beginPath(); c.moveTo(-10, -24); c.quadraticCurveTo(0, -20, 10, -24); c.lineTo(11, -15); c.quadraticCurveTo(0, -12, -11, -15); c.closePath(); c.fill();
+  c.fillStyle = vaultLG(-5, 0, 5, 0, [G0.lit, G0.hi, G0.lo], c); c.beginPath(); c.roundRect(-5, -23, 10, 8, 1.5); c.fill(); c.strokeStyle = G0.deep; c.lineWidth = 0.7; c.stroke();
+  c.save(); c.translate(0, 4); c.rotate(-0.08);
+  c.strokeStyle = '#7a8aa0'; c.lineWidth = 4.4; c.beginPath(); c.moveTo(-40, 0); c.quadraticCurveTo(0, 3, 36, -6); c.stroke();
+  c.strokeStyle = '#e6f0ff'; c.lineWidth = 2.4; c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-36, -1); c.quadraticCurveTo(0, 2, 32, -6.5); c.stroke();
+  c.strokeStyle = vaultLG(-50, 0, -40, 0, [G0.hi, G0.lo], c); c.lineWidth = 3; c.beginPath(); c.arc(-44, 2, 6, Math.PI * 0.6, Math.PI * 1.7); c.stroke();
+  c.fillStyle = G0.mid; c.fillRect(-42, -6, 3, 12); vaultEll(c, -48, 0, 2.6, 2.6, G0.hi);
+  c.restore();
+}
+function vaultCaptainArms(c, T, tip) {
+  // his left arm resting on the cutlass, his right raised to his hat on the clear (tip 0..1)
+  const ivory = (pts, w) => { c.strokeStyle = '#8a7250'; c.lineWidth = w + 2; c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); c.strokeStyle = '#efe0c0'; c.lineWidth = w; c.stroke(); };
+  const sleeve = (x0, y0, x1, y1) => { c.strokeStyle = '#3a0e2a'; c.lineWidth = 9; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.strokeStyle = '#7a2a5a'; c.lineWidth = 7; c.stroke(); c.strokeStyle = VP.gold.hi; c.lineWidth = 3; c.beginPath(); c.moveTo(x1 - (x1 - x0) * 0.12, y1 - (y1 - y0) * 0.12); c.lineTo(x1, y1); c.stroke(); };
+  sleeve(-14, -42, -22, -18); ivory([[-22, -18], [-26, -4], [-30, 2]], 2.4);
+  for (let q = 0; q < 3; q++) ivory([[-30, 2], [-33 + q * 2, 6]], 1.2);
+  const lift = smooth(0, 1, tip), ex = lerp(24, 26, lift), ey = lerp(-18, -48, lift), hx = lerp(30, 14, lift), hy = lerp(2, -68, lift);
+  sleeve(14, -42, ex, ey); ivory([[ex, ey], [lerp(30, 20, lift), lerp(-4, -60, lift)], [hx, hy]], 2.4);
+  for (let q = 0; q < 3; q++) ivory([[hx, hy], [hx + 3 - q * 2, hy + (lift > 0.5 ? -4 : 4)]], 1.2);
+  // a ring on his finger winking
+  vaultEll(c, hx, hy, 1.6, 1.6, VP.gold.hi); vaultEll(c, hx, hy, 0.8, 0.8, '#ff3a5a');
+  void T;
+}
+function vaultCaptainHead(T, pay, tip) {
+  // the head: a big ivory skull, a gold tooth in his grin, an eye patch over one socket, curse-fire in the other (gold
+  // when the curse breaks), the tricorn with a plume, lifted off on the tip
+  const G0 = VP.gold, eye = pay > 0.01 ? [255, 214, 90] : VP.curse, jaw = 1.5 + Math.sin(T * 1.7) * 0.8 + pay * 2.5;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the jaw and its teeth (one of them gold)
+  ctx.fillStyle = vaultLG(0, 6, 0, 18, ['#fff4dc', '#d8c29a', '#9a8460']); ctx.beginPath(); ctx.moveTo(-11, 6 + jaw); ctx.quadraticCurveTo(-12, 17 + jaw, 0, 18 + jaw); ctx.quadraticCurveTo(12, 17 + jaw, 11, 6 + jaw); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#7a6444'; ctx.lineWidth = 1; ctx.stroke();
+  // the cranium
+  const cr = () => { ctx.beginPath(); ctx.moveTo(-12, 9); ctx.bezierCurveTo(-20, 4, -19, -18, 0, -18); ctx.bezierCurveTo(19, -18, 20, 4, 12, 9); ctx.quadraticCurveTo(0, 12, -12, 9); ctx.closePath(); };
+  cr(); ctx.fillStyle = vaultRG(-5, -9, 26, ['#fffaf0', '#efe0c0', '#b8a07a']); ctx.fill();
+  ctx.save(); cr(); ctx.clip();
+  ctx.fillStyle = 'rgba(150,120,80,.25)'; ctx.beginPath(); ctx.ellipse(-12, 3, 5, 6, 0.3, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,96,60,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(-7, -12); ctx.lineTo(-10, -8); ctx.stroke(); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-8.2, -17); ctx.lineTo(-6.2, -12); ctx.stroke();
+  ctx.restore();
+  cr(); ctx.strokeStyle = '#8a7250'; ctx.lineWidth = 1.1; ctx.stroke();
+  vaultSheen(-2, -6, 15, 0.55, 3.4, 4.6);
+  // sockets: the left patched (a strap across), the right alight
+  vaultEll(ctx, 6.5, -2, 5.6, 5, '#3a2230', 0.12);
+  vaultGlowS(6.5, -2, 16, eye, 0.5 + 0.15 * Math.sin(T * 6));
+  ctx.fillStyle = vaultCol(eye, 0.6); ctx.beginPath(); ctx.arc(6.8, -1.8, 4, 0, TWO_PI); ctx.fill(); ctx.fillStyle = vaultCol(vaultLift(eye, 70)); ctx.beginPath(); ctx.ellipse(7, -1.6, 2, 2.5, 0, 0, TWO_PI); ctx.fill(); vaultEll(ctx, 6.2, -3, 0.8, 0.8, '#ffffff');
+  ctx.strokeStyle = '#2a1424'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-18, -10); ctx.quadraticCurveTo(-4, -8, 18, 2); ctx.stroke();
+  ctx.fillStyle = vaultLG(-12, -7, -2, 3, ['#4a3044', '#2a1424']); ctx.beginPath(); ctx.ellipse(-6.5, -2, 6, 5.4, -0.15, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#1e0c1a'; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,220,255,.3)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.ellipse(-6.5, -2, 4.4, 3.8, 0, 3.5, 4.6); ctx.stroke();
+  ctx.fillStyle = '#4a2a30'; ctx.beginPath(); ctx.moveTo(0, 3.5); ctx.lineTo(-2, 7); ctx.lineTo(2, 7); ctx.closePath(); ctx.fill();
+  for (let q = -3; q <= 3; q++) { const gold = q === 1; ctx.fillStyle = gold ? vaultLG(0, 7, 0, 11, [G0.lit, G0.hi, G0.lo]) : '#fffaf0'; ctx.beginPath(); ctx.roundRect(q * 2.8 - 1.3, 7.6, 2.6, 3.2, 0.7); ctx.fill(); ctx.strokeStyle = gold ? G0.deep : 'rgba(122,100,68,.7)'; ctx.lineWidth = 0.5; ctx.stroke(); }
+  if (pay > 0.2) vaultTwinkle(ctx, 2.8, 9, 5, (pay - 0.2) * Math.max(0, Math.sin(T * 3)) ** 4);
+  // the tricorn, gold-braided, a cream plume, lifted and tilted on the tip
+  const lift = smooth(0, 1, tip);
+  ctx.save(); ctx.translate(lerp(-1, 6, lift), lerp(-15, -24, lift)); ctx.rotate(lerp(-0.12, 0.35, lift));
+  for (let q = 0; q < 5; q++) { ctx.strokeStyle = q % 2 ? 'rgba(255,240,220,.85)' : 'rgba(230,200,190,.9)'; ctx.lineWidth = 2.6 - q * 0.3; ctx.beginPath(); ctx.moveTo(10, -9); ctx.quadraticCurveTo(22 + q * 2, -26 + q * 3 + Math.sin(T * 2 + q) * 1.2, 30 + q * 2, -16 + q * 4); ctx.stroke(); }
+  ctx.fillStyle = vaultLG(0, -14, 0, 4, ['#6a3a5a', '#3a1434', '#200a1c']);
+  ctx.beginPath(); ctx.moveTo(-24, 2); ctx.quadraticCurveTo(-18, -3, -12, -12); ctx.quadraticCurveTo(0, -18, 12, -12); ctx.quadraticCurveTo(18, -3, 24, 2); ctx.quadraticCurveTo(0, -4, -24, 2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#1e0818'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.strokeStyle = G0.hi; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(-24, 2); ctx.quadraticCurveTo(0, -4, 24, 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,230,255,.35)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-12, -11); ctx.quadraticCurveTo(0, -16.5, 10, -12); ctx.stroke();
+  // the gold skull-and-crossbones badge
+  ctx.strokeStyle = G0.lo; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-4, -2); ctx.lineTo(4, -8); ctx.moveTo(4, -2); ctx.lineTo(-4, -8); ctx.stroke();
+  vaultEll(ctx, 0, -6, 2.8, 2.6, G0.hi); vaultEll(ctx, -0.9, -6.2, 0.7, 0.7, '#3a1434'); vaultEll(ctx, 0.9, -6.2, 0.7, 0.7, '#3a1434');
+  ctx.restore();
+  ctx.restore();
+}
+function drawVaultDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -260 || y - (900 * s) > H + 200) return;
+  vaultCacheCheck();
+  const ch = vaultChamberRender(E), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.6) : 0, tip = a.clearT >= 0 ? clamp((a.clearT - 0.3) * 2, 0, 1) * (a.clearT < 2.4 ? 1 : clamp(1 - (a.clearT - 2.4) * 1.5, 0, 1)) : 0;
+  ctx.drawImage(ch.cv, ox + ch.xa * s, sy(ch.a1), ch.w, ch.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 120; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 120; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  // glints winking over the mountains of gold and the great chest
+  for (let q = 0; q < 16; q++) { const x = lerp(ch.xl, ch.xr, hash2(q, 2701)), al = E + 90 + 300 * hash2(q, 2702); vaultTwinkle(ctx, sx(x), sy(al), (3 + 3 * hash2(q, 2703)) * s, Math.max(0, Math.sin(T * (1 + hash2(q, 2704)) + q * 2)) ** 10 * (0.8 + 0.2 * pay)); }
+  // the captain on his throne
+  const cx = sx(ch.mid), cy = sy(E + VAULT_THRONE - 30 + 14), br = Math.sin(T * 1.3) * 0.6;
+  vaultGlowS(cx, cy - 40 * s, (90 + 60 * pay) * s, pay > 0 ? [255, 214, 110] : VP.curse, 0.16 + 0.2 * pay);
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
+  vaultCaptainBody(ctx); vaultCaptainArms(ctx, T, tip);
+  ctx.translate(0, -58 + br); ctx.rotate(Math.sin(T * 0.6) * 0.04 + tip * 0.08); vaultCaptainHead(T, pay, tip);
+  ctx.restore();
+  // the braziers either side of the throne: curse-fire, flaring gold on the clear
+  for (const d of [-1, 1]) {
+    const bx = sx(ch.mid + d * 92), by = sy(E + VAULT_THRONE - 6);
+    ctx.save(); ctx.translate(bx, by); ctx.scale(s, s);
+    ctx.fillStyle = vaultLG(-3, 0, 3, 0, [VP.gold.hi, VP.gold.lo]); ctx.fillRect(-2, 0, 4, 34);
+    ctx.fillStyle = vaultLG(-12, -2, 12, 8, [VP.gold.lit, VP.gold.mid, VP.gold.deep]); ctx.beginPath(); ctx.moveTo(-13, -2); ctx.lineTo(13, -2); ctx.quadraticCurveTo(11, 8, 0, 9); ctx.quadraticCurveTo(-11, 8, -13, -2); ctx.fill(); ctx.strokeStyle = VP.gold.deep; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,250,210,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-11, 0); ctx.quadraticCurveTo(-9, 6, -3, 7.5); ctx.stroke();
+    ctx.restore();
+    const col = pay > 0 ? [255, 200, 90] : VP.curse;
+    vaultGlowS(bx, by - 12 * s, (44 + 30 * pay) * s, col, 0.35 + 0.2 * pay);
+    ctx.save(); ctx.translate(bx, by - 1 * s); ctx.scale(s * (1 + 0.5 * pay), s * (1 + 0.5 * pay));
+    if (pay > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let k = 0; k < 3; k++) { const f = 1 - k * 0.28, hh = 22 * f * (0.9 + 0.15 * Math.sin(T * 13 + k + d)); ctx.fillStyle = k === 0 ? 'rgba(255,160,60,.5)' : k === 1 ? 'rgba(255,214,110,.55)' : 'rgba(255,250,220,.7)'; ctx.beginPath(); ctx.moveTo(-8 * f, 0); ctx.quadraticCurveTo(-9 * f, -hh * 0.5, Math.sin(T * 9 + k) * 2, -hh); ctx.quadraticCurveTo(9 * f, -hh * 0.5, 8 * f, 0); ctx.closePath(); ctx.fill(); } ctx.restore(); }
+    else vaultCurseFlame(0, 0, 22, T, d * 2);
+    ctx.restore();
+  }
+  // coins raining from the roof on the clear
+  if (pay > 0) for (let q = 0; q < 26; q++) { const u = pmod(T * (0.45 + 0.2 * hash2(q, 2711)) + hash2(q, 2712), 1), x = lerp(ch.xl + 20, ch.xr - 20, hash2(q, 2713)), al = E + 760 - u * 760; vaultCoin(sx(x), sy(al), VAULT_COIN_R * s * 0.9, T * 6 + q, Math.min(1, pay * 2) * Math.sin(u * Math.PI)); }
+  ctx.restore();
+  // ---- the deck: two plum stone shelves banked with gold, growing out of the walls to meet under you
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, G0 = VP.gold;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 12 : R + 12), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet + side * -1, e)), th = 18 * s;
+    const body = () => { ctx.beginPath(); ctx.moveTo(X0, y - 2 * s); ctx.lineTo(X1 + side * 4 * s, y - 2.5 * s); ctx.quadraticCurveTo(X1 - side * 2 * s, y - 1 * s, X1, y + 4 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + th * 1.1, X0, y + th * 1.8); ctx.closePath(); };
+    body(); ctx.fillStyle = vaultLG(0, y - 3 * s, 0, y + th * 1.6, VAULT_STONE); ctx.fill(); ctx.strokeStyle = '#2a1430'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    ctx.save(); body(); ctx.clip();
+    ctx.strokeStyle = 'rgba(30,12,36,.55)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(X0, y + 6 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + 8 * s, X1, y + 4 * s); ctx.stroke();
+    ctx.strokeStyle = 'rgba(214,190,226,.32)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(X0, y + 7.3 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + 9.3 * s, X1, y + 5.3 * s); ctx.stroke();
+    ctx.restore();
+    // a crust of gold coins along its top as it grows (drawn lying, lit on their upper lips), a stack or two on it
+    const w = Math.abs(X1 - X0), n = Math.floor(w / (5 * s));
+    for (let q = 0; q <= n; q++) { const x = lerp(X0, X1, q / Math.max(1, n)), yy = y - 2.6 * s - (q % 2) * 1.4 * s; vaultEll(ctx, x, yy + 0.8 * s, 3 * s, 1.5 * s, G0.lo); vaultEll(ctx, x, yy, 3 * s, 1.5 * s, hash2(q, side + 9) < 0.35 ? G0.hi : G0.mid); }
+    ctx.strokeStyle = 'rgba(255,248,200,.8)'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); for (let q = 0; q <= n; q += 1) { const x = lerp(X0, X1, q / Math.max(1, n)), yy = y - 2.6 * s - (q % 2) * 1.4 * s; ctx.moveTo(x - 2.4 * s, yy - 0.4 * s); ctx.quadraticCurveTo(x, yy - 1.4 * s, x + 2.4 * s, yy - 0.4 * s); } ctx.stroke();
+    if (e > 0.5) { ctx.save(); ctx.translate(lerp(X0, X1, 0.35), y - 3 * s); ctx.scale(s, s); vaultCoinStack(ctx, 0, 0, 5, 0.3, 1); vaultCoinStack(ctx, 9, 1, 3, -0.2, 1); ctx.restore(); }
+    // a lantern hanging on the wall above it (green until the curse breaks, then warm gold): the deck's own light
+    const wxs = sx(side < 0 ? L + 2 : R - 2), ly = y - 54 * s, col = pay > 0 ? [255, 210, 110] : VP.curse;
+    vaultGlowS(wxs - side * 10 * s, ly, 48 * s, col, 0.3 + 0.1 * Math.sin(T * 2 + side) + 0.25 * pay);
+    ctx.save(); ctx.translate(wxs - side * 10 * s, ly); ctx.scale(s, s);
+    ctx.strokeStyle = G0.lo; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(side * 10, -16); ctx.lineTo(0, -16); ctx.lineTo(0, -10); ctx.stroke();
+    ctx.fillStyle = vaultLG(-6, 0, 6, 0, [G0.hi, G0.lo]); ctx.beginPath(); ctx.moveTo(-6, -10); ctx.lineTo(6, -10); ctx.lineTo(4, -7); ctx.lineTo(-4, -7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = vaultRG(0, 0, 7, [vaultCol(vaultLift(col, 80)), vaultCol(col, 0.8), vaultCol(vaultLift(col, -60), 0.6)]); ctx.beginPath(); ctx.roundRect(-4.5, -7, 9, 13, 2); ctx.fill();
+    ctx.strokeStyle = G0.lo; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-4.5, -7); ctx.lineTo(-4.5, 6); ctx.moveTo(4.5, -7); ctx.lineTo(4.5, 6); ctx.moveTo(0, -7); ctx.lineTo(0, 6); ctx.stroke();
+    ctx.fillStyle = vaultLG(-6, 0, 6, 0, [G0.hi, G0.lo]); ctx.fillRect(-5.5, 6, 11, 2.6);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (vaultOn()) drawVaultDeck(); else base(); }; }
+// the payoff: the curse breaks: a fountain of coins bursts up round you, green sparks turn gold
+function vaultClearBurst() {
+  const a = G.adv, p = G.p;
+  vaultBurst(p.x, a.end + 10, 44, 1.5, 1.4);
+  for (let k = 0; k < 24; k++) { const an = k / 24 * TWO_PI; puff(p.x, a.end + 40, Math.cos(an) * 210, Math.sin(an) * 210 + 60, 0.8, 2.6, 'ember', k % 3 ? [255, 220, 120] : [255, 250, 220]); }
+  puff(p.x, a.end + 30, 0, 40, 0.7, 22, 'star');
+  G.flashCol = [255, 226, 150];
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (vaultOn() && !boss) vaultClearBurst(); }; }
+// ---- cursed rubies: three in daring spots (in a skeleton's palm on a skull's orbit, on a swell's crest), worth a big
+// coin each, and the stage's ruby mission; the chest mission's count ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'vaultRuby') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.vaultRuby = (st.vaultRuby || 0) + 1, of = advGoalN('vaultRuby');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Cursed ruby ${n}/${of}!` : 'Cursed ruby!', '#ffb0c0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 150, 170];
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(an) * 190, Math.sin(an) * 190, 0.55, 2.4, 'ember', k % 3 ? [255, 90, 120] : VP.curse); }
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  vaultBurst(f.x, f.alt, 10, 0.8, 0.9);
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffb0c0', big: true, sub: 'cursed ruby' });
+  vibrate([20, 30, 20]); sfx('vruby');
+}; }
+// The cursed ruby (inside its pickup circle): a big cut ruby in a claw setting of gold on a chain loop, a wisp of green
+// curse-fire licking off it, a deep red glow, bobbing, a twinkle on its table.
+function drawVaultRubyArt(t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2, gl = 0.6 + 0.25 * Math.sin(t * 3.1 + ph), G0 = VP.gold;
+  vaultGlowS(0, bob, 42, [255, 70, 110], 0.34 * gl + 0.1);
+  vaultGlowS(0, bob - 6, 20, VP.curse, 0.14 * gl);
+  ctx.save(); ctx.translate(0, bob); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  vaultCurseFlame(3, -11, 11, t, ph, 0.55);
+  // the chain loop over the top
+  ctx.strokeStyle = G0.lo; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(0, -12, 4, 3.4, 0, Math.PI * 1.05, Math.PI * 1.95 + Math.PI); ctx.stroke(); ctx.strokeStyle = G0.hi; ctx.lineWidth = 1.2; ctx.stroke();
+  // the gold setting: a rim with four claws
+  ctx.fillStyle = vaultRG(-3, -3, 15, [G0.lit, G0.hi, G0.mid, G0.lo]); ctx.beginPath(); ctx.ellipse(0, 0, 12.5, 11.5, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = G0.deep; ctx.lineWidth = 1; ctx.stroke();
+  // the stone: a cushion cut ruby, crown facets, a table
+  const C = VAULT_GEMS.ruby, oct = []; for (let i = 0; i < 8; i++) { const a = i / 8 * TWO_PI + Math.PI / 8; oct.push([Math.cos(a) * 10, Math.sin(a) * 9]); }
+  ctx.fillStyle = vaultRG(-3.5, -3.5, 15, ['#ffd8e0', '#ff4a6a', '#c0103a', '#6a0420']); ctx.beginPath(); oct.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = C[2]; ctx.lineWidth = 1; ctx.stroke();
+  const tb = oct.map(([x, y]) => [x * 0.52, y * 0.52]);
+  ctx.strokeStyle = 'rgba(255,220,230,.45)'; ctx.lineWidth = 0.8; ctx.beginPath(); for (let i = 0; i < 8; i++) { ctx.moveTo(tb[i][0], tb[i][1]); ctx.lineTo(oct[i][0], oct[i][1]); } ctx.stroke();
+  ctx.fillStyle = vaultLG(-5, -5, 5, 5, ['#ffb8c8', '#ff3a5a', '#a00a30']); ctx.beginPath(); tb.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,6,30,.6)'; ctx.lineWidth = 0.6; ctx.stroke();
+  // a faint skull of curse-green deep inside it (it is cursed, after all)
+  ctx.fillStyle = 'rgba(120,255,170,.32)'; ctx.beginPath(); ctx.ellipse(0, 0.6, 3, 2.6, 0, 0, TWO_PI); ctx.fill(); vaultEll(ctx, -1.1, 0.3, 0.7, 0.8, 'rgba(60,0,20,.6)'); vaultEll(ctx, 1.1, 0.3, 0.7, 0.8, 'rgba(60,0,20,.6)');
+  for (const [cx, cy] of [[-9, -6], [9, -6], [-9, 6], [9, 6]]) { ctx.fillStyle = vaultRG(cx - 0.6, cy - 0.8, 3, [G0.lit, G0.hi, G0.lo]); ctx.beginPath(); ctx.ellipse(cx, cy, 2.1, 2.6, Math.atan2(cy, cx), 0, TWO_PI); ctx.fill(); ctx.strokeStyle = G0.deep; ctx.lineWidth = 0.6; ctx.stroke(); }
+  vaultEll(ctx, -3.6, -4.2, 2.4, 1.3, 'rgba(255,255,255,.95)', -0.6);
+  vaultSheen(0, 0, 13, 0.5, 3.5, 4.6);
+  ctx.restore();
+  const u = (t * 0.7 + ph) % 1, a = Math.sin(u * Math.PI);
+  vaultTwinkle(ctx, 6, -6 + bob, 6 * a, 0.9 * a);
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'vaultRuby')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'vaultRuby');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'vaultRuby') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawVaultRubyArt(G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the ruby mission and the chest mission (stars), and their counts on the HUD under the others
+ADV_GOALS.vaultRuby = { text: g => `Find all ${g.n} cursed rubies`, done: (r, g) => (r.stats.vaultRuby || 0) >= g.n, any: true, prog: (g, st) => `${st.vaultRuby || 0}/${g.n}` };
+ADV_GOALS.vaultChests = { text: g => `Crack open ${g.n} treasure chests`, done: (r, g) => (r.stats.vaultChests || 0) >= g.n, any: true, prog: (g, st) => `${st.vaultChests || 0}/${g.n}` };
+// a small closed chest for the HUD (cached)
+function vaultHudChest() {
+  return vaultSprite('hudChest', 30, 26, c => {
+    c.translate(15, 14); const G0 = VP.gold;
+    c.fillStyle = vaultLG(0, -10, 0, 0, ['#cf9452', '#94592a'], c); c.beginPath(); c.moveTo(-12, -2); c.lineTo(-12, -6); c.quadraticCurveTo(0, -13, 12, -6); c.lineTo(12, -2); c.closePath(); c.fill(); c.strokeStyle = '#4a260c'; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = vaultLG(0, -2, 0, 10, ['#b07040', '#6a3818'], c); c.beginPath(); c.roundRect(-12, -2, 24, 12, 1.5); c.fill(); c.strokeStyle = '#4a260c'; c.stroke();
+    c.fillStyle = G0.hi; c.fillRect(-9, -9, 3, 19); c.fillRect(6, -9, 3, 19); c.fillStyle = vaultLG(-3, 0, 3, 0, [G0.lit, G0.lo], c); c.fillRect(-3, -4, 6, 6);
+    c.strokeStyle = 'rgba(255,230,200,.5)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-10, -6.5); c.quadraticCurveTo(0, -12, 10, -6.5); c.stroke();
+  });
+}
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv; if (!a || !a.st || a.st.theme !== 'vault') return;
+  const goals = advGoalList(a.lv, a.st), before = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  let row = before;
+  for (const k of ['vaultRuby', 'vaultChests']) {
+    const g = goals.find(q => q.k === k); if (!g) continue;
+    const n = G.stats[k] || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * row++, txt = `${Math.min(n, g.n)}/${g.n}`;
+    ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#ffe9a0' : '#ffe7b8'; ctx.fillText(txt, xr, y);
+    ctx.translate(xr - tw - 13, y);
+    if (k === 'vaultRuby') { ctx.scale(0.55, 0.55); drawVaultRubyArt(G.t, 0); }
+    else { const sp = vaultHudChest(); ctx.drawImage(sp.cv, -12, -11, 24, 21); }
+    ctx.restore();
+  }
+}; }
+// The stage on the island: level 23 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'vault' || (G.level && G.level.vault)) return;
+  G.level = createVaultLevel(G.seed, st); G.vtCoins = []; G.vtSniffPop = 0;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The captain\'s hoard ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the vault's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRV = { VAULT, VAULT_STAGE, vaultShapes, vaultDanger, vaultAvalState, vaultMimicState, vaultSkullState, vaultSurgeState, vaultChestBody, vaultChestTrigger, createVaultLevel, cache: VAULT_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Cursed Treasure Vault, island level 23)
 // (game slot: Cascade Falls, island level 24)
 // (game slot: Gull Cliffs, island level 25)

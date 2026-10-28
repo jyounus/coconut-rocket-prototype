@@ -2905,6 +2905,158 @@ const shipwreckStats = { seeds: 0, traps: 0, searches: 0, worst: 0, compasses: 0
 }
 const shipwreckSummary = () => `PASS: Shipwreck Hold: ${shipwreckStats.seeds} layouts × ${shipwreckStats.len} m, only its own traps (${Object.entries(shipwreckStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${shipwreckStats.minW.toFixed(0)}+ wide, wall slope ${shipwreckStats.slope.toFixed(2)} (max ${SW.RULES.maxWallSlope}); lanes past barrels ${shipwreckStats.barrelLane.toFixed(0)}+, past anchors at rest ${shipwreckStats.anchorLane.toFixed(0)}+, past a kraken's sweep ${shipwreckStats.armLane.toFixed(0)}+ (minLane ${SW.RULES.minLane}); a rack's gap row ${shipwreckStats.gapRow} high (widest pilot ${PILOT_H.toFixed(0)}); anchors ${shipwreckStats.anchorWall.toFixed(0)}+ off the walls; sling end gaps ${shipwreckStats.slingGap[0].toFixed(0)}..${shipwreckStats.slingGap[1].toFixed(0)}; beats ${shipwreckStats.beatGap.toFixed(0)}+ apart; pickups ${shipwreckStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${shipwreckStats.traps} beats and ${shipwreckStats.compasses} compasses (grab and escape) flown by the widest pilot in ${shipwreckStats.searches} searches from 6 phases each, the slowest pass ${shipwreckStats.worst.toFixed(1)} s`;
 // (test slot: Shipwreck Hold, island level 22)
+// ---------- Adventure: the Cursed Treasure Vault (island level 23), an authored stage with its own traps ----------
+// As the lagoon's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases, sides and looks), then every beat, every cursed ruby and every real chest flown by a time-space search for the
+// widest pilot on the traps' own clocks from several start phases (a pouring column, a lashing tongue, a lunging skull
+// and a rolling surge all count as solid exactly when the game kills on them).
+const VG = new Function(regions.join('\n') + '\nreturn { createVaultLevel, vaultShapes, vaultDanger, vaultEnd, vaultAvalState, vaultChestBody, vaultChestTrigger, vaultSkullState, vaultSurgeState, VAULT, VAULT_STAGE, VAULT_TYPES, ADV_VAULT, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const vaultStats = { seeds: 0, traps: 0, searches: 0, worst: 0, rubies: 0, chests: 0, realChests: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { vaultAval: Infinity, vaultChest: Infinity, vaultSkull: Infinity, vaultSurge: Infinity }, len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = VG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = VG.ADV_VAULT, X = VG.VAULT;
+  const vfail = (rule, d) => fail('vault: ' + rule, d);
+  if (st0.theme !== 'vault' || !(st0.reward > 0)) vfail('the vault is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'vaultRuby' && g.n === 3) || !st0.goals.some(g => g.k === 'vaultChests' && g.n > 0)) vfail('three missions: the hoard, 3 cursed rubies and the real chests', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * VG.UNITS_PER_M - VG.vaultEnd()) > 1e-6) vfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: avalanches, then chests (a real one, then a mimic), then skulls, then surges, each taught alone
+  {
+    const fam = { aval: 'aval', avalPair: 'aval', chest: 'chest', mimic: 'mimic', chestPair: 'mimic', mimicAval: 'mimic', skull: 'skull', skullPair: 'skull', skullChest: 'skull', skullAval: 'skull', surge: 'surge', surgePair: 'surge', surgeSkull: 'surge', surgeChest: 'surge', surgeAval: 'surge' };
+    const firsts = {}, seen = [];
+    for (const sec of VG.VAULT_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { vfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) vfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 0.31) vfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'aval,chest,mimic,skull,surge') vfail('the vault teaches avalanches, chests, mimics, skulls, then surges', seen.join());
+    if (!VG.VAULT_STAGE.some(sec => sec.calm && !sec.finish && sec !== VG.VAULT_STAGE[0])) vfail('the vault has a breather', '');
+    if (!VG.VAULT_STAGE[VG.VAULT_STAGE.length - 1].finish) vfail('the stage ends in the captain\'s hoard', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (VG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the lagoon's): solid = every lethal shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) VG.vaultShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = VG.createVaultLevel(VG.advSeed(st), st), hz = [], fr = [];
+    vaultStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) vfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) vfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    vaultStats.len = level.end / 10;
+    for (const h of hz) if (!VG.VAULT_TYPES.has(h.type)) vfail('the vault only has its own traps', h.type);
+    for (const h of hz) vaultStats.kinds[h.type + (h.type === 'vaultChest' ? (h.mimic ? '(mimic)' : '(real)') : '')] = (vaultStats.kinds[h.type + (h.type === 'vaultChest' ? (h.mimic ? '(mimic)' : '(real)') : '')] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); vaultStats.beatGap = Math.min(vaultStats.beatGap, g); if (g < 0) vfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) vfail('the hoard below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      vaultStats.minW = Math.min(vaultStats.minW, r - l); vaultStats.slope = Math.max(vaultStats.slope, l2 - l, r - r2);
+    }
+    if (vaultStats.minW < R.minWidth) vfail('the shaft is never narrower than minWidth', vaultStats.minW.toFixed(1));
+    if (vaultStats.slope > R.maxWallSlope) vfail('the walls never step in faster than maxWallSlope', vaultStats.slope.toFixed(2));
+    // static lanes: every trap at its widest reach (a full column, a mimic's tongue at full stretch, a skull's ring and
+    // lunges, a surge at full heave) leaves an open lane of minLane to the far wall, at every height it reaches
+    for (const h of hz) {
+      const S = VG.vaultDanger(h);
+      for (const q of S) {
+        const a0 = q.k === 'c' ? q.a - q.r : Math.min(q.a0, q.a1) - q.r, a1 = q.k === 'c' ? q.a + q.r : Math.max(q.a0, q.a1) + q.r;
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l;
+          vaultStats.lane[h.type] = Math.min(vaultStats.lane[h.type], m);
+          if (m < R.minLane) { vfail('every trap leaves a lane of minLane to the far wall', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = VG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) vfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: rubies and the Grotto's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(VG.laneSize().w / 2 + 6 + VG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of VG.vaultDanger(h)) dd = Math.min(dd, VG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) vaultStats.pick = Math.min(vaultStats.pick, dd);
+      if (dd < need - 0.5) vfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a ruby is a dare, but never inside a solid part (the arm holding it)
+    for (const f of fr.filter(f => f.kind === 'vaultRuby')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of VG.vaultShapes(h, 0, [], 'body')) if (VG.shapeDist(q, f.x, f.alt) < 4) { vfail('a ruby never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < VG.pickR(fr[i]) + VG.pickR(fr[j]) + VG.PICK_GAP - 0.01) vfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'vaultRuby').length !== 3) vfail('the vault holds exactly 3 cursed rubies', `${fr.filter(f => f.kind === 'vaultRuby').length}`);
+    const reals = hz.filter(h => h.type === 'vaultChest' && !h.mimic);
+    vaultStats.realChests = reals.length;
+    if (reals.length < st0.goals.find(g => g.k === 'vaultChests').n + 2) vfail('the vault holds a few more real chests than the mission asks', `${reals.length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) vfail('the vault keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      vaultStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        vaultStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) vfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else vaultStats.worst = Math.max(vaultStats.worst, tm);
+      }
+    }
+    // every ruby can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases; every
+    // real chest can be cracked open (its trigger touched: body and halo) and escaped, from 3
+    const dare = (f, x, a, touch, n, label) => {
+      const own = hz.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        vaultStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { vfail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'vaultRuby')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < VG.COCO_R + W / 2 - 4, 6, 'cursed ruby')) vaultStats.rubies++;
+    if (k === 0) for (const h of reals) { const B = VG.vaultChestTrigger([], h); if (dare(h, h.x, h.alt + 17, (x, a) => capHit(B, x, a, -2), 3, 'real chest')) vaultStats.chests++; }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const vaultSummary = () => `PASS: Cursed Treasure Vault: ${vaultStats.seeds} layouts × ${vaultStats.len} m, only its own traps (${Object.entries(vaultStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${vaultStats.minW.toFixed(0)}+ wide, wall slope ${vaultStats.slope.toFixed(2)} (max ${VG.RULES.maxWallSlope}); open lanes past avalanches ${vaultStats.lane.vaultAval.toFixed(0)}+, chests ${vaultStats.lane.vaultChest.toFixed(0)}+, skulls ${vaultStats.lane.vaultSkull.toFixed(0)}+, surges ${vaultStats.lane.vaultSurge.toFixed(0)}+ (minLane ${VG.RULES.minLane}), beats ${vaultStats.beatGap.toFixed(0)}+ apart; pickups ${vaultStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${vaultStats.traps} beats, ${vaultStats.rubies} rubies and ${vaultStats.chests}/${vaultStats.realChests} real chests (reach and escape) flown by the widest pilot in ${vaultStats.searches} searches, the slowest pass ${vaultStats.worst.toFixed(1)} s`;
 // (test slot: Cursed Treasure Vault, island level 23)
 // (test slot: Cascade Falls, island level 24)
 // (test slot: Gull Cliffs, island level 25)
@@ -2937,4 +3089,5 @@ console.log(lagoonSummary());
 console.log(bogSummary());
 console.log(fossilSummary());
 console.log(shipwreckSummary());
+console.log(vaultSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
