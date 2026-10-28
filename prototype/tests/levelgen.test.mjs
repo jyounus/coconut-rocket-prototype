@@ -1983,6 +1983,146 @@ console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.fl
 // Level slots: each new themed level puts its test block immediately before its slot line.
 // (test slot: Murk Mire, island level 7)
 // (test slot: Hidden Lagoon, island level 11)
+// ---------- Adventure: the Amethyst Geode (island level 16), an authored stage with its own traps ----------
+// As Frost Hollow's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every heart geode flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases (a prism beam's halo counts as solid here: every beat can be passed without
+// ever getting singed, which the "never singed" mission needs).
+const GE = new Function(regions.join('\n') + '\nreturn { createGeodeLevel, geodeShapes, geodeDanger, geodeEnd, geodePrismAt, geodeShardAt, geodeBounceAt, geodeChimeAt, geodePathAt, GEODE, GEODE_STAGE, GEODE_TYPES, ADV_GEODE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const geodeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, hearts: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, paths: 0, ripples: 0 };
+{
+  const R = GE.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = GE.ADV_GEODE, X = GE.GEODE;
+  if (st0.theme !== 'geode' || !(st0.reward > 0)) fail('the Amethyst Geode is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'geodeHearts' && g.n === 3) || !st0.goals.some(g => g.k === 'geodeUnsinged')) fail('the Amethyst Geode has three missions: the Heart of the Geode, 3 heart geodes and never singed', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * GE.UNITS_PER_M - GE.geodeEnd()) > 1e-6) fail('the Amethyst Geode stage length matches its layout', `${st0.len}`);
+  // nothing lethal from below: beams only sweep down to level, shards only fly level or down, gems only fall, ripples
+  // only spread from level down
+  if (!(X.prism.a0 > X.prism.a1 && X.prism.a1 >= 0)) fail('a prism beam only sweeps down, never below level', `${X.prism.a0} → ${X.prism.a1}`);
+  if (!X.shard.angles.every(an => an > 0 && an < Math.PI)) fail('crown shards never fly upward', X.shard.angles.join());
+  if (!(X.chime.span > 0 && X.chime.span < Math.PI / 2)) fail('a chime ripple spreads only from level down', `${X.chime.span}`);
+  // the stage's order: prisms, then crowns, then ricochet pockets, then chimes, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { prismPair: 'geodePrism', prismCross: 'geodePrism', shardPair: 'geodeShard', shardPrism: 'geodeShard', bounceShard: 'geodeShard', bounceDuo: 'geodeBounce', chimePrism: 'geodeChime', chimeShard: 'geodeShard' };
+    for (const sec of GE.GEODE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each geode trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a geode trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    for (const sec of GE.GEODE_STAGE) if (!sec.calm) for (const [, kind] of sec.beats) if ((kind === 'bounceDuo' && !firsts.geodeBounce) || (kind.startsWith('chime') && !firsts.geodeChime)) fail('each geode trap is introduced alone first', kind);
+    if (seen.join() !== 'geodePrism,geodeShard,geodeBounce,geodeChime') fail('the Amethyst Geode teaches prisms, then crowns, then ricochets, then chimes', seen.join());
+    if (!GE.GEODE_STAGE.some(sec => sec.calm && !sec.finish && sec !== GE.GEODE_STAGE[0])) fail('the Amethyst Geode has a breather grotto', '');
+    if (!GE.GEODE_STAGE[GE.GEODE_STAGE.length - 1].finish) fail('the Amethyst Geode ends in the Heart of the Geode', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (GE.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // every lethal shape of the traps at t, and the prism beams' halos (the search never lets itself be singed)
+  const allShapes = (traps, t, S) => { for (const h of traps) { GE.geodeShapes(h, t, S); if (h.type === 'geodePrism') GE.geodeShapes(h, t, S, 'halo'); } return S; };
+  // the search (as Frost Hollow's), with an optional waypoint: `via(x, a)` must be touched before the goal counts
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 14 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = GE.createGeodeLevel(GE.advSeed(st), st), hz = [], fr = [];
+    geodeStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('geode traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('geode pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    geodeStats.len = level.end / 10;
+    for (const h of hz) if (!GE.GEODE_TYPES.has(h.type)) fail('the Amethyst Geode only has its own traps', h.type);
+    for (const h of hz) geodeStats.kinds[h.type] = (geodeStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); geodeStats.beatGap = Math.min(geodeStats.beatGap, g); if (g < 0) fail('geode beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Heart of the Geode below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      geodeStats.minW = Math.min(geodeStats.minW, r - l); geodeStats.slope = Math.max(geodeStats.slope, l2 - l, r - r2);
+    }
+    if (geodeStats.minW < R.minWidth) fail('the geode shaft is never narrower than minWidth', geodeStats.minW.toFixed(1));
+    if (geodeStats.slope > R.maxWallSlope) fail('the geode walls never step in faster than maxWallSlope', geodeStats.slope.toFixed(2));
+    for (const h of hz) {
+      if (h.type === 'geodeBounce') {
+        // a gem's path stays inside the shaft and only ever falls
+        for (let i = 0; i < h.path.length - 1; i++) if (h.path[i + 1][1] >= h.path[i][1]) fail('a ricochet gem only ever falls', `${h.alt}`);
+        for (let d = 0; d < h.plen; d += 4) { const [x, a] = GE.geodePathAt(h, d), [l, r] = level.walls(a); if (x - X.bounce.r < l - 1.5 || x + X.bounce.r > r + 1.5) { fail('a ricochet gem stays in the shaft', `${h.alt} at ${d}`); break; } }
+        geodeStats.paths++;
+      }
+      if (h.type === 'geodeChime') { if (h.rmax > 420) fail('a chime ripple dies on the far wall', `${h.rmax}`); geodeStats.ripples++; }
+      if (h.type === 'geodePrism') for (const L of h.lens) if (!(L > 150 && L < 520)) fail('a prism beam ends on the far wall', `${L} at ${h.alt}`);
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = GE.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('geode pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the hearts, the grotto's cut gem)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(GE.laneSize().w / 2 + 6 + GE.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of GE.geodeDanger(h)) dd = Math.min(dd, GE.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) geodeStats.pick = Math.min(geodeStats.pick, dd);
+      if (dd < need - 0.5) fail('geode pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < GE.pickR(fr[i]) + GE.pickR(fr[j]) + GE.PICK_GAP - 0.01) fail('geode pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'heart').length !== 3) fail('the Amethyst Geode holds exactly 3 heart geodes', `${fr.filter(f => f.kind === 'heart').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the Amethyst Geode keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      geodeStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        geodeStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every geode trap can be passed by the widest pilot from any phase, never singed', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else geodeStats.worst = Math.max(geodeStats.worst, tm);
+      }
+    }
+    // every heart geode can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'heart')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        geodeStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < GE.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every heart geode can be grabbed and escaped by the widest pilot', `heart at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      geodeStats.hearts++;
+    }
+  }
+}
+const geodeSummary = () => `PASS: Amethyst Geode: ${geodeStats.seeds} layouts × ${geodeStats.len} m, only its own traps (${Object.entries(geodeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${geodeStats.minW.toFixed(0)}+ wide, wall slope ${geodeStats.slope.toFixed(2)} (max ${GE.RULES.maxWallSlope}); beams only sweep down, shards only fly level or down, ${geodeStats.paths} gem paths only fall and stay in the shaft, ${geodeStats.ripples} ripples spread only down; beats ${geodeStats.beatGap.toFixed(0)}+ apart; pickups ${geodeStats.pick.toFixed(1)}+ from any reach; ${geodeStats.traps} beats × 6 phases and ${geodeStats.hearts} heart geodes flown by the widest pilot never singed (${geodeStats.searches} searches, slowest ${geodeStats.worst.toFixed(1)} s)`;
 // (test slot: Amethyst Geode, island level 16)
 // (test slot: Fossil Bonepit, island level 21)
 // (test slot: Shipwreck Hold, island level 22)
@@ -2013,4 +2153,5 @@ console.log(grottoSummary());
 console.log(frostSummary());
 console.log(stormSummary());
 console.log(mineSummary());
+console.log(geodeSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
