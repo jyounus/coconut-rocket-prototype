@@ -8492,6 +8492,408 @@ const ADV_CASCADE = { name: 'Cascade Falls', theme: 'cascade', seed: 'isl-24-cas
 /* LEVELGEN:END */
 // (LEVELGEN slot: Cascade Falls, island level 24)
 // (LEVELGEN slot: Gull Cliffs, island level 25)
+/* LEVELGEN:BEGIN */
+// ---------- Clockwork Tower (island level 26): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Sunken Temple (see createTempleLevel): the tower's door, then one new trap at a time, each
+// taught alone and slow before it is combined (the Gear Gallery, the Steam Works, the Cuckoo Corridor, the Escapement),
+// a breather (the Bell Loft), the Midnight Gauntlet, then the Great Clock itself and its finish. Its own shaft (riveted
+// brass panels that step in and out), its own traps and its own look (G.theme 'clockwork', see the clockwork drawing).
+// The twist: the whole tower runs on one clock. Every trap moves on the same beat (CLOCKWORK.beat s): learn it and the
+// tower becomes a rhythm. The traps' clocks read the tower's time (G.clockworkT in play), which the robot's wind-up key
+// can stop for a moment (the perk, see the game block).
+// The traps (every one leaves a lane or a timing that the widest pilot fits through):
+// - clockworkGear (Gear Grinder): a huge cog half buried in a wall with two long grinding teeth. It turns one notch
+//   (30°) on the beat, every `every` beats, the teeth on the shaft side always moving down (from above, never rising):
+//   a tooth comes out of the wall pointing up, sweeps out across the shaft and down, and back into the wall. The cog's
+//   rim and both teeth hurt; the lane past the tooth tips is always open.
+// - clockworkPiston (Piston Slam): a steam ram bolted to a wall. Every P beats its gauge climbs and it hisses (`tell`
+//   beats), then on the beat it slams out across the shaft, holds, and draws back. Head and rod hurt; the housing too.
+// - clockworkCuckoo (Cuckoo Punch): a carved cuckoo clock on a wall. Every P beats it chimes (`tell` beats: the bell
+//   on its gable rings, the house shudders), its doors snap open on the beat and the cuckoo shoots out on its spring
+//   (`reach`, along a tilt), wobbles, and springs back in. House, bird and spring hurt.
+// - clockworkAnchor (the Escapement, this stage's own): the tower's escapement anchor, huge, pivoted in a wall. Two
+//   arms with hooked pallets fan out above and below the pivot; it rocks on the beat (every `every` beats, tick ... tock),
+//   so its upper and lower pallets take turns swinging out into the shaft and back. Arms, pallets and boss hurt.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const CLOCKWORK = {
+  beat: 0.5,                                          // the tower's beat (s): everything moves on it
+  panel: 120, step: 4,                                // the walls' riveted panels: pitch and how far each steps in
+  gear: { R: 84, cin: 38, BL: 200, bw: 11, tipR: 15, snap: 0.22, ease: 360 },
+  piston: { reach: 166, mount: 18, headW: 30, hh: 30, rod: 7, T: { tell: 2, slam: 0.2, hold: 1, back: 1.2 }, ease: 330 },
+  cuckoo: { depth: 46, door: 31, reach: 112, birdR: 17, T: { tell: 1.5, open: 0.14, out: 0.24, hold: 1.4, back: 0.6, shut: 0.14 }, ease: 330 },
+  anchor: { L: 166, piv: 6, alpha: 0.95, phi: 0.42, armR: 7, palR: 13, boss: 18, swing: 0.26, ease: 380 },
+  chiliGap: 470, end: 380,
+};
+const CLOCKWORK_TYPES = new Set(['clockworkGear', 'clockworkPiston', 'clockworkCuckoo', 'clockworkAnchor']);
+// The stage, bottom to top (as TEMPLE_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). P and every are in beats; ph shifts a trap by whole beats.
+// watch: that trap guards a golden pocket watch (3 in all, the stage's collectible).
+const CLOCKWORK_STAGE = [
+  { name: 'The Clock Door', w: 376, len: 1000, calm: true },
+  { name: 'Gear Gallery', w: 372, beats: [[560, 'gear', { side: 1, every: 2 }], [620, 'gear', { side: -1, every: 2, ph: 1 }], [640, 'gearPair', { every: 2 }],
+    [860, 'gear', { side: 1, every: 1 }], [660, 'gearPair', { every: 1, ph: 1 }],
+    [860, 'gear', { side: -1, every: 1, ph: 1 }], [660, 'gearPair', { every: 1 }]], tail: 620 },
+  { name: 'Steam Works', w: 372, beats: [[520, 'piston', { side: -1, P: 8 }], [460, 'piston', { side: 1, P: 8, ph: 3 }], [520, 'pistonPair', { P: 8 }],
+    [640, 'pistonGear', { P: 8, every: 2, watch: true }], [700, 'piston', { side: -1, P: 7, ph: 2 }], [520, 'pistonPair', { P: 7, ph: 5 }],
+    [640, 'pistonGear', { P: 7, every: 1, ph: 2 }], [700, 'piston', { side: 1, P: 7, ph: 4 }]], tail: 600 },
+  { name: 'Cuckoo Corridor', w: 370, beats: [[520, 'cuckoo', { side: 1, P: 8, tilt: 0 }], [480, 'cuckoo', { side: -1, P: 8, ph: 2, tilt: -0.2 }], [520, 'cuckooPair', { P: 8 }],
+    [560, 'cuckooPiston', { P: 8 }], [680, 'cuckooGear', { P: 8, every: 2 }], [520, 'cuckooPair', { P: 7, ph: 3 }],
+    [560, 'cuckooPiston', { P: 7, ph: 1 }], [680, 'cuckooGear', { P: 7, every: 1, ph: 1 }]], tail: 600 },
+  { name: 'The Escapement', w: 374, beats: [[600, 'anchor', { side: -1, every: 2 }], [560, 'anchor', { side: 1, every: 2, ph: 1 }], [640, 'anchorCuckoo', { every: 2, P: 8, watch: true }],
+    [720, 'anchorPiston', { every: 2, P: 8 }], [760, 'anchorGear', { every: 2 }],
+    [840, 'anchorCuckoo', { every: 2, P: 7, ph: 1 }], [720, 'anchorPiston', { every: 2, P: 7, ph: 3 }]], tail: 620 },
+  { name: 'The Bell Loft', w: 384, len: 1400, calm: true },
+  { name: 'Midnight Gauntlet', w: 368, beats: [[520, 'pistonPair', { P: 7 }], [660, 'gearPair', { every: 1 }], [720, 'cuckooPiston', { P: 7, ph: 1 }],
+    [760, 'anchorGear', { every: 2, ph: 1 }], [760, 'cuckooPair', { P: 7, ph: 2 }], [700, 'anchorPiston', { every: 2, P: 7, ph: 1 }],
+    [660, 'pistonGear', { P: 7, every: 1, watch: true }], [840, 'anchorCuckoo', { every: 2, P: 7, ph: 3 }], [700, 'gear', { side: -1, every: 1, ph: 1 }],
+    [620, 'pistonPair', { P: 6, ph: 1 }], [700, 'cuckooGear', { P: 7, every: 1, ph: 2 }], [760, 'anchor', { side: 1, every: 2 }],
+    [700, 'pistonPair', { P: 6, ph: 3 }], [660, 'gearPair', { every: 1, ph: 1 }], [720, 'cuckooPiston', { P: 6, ph: 2 }], [760, 'anchorGear', { every: 2 }],
+    [760, 'cuckooPair', { P: 6, ph: 4 }]], tail: 780 },
+  { name: 'The Great Clock', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height, from the layout alone
+const clockworkEnd = () => { let y = 0; for (const sec of CLOCKWORK_STAGE) { if (sec.finish) return y + CLOCKWORK.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+// a back-out ease (a snap with a small overshoot), for everything that ticks
+const clockworkSnap = x => { x = clamp(x, 0, 1); const c = 2.2; return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// A trap's own time in beats since its cycle began (0 .. P)
+const clockworkU = (h, t, P) => pmod(t / CLOCKWORK.beat - (h.ph || 0), P);
+// The gear on its clock: its turn (notches, eased: whole numbers between ticks), the tooth angle (world radians: 0 out
+// of a left wall, up is +), the shudder before each tick (0..1)
+function clockworkGearState(h, t) {
+  const B = CLOCKWORK.beat, E = h.every, X = CLOCKWORK.gear, n = t / B - (h.ph || 0), k = Math.floor(n / E), sec = (n - k * E) * B;
+  const turn = k + clockworkSnap(sec / X.snap), tell = smooth(E * B - 0.3, E * B, sec);
+  const a = (h.side > 0 ? Math.PI / 2 : Math.PI / 2) - h.side * turn * Math.PI / 6;
+  return { turn, a, tell, moving: sec < X.snap ? 1 : 0, sec };
+}
+const clockworkGearC = h => [h.base - h.side * CLOCKWORK.gear.cin, h.alt];
+// world direction of a tooth at angle a (a measured from +x, counter-clockwise: the same for both walls)
+function clockworkGearShapes(S, h, st, kind) {
+  const X = CLOCKWORK.gear, [cx, ca] = clockworkGearC(h);
+  S.push({ k: 'c', x: cx, a: ca, r: X.R - 4 });
+  if (kind === 'body') return S;
+  for (const off of [0, Math.PI]) {
+    const a = st.a + off, ux = Math.cos(a), ua = Math.sin(a);
+    if (ux * h.side < -0.2) continue;   // (deep in the wall)
+    S.push({ k: 's', x0: cx + ux * (X.R - 6), a0: ca + ua * (X.R - 6), x1: cx + ux * (X.BL - X.tipR - 2), a1: ca + ua * (X.BL - X.tipR - 2), r: X.bw });
+    S.push({ k: 'c', x: cx + ux * (X.BL - X.tipR * 0.8), a: ca + ua * (X.BL - X.tipR * 0.8), r: X.tipR });
+  }
+  return S;
+}
+// The piston on its clock: the tell (0..1), how far it is out (0..1)
+function clockworkPistonState(h, t) {
+  const T = CLOCKWORK.piston.T, u = clockworkU(h, t, h.P), rest = h.P - T.tell - T.slam - T.hold - T.back;
+  if (u < rest) return { tell: 0, e: 0, u };
+  let v = u - rest;
+  if (v < T.tell) return { tell: v / T.tell, e: -0.03 * smooth(0.5, 1, v / T.tell), u };
+  v -= T.tell;
+  if (v < T.slam) { const q = v / T.slam; return { tell: 1, e: q * q, u, slamming: 1 }; }
+  v -= T.slam;
+  if (v < T.hold) return { tell: 0, e: 1, u, slamming: 1, hold: v / T.hold };
+  v -= T.hold;
+  return { tell: 0, e: 1 - smooth(0, 1, v / T.back), u, back: 1 };
+}
+// the ram head's front (x) at extension e
+const clockworkPistonFront = (h, e) => { const X = CLOCKWORK.piston; return h.base + h.side * (X.mount + X.headW + Math.max(0, e) * (X.reach - X.mount - X.headW)); };
+function clockworkPistonShapes(S, h, st, kind) {
+  const X = CLOCKWORK.piston, d = h.side, b = h.base, A = h.alt;
+  S.push({ k: 's', x0: b + d * 6, a0: A - 22, x1: b + d * 6, a1: A + 22, r: 12 });   // the cylinder housing on the wall
+  S.push({ k: 'c', x: b + d * 4, a: A + 45, r: 10 });                                  // its pressure gauge
+  if (kind === 'body') return S;
+  const f = clockworkPistonFront(h, st.e), bk = f - d * X.headW;
+  S.push({ k: 'b', x0: Math.min(f, bk), x1: Math.max(f, bk), a0: A - X.hh, a1: A + X.hh });   // the ram head (a block)
+  if (st.e > 0.01) S.push({ k: 's', x0: b + d * 10, a0: A, x1: bk, a1: A, r: X.rod });
+  return S;
+}
+// The cuckoo on its clock: the tell (0..1), how far the doors are open (0..1), how far the bird is out (0..1+ wobble)
+function clockworkCuckooState(h, t) {
+  const T = CLOCKWORK.cuckoo.T, u = clockworkU(h, t, h.P), rest = h.P - T.tell - T.open - T.out - T.hold - T.back - T.shut;
+  if (u < rest) return { tell: 0, open: 0, ext: 0, u };
+  let v = u - rest;
+  if (v < T.tell) return { tell: v / T.tell, open: 0, ext: 0, u };
+  v -= T.tell;
+  if (v < T.open) return { tell: 1, open: smooth(0, 1, v / T.open), ext: 0, u };
+  v -= T.open;
+  if (v < T.out) { const q = v / T.out; return { tell: 0, open: 1, ext: 1 - (1 - q) ** 3, u, punching: 1 }; }
+  v -= T.out;
+  if (v < T.hold) { const s2 = v * CLOCKWORK.beat; return { tell: 0, open: 1, ext: 1 + 0.07 * Math.exp(-s2 * 5) * Math.sin(s2 * 30), u, punching: 1 }; }
+  v -= T.hold;
+  if (v < T.back) return { tell: 0, open: 1, ext: 1 - smooth(0, 1, v / T.back), u };
+  v -= T.back;
+  return { tell: 0, open: 1 - smooth(0, 1, v / T.shut), ext: 0, u };
+}
+// where the bird's spring comes out (the gable door) and the bird's centre at ext
+const clockworkCuckooDoor = h => [h.base + h.side * 23, h.alt + CLOCKWORK.cuckoo.door];
+function clockworkCuckooBird(h, ext) { const [dx, da] = clockworkCuckooDoor(h), L = CLOCKWORK.cuckoo.reach * ext; return [dx + h.side * Math.cos(h.tilt) * L, da + Math.sin(h.tilt) * L]; }
+function clockworkCuckooShapes(S, h, st, kind) {
+  const d = h.side, b = h.base, A = h.alt, hc = b + d * 23;
+  S.push({ k: 's', x0: hc, a0: A - 14, x1: hc, a1: A + 12, r: 21 });                   // the house
+  S.push({ k: 's', x0: b + d * 4, a0: A + 30, x1: b + d * 44, a1: A + 30, r: 9 });      // its eaves
+  S.push({ k: 's', x0: hc, a0: A + 34, x1: hc, a1: A + 48, r: 9 });                     // its gable and the bell
+  S.push({ k: 's', x0: hc, a0: A - 38, x1: hc, a1: A - 60, r: 11 });                    // the pendulum and weights
+  if (kind === 'body' || st.ext <= 0.02) return S;
+  const [dx, da] = clockworkCuckooDoor(h), [bx, ba] = clockworkCuckooBird(h, st.ext), ux = d * Math.cos(h.tilt), ua = Math.sin(h.tilt);
+  S.push({ k: 's', x0: dx, a0: da, x1: bx, a1: ba, r: 5.5 });                              // the spring
+  S.push({ k: 'c', x: bx, a: ba, r: CLOCKWORK.cuckoo.birdR });                           // the bird
+  S.push({ k: 's', x0: bx, a0: ba, x1: bx + ux * 24, a1: ba + ua * 24 + 1, r: 6 });      // its beak
+  S.push({ k: 's', x0: bx - ux * 11, a0: ba - ua * 11 + 1, x1: bx - ux * 24, a1: ba - ua * 24 + 2, r: 6 });   // its tail
+  return S;
+}
+// The anchor on its clock: its rock (-1 .. 1, eased: which pallet is out), the shudder before each tock (0..1)
+function clockworkAnchorState(h, t) {
+  const B = CLOCKWORK.beat, E = h.every, X = CLOCKWORK.anchor, n = t / B - (h.ph || 0), k = Math.floor(n / E), sec = (n - k * E) * B;
+  const from = k % 2 ? -1 : 1, q = clockworkSnap(sec / X.swing), rock = -from + 2 * from * q;
+  return { rock, tell: smooth(E * B - 0.32, E * B, sec), moving: sec < X.swing ? 1 : 0, k, sec };
+}
+// an arm's angle (from the wall's outward normal, up is +) and its tip (world) for the upper (+1) or lower (-1) arm
+function clockworkAnchorArm(h, st, arm) {
+  const X = CLOCKWORK.anchor, th = arm * X.alpha + X.phi * st.rock, px = h.base + h.side * X.piv;
+  return { th, px, pa: h.alt, ux: h.side * Math.cos(th), ua: Math.sin(th) };
+}
+function clockworkAnchorShapes(S, h, st, kind) {
+  const X = CLOCKWORK.anchor;
+  S.push({ k: 'c', x: h.base + h.side * X.piv, a: h.alt, r: X.boss });
+  if (kind === 'body') return S;
+  for (const arm of [1, -1]) {
+    const q = clockworkAnchorArm(h, st, arm), L = X.L;
+    S.push({ k: 's', x0: q.px + q.ux * 12, a0: q.pa + q.ua * 12, x1: q.px + q.ux * (L - X.palR), a1: q.pa + q.ua * (L - X.palR), r: X.armR });
+    S.push({ k: 'c', x: q.px + q.ux * (L - X.palR * 0.6), a: q.pa + q.ua * (L - X.palR * 0.6), r: X.palR });
+  }
+  return S;
+}
+
+// Every collision shape of a clockwork trap at time t (the tower's clock), fitted to its drawing. kind: undefined for
+// the lethal ones, 'body' the parts that never move (a cog's rim, a housing, a house, an anchor's boss).
+function clockworkShapes(h, t, S = [], kind) {
+  if (h.type === 'clockworkGear') clockworkGearShapes(S, h, clockworkGearState(h, t), kind);
+  else if (h.type === 'clockworkPiston') clockworkPistonShapes(S, h, clockworkPistonState(h, t), kind);
+  else if (h.type === 'clockworkCuckoo') clockworkCuckooShapes(S, h, clockworkCuckooState(h, t), kind);
+  else if (h.type === 'clockworkAnchor') clockworkAnchorShapes(S, h, clockworkAnchorState(h, t), kind);
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): a cog's teeth all the way round their half turn, a ram
+// all along its stroke, a cuckoo all along its spring (and its wobble), an anchor's arms in both poses and between.
+function clockworkDanger(h) {
+  const S = [];
+  if (h.type === 'clockworkGear') for (let k = 0; k <= 24; k++) clockworkGearShapes(S, h, { a: Math.PI / 2 - k * Math.PI / 24 * (h.side > 0 ? 1 : -1) }, undefined);
+  else if (h.type === 'clockworkPiston') for (let k = 0; k <= 8; k++) clockworkPistonShapes(S, h, { e: k / 8 }, undefined);
+  else if (h.type === 'clockworkCuckoo') for (let k = 1; k <= 8; k++) clockworkCuckooShapes(S, h, { ext: k / 8 * 1.07 }, undefined);
+  else if (h.type === 'clockworkAnchor') for (let k = 0; k <= 8; k++) clockworkAnchorShapes(S, h, { rock: -1 + k / 4 }, undefined);
+  return S;
+}
+// A riveted wall panel (for the shaft's relief and its drawing): panel i on a side starts at height `a0` and stands
+// `d` in from the wall's line (0, step or 2 steps)
+function clockworkPanel(i, side, seed) {
+  const C = CLOCKWORK, j = hash2(i, (seed & 0xffff) + 311 + side * 17);
+  return { a0: i * C.panel + (hash2(i, (seed & 0xffff) + 313 + side * 19) - 0.5) * 40, d: j < 0.4 ? 0 : j < 0.75 ? C.step : 2 * C.step, j };
+}
+
+// The Clockwork Tower's shaft, laid out in full from CLOCKWORK_STAGE (the seed only nudges looks and sides). It answers
+// the same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createClockworkLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xC10C4) >>> 0), C0 = CLOCKWORK;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of CLOCKWORK_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = clockworkEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the panels' relief on a side: each riveted panel stands 0, one or two steps in from the wall's line, the step
+  // between two panels a short chamfer (never steeper than RULES.maxWallSlope); eased flat where a trap is mounted
+  // (so it sits on a flat face) and over the launch
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 60 && a < f.a1 + 60) k = Math.max(k, smooth(f.a0 - 60, f.a0, a) * (1 - smooth(f.a1, f.a1 + 60, a))); return k; };
+  const panelOf = (a, side) => { let i = Math.floor(a / C0.panel); if (a < clockworkPanel(i, side, seed).a0) i--; else if (a >= clockworkPanel(i + 1, side, seed).a0) i++; return i; };
+  const reliefAt = (a, side) => {
+    const i = panelOf(a, side), P = clockworkPanel(i, side, seed), N = clockworkPanel(i + 1, side, seed), Q = clockworkPanel(i - 1, side, seed);
+    let d = P.d;
+    if (a < P.a0 + 7) d = lerp(Q.d, P.d, smooth(P.a0 - 7, P.a0 + 7, a));
+    else if (a > N.a0 - 7) d = lerp(P.d, N.d, smooth(N.a0 - 7, N.a0 + 7, a));
+    return d * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function cWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function cOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = cWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const pick = () => (rng() < 0.5 ? 1 : -1);
+  const wallOf = d => d > 0 ? -1 : 1;   // (a trap on the left wall, d 1, flattens side 0)
+  const G0 = C0.gear, P0 = C0.piston, K0 = C0.cuckoo, A0 = C0.anchor;
+  const make = {
+    gear(A, o) {
+      const d = o.side || pick(), ext = G0.BL + 4; flat(A - ext, A + ext, wallOf(d));
+      return [{ type: 'clockworkGear', side: d, alt: A, every: o.every || 2, ph: o.ph || 0, lo: A - ext, hi: A + ext, ease: G0.ease, watch: !!o.watch }];
+    },
+    gearPair(A, o) {   // gears on facing walls 300 apart, turning together on the beat
+      const d = pick();
+      return [...make.gear(A, { side: d, every: o.every, ph: o.ph }), ...make.gear(A + 300, { side: -d, every: o.every, ph: (o.ph || 0) + 1 })];
+    },
+    piston(A, o) {
+      const d = o.side || pick(); flat(A - 60, A + 60, wallOf(d));
+      return [{ type: 'clockworkPiston', side: d, alt: A, P: o.P || 8, ph: o.ph || 0, lo: A - 46, hi: A + 60, ease: P0.ease, watch: !!o.watch }];
+    },
+    pistonPair(A, o) { // rams on facing walls 200 apart, half a cycle out of step: one slams while the other draws back
+      const d = pick(), p0 = o.ph || 0;
+      return [...make.piston(A, { side: d, P: o.P, ph: p0 }), ...make.piston(A + 200, { side: -d, P: o.P, ph: p0 + Math.floor(o.P / 2) })];
+    },
+    pistonGear(A, o) { // a ram, a gear on the far wall above it
+      const d = pick();
+      return [...make.piston(A, { side: d, P: o.P, ph: o.ph, watch: o.watch }), ...make.gear(A + 300, { side: -d, every: o.every, ph: (o.ph || 0) + 1 })];
+    },
+    cuckoo(A, o) {
+      const d = o.side || pick(), tilt = o.tilt ?? [-0.22, 0, 0.18][Math.floor(rng() * 3)]; flat(A - 80, A + 70, wallOf(d));
+      return [{ type: 'clockworkCuckoo', side: d, alt: A, P: o.P || 8, ph: o.ph || 0, tilt, lo: A - 74, hi: A + Math.max(60, K0.door + Math.sin(tilt) * K0.reach * 1.07 + 22), ease: K0.ease, watch: !!o.watch }];
+    },
+    cuckooPair(A, o) { // cuckoo clocks on facing walls 230 apart, punching half a cycle apart
+      const d = pick(), p0 = o.ph || 0;
+      return [...make.cuckoo(A, { side: d, P: o.P, ph: p0 }), ...make.cuckoo(A + 230, { side: -d, P: o.P, ph: p0 + Math.floor(o.P / 2) })];
+    },
+    cuckooPiston(A, o) { // a cuckoo, a ram on the far wall above it
+      const d = pick();
+      return [...make.cuckoo(A, { side: d, P: o.P, ph: o.ph }), ...make.piston(A + 220, { side: -d, P: o.P, ph: (o.ph || 0) + 3 })];
+    },
+    cuckooGear(A, o) { // a gear, a cuckoo on the far wall beside its sweep
+      const d = pick();
+      return [...make.gear(A, { side: d, every: o.every, ph: o.ph }), ...make.cuckoo(A + 120, { side: -d, P: o.P, ph: (o.ph || 0) + 2 })];
+    },
+    anchor(A, o) {
+      const d = o.side || pick(), ext = A0.L + A0.palR + 6; flat(A - ext, A + ext, wallOf(d));
+      return [{ type: 'clockworkAnchor', side: d, alt: A, every: o.every || 2, ph: o.ph || 0, lo: A - ext, hi: A + ext, ease: A0.ease, watch: !!o.watch }];
+    },
+    anchorCuckoo(A, o) { // an anchor, a cuckoo on the far wall at its pivot
+      const d = pick();
+      return [...make.anchor(A, { side: d, every: o.every, ph: o.ph, watch: o.watch }), ...make.cuckoo(A + 40, { side: -d, P: o.P, ph: (o.ph || 0) + 1, tilt: -0.2 })];
+    },
+    anchorPiston(A, o) { // an anchor, a ram on the far wall level with its upper pallet
+      const d = pick();
+      return [...make.anchor(A, { side: d, every: o.every, ph: o.ph }), ...make.piston(A + 110, { side: -d, P: o.P, ph: (o.ph || 0) + 2 })];
+    },
+    anchorGear(A, o) {   // an anchor and a gear on facing walls, their sweeps overlapping
+      const d = pick();
+      return [...make.anchor(A, { side: d, every: o.every, ph: o.ph, watch: o.watch }), ...make.gear(A + 330, { side: -d, every: o.every, ph: (o.ph || 0) + 1 })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, clockwork: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions
+  for (const b of beats) for (const h of b.hs) {
+    const [L, R] = cOpening(h.lo, h.hi);
+    h.L = L; h.R = R; h.base = h.side > 0 ? L : R;
+    if (h.type === 'clockworkGear') h.x = h.base + h.side * 60;
+    else if (h.type === 'clockworkPiston') h.x = h.base + h.side * 40;
+    else if (h.type === 'clockworkCuckoo') h.x = h.base + h.side * 23;
+    else h.x = h.base + h.side * 40;
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, clockworkDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = cWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = cWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = cWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  // the middle of the lane on the far side of a trap reaching `reach` out from its wall
+  const farLane = (h, reach, a) => { const [l, r] = cWalls(a), e = h.base + h.side * reach; return h.side > 0 ? (e + r) / 2 : (l + e) / 2; };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + C0.end - 120, 0.5);
+    else {   // the Bell Loft: a clock face of coconuts round the middle (a big coin at each quarter hour), then a weave
+      const cA = sc.a0 + 380, cx = mid(cA);
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 92, cA + Math.sin(an) * 92, k % 3 ? 'coco' : 'gold', { clear: -Infinity }); }
+      weave(sc.a0 + 580, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way (the open lane past it); a trap guarding a watch keeps it as the dare
+  let watches = 0;
+  const reachOf = h => h.type === 'clockworkGear' ? G0.BL - G0.cin + 4 : h.type === 'clockworkPiston' ? P0.reach + 4 : h.type === 'clockworkCuckoo' ? 23 + K0.reach * 1.07 + 26 : A0.piv + A0.L + 4;
+  for (const b of beats) {
+    for (const h of b.hs) {
+      const x = farLane(h, reachOf(h), h.alt);
+      if (h.type === 'clockworkGear') { column(x, h.alt - 120, 3, 60, { clear: 30 }); }
+      else if (h.type === 'clockworkPiston') { column(x, h.alt - 40, 2, 44, { clear: 30 }); }
+      else if (h.type === 'clockworkCuckoo') { column(x, h.alt - 30, 2, 44, { clear: 30 }); }
+      else { column(x, h.alt - 90, 3, 60, { clear: 30 }); }
+      if (h.watch) {
+        let wx, wa;
+        if (h.type === 'clockworkPiston') { wx = h.base + h.side * (P0.reach * 0.62); wa = h.alt; }
+        else if (h.type === 'clockworkGear') { wx = h.base + h.side * 96; wa = h.alt + 4; }
+        else if (h.type === 'clockworkAnchor') { wx = h.base + h.side * (A0.piv + 118); wa = h.alt + 4; }
+        else { const [bx, ba] = clockworkCuckooBird(h, 0.6); wx = bx; wa = ba - 26; }
+        fruit.push({ x: wx, alt: wa, kind: 'clockworkWatch', watch: true, clear: -Infinity }); watches++;
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(h => h.hi)) + 70, a1 = Math.min(...next.hs.map(h => h.lo)) - 90; if (a1 - a0 > 60) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the temple's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= C0.chiliGap + 130; j++) if (spots[j].a - last >= C0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < C0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: cWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, clockwork: true, sections: secs, beats, top: topA, watches,
+    reliefAt, panelOf,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 26): its own shaft (createClockworkLevel), the clockwork look (G.theme), its missions
+// (the great clock, 3 golden pocket watches, beat the tower clock) and its length in metres (from the layout).
+const ADV_CLOCKWORK = { name: 'Clockwork Tower', theme: 'clockwork', seed: 'isl-26-clockwork', reward: 250, target: 0, len: clockworkEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the great clock' }, { k: 'clockworkWatch', n: 3 }, { k: 'time', s: 105 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Clockwork Tower, island level 26)
 // (LEVELGEN slot: Kooky Lab, island level 27)
 // (LEVELGEN slot: Pipe Organ Cavern, island level 28)
@@ -37235,7 +37637,7 @@ const ISLAND = {
     { id: 23, name: 'Cursed Treasure Vault', region: 'vault', pilot: 'piggy', perk: 'Sniffs out mimics: they glow red', stage: 'vault' },
     { id: 24, name: 'Cascade Falls', region: 'cascade', pilot: 'duck', perk: 'Swims up the falls: the chute speeds the duck up', stage: 'cascade' },
     { id: 25, name: 'Gull Cliffs', region: 'cliffs', pilot: 'penguin', perk: 'Gulls ignore a fellow seabird' },
-    { id: 26, name: 'Clockwork Tower', region: 'clockwork', pilot: 'robot', perk: 'A wind-up key pauses time for a second' },
+    { id: 26, name: 'Clockwork Tower', region: 'clockwork', pilot: 'robot', perk: 'A wind-up key pauses time for a second', stage: 'clockwork' },
     { id: 27, name: 'Kooky Lab', region: 'lab', pilot: 'axolotl', perk: 'Too slippery for the slime to stick' },
     { id: 28, name: 'Pipe Organ Cavern', region: 'organ', pilot: 'firefly', perk: 'Glows to the beat and shows the next blast' },
     { id: 29, name: 'Pinball Palace', region: 'pinball', pilot: 'hamster', perk: 'The turbo ball rolls off bumpers' },
@@ -37314,6 +37716,7 @@ ADV_STAGES.fossil = ADV_FOSSIL;   // (island level 21, Fossil Bonepit: see creat
 ADV_STAGES.shipwreck = ADV_SHIPWRECK;   // (island level 22, Shipwreck Hold: see createShipwreckLevel)
 ADV_STAGES.vault = ADV_VAULT;   // (island level 23, Cursed Treasure Vault: see createVaultLevel)
 ADV_STAGES.cascade = ADV_CASCADE;   // (island level 24, Cascade Falls: see createCascadeLevel)
+ADV_STAGES.clockwork = ADV_CLOCKWORK;   // (island level 26, Clockwork Tower: see createClockworkLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -60039,6 +60442,1672 @@ function drawCascadeForeground() {
 { const base = stageClear; stageClear = function (boss) { base(boss); if (cascadeOn() && !boss) cascadeSpringBurst(); }; }
 // (game slot: Cascade Falls, island level 24)
 // (game slot: Gull Cliffs, island level 25)
+// ---------- the Clockwork Tower (island level 26): its look, traps, watches and sounds ----------
+// The stage's shaft and traps are laid out by createClockworkLevel (LEVELGEN); here they come alive and get drawn. While
+// it runs G.theme is 'clockwork': inside the island's clock tower, where everything ticks. Polished brass and copper
+// gone green with verdigris in the seams, cream clock faces, carved walnut, warm amber light through the great clock's
+// glass far above, and the whole tower moving on one beat (nothing of it shows anywhere else: Daily and Practice never
+// set a theme).
+// Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left, every edge a darker shade of its own
+// colour (never black), detail as line pairs (a dark furrow under a lit ridge), sheen strokes and soft glows.
+// The tower's clock: every trap reads G.clockworkT (seconds, advanced with the game while the stage runs), so the robot's
+// wind-up key can stop it (the perk: the first trap that would hit him stops the tower's clock for a moment and he slips
+// free). Everything else that ticks (the walls' beat lamps, the backdrop's gears and pendulums) reads it too.
+// Performance: everything static (the walls' panels, the backdrop's layers, housings, houses, cogs, the finish's set) is
+// drawn once into cached canvases at the screen's pixel density (tiles down the height, rendered a little ahead of the
+// camera, one per frame) and blitted; turning things (cogs, anchors, gears in the backdrop) are cached sprites drawn
+// rotated; steam puffs and flying cogs are blits of cached sprites.
+const CLOCKWORK_P = {
+  brass: ['#fff2bc', '#e6b250', '#a66a20', '#6a3c10'], brassR: [[255, 242, 188], [230, 178, 80], [166, 106, 32], [106, 60, 16]],
+  copper: ['#ffcaa0', '#d07a46', '#80401e', '#5a2814'], steel: ['#f6f9fc', '#aab4c4', '#5e667c', '#40465c'],
+  walnut: ['#b8763e', '#7a4424', '#462412', '#30160a'], iron: ['#9aa0b0', '#5c6276', '#363a4c', '#262838'],
+  cream: ['#fffdf4', '#f4e6c4', '#cfb486'], verd: [95, 174, 152], warm: [255, 206, 130], amber: [255, 176, 72], ruby: [214, 52, 64],
+  pal: { bgTop: [98, 66, 42], bgBot: [42, 27, 18], far: [104, 70, 42], far2: [88, 58, 36], wall: [96, 62, 30], wallIn: [34, 19, 9], rim: [255, 206, 120] },
+};
+const clockworkOn = () => !!(G && G.theme === 'clockwork');
+{ const base = pal; pal = function (key, a) { return clockworkOn() && CLOCKWORK_P.pal[key] ? CLOCKWORK_P.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function clockworkLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function clockworkRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+const clockworkCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const clockworkLift = (c, k) => c.map(v => clamp(v + k, 0, 255));
+function clockworkCirc(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.01, r), 0, TWO_PI); }
+function clockworkEll(c, x, y, rx, ry, fill, rot = 0) { c.fillStyle = fill; c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); c.fill(); }
+// a sheen stroke on a round thing (an arc of white on its lit upper left)
+function clockworkSheen(c, x, y, r, a = 0.5, from = 3.6, to = 4.7) { c.save(); c.strokeStyle = `rgba(255,255,245,${a})`; c.lineWidth = Math.max(0.6, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.7, from, to); c.stroke(); c.restore(); }
+// a four-point twinkle (additive)
+function clockworkTwinkle(c, x, y, r, a, col = [255, 246, 214]) {
+  if (a < 0.03 || r < 0.3) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = clockworkCol(col, a);
+  c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.22, y - r * 0.22); c.lineTo(x + r, y); c.lineTo(x + r * 0.22, y + r * 0.22); c.lineTo(x, y + r); c.lineTo(x - r * 0.22, y + r * 0.22); c.lineTo(x - r, y); c.lineTo(x - r * 0.22, y - r * 0.22); c.closePath(); c.fill();
+  c.restore();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function clockworkCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0); c.lineJoin = 'round'; c.lineCap = 'round';
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const CLOCKWORK_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map() };
+function clockworkCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (CLOCKWORK_CACHE.key !== key) { CLOCKWORK_CACHE.key = key; CLOCKWORK_CACHE.walls.clear(); CLOCKWORK_CACHE.layers.clear(); CLOCKWORK_CACHE.sprites.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function clockworkSprite(name, w, h, draw) {
+  let sp = CLOCKWORK_CACHE.sprites.get(name);
+  if (!sp) { sp = clockworkCanvas(w, h); draw(sp.c, sp.w, sp.h); CLOCKWORK_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// a soft additive glow blitted from a cached disc (cheap: no gradient built per frame)
+function clockworkGlow(x, y, r, col, a) {
+  if (a < 0.004 || r < 0.5) return;
+  const sp = clockworkSprite('glow' + col.join(','), 64, 64, c => { c.fillStyle = clockworkRG(32, 32, 32, [clockworkCol(col, 1), clockworkCol(col, 0.32), clockworkCol(col, 0)], c); c.fillRect(0, 0, 64, 64); });
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, a); ctx.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); ctx.restore();
+}
+// the tower's time, its beat, and how loud something at height a sounds (0 off screen)
+const clockworkT = () => (G && G.clockworkT) || 0;
+const clockworkBeatK = () => { const B = CLOCKWORK.beat, u = pmod(clockworkT(), B) / B; return Math.exp(-u * 7); };   // 1 right on the beat
+const clockworkVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+// is the pilot the robot (his wind-up key stops the tower's clock once a run: the perk)?
+const clockworkRobot = () => { const pl = pilot(); return !!(pl && ((pl.character && pl.character.id === 'robot') || pl.id === 'robot')); };
+
+// ---- shared parts (drawn in c's frame, world units unless said) ----
+// a domed rivet / a hex bolt head, lit from the top left
+function clockworkRivet(c, x, y, r, C = CLOCKWORK_P.brass) {
+  c.fillStyle = 'rgba(60,30,8,.45)'; clockworkCirc(c, x + r * 0.35, y + r * 0.45, r); c.fill();
+  c.fillStyle = clockworkRG(x - r * 0.4, y - r * 0.4, r * 1.5, [C[0], C[1], C[2]], c); clockworkCirc(c, x, y, r); c.fill();
+  c.fillStyle = 'rgba(255,255,240,.85)'; clockworkCirc(c, x - r * 0.35, y - r * 0.35, r * 0.32); c.fill();
+}
+function clockworkBolt(c, x, y, r, C = CLOCKWORK_P.steel) {
+  c.fillStyle = 'rgba(40,24,10,.45)'; clockworkCirc(c, x + r * 0.4, y + r * 0.5, r * 1.1); c.fill();
+  c.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TWO_PI / 6 + 0.3; c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } c.closePath();
+  c.fillStyle = clockworkLG(x - r, y - r, x + r, y + r, [C[0], C[1], C[2]], c); c.fill(); c.strokeStyle = C[3]; c.lineWidth = Math.max(0.4, r * 0.3); c.stroke();
+  c.fillStyle = 'rgba(255,255,240,.8)'; clockworkCirc(c, x - r * 0.3, y - r * 0.3, r * 0.26); c.fill();
+}
+// a toothed gear's outline (n teeth, tooth depth d) as a path
+function clockworkGearPath(c, x, y, R, n, ang, d) {
+  const rr = R - d, st = TWO_PI / n; c.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = ang + i * st;
+    const pts = [[rr, a - st * 0.5], [rr, a - st * 0.27], [R, a - st * 0.14], [R, a + st * 0.14], [rr, a + st * 0.27]];
+    pts.forEach(([r, aa], k) => (i === 0 && k === 0 ? c.moveTo : c.lineTo).call(c, x + Math.cos(aa) * r, y + Math.sin(aa) * r));
+  }
+  c.closePath();
+}
+// a glossy metal gear (concept port): toothed rim, open spokes or holes, a hub and a hex bolt, lit from the top left,
+// bevels on the teeth facing the light, a furrow and a ridge inside the teeth, a sheen on the rim. C: [lit, mid, dark, edge]
+function clockworkGearArt(c, x, y, R, n, ang, C, o = {}) {
+  const d = o.depth ?? R * 0.16, rin = o.rin ?? R * 0.64, sp = o.spokes ?? 5, hub = o.hub ?? R * 0.24;
+  const grad = clockworkLG(x - R, y - R, x + R * 0.7, y + R, [C[0], C[1], C[2]], c);
+  c.save(); c.lineJoin = 'round';
+  clockworkGearPath(c, x, y, R, n, ang, d);
+  if (sp) { c.moveTo(x + rin, y); c.arc(x, y, rin, 0, TWO_PI, true); }
+  c.fillStyle = grad; c.fill('evenodd');
+  c.strokeStyle = C[3]; c.lineWidth = o.lw ?? Math.max(0.8, R * 0.018); c.stroke();
+  for (let i = 0; i < n; i++) {
+    const a = ang + i * TWO_PI / n, st = TWO_PI / n, f = Math.cos(a - 3.93);
+    if (Math.abs(f) < 0.25) continue;
+    c.strokeStyle = f > 0 ? `rgba(255,250,220,${0.7 * f})` : `rgba(60,30,8,${-0.45 * f})`; c.lineWidth = Math.max(0.7, R * 0.024);
+    c.beginPath(); c.moveTo(x + Math.cos(a - st * 0.12) * (R - 0.8), y + Math.sin(a - st * 0.12) * (R - 0.8)); c.lineTo(x + Math.cos(a + st * 0.12) * (R - 0.8), y + Math.sin(a + st * 0.12) * (R - 0.8)); c.stroke();
+  }
+  c.strokeStyle = C[3]; c.globalAlpha = 0.6; c.lineWidth = Math.max(0.7, R * 0.028); clockworkCirc(c, x, y, R - d - R * 0.05); c.stroke(); c.globalAlpha = 1;
+  c.strokeStyle = 'rgba(255,250,220,.5)'; c.lineWidth = Math.max(0.5, R * 0.02); c.beginPath(); c.arc(x, y, R - d - R * 0.05 + Math.max(0.8, R * 0.02), 0.2, 2.9); c.stroke();
+  if (sp) {
+    c.strokeStyle = 'rgba(255,250,220,.55)'; c.lineWidth = Math.max(0.7, R * 0.026); c.beginPath(); c.arc(x, y, rin + 0.6, -0.2, 1.9); c.stroke();
+    for (let i = 0; i < sp; i++) {
+      const a = ang + (i + 0.5) * TWO_PI / sp, ux = Math.cos(a), uy = Math.sin(a), vx = -uy, vy = ux, w1 = R * 0.13, w2 = R * 0.09;
+      c.beginPath();
+      c.moveTo(x + ux * hub * 0.8 + vx * w1, y + uy * hub * 0.8 + vy * w1); c.lineTo(x + ux * (rin + 2) + vx * w2, y + uy * (rin + 2) + vy * w2);
+      c.lineTo(x + ux * (rin + 2) - vx * w2, y + uy * (rin + 2) - vy * w2); c.lineTo(x + ux * hub * 0.8 - vx * w1, y + uy * hub * 0.8 - vy * w1);
+      c.closePath(); c.fillStyle = grad; c.fill(); c.strokeStyle = C[3]; c.lineWidth = Math.max(0.6, R * 0.016); c.stroke();
+      const s2 = (vx * -0.7 + vy * -0.7) > 0 ? 1 : -1;
+      c.strokeStyle = 'rgba(255,250,220,.5)'; c.lineWidth = Math.max(0.5, R * 0.014); c.beginPath();
+      c.moveTo(x + ux * hub + vx * w1 * 0.5 * s2, y + uy * hub + vy * w1 * 0.5 * s2); c.lineTo(x + ux * rin + vx * w2 * 0.5 * s2, y + uy * rin + vy * w2 * 0.5 * s2); c.stroke();
+    }
+  } else if (o.holes) {
+    for (let i = 0; i < o.holes; i++) {
+      const a = ang + i * TWO_PI / o.holes, hx = x + Math.cos(a) * R * 0.45, hy = y + Math.sin(a) * R * 0.45;
+      c.fillStyle = o.holeCol || C[3]; clockworkCirc(c, hx, hy, R * 0.12); c.fill();
+      c.strokeStyle = 'rgba(255,250,220,.45)'; c.lineWidth = Math.max(0.5, R * 0.02); c.beginPath(); c.arc(hx, hy, R * 0.12, 0.2, 2.4); c.stroke();
+    }
+  }
+  const HC = o.hubC || CLOCKWORK_P.steel;
+  c.fillStyle = clockworkRG(x - hub * 0.4, y - hub * 0.5, hub * 1.4, [HC[0], HC[1], HC[2]], c); clockworkCirc(c, x, y, hub); c.fill();
+  c.strokeStyle = HC[3]; c.lineWidth = Math.max(0.6, hub * 0.08); c.stroke();
+  const br = hub * 0.5; c.beginPath();
+  for (let i = 0; i < 6; i++) { const a = ang + i * TWO_PI / 6; i ? c.lineTo(x + Math.cos(a) * br, y + Math.sin(a) * br) : c.moveTo(x + Math.cos(a) * br, y + Math.sin(a) * br); }
+  c.closePath(); c.fillStyle = clockworkLG(x - br, y - br, x + br, y + br, [CLOCKWORK_P.steel[0], CLOCKWORK_P.steel[2]], c); c.fill(); c.strokeStyle = CLOCKWORK_P.steel[3]; c.lineWidth = Math.max(0.4, br * 0.12); c.stroke();
+  c.strokeStyle = 'rgba(255,255,245,.5)'; c.lineWidth = Math.max(0.8, R * 0.05); c.lineCap = 'round';
+  c.beginPath(); c.arc(x, y, R - d * 1.6, 3.6, 4.6); c.stroke();
+  c.restore();
+}
+// a cartoon puff of steam: four lobes shaded from the top left in one path (it never darkens where it overlaps)
+function clockworkPuffArt(c, x, y, r, tint = [255, 255, 255]) {
+  c.fillStyle = clockworkRG(x - r * 0.5, y - r * 0.6, r * 1.9, [clockworkCol(tint), clockworkCol([tint[0] * 0.86 + 30, tint[1] * 0.84 + 28, tint[2] * 0.86 + 34]), clockworkCol([tint[0] * 0.62 + 50, tint[1] * 0.6 + 48, tint[2] * 0.66 + 54])], c);
+  c.beginPath();
+  for (const [dx, dy, k] of [[0, 0, 1], [-0.75, 0.25, 0.72], [0.78, 0.3, 0.76], [0.15, -0.55, 0.72]]) { c.moveTo(x + dx * r + k * r, y + dy * r); c.arc(x + dx * r, y + dy * r, k * r, 0, TWO_PI); }
+  c.fill();
+  c.strokeStyle = 'rgba(150,140,150,.35)'; c.lineWidth = Math.max(0.5, r * 0.05); c.beginPath(); c.arc(x + 0.78 * r, y + 0.3 * r, 0.76 * r, 0.2, 1.8); c.stroke();
+}
+
+// ---- the tower's own particles: steam puffs (cached sprite, swelling and fading), sparks and little cogs ----
+function clockworkPuffSprite() { return clockworkSprite('puff', 48, 48, c => clockworkPuffArt(c, 24, 26, 13)); }
+function clockworkCogSprite(v) { return clockworkSprite('cog' + v, 24, 24, c => clockworkGearArt(c, 12, 12, 10.5, 8 + v, 0, v % 2 ? CLOCKWORK_P.brass : CLOCKWORK_P.copper, { spokes: 0, holes: 3, hub: 3, depth: 2.4, lw: 0.6 })); }
+function clockworkFx(kind, x, a, vx, va, life, size, o = {}) {
+  const D = G.clockworkFx || (G.clockworkFx = []); if (D.length > 140) D.shift();
+  D.push({ kind, x, a, vx, va, life, max: life, size, rot: Math.random() * 6.3, w: (Math.random() - 0.5) * 8, ...o });
+}
+function updateClockworkFx(dt) {
+  const D = G.clockworkFx; if (!D) return;
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    if (q.kind === 'puff') { q.vx *= 1 - dt * 2.2; q.va = q.va * (1 - dt * 1.5) + 30 * dt; }
+    else { q.va -= (q.kind === 'cog' ? 700 : 500) * dt; q.vx *= 1 - dt * 0.8; }
+    q.x += q.vx * dt; q.a += q.va * dt; q.rot += q.w * dt;
+  }
+}
+function drawClockworkFx() {
+  const D = G.clockworkFx; if (!D || !D.length) return;
+  const pf = clockworkPuffSprite();
+  for (const q of D) {
+    const y = sy(q.a); if (y < -40 || y > H + 40) continue;
+    const t = q.life / q.max, x = sx(q.x);
+    if (q.kind === 'puff') {
+      const r = q.size * (1.6 - t * 0.9) * s; ctx.globalAlpha = Math.min(1, t * 1.6) * (q.al ?? 0.8);
+      ctx.drawImage(pf.cv, x - r * 1.85, y - r * 2, r * 3.7, r * 3.7); ctx.globalAlpha = 1;
+    } else if (q.kind === 'cog') {
+      const sp = clockworkCogSprite(q.v || 1), r = q.size * s; ctx.save(); ctx.globalAlpha = Math.min(1, t * 3); ctx.translate(x, y); ctx.rotate(q.rot); ctx.drawImage(sp.cv, -r, -r, r * 2, r * 2); ctx.restore();
+    } else {   // a spark: a short hot streak along its flight
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,${190 + 60 * t | 0},${110 * t | 0},${t})`; ctx.lineWidth = q.size * s; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - q.vx * 0.025 * s, y + q.va * 0.025 * s); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+// ---- sounds (synth) ----
+const CLOCKWORK_SFX = {
+  // the tower's beat: a dry wooden tick, a lower tock on every other beat
+  cktick: (t, B, v) => { vTone(B, t, 2300, { type: 'triangle', v: 0.016 * v, dur: 0.035 }); vNoise(B, t, { f: 3400, q: 4, v: 0.02 * v, dur: 0.02 }); },
+  cktock: (t, B, v) => { vTone(B, t, 1500, { type: 'triangle', v: 0.018 * v, dur: 0.045 }); vNoise(B, t, { f: 2200, q: 4, v: 0.022 * v, dur: 0.025 }); },
+  // a cog turning a notch: a heavy clunk and a ratchet click
+  ckclunk: (t, B, v) => { vTone(B, t, 120, { f2: 70, glide: 0.08, type: 'square', lp: 700, v: 0.05 * v, dur: 0.1 }); vNoise(B, t, { f: 1800, q: 3, v: 0.05 * v, dur: 0.04 }); vNoise(B, t + 0.05, { f: 4200, q: 6, v: 0.025 * v, dur: 0.02 }); },
+  // a piston building pressure: a hiss rising with a creaking gauge
+  ckhiss: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 2600, f2: 5200, v: 0.07 * v, dur: 1.0, a: 0.5 }); vTone(B, t, 90, { f2: 140, glide: 0.95, type: 'sawtooth', lp: 400, v: 0.02 * v, dur: 1.0, a: 0.6 }); },
+  // the slam: a steam bang and an iron clang
+  ckslam: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 2400, f2: 300, v: 0.16 * v, dur: 0.3 }); vTone(B, t, 160, { f2: 60, glide: 0.2, type: 'square', lp: 1100, v: 0.08 * v, dur: 0.25 }); vTone(B, t + 0.01, 523, { type: 'sine', v: 0.03 * v, dur: 0.5 }); vNoise(B, t + 0.02, { type: 'highpass', f: 3000, v: 0.06 * v, dur: 0.5, a: 0.02 }); },
+  // a cuckoo clock chiming: two little bell dings
+  ckchime: (t, B, v) => { for (const [i, m] of [[0, 88], [1, 84]]) { vTone(B, t + i * 0.32, mf(m), { type: 'sine', v: 0.05 * v, dur: 0.5 }); vTone(B, t + i * 0.32, mf(m + 19), { type: 'sine', v: 0.015 * v, dur: 0.3 }); } },
+  // the punch: a spring's boing and the bird's two notes
+  ckcuckoo: (t, B, v) => { vTone(B, t, 220, { f2: 660, glide: 0.08, type: 'triangle', v: 0.05 * v, dur: 0.18, vib: [26, 18] }); vTone(B, t + 0.08, mf(79), { type: 'sine', v: 0.06 * v, dur: 0.16 }); vTone(B, t + 0.28, mf(75), { type: 'sine', v: 0.06 * v, dur: 0.24 }); },
+  // the anchor rocking: a deep metal tock
+  ckanchor: (t, B, v) => { vTone(B, t, 200, { f2: 120, glide: 0.06, type: 'triangle', v: 0.06 * v, dur: 0.12 }); vNoise(B, t, { f: 1200, q: 3, v: 0.04 * v, dur: 0.05 }); vTone(B, t, 410, { type: 'sine', v: 0.015 * v, dur: 0.2 }); },
+  // a golden watch: a music-box run that resolves
+  ckwatch: (t, B) => { [76, 79, 83, 88, 91, 95].forEach((m, i) => vTone(B, t + i * 0.055, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.06, dur: 0.45 })); vTone(B, t + 0.4, mf(100), { type: 'sine', v: 0.03, dur: 0.8 }); },
+  // the wind-up key stopping the clock: a winding ratchet, then a glassy hush
+  ckkey: (t, B) => { for (let i = 0; i < 6; i++) vNoise(B, t + i * 0.04, { f: 3600 - i * 200, q: 6, v: 0.05, dur: 0.02 }); vTone(B, t + 0.2, mf(84), { type: 'sine', v: 0.06, dur: 1.2, vib: [3, 6] }); vTone(B, t + 0.2, mf(91), { type: 'sine', v: 0.03, dur: 1.0 }); vTone(B, t + 0.2, 400, { f2: 90, glide: 1, type: 'sawtooth', lp: 500, v: 0.025, dur: 1 }); },
+  // the clock running again
+  ckgo: (t, B) => { vTone(B, t, 90, { f2: 400, glide: 0.25, type: 'sawtooth', lp: 700, v: 0.03, dur: 0.3 }); vNoise(B, t, { f: 3000, q: 5, v: 0.03, dur: 0.05 }); },
+  // the great bell at the top: a deep bong with its hum and partials
+  ckbell: (t, B) => { for (const [f, v, d] of [[98, 0.12, 3.2], [196, 0.07, 2.6], [233, 0.04, 2.2], [294, 0.035, 1.8], [392, 0.03, 1.4], [588, 0.015, 1]]) vTone(B, t, f, { type: 'sine', v, dur: d, a: 0.005 }); vNoise(B, t, { type: 'lowpass', f: 900, v: 0.08, dur: 0.12 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = CLOCKWORK_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + (o.delay || 0) + 0.005, SND.sfx, o.v ?? 1);
+}; }
+
+// ---- the traps at play ----
+CAUSES.clockworkGear = 'Ground up by the gear grinder';
+CAUSES.clockworkPiston = 'Flattened by a steam piston';
+CAUSES.clockworkCuckoo = 'Punched by a cuckoo';
+CAUSES.clockworkAnchor = 'Caught in the escapement';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'clockworkGear' ? [255, 200, 90] : cause === 'clockworkPiston' ? [255, 150, 90] : cause === 'clockworkCuckoo' ? [255, 120, 90] : cause === 'clockworkAnchor' ? [200, 220, 255] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!CLOCKWORK_TYPES.has(h.type)) return base(h);
+  return clockworkShapes(h, clockworkT()).map(shrinkShape);
+}; }
+// the tower's clock runs with the game (stopped while the wind-up key holds it)
+{ const base = updateHazards; updateHazards = function (dt) {
+  if (G.level && G.level.clockwork) {
+    if (G.clockworkStop > 0) { G.clockworkStop -= dt; if (G.clockworkStop <= 0) { sfx('ckgo'); G.clockworkStop = 0; } }
+    else G.clockworkT = (G.clockworkT || 0) + dt;
+    updateClockworkTraps(dt); updateClockworkFx(dt);
+  }
+  base(dt);
+}; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.clockwork) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && CLOCKWORK_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// The wind-up key (the robot's perk): the first clockwork trap of a run that would hit him stops the tower's clock for
+// a moment instead (every trap freezes where it is), and he slips free.
+{ const base = die; die = function (cause, h) {
+  if (clockworkOn() && G.state === 'play' && G.p.invuln <= 0 && h && CLOCKWORK_TYPES.has(h.type) && !G.clockworkKeyUsed && clockworkRobot()) {
+    const p = G.p;
+    G.clockworkKeyUsed = true; G.clockworkStop = 1.2; G.clockworkStopMax = 1.2; p.invuln = 1.45; G.stats.clockworkKey = 1;
+    G.flash = Math.max(G.flash, 0.35); G.flashCol = [255, 230, 170]; G.shake = Math.max(G.shake, 3); vibrate([20, 30, 20]);
+    sfx('ckkey'); chainEvent('Wind-up key: the clock stops!', '#ffe2a0', 1.8);
+    for (let k = 0; k < 16; k++) { const an = k / 16 * TWO_PI; puff(p.x, p.alt, Math.cos(an) * 170, Math.sin(an) * 170, 0.5, 2, 'sparkle'); }
+    puff(p.x, p.alt, 0, 0, 0.5, 26, 'whoosh');
+    return;
+  }
+  return base(cause, h);
+}; }
+function updateClockworkTraps(dt) {
+  const top = G.camAlt + viewH, T = clockworkT(), stopped = G.clockworkStop > 0;
+  let any = false;
+  for (const h of G.hazards) {
+    if (!CLOCKWORK_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (vis) any = true;
+    if (h.type === 'clockworkGear') {
+      const st = clockworkGearState(h, T), was = h.st || st;
+      if (vis && st.moving && !was.moving) sfx('ckclunk', { v: clockworkVol(h.alt) * 0.8 });
+      // sparks where a tooth grinds past the wall's slot as it turns
+      if (vis && st.moving && !stopped && Math.random() < dt * 30) for (const off of [0, Math.PI]) { const a = st.a + off; if (Math.cos(a) * h.side > 0.05 && Math.abs(Math.sin(a)) > 0.9) { const [cx, ca] = clockworkGearC(h); clockworkFx('spark', h.base, ca + Math.sign(Math.sin(a)) * CLOCKWORK.gear.R * 0.95, h.side * (60 + Math.random() * 120), (Math.random() - 0.3) * 160, 0.35, 1.2); void cx; } }
+      h.st = st;
+    } else if (h.type === 'clockworkPiston') {
+      const st = clockworkPistonState(h, T), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('ckhiss', { v: clockworkVol(h.alt) });
+      if (vis && st.slamming && !was.slamming) { sfx('ckslam', { v: clockworkVol(h.alt) }); if (Math.abs(h.alt - G.p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 2.5); for (let k = 0; k < 5; k++) clockworkFx('puff', h.base + h.side * 20, h.alt + (k % 2 ? 24 : -24), h.side * (40 + Math.random() * 60), (k % 2 ? 1 : -1) * (20 + Math.random() * 40), 0.9, 6 + Math.random() * 4); }
+      if (vis && !stopped && st.tell > 0.1 && Math.random() < dt * (4 + 10 * st.tell)) clockworkFx('puff', h.base + h.side * 10, h.alt + 34, h.side * (20 + Math.random() * 30), 20 + Math.random() * 30, 0.8, 3 + 3 * st.tell, { al: 0.7 });
+      h.st = st;
+    } else if (h.type === 'clockworkCuckoo') {
+      const st = clockworkCuckooState(h, T), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('ckchime', { v: clockworkVol(h.alt) });
+      if (vis && st.punching && !was.punching) { sfx('ckcuckoo', { v: clockworkVol(h.alt) }); const [dx, da] = clockworkCuckooDoor(h); for (let k = 0; k < 6; k++) puff(dx + h.side * 6, da, h.side * (40 + Math.random() * 80), (Math.random() - 0.5) * 90, 0.4, 1.6, 'sparkle'); }
+      h.st = st;
+    } else if (h.type === 'clockworkAnchor') {
+      const st = clockworkAnchorState(h, T), was = h.st || st;
+      if (vis && st.moving && !was.moving) sfx('ckanchor', { v: clockworkVol(h.alt) });
+      h.st = st;
+    }
+  }
+  // the tower's beat, ticking and tocking while its machinery is in sight
+  const bi = Math.floor(T / CLOCKWORK.beat);
+  if (bi !== G.clockworkBi) { G.clockworkBi = bi; if (any && G.state === 'play' && !stopped) sfx(bi % 2 ? 'cktock' : 'cktick', { v: 1 }); }
+}
+// ---- the tower's traps, drawn (each to its hitbox shapes) ----
+// A cached piece of a trap's art in screen orientation (light always from the top left; a piece for the right wall is
+// drawn mirrored in its geometry only): drawn once at the screen's scale in world units round its origin (y down),
+// covering x0..x1, y0..y1; blitted with clockworkBlit(sp, X, Y) at the origin's screen point.
+function clockworkPiece(name, x0, x1, y0, y1, draw) {
+  let sp = CLOCKWORK_CACHE.sprites.get(name);
+  if (!sp) {
+    sp = clockworkCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = -x0 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(s, s); draw(sp.c);
+    CLOCKWORK_CACHE.sprites.set(name, sp);
+  }
+  return sp;
+}
+const clockworkBlit = (sp, X, Y) => ctx.drawImage(sp.cv, X - sp.ax, Y - sp.ay, sp.w, sp.h);
+// a cylinder's shading across its width (light along the top or left): for rods, pipes, drums
+function clockworkTube(c, x0, y0, x1, y1, C) { return clockworkLG(x0, y0, x1, y1, [C[1], C[0], C[1], C[2]], c); }
+// a red warning lamp in a brass bezel (screen px), lit 0..1
+function clockworkLamp(x, y, r, on, col = [255, 80, 64]) {
+  if (on > 0.05) clockworkGlow(x, y, r * 4.5, col, 0.65 * on);
+  ctx.fillStyle = clockworkRG(x - r * 0.4, y - r * 0.4, r * 1.3, on > 0.5 ? ['#fff4ea', clockworkCol(col), clockworkCol(clockworkLift(col, -110))] : [clockworkCol(clockworkLift(col, -40)), clockworkCol(clockworkLift(col, -110)), clockworkCol(clockworkLift(col, -170))]);
+  clockworkCirc(ctx, x, y, r); ctx.fill();
+  ctx.strokeStyle = CLOCKWORK_P.brass[3]; ctx.lineWidth = r * 0.35; clockworkCirc(ctx, x, y, r * 1.12); ctx.stroke();
+  ctx.strokeStyle = CLOCKWORK_P.brass[1]; ctx.lineWidth = r * 0.18; ctx.beginPath(); ctx.arc(x, y, r * 1.12, 3.3, 5.2); ctx.stroke();
+}
+
+// ---- Gear Grinder ----
+// The cog itself (no grinding teeth): 24 teeth, a recessed face with embossed rings, 24 rivets and an engraved sunburst,
+// a steel boss. Its pattern repeats every 15°, so it is cached in 8 frames across a tooth and the light stays put.
+function clockworkCogFrame(f) {
+  const X = CLOCKWORK.gear, R = X.R, P = CLOCKWORK_P;
+  return clockworkPiece('cog' + f, -R - 4, R + 4, -R - 4, R + 4, c => {
+    const ang = f / 8 * Math.PI / 12, n = 24, d = 10;
+    clockworkGearPath(c, 0, 0, R, n, ang, d);
+    c.fillStyle = clockworkLG(-R, -R, R * 0.8, R, [P.brass[0], P.brass[1], P.brass[2]], c); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.3; c.stroke();
+    for (let i = 0; i < n; i++) {   // bevels on the teeth facing the light, shade on the ones facing away
+      const a = ang + i * TWO_PI / n, st = TWO_PI / n, k = Math.cos(a - 3.93);
+      if (Math.abs(k) < 0.2) continue;
+      c.strokeStyle = k > 0 ? `rgba(255,250,220,${0.75 * k})` : `rgba(80,40,10,${-0.5 * k})`; c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(Math.cos(a - st * 0.12) * (R - 1), Math.sin(a - st * 0.12) * (R - 1)); c.lineTo(Math.cos(a + st * 0.12) * (R - 1), Math.sin(a + st * 0.12) * (R - 1)); c.stroke();
+    }
+    // the face: a recessed disc inside the teeth (its lip shaded at the top left, lit at the bottom right)
+    const Rf = R - d - 3;
+    c.fillStyle = clockworkRG(-Rf * 0.35, -Rf * 0.4, Rf * 1.5, ['#f4cc78', P.brass[1], '#9a6420'], c); clockworkCirc(c, 0, 0, Rf); c.fill();
+    c.strokeStyle = 'rgba(90,46,10,.8)'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, Rf, 2.6, 5.9); c.stroke();
+    c.strokeStyle = 'rgba(255,240,200,.7)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 0, Rf - 0.6, -0.4, 2.2); c.stroke();
+    // an engraved sunburst (line pairs) between the rings
+    for (let i = 0; i < 24; i++) {
+      const a = ang + (i + 0.5) * TWO_PI / 24, cs = Math.cos(a), sn = Math.sin(a);
+      c.strokeStyle = 'rgba(110,60,14,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(cs * 30, sn * 30); c.lineTo(cs * 52, sn * 52); c.stroke();
+      c.strokeStyle = 'rgba(255,236,180,.4)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(cs * 30 + 0.8, sn * 30 + 0.8); c.lineTo(cs * 52 + 0.8, sn * 52 + 0.8); c.stroke();
+    }
+    // a raised band round the rim with its ring of rivets
+    c.strokeStyle = 'rgba(110,60,14,.6)'; c.lineWidth = 1.4; clockworkCirc(c, 0, 0, 56); c.stroke();
+    c.strokeStyle = 'rgba(255,240,200,.5)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 57.2, 3.2, 5.3); c.stroke();
+    for (let i = 0; i < 24; i++) { const a = ang + i * TWO_PI / 24; clockworkRivet(c, Math.cos(a) * 63, Math.sin(a) * 63, 1.9); }
+    // the boss: a raised collar and a steel hub (the bolt turns with the teeth, drawn live)
+    c.fillStyle = clockworkRG(-8, -9, 36, [P.brass[0], P.brass[1], P.brass[2]], c); clockworkCirc(c, 0, 0, 29); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.65)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 0, 27, 3.5, 4.8); c.stroke();
+    c.fillStyle = clockworkRG(-5, -6, 26, [P.steel[0], P.steel[1], P.steel[2]], c); clockworkCirc(c, 0, 0, 19); c.fill();
+    c.strokeStyle = P.steel[3]; c.lineWidth = 1; c.stroke();
+    // the light: a gloss along the upper left of the teeth ring, a soft shade on the lower right
+    c.strokeStyle = 'rgba(255,255,245,.45)'; c.lineWidth = 3.4; c.beginPath(); c.arc(0, 0, R - 15, 3.55, 4.65); c.stroke();
+    c.strokeStyle = 'rgba(70,34,8,.25)'; c.lineWidth = 5; c.beginPath(); c.arc(0, 0, R - 16, 0.25, 1.4); c.stroke();
+  });
+}
+// the housing round the slot it turns out of (on the wall's face, the wall at x 0, the shaft toward +d): a heavy brass
+// plate, bolts along it, an engraved arc following the cog, and the slot's dark mouth
+function clockworkGearHousing(d) {
+  const X = CLOCKWORK.gear, dy = Math.sqrt((X.R - 4) ** 2 - X.cin ** 2) + 8, P = CLOCKWORK_P;
+  return clockworkPiece('gearHouse' + d, d > 0 ? -60 : -4, d > 0 ? 4 : 60, -dy - 30, dy + 30, c => {
+    const x0 = -d * 58, x1 = -d * 8, L = Math.min(x0, x1), W = 50;
+    c.fillStyle = 'rgba(30,14,4,.35)'; c.beginPath(); c.roundRect(L + 2, -dy - 24, W, dy * 2 + 52, 5); c.fill();
+    c.fillStyle = clockworkLG(L, -dy - 26, L + W, dy + 26, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(L, -dy - 26, W, dy * 2 + 52, 5); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,215,.75)'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(L + 2, dy + 22); c.lineTo(L + 2, -dy - 23); c.lineTo(L + W - 3, -dy - 23); c.stroke();
+    // engraved arcs following the cog (line pairs)
+    const cx = -d * X.cin;
+    c.save(); c.beginPath(); c.rect(L, -dy - 24, W, dy * 2 + 48); c.clip();
+    for (const rr of [X.R + 8, X.R + 15]) { c.strokeStyle = 'rgba(100,54,12,.6)'; c.lineWidth = 1.6; clockworkCirc(c, cx, 0, rr); c.stroke(); c.strokeStyle = 'rgba(255,240,200,.45)'; c.lineWidth = 0.8; clockworkCirc(c, cx, 0, rr + 1.4); c.stroke(); }
+    c.restore();
+    for (let y = -dy - 18; y <= dy + 18; y += 22) clockworkBolt(c, -d * 50, y, 2.4, P.brass);
+    // the slot's mouth: deep shadow where the cog goes into the wall
+    c.fillStyle = clockworkLG(-d * 10, 0, 0, 0, ['rgba(26,12,4,.95)', 'rgba(60,32,12,.85)'], c); c.beginPath(); c.roundRect(Math.min(-d * 11, 0), -dy, 11, dy * 2, 4); c.fill();
+    // cheek blocks capping the slot top and bottom (flush with the wall's face)
+    for (const e of [-1, 1]) {
+      const yy = e * (dy + 5);
+      c.fillStyle = clockworkLG(0, yy - 7, 0, yy + 7, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(Math.min(-d * 16, d * 2), yy - 7, 18, 14, 4); c.fill();
+      c.strokeStyle = P.brass[3]; c.lineWidth = 1; c.stroke();
+      clockworkRivet(c, -d * 10, yy, 1.7); clockworkRivet(c, -d * 3, yy, 1.7);
+    }
+  });
+}
+// one grinding tooth at world angle a, drawn live in screen space (light fixed at the top left): a brass root plate
+// riveted to the cog, a tapered steel blade with a fuller (a furrow under a lit ridge) and a serrated leading edge, and
+// a hooked claw at the tip
+function clockworkGearTooth(cx, cy, a, lead) {
+  const X = CLOCKWORK.gear, P = CLOCKWORK_P, ux = Math.cos(a), uy = -Math.sin(a), vx = -uy * lead, vy = ux * lead, k = s;
+  const pt = (r, w) => [cx + (ux * r + vx * w) * k, cy + (uy * r + vy * w) * k];
+  // which side faces the light (screen up-left): that edge is lit
+  const lit = (vx * -0.7 + vy * -0.7) > 0 ? 1 : -1;
+  // the blade (from under the root plate out to the claw), tapering
+  const poly = q => { ctx.beginPath(); q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); };
+  const blade = [pt(40, -10.4), pt(176, -8.8), pt(176, 8.8), pt(40, 10.4)];
+  const [gx0, gy0] = pt(108, 10 * lit), [gx1, gy1] = pt(108, -10 * lit);
+  poly(blade); ctx.fillStyle = clockworkLG(gx0, gy0, gx1, gy1, [P.steel[0], P.steel[1], P.steel[2]]); ctx.fill();
+  ctx.strokeStyle = P.steel[3]; ctx.lineWidth = 1.1 * k; ctx.stroke();
+  // serrations along the leading edge (each lit on its upper flank)
+  ctx.beginPath();
+  for (let r = 60; r < 168; r += 9) { const w = lerp(10.4, 8.8, (r - 40) / 136); const [x0, y0] = pt(r, w), [x1, y1] = pt(r + 4.5, w + 2.6), [x2, y2] = pt(r + 9, w); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); }
+  ctx.fillStyle = P.steel[1]; ctx.fill(); ctx.strokeStyle = P.steel[3]; ctx.lineWidth = 0.8 * k; ctx.stroke();
+  // the fuller: a furrow and a lit ridge down the blade
+  const [f0x, f0y] = pt(62, 0), [f1x, f1y] = pt(160, 0), [l0x, l0y] = pt(62, -1.4 * lit), [l1x, l1y] = pt(160, -1.4 * lit);
+  ctx.strokeStyle = 'rgba(52,58,78,.7)'; ctx.lineWidth = 1.6 * k; ctx.beginPath(); ctx.moveTo(f0x, f0y); ctx.lineTo(f1x, f1y); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.9 * k; ctx.beginPath(); ctx.moveTo(l0x, l0y); ctx.lineTo(l1x, l1y); ctx.stroke();
+  const [e0x, e0y] = pt(44, 9.4 * lit), [e1x, e1y] = pt(172, 8 * lit);
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.1 * k; ctx.beginPath(); ctx.moveTo(e0x, e0y); ctx.lineTo(e1x, e1y); ctx.stroke();
+  // the claw: a hooked steel tooth swept back from the leading edge
+  const claw = [pt(172, -11), pt(199, -7), pt(203, 1.5), pt(197, 13), pt(190, 14), pt(186, 10), pt(172, 11)];
+  const [h0x, h0y] = pt(188, 10 * lit), [h1x, h1y] = pt(188, -10 * lit);
+  poly(claw); ctx.fillStyle = clockworkLG(h0x, h0y, h1x, h1y, [P.steel[0], P.steel[1], P.steel[2]]); ctx.fill();
+  ctx.strokeStyle = P.steel[3]; ctx.lineWidth = 1.1 * k; ctx.stroke();
+  const [c0x, c0y] = pt(176, 5), [c1x, c1y] = pt(194, 10.5);
+  ctx.strokeStyle = 'rgba(52,58,78,.6)'; ctx.lineWidth = 1 * k; ctx.beginPath(); ctx.moveTo(c0x, c0y); ctx.lineTo(c1x, c1y); ctx.stroke();
+  const [s0x, s0y] = pt(176, -8 * lit), [s1x, s1y] = pt(200, -4.5 * lit);
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1 * k; ctx.beginPath(); ctx.moveTo(s0x, s0y); ctx.lineTo(s1x, s1y); ctx.stroke();
+  // the root plate riveted over the cog's face
+  const root = [pt(16, -13), pt(58, -11), pt(66, 0), pt(58, 11), pt(16, 13)];
+  const [r0x, r0y] = pt(40, 13 * lit), [r1x, r1y] = pt(40, -13 * lit);
+  poly(root); ctx.fillStyle = clockworkLG(r0x, r0y, r1x, r1y, [P.brass[0], P.brass[1], P.brass[2]]); ctx.fill();
+  ctx.strokeStyle = P.brass[3]; ctx.lineWidth = 1 * k; ctx.stroke();
+  for (const r of [34, 52]) { const [bx, by] = pt(r, 0); clockworkRivet(ctx, bx, by, 2.4 * k); }
+}
+function drawClockworkGear(h) {
+  clockworkCacheCheck();
+  const X = CLOCKWORK.gear, d = h.side, T = clockworkT(), st = h.st || clockworkGearState(h, T), [wcx, wca] = clockworkGearC(h);
+  const sh = st.tell > 0 && G.clockworkStop <= 0 ? Math.sin(G.t * 90) * 0.9 * st.tell * s : 0;
+  const cx = sx(wcx) + sh, cy = sy(wca), wallX = sx(h.base);
+  clockworkBlit(clockworkGearHousing(d), wallX, cy);
+  // inside the slot: the cog's hidden half, in shadow
+  const f = Math.floor(pmod(-st.a, Math.PI / 12) / (Math.PI / 12) * 8) % 8, cog = clockworkCogFrame(f), dy = Math.sqrt((X.R - 4) ** 2 - X.cin ** 2) * s;
+  ctx.save(); ctx.beginPath(); ctx.rect(Math.min(wallX, wallX - d * 10 * s), cy - dy, 10 * s, dy * 2); ctx.clip(); ctx.globalAlpha = 0.45; clockworkBlit(cog, cx, cy); ctx.restore();
+  // the part out in the shaft: the cog and its teeth
+  ctx.save(); ctx.beginPath(); const far = d > 0 ? cssW + 50 : -50; ctx.rect(Math.min(wallX - d * 1 * s, far), cy - 260 * s, Math.abs(far - wallX), 520 * s); ctx.clip();
+  clockworkBlit(cog, cx, cy);
+  for (const off of [0, Math.PI]) clockworkGearTooth(cx, cy, st.a + off, d);
+  // the hub's bolt turns with it
+  const ba = -st.a; ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = ba + i * TWO_PI / 6; ctx.lineTo(cx + Math.cos(a) * 9 * s, cy + Math.sin(a) * 9 * s); } ctx.closePath();
+  ctx.fillStyle = clockworkLG(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy + 9 * s, [CLOCKWORK_P.steel[0], CLOCKWORK_P.steel[2]]); ctx.fill(); ctx.strokeStyle = CLOCKWORK_P.steel[3]; ctx.lineWidth = s; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; clockworkCirc(ctx, cx - 3 * s, cy - 3 * s, 1.6 * s); ctx.fill();
+  // a smear of motion behind the claws as it snaps round a notch
+  if (st.moving && G.clockworkStop <= 0) {
+    const k = 1 - st.sec / X.snap;
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (const off of [0, Math.PI]) {
+      const a = st.a + off; if (Math.cos(a) * d < -0.1) continue;
+      for (let q = 0; q < 3; q++) { ctx.strokeStyle = `rgba(255,236,190,${0.32 * k * (1 - q * 0.3)})`; ctx.lineWidth = (3 - q * 0.8) * s; ctx.beginPath(); const r = (X.BL - 8 - q * 12) * s; ctx.arc(cx, cy, r, -a, -a - d * 0.45 * k, d > 0); ctx.stroke(); }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+  // the lamp on the housing: red as it is about to turn, and the beat lamp under it
+  clockworkLamp(wallX - d * 22 * s, cy - (dy + 22 * s), 3.6 * s, st.tell > 0 ? (Math.sin(G.t * 40) > 0 ? 1 : 0.4) : st.moving ? 0.8 : 0.1);
+}
+
+// ---- Piston Slam ----
+// the cylinder on the wall (screen orientation; the wall at x 0, the shaft toward +d): a flanged brass drum bolted on,
+// a copper collar where the rod comes out, a steam pipe up to a pressure gauge (its needle is live)
+function clockworkPistonHousing(d) {
+  const P = CLOCKWORK_P;
+  return clockworkPiece('pistonHouse' + d, d > 0 ? -16 : -24, d > 0 ? 24 : 16, -60, 36, c => {
+    // the wall plate behind it
+    const pl = Math.min(-d * 14, d * 2);
+    c.fillStyle = clockworkLG(pl, -34, pl + 16, 34, [P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(pl, -34, 16, 68, 3); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 0.9; c.stroke();
+    // steam pipe up to the gauge
+    const gx = d * 4, gy = -45;
+    c.fillStyle = clockworkTube(c, gx - 2.6, 0, gx + 2.6, 0, P.copper); c.fillRect(gx - 2.6, gy, 5.2, 20); c.strokeStyle = P.copper[3]; c.lineWidth = 0.7; c.strokeRect(gx - 2.6, gy, 5.2, 20);
+    c.fillStyle = clockworkTube(c, gx - 4, 0, gx + 4, 0, P.copper); c.fillRect(gx - 4, gy + 12, 8, 3.4);
+    // the drum
+    const x0 = Math.min(-d * 2, d * 16);
+    c.fillStyle = 'rgba(40,20,6,.4)'; c.beginPath(); c.roundRect(x0 + 2, -26, 18, 56, 6); c.fill();
+    c.fillStyle = clockworkLG(x0, -28, x0 + 18, 28, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(x0, -28, 18, 56, 6); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+    for (const yy of [-21, 21]) { c.fillStyle = clockworkLG(0, yy - 3, 0, yy + 3, [P.brass[0], P.brass[2]], c); c.fillRect(x0 - 1, yy - 2.6, 20, 5.2); c.strokeStyle = P.brass[3]; c.lineWidth = 0.7; c.strokeRect(x0 - 1, yy - 2.6, 20, 5.2); }
+    for (const yy of [-12, 0, 12]) clockworkRivet(c, d * 6, yy, 1.6);
+    c.strokeStyle = 'rgba(255,250,220,.65)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x0 + 3, -18); c.lineTo(x0 + 3, 16); c.stroke();
+    // the copper collar
+    const cl = Math.min(d * 13, d * 20);
+    c.fillStyle = clockworkLG(0, -10, 0, 10, [P.copper[0], P.copper[1], P.copper[2]], c); c.beginPath(); c.roundRect(cl, -10, 7, 20, 2.5); c.fill(); c.strokeStyle = P.copper[3]; c.lineWidth = 0.8; c.stroke();
+    // the gauge's case and dial (the needle is drawn live)
+    c.fillStyle = clockworkRG(gx - 3, gy - 3, 11, P.cream, c); clockworkCirc(c, gx, gy, 8.6); c.fill();
+    c.strokeStyle = 'rgba(200,40,30,.85)'; c.lineWidth = 2; c.beginPath(); c.arc(gx, gy, 6.2, -0.5, 0.7); c.stroke();
+    c.strokeStyle = 'rgba(110,70,40,.75)'; c.lineWidth = 0.6; c.beginPath(); for (let i = 0; i < 7; i++) { const a = -2.6 + i * 0.55; c.moveTo(gx + Math.cos(a) * 7.4, gy + Math.sin(a) * 7.4); c.lineTo(gx + Math.cos(a) * 5.8, gy + Math.sin(a) * 5.8); } c.stroke();
+    c.strokeStyle = clockworkLG(gx - 10, gy - 10, gx + 10, gy + 10, [P.brass[0], P.brass[2]], c); c.lineWidth = 2.6; clockworkCirc(c, gx, gy, 9.6); c.stroke();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 0.6; clockworkCirc(c, gx, gy, 10.9); c.stroke();
+  });
+}
+// the ram head (screen orientation, its front face at x 0, toward +d): a riveted iron block, a brass striking plate on
+// its front, warning stripes on its flank
+function clockworkPistonHead(d) {
+  const X = CLOCKWORK.piston, W = X.headW, hh = X.hh, P = CLOCKWORK_P;
+  return clockworkPiece('pistonHead' + d, d > 0 ? -W - 2 : -2, d > 0 ? 2 : W + 2, -hh - 2, hh + 3, c => {
+    const bx = Math.min(0, -d * W), fx = d > 0 ? -9 : 0;
+    c.fillStyle = 'rgba(30,20,30,.35)'; c.beginPath(); c.roundRect(bx + 1.5, -hh + 2, W, hh * 2, 6); c.fill();
+    c.fillStyle = clockworkLG(bx, -hh, bx + W, hh, [P.iron[0], P.iron[1], P.iron[2]], c); c.beginPath(); c.roundRect(bx, -hh, W, hh * 2, 6); c.fill();
+    c.strokeStyle = P.iron[3]; c.lineWidth = 1.1; c.stroke();
+    // warning stripes on the flank (yellow and rust, clipped to an inset panel)
+    const px = Math.min(-d * 10, -d * (W - 4)), pw = W - 14;
+    c.save(); c.beginPath(); c.roundRect(px, -hh + 6, pw, hh * 2 - 12, 2); c.clip();
+    for (let k = -6; k < 8; k++) { c.fillStyle = k % 2 ? '#ffcc3c' : '#a8402a'; const yy = -hh + k * 9; c.beginPath(); c.moveTo(px - 2, yy); c.lineTo(px + pw + 2, yy - 10); c.lineTo(px + pw + 2, yy - 1); c.lineTo(px - 2, yy + 9); c.fill(); }
+    c.fillStyle = clockworkLG(px, 0, px + pw, 0, ['rgba(255,255,255,.18)', 'rgba(0,0,0,0)', 'rgba(60,20,10,.25)'], c); c.fillRect(px, -hh, pw, hh * 2);
+    c.restore();
+    c.strokeStyle = 'rgba(60,30,20,.7)'; c.lineWidth = 0.8; c.beginPath(); c.roundRect(px, -hh + 6, pw, hh * 2 - 12, 2); c.stroke();
+    // the brass striking plate on its front
+    c.fillStyle = clockworkLG(fx, -hh, fx + 9, hh, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(fx, -hh, 9, hh * 2, d > 0 ? [2, 6, 6, 2] : [6, 2, 2, 6]); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(fx + 2.4, -hh + 5); c.lineTo(fx + 2.4, hh - 7); c.stroke();
+    for (const yy of [-hh + 5, hh - 5]) for (const xx of [bx + 4, bx + W - 4]) clockworkRivet(c, xx, yy, 1.5, P.steel);
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(bx + 3, -hh + 2); c.lineTo(bx + W - 4, -hh + 2); c.stroke();
+  });
+}
+// a rod's cross-section strip (stretched along x when drawn): steel, lit along its top, a polished line
+function clockworkRodStrip(name, r, C) { return clockworkSprite(name, 4, r * 2 + 2, c => { c.fillStyle = clockworkLG(0, 1, 0, r * 2 + 1, [C[1], C[0], C[1], C[2]], c); c.fillRect(0, 1, 4, r * 2); c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(0, r * 0.6 + 1, 4, 1); c.fillStyle = C[3]; c.fillRect(0, 0.5, 4, 0.7); c.fillRect(0, r * 2 + 0.6, 4, 0.7); }); }
+function drawClockworkPiston(h) {
+  clockworkCacheCheck();
+  const X = CLOCKWORK.piston, d = h.side, T = clockworkT(), st = h.st || clockworkPistonState(h, T), wallX = sx(h.base), Y = sy(h.alt);
+  const e = st.e, sh = st.tell > 0.4 && G.clockworkStop <= 0 ? Math.sin(G.t * 90) * 0.9 * st.tell * s : 0;
+  const front = sx(clockworkPistonFront(h, e)) + sh, back = front - d * X.headW * s;
+  // the danger glow under the ram as it winds up and slams
+  if (st.tell > 0 || st.slamming) clockworkGlow((front + back) / 2, Y, (40 + 30 * Math.max(0, e)) * s, [255, 90, 60], 0.18 + 0.3 * (st.slamming ? 1 : st.tell));
+  // the rod and its brass sleeve
+  const rx0 = wallX + d * 10 * s, rl = (back - rx0) * d;
+  if (rl > 0) {
+    const rod = clockworkRodStrip('rod', X.rod, CLOCKWORK_P.steel), sl = clockworkRodStrip('sleeve', 9, CLOCKWORK_P.brass);
+    ctx.drawImage(rod.cv, Math.min(rx0, back), Y - (X.rod + 1) * s, rl, (X.rod * 2 + 2) * s);
+    const sll = Math.min(rl, 26 * s); ctx.drawImage(sl.cv, Math.min(rx0, rx0 + d * sll), Y - 10 * s, sll, 20 * s);
+  }
+  clockworkBlit(clockworkPistonHousing(d), wallX, Y);
+  // the gauge's needle climbing into the red through the tell
+  const gx = wallX + d * 4 * s, gy = Y - 45 * s, na = st.tell > 0 ? lerp(-2.5, 0.55, st.tell ** 2) + Math.sin(G.t * 60) * 0.05 * st.tell : st.slamming ? 0.55 : st.back ? lerp(0.55, -2.5, 1 - e) : -2.5;
+  ctx.strokeStyle = '#3a2214'; ctx.lineWidth = 1.3 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + Math.cos(na) * 6.4 * s, gy + Math.sin(na) * 6.4 * s); ctx.stroke();
+  ctx.fillStyle = '#c0392b'; clockworkCirc(ctx, gx, gy, 1.3 * s); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.arc(gx, gy, 7 * s, 3.7, 4.7); ctx.stroke();
+  // the head
+  clockworkBlit(clockworkPistonHead(d), front, Y);
+  // speed lines behind it as it slams out
+  if (st.slamming && st.e < 1 && G.clockworkStop <= 0 || (st.hold != null && st.hold < 0.25)) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (const o of [-20, -8, 8, 20]) { ctx.strokeStyle = 'rgba(255,240,210,.45)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(back - d * 4 * s, Y + o * s); ctx.lineTo(back - d * 36 * s, Y + o * s); ctx.stroke(); }
+    ctx.restore();
+  }
+  // the warning lamp on the drum
+  clockworkLamp(wallX + d * 6 * s, Y - 31 * s, 2.6 * s, st.tell > 0 ? (Math.sin(G.t * 34) > 0 ? 1 : 0.35) : st.slamming ? 1 : 0.1);
+}
+
+// ---- Cuckoo Punch ----
+const CLOCKWORK_WOOD = [[214, 150, 96], [150, 92, 50], [92, 52, 26], [70, 36, 18]];
+// the clock house (screen orientation, its middle at (0, 0), y down; its back against the wall on the -d side): carved
+// walnut with a leafy border, a cream dial (its hands are live), a shingled gable roof and a plaster gable with the
+// doorway (the doors are live), pine-cone weights on chains, a brass hanger bolted into the wall
+function clockworkCuckooHouse(d) {
+  const P = CLOCKWORK_P, W = CLOCKWORK_WOOD, hw = 21;
+  return clockworkPiece('cuckooHouse' + d, -34, 34, -60, 66, c => {
+    // the hanger: an iron strap from the wall into the roof's back, a big bolt in the wall
+    const wx = -d * 23;
+    c.strokeStyle = P.iron[2]; c.lineWidth = 3; c.beginPath(); c.moveTo(wx, -36); c.lineTo(-d * 12, -36); c.stroke();
+    c.strokeStyle = P.iron[0]; c.lineWidth = 1; c.beginPath(); c.moveTo(wx, -37); c.lineTo(-d * 12, -37); c.stroke();
+    clockworkBolt(c, wx - d * 1, -36, 2.6, P.steel);
+    // pine-cone weights on their chains
+    for (const [dx, len] of [[-7, 16], [7, 9]]) {
+      c.strokeStyle = 'rgba(140,100,50,.95)'; c.lineWidth = 1; c.beginPath(); for (let yy = 27; yy < 27 + len; yy += 3) { c.moveTo(dx - 1, yy); c.lineTo(dx + 1, yy + 2.6); } c.stroke();
+      const wy = 27 + len + 8;
+      c.fillStyle = clockworkLG(dx - 4, wy - 8, dx + 4, wy + 8, [P.brass[0], P.brass[1], P.brass[3]], c);
+      c.beginPath(); c.moveTo(dx, wy - 9); c.quadraticCurveTo(dx + 5.5, wy - 4, dx + 3.2, wy + 7); c.quadraticCurveTo(dx, wy + 10, dx - 3.2, wy + 7); c.quadraticCurveTo(dx - 5.5, wy - 4, dx, wy - 9); c.fill();
+      c.strokeStyle = P.brass[3]; c.lineWidth = 0.6; c.stroke();
+      c.beginPath(); for (let k = 0; k < 4; k++) { const yy = wy - 5 + k * 3.4; c.moveTo(dx - 3.6, yy); c.quadraticCurveTo(dx, yy + 2.2, dx + 3.6, yy); } c.stroke();
+      c.strokeStyle = 'rgba(255,250,220,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(dx - 2, wy - 6); c.quadraticCurveTo(dx - 3.4, wy - 1, dx - 2.4, wy + 4); c.stroke();
+    }
+    // the body
+    c.fillStyle = 'rgba(30,14,6,.35)'; c.beginPath(); c.roundRect(-hw + 2, -22, hw * 2, 51, [3, 3, 8, 8]); c.fill();
+    c.fillStyle = clockworkLG(-hw, -24, hw, 28, [clockworkCol(W[0]), clockworkCol(W[1]), clockworkCol(W[2])], c); c.beginPath(); c.roundRect(-hw, -24, hw * 2, 51, [3, 3, 8, 8]); c.fill();
+    c.strokeStyle = clockworkCol(W[3]); c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = clockworkCol(W[2], 0.6); c.lineWidth = 0.7; c.beginPath();
+    for (const gx of [-12, -4, 6, 13]) { c.moveTo(gx, -21); c.bezierCurveTo(gx + 1.5, -6, gx - 1.5, 10, gx, 24); }
+    c.stroke();
+    c.strokeStyle = 'rgba(255,220,170,.4)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-hw + 2, 22); c.lineTo(-hw + 2, -21); c.lineTo(hw - 3, -21); c.stroke();
+    // a carved leafy border down both sides, and a garland across the bottom
+    for (let i = 0; i < 6; i++) for (const e of [-1, 1]) {
+      const lx = e * (hw - 3.4), ly = -18 + i * 7.6;
+      c.fillStyle = clockworkLG(lx - 2, ly - 2, lx + 2, ly + 2, ['#b8d878', '#5a7a34'], c); c.beginPath(); c.ellipse(lx, ly, 1.9, 3.5, e * 0.5, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(40,60,20,.6)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(lx, ly - 2.6); c.lineTo(lx, ly + 2.6); c.stroke();
+    }
+    for (let i = 0; i < 5; i++) { const lx = -10 + i * 5, ly = 22 + Math.sin(i * 1.3) * 1; c.fillStyle = clockworkLG(lx - 2, ly - 2, lx + 2, ly + 2, ['#c8e080', '#5a7a34'], c); c.beginPath(); c.ellipse(lx, ly, 3.2, 1.8, (i - 2) * 0.3, 0, TWO_PI); c.fill(); }
+    // the dial (its bezel, its numerals as ticks; the hands are drawn live)
+    const dy = 6;
+    c.fillStyle = 'rgba(40,18,6,.45)'; clockworkCirc(c, 1, dy + 1.4, 12.6); c.fill();
+    c.fillStyle = clockworkRG(-3, dy - 4, 13, P.cream, c); clockworkCirc(c, 0, dy, 10.4); c.fill();
+    c.strokeStyle = clockworkLG(-11, dy - 11, 11, dy + 11, [P.brass[0], P.brass[2]], c); c.lineWidth = 2.2; clockworkCirc(c, 0, dy, 11.4); c.stroke();
+    c.strokeStyle = 'rgba(110,70,36,.85)'; c.lineWidth = 0.7; c.beginPath();
+    for (let i = 0; i < 12; i++) { const a = i * TWO_PI / 12; c.moveTo(Math.cos(a) * 9.6, dy + Math.sin(a) * 9.6); c.lineTo(Math.cos(a) * (i % 3 ? 8.4 : 7.0), dy + Math.sin(a) * (i % 3 ? 8.4 : 7.0)); } c.stroke();
+    // the roof: a pitched gable of scalloped shingles, a carved eave
+    const ry = -22, peak = -45;
+    c.fillStyle = clockworkLG(-hw - 6, peak, hw + 6, ry, ['#b05a3e', '#7e3222', '#521e14'], c);
+    c.beginPath(); c.moveTo(-hw - 8, ry + 2); c.lineTo(0, peak); c.lineTo(hw + 8, ry + 2); c.lineTo(hw + 4, ry + 5); c.lineTo(0, peak + 6); c.lineTo(-hw - 4, ry + 5); c.closePath(); c.fill();
+    c.strokeStyle = '#42160e'; c.lineWidth = 1; c.stroke();
+    c.save(); c.beginPath(); c.moveTo(-hw - 8, ry + 2); c.lineTo(0, peak); c.lineTo(hw + 8, ry + 2); c.lineTo(hw + 4, ry + 5); c.lineTo(0, peak + 6); c.lineTo(-hw - 4, ry + 5); c.closePath(); c.clip();
+    c.strokeStyle = 'rgba(60,16,10,.55)'; c.lineWidth = 0.7;
+    for (let k = 0; k < 5; k++) { const t0 = 0.15 + k * 0.17; for (const e of [-1, 1]) { c.beginPath(); for (let q = 0; q < 4; q++) { const u = t0 + q * 0.04; c.arc(e * (hw + 6) * (1 - u) * 0.98 + e * q * 0.5, lerp(ry + 2, peak, 1 - u) + 1.8, 2.2, 0, Math.PI); } c.stroke(); } }
+    c.restore();
+    c.strokeStyle = 'rgba(255,200,160,.6)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-hw - 6, ry); c.lineTo(-1, peak + 1.5); c.stroke();
+    // the gable front (cream plaster) and its dark doorway (the leaves are live)
+    c.fillStyle = clockworkLG(0, peak + 6, 0, ry + 5, ['#f6e8c8', '#d8bc90'], c);
+    c.beginPath(); c.moveTo(-hw - 3, ry + 5); c.lineTo(0, peak + 6); c.lineTo(hw + 3, ry + 5); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(150,110,70,.6)'; c.lineWidth = 0.6; c.stroke();
+    c.fillStyle = '#2e160a'; c.beginPath(); c.roundRect(-6, -40, 12, 11, [6, 6, 0, 0]); c.fill();
+    c.strokeStyle = clockworkCol(W[1]); c.lineWidth = 1.4; c.beginPath(); c.roundRect(-6.8, -40.8, 13.6, 12, [7, 7, 0, 0]); c.stroke();
+    // the little perch under the doorway
+    c.fillStyle = clockworkLG(0, -29, 0, -26, [clockworkCol(W[0]), clockworkCol(W[2])], c); c.fillRect(-8, -29, 16, 2.6);
+    // a carved pediment ornament: two leaves under the eave
+    for (const e of [-1, 1]) { c.fillStyle = clockworkLG(0, -25, 0, -20, ['#b8d878', '#5a7a34'], c); c.beginPath(); c.ellipse(e * 12, -21.5, 4, 1.6, e * -0.4, 0, TWO_PI); c.fill(); }
+  });
+}
+// the cuckoo itself (its centre at (0, 0), facing +x; flipped for the left-facing side): a chunky carved and painted
+// bird, beak wide open, very cross
+function clockworkCuckooBirdArt(d) {
+  return clockworkPiece('cuckooBird' + d, -31, 31, -26, 18, c => {
+    c.scale(d * 1.25, 1.25);
+    c.fillStyle = clockworkLG(-14, -2, -6, 6, ['#3fa58c', '#1f6a5a'], c);
+    c.beginPath(); c.moveTo(-9, -2); c.lineTo(-21, -6); c.lineTo(-19.5, -1); c.lineTo(-21.5, 3); c.lineTo(-9, 4); c.closePath(); c.fill(); c.strokeStyle = '#174a40'; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(200,255,230,.5)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-10, -1); c.lineTo(-19, -4.4); c.stroke();
+    c.fillStyle = clockworkRG(-4, -7, 18, ['#ffb27a', '#e85a3a', '#9a2a22'], c); c.beginPath(); c.ellipse(0, 0, 13, 10.5, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#7a1e18'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = clockworkLG(0, 0, 0, 10, ['#fff4dc', '#e8cc9a'], c); c.beginPath(); c.ellipse(3, 4.5, 7.5, 5.2, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(190,140,80,.6)'; c.lineWidth = 0.6; c.beginPath(); for (const yy of [3, 5.5, 8]) { c.moveTo(-1, yy); c.quadraticCurveTo(3, yy + 1.4, 7, yy); } c.stroke();
+    c.fillStyle = clockworkLG(-9, -6, -1, 6, ['#58c8a8', '#2a7e68'], c); c.beginPath(); c.moveTo(-9, -4); c.quadraticCurveTo(-2, -7, 1, -1); c.quadraticCurveTo(-3, 5, -11, 3); c.closePath(); c.fill();
+    c.strokeStyle = '#1f5a4a'; c.lineWidth = 0.6; c.stroke();
+    c.strokeStyle = '#ffd860'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-8, -2.4); c.quadraticCurveTo(-3, -4.5, -0.5, -1); c.stroke();
+    c.fillStyle = clockworkLG(0, -16, 0, -9, ['#ff8a5a', '#c83a2a'], c); c.beginPath(); c.moveTo(1, -9.5); c.quadraticCurveTo(-1, -16, -5, -14); c.quadraticCurveTo(-2, -12, -3, -9); c.closePath(); c.fill();
+    c.strokeStyle = '#8a2418'; c.lineWidth = 0.5; c.stroke();
+    // the beak, wide open
+    c.fillStyle = '#7a1e22'; c.beginPath(); c.moveTo(10, -3); c.lineTo(20, -5); c.lineTo(20, 3); c.lineTo(10, 1.5); c.fill();
+    c.fillStyle = clockworkLG(10, -7, 10, -1, ['#ffe680', '#f0a020'], c); c.beginPath(); c.moveTo(9.5, -5); c.quadraticCurveTo(16, -7.4, 21.5, -6); c.lineTo(10, -1.2); c.closePath(); c.fill();
+    c.strokeStyle = '#b06a10'; c.lineWidth = 0.5; c.stroke();
+    c.fillStyle = clockworkLG(10, 0, 10, 5, ['#f6c040', '#c87818'], c); c.beginPath(); c.moveTo(10, 0.4); c.lineTo(20.5, 3.8); c.quadraticCurveTo(15, 5.4, 9.5, 3); c.closePath(); c.fill();
+    c.stroke();
+    // a cross eye under a heavy brow
+    c.fillStyle = '#fffaf0'; c.beginPath(); c.ellipse(4.6, -4, 3.6, 3.2, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#7a1e18'; c.lineWidth = 0.6; c.stroke();
+    c.fillStyle = '#1e2a28'; c.beginPath(); c.ellipse(5.6, -3.8, 1.6, 1.9, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(5.0, -4.6, 0.6, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#5a1410'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(1, -8.6); c.lineTo(8.4, -6.4); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 0, 9.5, 3.5, 4.3); c.stroke();
+  });
+}
+function drawClockworkCuckoo(h) {
+  clockworkCacheCheck();
+  const K = CLOCKWORK.cuckoo, d = h.side, T = clockworkT(), st = h.st || clockworkCuckooState(h, T), P = CLOCKWORK_P;
+  const stopped = G.clockworkStop > 0, sh = st.tell > 0 && !stopped ? Math.sin(G.t * 80) * 0.8 * st.tell * s : 0;
+  const hx = sx(h.base + d * 23) + sh, hy = sy(h.alt);
+  // the pendulum swinging on the beat (behind the house's bottom)
+  const pa = Math.sin(T * Math.PI / CLOCKWORK.beat) * 0.32;
+  ctx.save(); ctx.translate(hx, hy + 25 * s); ctx.rotate(pa); ctx.scale(s, s);
+  ctx.strokeStyle = P.brass[2]; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 22); ctx.stroke();
+  ctx.fillStyle = clockworkRG(-1.5, 22, 6, [P.brass[0], P.brass[1], P.brass[2]]); ctx.beginPath(); ctx.ellipse(0, 26, 4.2, 5.2, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = P.brass[3]; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.restore();
+  clockworkBlit(clockworkCuckooHouse(d), hx, hy);
+  // the dial's hands: the minute hand jumps on every beat
+  const dyc = hy + 6 * s, ma = -Math.PI / 2 + Math.floor(T / CLOCKWORK.beat) * TWO_PI / 60, ha = -Math.PI / 2 + 2.2;
+  ctx.strokeStyle = '#4a2a14'; ctx.lineCap = 'round';
+  ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(hx, dyc); ctx.lineTo(hx + Math.cos(ma) * 8 * s, dyc + Math.sin(ma) * 8 * s); ctx.stroke();
+  ctx.lineWidth = 1.8 * s; ctx.beginPath(); ctx.moveTo(hx, dyc); ctx.lineTo(hx + Math.cos(ha) * 5 * s, dyc + Math.sin(ha) * 5 * s); ctx.stroke();
+  ctx.fillStyle = '#c0392b'; clockworkCirc(ctx, hx, dyc, 1.4 * s); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.arc(hx, dyc, 8.2 * s, 3.7, 4.6); ctx.stroke();
+  // the bell on the peak, swinging and ringing through the tell
+  const bA = st.tell > 0 && !stopped ? Math.sin(G.t * 40) * 0.5 : 0;
+  ctx.save(); ctx.translate(hx, hy - 46 * s); ctx.rotate(bA); ctx.scale(s, s);
+  ctx.fillStyle = clockworkRG(-1.5, -5, 7, [P.brass[0], P.brass[1], P.brass[2]]); ctx.beginPath(); ctx.moveTo(-4.4, 0); ctx.quadraticCurveTo(-4.2, -7, 0, -7.2); ctx.quadraticCurveTo(4.2, -7, 4.4, 0); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = P.brass[3]; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.fillStyle = P.brass[2]; clockworkCirc(ctx, 0, 1, 1.3); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,240,.8)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-2.4, -1.4); ctx.quadraticCurveTo(-2.6, -4.8, -0.6, -5.6); ctx.stroke();
+  ctx.restore();
+  if (st.tell > 0 || (st.punching && st.ext < 1.02)) {
+    const k = st.tell > 0 ? 1 : 0.5;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) { const u = pmod(G.t * 2.6 + i / 3, 1), r = (6 + u * 18) * s; ctx.strokeStyle = `rgba(255,230,150,${(1 - u) * 0.8 * k})`; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.arc(hx, hy - 50 * s, r, -2.6, -0.5); ctx.stroke(); }
+    ctx.restore();
+    clockworkGlow(hx + d * 10 * s, hy - 36 * s, 40 * s, [255, 110, 70], 0.25 * st.tell);
+  }
+  // the doors: two little leaves swinging open on the beat
+  const op = st.open, dX = hx, dY = hy - 29 * s;
+  for (const e of [-1, 1]) {
+    const lw = 6 * (1 - op * 0.85) * s, hxx = dX + e * 6 * s, x0 = hxx - e * lw;
+    ctx.fillStyle = clockworkLG(Math.min(hxx, x0), dY - 11 * s, Math.max(hxx, x0), dY, op > 0.5 ? ['#7a3a20', '#4e2010'] : ['#cc7e46', '#8a4a22']);
+    ctx.beginPath(); ctx.moveTo(hxx, dY); ctx.lineTo(hxx, dY - 8 * s); ctx.quadraticCurveTo(hxx, dY - 11 * s, x0, dY - 10.4 * s); ctx.lineTo(x0, dY); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#4a200e'; ctx.lineWidth = 0.7 * s; ctx.stroke();
+    if (op < 0.5) { ctx.fillStyle = '#ffd860'; clockworkCirc(ctx, dX + e * 1.6 * s, dY - 4 * s, 0.7 * s); ctx.fill(); }
+  }
+  // the cuckoo on its spring
+  if (st.ext > 0.02) {
+    const [dx, da] = clockworkCuckooDoor(h), [bx, ba] = clockworkCuckooBird(h, st.ext), X0 = sx(dx) + sh, Y0 = sy(da), BX = sx(bx) + sh, BY = sy(ba);
+    const ux = (BX - X0), uy = (BY - Y0), L = Math.hypot(ux, uy) || 1, nx = -uy / L, ny = ux / L;
+    clockworkGlow(BX, BY, 42 * s, [255, 100, 70], 0.3 + 0.2 * st.ext);
+    const coils = 9, N = 72;
+    for (const pass of [0, 1]) {
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const u = i / N, th = u * coils * TWO_PI, front = Math.cos(th) > 0, px = X0 + ux * u * (1 - 8 * s / L) + nx * Math.sin(th) * 5.2 * s, py = Y0 + uy * u * (1 - 8 * s / L) + ny * Math.sin(th) * 5.2 * s;
+        if ((pass === 1) === front) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.strokeStyle = pass ? P.steel[0] : P.steel[2]; ctx.lineWidth = (pass ? 2 : 2.6) * s; ctx.lineCap = 'round'; ctx.stroke();
+    }
+    ctx.save(); ctx.translate(BX, BY); ctx.rotate(-h.tilt * d); const b = clockworkCuckooBirdArt(d); clockworkBlit(b, 0, 0); ctx.restore();
+    if (st.punching && st.ext < 1 && !stopped) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 1 - st.ext;
+      ctx.strokeStyle = `rgba(255,240,200,${0.6 * k + 0.2})`; ctx.lineWidth = 1.2 * s;
+      for (const o of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(BX - ux / L * 18 * s + nx * o * s, BY - uy / L * 18 * s + ny * o * s); ctx.lineTo(BX - ux / L * 40 * s + nx * o * s, BY - uy / L * 40 * s + ny * o * s); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+}
+
+// ---- the Escapement: a huge anchor rocking on the beat ----
+// the anchor at rest (its pivot at (0, 0), the wall's normal toward +d; drawn rotated by its rock): a steel boss with a
+// brass collar and a big nut, two tapered arms fanning above and below, each ending in a hooked steel pallet holding a
+// ruby pallet stone
+function clockworkAnchorArt(d) {
+  const A = CLOCKWORK.anchor, P = CLOCKWORK_P, L = A.L;
+  return clockworkPiece('anchor' + d, d > 0 ? -30 : -L - 20, d > 0 ? L + 20 : 30, -L - 20, L + 20, c => {
+    c.save(); c.translate(0, 0);
+    // geometry is built for +x out of the wall and mirrored for the right wall; the light is kept at the top left
+    const pt = (th, r, w) => { const ux = d * Math.cos(th), uy = -Math.sin(th), vx = -uy, vy = ux; return [ux * r + vx * w, uy * r + vy * w]; };
+    for (const arm of [1, -1]) {
+      const th = arm * A.alpha, curve = 0;
+      // the arm: a tapered steel bar with a gentle curve, lit along its upper edge
+      const P1 = [], P2 = [];
+      for (let i = 0; i <= 10; i++) { const r = lerp(10, L - A.palR - 2, i / 10), w = lerp(7.2, 4.6, i / 10), bend = Math.sin(i / 10 * Math.PI) * 1.5 * arm; P1.push(pt(th + curve, r, w + bend)); P2.push(pt(th + curve, r, -w + bend)); }
+      const body = () => { c.beginPath(); [...P1, ...P2.reverse()].forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); P2.reverse(); };
+      const [m0x, m0y] = pt(th, L * 0.5, 8), [m1x, m1y] = pt(th, L * 0.5, -8);
+      const litTop = m0y < m1y;
+      body(); c.fillStyle = clockworkLG(m0x, m0y, m1x, m1y, litTop ? [P.steel[0], P.steel[1], P.steel[2]] : [P.steel[2], P.steel[1], P.steel[0]], c); c.fill();
+      c.strokeStyle = P.steel[3]; c.lineWidth = 1.1; c.stroke();
+      // a fuller down the arm (furrow under a lit ridge) and two rivets
+      c.strokeStyle = 'rgba(52,58,78,.6)'; c.lineWidth = 1.3; c.beginPath(); for (let i = 1; i <= 8; i++) { const r = lerp(10, L - A.palR - 2, i / 10), bend = Math.sin(i / 10 * Math.PI) * 1.5 * arm, [x, y] = pt(th + curve, r, bend); i === 1 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 0.8; c.beginPath(); for (let i = 1; i <= 8; i++) { const r = lerp(10, L - A.palR - 2, i / 10), bend = Math.sin(i / 10 * Math.PI) * 1.5 * arm, [x, y] = pt(th + curve, r, bend + (litTop ? 1.4 : -1.4) * arm * (arm > 0 ? 1 : -1)); i === 1 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
+      // the pallet: a hooked steel claw (around the hitbox circle at L - 0.6 palR) holding a ruby stone
+      const pr = L - A.palR * 0.6, [pcx, pcy] = pt(th, pr, 0);
+      const hook = [pt(th, pr - 12, 7), pt(th, pr + 6, 9), pt(th, pr + 12, 3), pt(th - arm * 0.06, pr + 9, -9), pt(th, pr - 2, -11), pt(th, pr - 12, -6)];
+      c.beginPath(); hook.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+      c.fillStyle = clockworkLG(pcx - 12, pcy - 12, pcx + 12, pcy + 12, [P.steel[0], P.steel[1], P.steel[2]], c); c.fill(); c.strokeStyle = P.steel[3]; c.lineWidth = 1.1; c.stroke();
+      // the ruby pallet stone set in it
+      const sp = [pt(th, pr - 4, -4), pt(th, pr + 8, -3), pt(th, pr + 8, -9), pt(th, pr - 4, -10)];
+      c.beginPath(); sp.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+      const [s0x, s0y] = sp[3], [s1x, s1y] = sp[1];
+      c.fillStyle = clockworkLG(s0x, s0y, s1x, s1y, ['#ffd0d4', '#e8324a', '#8a0a22'], c); c.fill(); c.strokeStyle = '#7a0a1e'; c.lineWidth = 0.7; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.85)'; const [gx, gy] = pt(th, pr - 1, -8.4); c.beginPath(); c.ellipse(gx, gy, 1.4, 0.8, 0.4, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1; const [k0x, k0y] = pt(th, pr - 10, 6), [k1x, k1y] = pt(th, pr + 5, 8); c.beginPath(); c.moveTo(k0x, k0y); c.lineTo(k1x, k1y); c.stroke();
+    }
+    // the boss: a brass collar, a steel hub and a big nut
+    c.fillStyle = 'rgba(30,20,20,.35)'; clockworkCirc(c, 2, 2.4, 18); c.fill();
+    c.fillStyle = clockworkRG(-6, -7, 26, [P.brass[0], P.brass[1], P.brass[2]], c); clockworkCirc(c, 0, 0, 17.5); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+    for (let i = 0; i < 8; i++) { const a = i * TWO_PI / 8 + 0.2; clockworkRivet(c, Math.cos(a) * 13.5, Math.sin(a) * 13.5, 1.5); }
+    c.fillStyle = clockworkRG(-3, -4, 13, [P.steel[0], P.steel[1], P.steel[2]], c); clockworkCirc(c, 0, 0, 9.5); c.fill(); c.strokeStyle = P.steel[3]; c.lineWidth = 0.9; c.stroke();
+    clockworkBolt(c, 0, 0, 5.4, P.steel);
+    c.strokeStyle = 'rgba(255,255,245,.6)'; c.lineWidth = 1.6; c.beginPath(); c.arc(0, 0, 15.5, 3.5, 4.6); c.stroke();
+    c.restore();
+  });
+}
+// the bearing plate on the wall behind the pivot (the wall at x 0): brass, a jewelled bearing, bolts, and the slot the
+// escape wheel turns in (the wheel is drawn live)
+function clockworkAnchorPlate(d) {
+  const P = CLOCKWORK_P;
+  return clockworkPiece('anchorPlate' + d, d > 0 ? -50 : -6, d > 0 ? 6 : 50, -56, 56, c => {
+    const L = Math.min(-d * 48, d * 4), W = 52;
+    c.fillStyle = 'rgba(30,14,4,.35)'; c.beginPath(); c.roundRect(L + 2, -50, W, 104, 8); c.fill();
+    c.fillStyle = clockworkLG(L, -52, L + W, 52, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(L, -52, W, 104, 8); c.fill();
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+    c.strokeStyle = 'rgba(255,250,215,.7)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(L + 2, 46); c.lineTo(L + 2, -49); c.lineTo(L + W - 6, -49); c.stroke();
+    for (const [bx, by] of [[-d * 40, -42], [-d * 40, 42], [-d * 10, -44], [-d * 10, 44]]) clockworkBolt(c, bx, by, 2.4, P.brass);
+    // engraved rays round the bearing
+    for (let i = 0; i < 10; i++) { const a = i * TWO_PI / 10; c.strokeStyle = 'rgba(100,54,12,.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-d * 20 + Math.cos(a) * 12, Math.sin(a) * 12); c.lineTo(-d * 20 + Math.cos(a) * 24, Math.sin(a) * 24); c.stroke(); }
+    // the escape wheel's dark slot
+    c.fillStyle = 'rgba(28,12,4,.9)'; c.beginPath(); c.roundRect(Math.min(-d * 46, -d * 30), -34, 16, 68, 6); c.fill();
+  });
+}
+// the escape wheel (sawtooth, 15 teeth), turned a tooth each tock
+function clockworkEscapeSprite() {
+  const P = CLOCKWORK_P;
+  return clockworkSprite('escape', 80, 80, c => {
+    c.translate(40, 40); const n = 15;
+    c.beginPath(); for (let i = 0; i < n; i++) { const a = i * TWO_PI / n; c.lineTo(Math.cos(a) * 20, Math.sin(a) * 20); c.lineTo(Math.cos(a + 0.3) * 34, Math.sin(a + 0.3) * 34); c.lineTo(Math.cos(a + 0.4) * 20, Math.sin(a + 0.4) * 20); }
+    c.closePath(); c.fillStyle = clockworkRG(-10, -10, 40, [P.brass[0], P.brass[1], P.brass[2]], c); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1; c.stroke();
+    c.fillStyle = 'rgba(40,18,4,.85)'; for (let i = 0; i < 4; i++) { const a = i * TWO_PI / 4 + 0.4; clockworkCirc(c, Math.cos(a) * 11, Math.sin(a) * 11, 3.6); c.fill(); }
+    clockworkBolt(c, 0, 0, 4, P.steel);
+  });
+}
+function drawClockworkAnchor(h) {
+  clockworkCacheCheck();
+  const A = CLOCKWORK.anchor, d = h.side, T = clockworkT(), st = h.st || clockworkAnchorState(h, T), wallX = sx(h.base), Y = sy(h.alt);
+  const stopped = G.clockworkStop > 0, sh = st.tell > 0 && !stopped ? Math.sin(G.t * 80) * 0.7 * st.tell * s : 0;
+  // the escape wheel in the wall, a tooth further each tock
+  const ew = clockworkEscapeSprite(), ewa = (st.k + clockworkSnap(st.sec / A.swing)) * TWO_PI / 15 * d;
+  ctx.save(); ctx.beginPath(); ctx.rect(Math.min(wallX - d * 46 * s, wallX - d * 30 * s), Y - 34 * s, 16 * s, 68 * s); ctx.clip();
+  ctx.translate(wallX - d * 38 * s, Y); ctx.rotate(ewa); ctx.drawImage(ew.cv, -40 * s * 0.9, -40 * s * 0.9, 80 * s * 0.9, 80 * s * 0.9); ctx.restore();
+  clockworkBlit(clockworkAnchorPlate(d), wallX, Y);
+  const art = clockworkAnchorArt(d), PX = sx(h.base + d * A.piv) + sh;
+  // the telegraph: a faint ghost of the pose it is about to swing to
+  if (st.tell > 0.05 && !stopped) {
+    const nr = -Math.sign(st.rock || 1);
+    ctx.save(); ctx.globalAlpha = 0.22 * st.tell; ctx.translate(PX, Y); ctx.rotate(-A.phi * nr * d); clockworkBlit(art, 0, 0); ctx.restore();
+  }
+  // glows on the pallets (the ruby stones catch the light), the anchor itself rocked to its pose
+  for (const arm of [1, -1]) { const q = clockworkAnchorArm(h, st, arm), r = A.L - A.palR * 0.6; clockworkGlow(sx(q.px + q.ux * r), sy(q.pa + q.ua * r), 26 * s, [255, 80, 90], 0.16 + 0.22 * st.tell); }
+  ctx.save(); ctx.translate(PX, Y); ctx.rotate(-A.phi * st.rock * d); clockworkBlit(art, 0, 0); ctx.restore();
+  if (st.moving && !stopped) {
+    const k = 1 - st.sec / A.swing;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (const arm of [1, -1]) { const q = clockworkAnchorArm(h, st, arm), a0 = Math.atan2(-q.ua, q.ux), r = (A.L - 6) * s; ctx.strokeStyle = `rgba(230,240,255,${0.35 * k})`; ctx.lineWidth = 2.6 * s; ctx.beginPath(); const da = -(st.rock > 0 ? 1 : -1) * d * 0.35 * k; ctx.arc(PX, Y, r, a0, a0 + da, da < 0); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+DRAW.clockworkGear = drawClockworkGear; DRAW.clockworkPiston = drawClockworkPiston; DRAW.clockworkCuckoo = drawClockworkCuckoo; DRAW.clockworkAnchor = drawClockworkAnchor;
+// ---- the tower's scene ----
+// Walls: the tower's inner skin of riveted brass plates (each plate exactly one of the shaft's relief panels, so the
+// steps in the wall are the plates standing proud), aged warm and gone green with verdigris where water has run from
+// the rivets; an embossed frame on every plate, seams as line pairs, and something set into most plates that changes
+// with the section (little dials at the Clock Door, cog portholes in the Gear Gallery, copper pipes and valves in the
+// Steam Works, carved walnut in the Cuckoo Corridor, escape-wheel windows in the Escapement, bell-rope cleats in the Bell
+// Loft, warning stripes and lamps in the Midnight Gauntlet). Behind the plates the tower's iron straps and walnut posts.
+// Along the shaft a real lip: a rolled brass bead with its own rivets, lit along its top. Beat lamps set in some plates
+// blink on the tower's beat. All drawn once into cached tiles (CLOCKWORK_TILE high, both sides) and blitted.
+const CLOCKWORK_TILE = 200;
+const CLOCKWORK_DECOR = { 'The Clock Door': 'dial', 'Gear Gallery': 'gear', 'Steam Works': 'pipe', 'Cuckoo Corridor': 'wood', 'The Escapement': 'escape', 'The Bell Loft': 'bell', 'Midnight Gauntlet': 'warn', 'The Great Clock': 'dial' };
+function clockworkSecName(a) {
+  const S = G.level && G.level.sections; if (!S) return 'The Clock Door';
+  let n = S[0].name; for (const q of S) if (a >= q.a0) n = q.name; return n;
+}
+const clockworkSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function clockworkWallTile(side, k) {
+  const C = CLOCKWORK_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = clockworkRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+// ---- what is set into a plate (c in tile px, (x, y) the spot, k = s) ----
+function clockworkDecorDial(c, x, y, k, j) {
+  const P = CLOCKWORK_P, r = 12 * k;
+  c.fillStyle = 'rgba(40,20,6,.45)'; clockworkCirc(c, x + 1.2 * k, y + 1.6 * k, r * 1.2); c.fill();
+  c.fillStyle = clockworkRG(x - r * 0.4, y - r * 0.4, r * 1.4, P.cream, c); clockworkCirc(c, x, y, r); c.fill();
+  c.strokeStyle = clockworkLG(x - r, y - r, x + r, y + r, [P.brass[0], P.brass[1], P.brass[2]], c); c.lineWidth = 2.6 * k; clockworkCirc(c, x, y, r + 1.2 * k); c.stroke();
+  c.strokeStyle = P.brass[3]; c.lineWidth = 0.6 * k; clockworkCirc(c, x, y, r + 2.6 * k); c.stroke();
+  c.strokeStyle = 'rgba(110,70,36,.85)'; c.lineWidth = 0.8 * k; c.beginPath();
+  for (let i = 0; i < 12; i++) { const a = i * TWO_PI / 12, l = i % 3 ? 0.84 : 0.7; c.moveTo(x + Math.cos(a) * r * 0.92, y + Math.sin(a) * r * 0.92); c.lineTo(x + Math.cos(a) * r * l, y + Math.sin(a) * r * l); } c.stroke();
+  const h1 = j * 6.2, h2 = j * 40;
+  c.strokeStyle = '#4a2a14'; c.lineWidth = 1.4 * k; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(h1) * r * 0.5, y + Math.sin(h1) * r * 0.5); c.stroke();
+  c.lineWidth = 0.9 * k; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(h2) * r * 0.78, y + Math.sin(h2) * r * 0.78); c.stroke();
+  c.fillStyle = '#c0392b'; clockworkCirc(c, x, y, 1.2 * k); c.fill();
+  c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1 * k; c.beginPath(); c.arc(x, y, r * 0.8, 3.6, 4.6); c.stroke();
+}
+function clockworkDecorPorthole(c, x, y, k, j, inner) {
+  const P = CLOCKWORK_P, r = 14 * k;
+  c.fillStyle = clockworkRG(x + r * 0.3, y + r * 0.3, r * 1.2, ['#3a2210', '#1e1008'], c); clockworkCirc(c, x, y, r); c.fill();
+  c.save(); clockworkCirc(c, x, y, r); c.clip();
+  inner(c, x, y, r);
+  c.fillStyle = clockworkLG(x - r, y - r, x + r, y + r, ['rgba(255,240,210,.22)', 'rgba(255,240,210,0)', 'rgba(0,0,0,.25)'], c); c.fillRect(x - r, y - r, r * 2, r * 2);
+  c.restore();
+  c.strokeStyle = clockworkLG(x - r, y - r, x + r, y + r, [P.brass[0], P.brass[1], P.brass[2]], c); c.lineWidth = 4 * k; clockworkCirc(c, x, y, r + 2 * k); c.stroke();
+  c.strokeStyle = P.brass[3]; c.lineWidth = 0.7 * k; clockworkCirc(c, x, y, r + 4.2 * k); c.stroke(); clockworkCirc(c, x, y, r); c.stroke();
+  for (let i = 0; i < 6; i++) { const a = i * TWO_PI / 6 + 0.5; clockworkRivet(c, x + Math.cos(a) * (r + 2) , y + Math.sin(a) * (r + 2), 1.2 * k); }
+  c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 1.4 * k; c.beginPath(); c.arc(x, y, r * 0.72, 3.7, 4.5); c.stroke();
+}
+function clockworkDecorPipe(c, x, ya, yb, k, j) {
+  const P = CLOCKWORK_P, w = 5 * k, y0 = Math.min(ya, yb), y1 = Math.max(ya, yb);
+  c.fillStyle = 'rgba(30,14,4,.35)'; c.fillRect(x - w + 2 * k, y0, w * 2, y1 - y0);
+  c.fillStyle = clockworkLG(x - w, 0, x + w, 0, [P.copper[1], P.copper[0], P.copper[1], P.copper[2]], c); c.fillRect(x - w, y0, w * 2, y1 - y0);
+  c.fillStyle = P.copper[3]; c.fillRect(x - w, y0, 0.7 * k, y1 - y0); c.fillRect(x + w - 0.7 * k, y0, 0.7 * k, y1 - y0);
+  for (let yy = y0 + 14 * k; yy < y1 - 8 * k; yy += 44 * k) {   // flanges with bolts
+    c.fillStyle = clockworkLG(x - w - 2 * k, 0, x + w + 2 * k, 0, [P.brass[1], P.brass[0], P.brass[2]], c); c.fillRect(x - w - 2.4 * k, yy - 2.4 * k, w * 2 + 4.8 * k, 4.8 * k);
+    c.strokeStyle = P.brass[3]; c.lineWidth = 0.6 * k; c.strokeRect(x - w - 2.4 * k, yy - 2.4 * k, w * 2 + 4.8 * k, 4.8 * k);
+  }
+  // a valve wheel on it
+  const vy = lerp(y0, y1, 0.5 + (j - 0.5) * 0.3), vr = 7 * k;
+  c.strokeStyle = '#7a1e18'; c.lineWidth = 2.6 * k; clockworkCirc(c, x, vy, vr); c.stroke();
+  c.strokeStyle = '#d8483a'; c.lineWidth = 1.6 * k; clockworkCirc(c, x, vy, vr); c.stroke();
+  c.beginPath(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4 + 0.3; c.moveTo(x - Math.cos(a) * vr, vy - Math.sin(a) * vr); c.lineTo(x + Math.cos(a) * vr, vy + Math.sin(a) * vr); } c.lineWidth = 1.1 * k; c.stroke();
+  c.strokeStyle = 'rgba(255,220,200,.7)'; c.lineWidth = 0.8 * k; c.beginPath(); c.arc(x, vy, vr, 3.5, 4.6); c.stroke();
+  clockworkBolt(c, x, vy, 2 * k, P.brass);
+}
+function clockworkDecorCarving(c, x, y, w, h, k) {
+  const W = CLOCKWORK_WOOD;
+  c.fillStyle = clockworkLG(x - w, y - h, x + w, y + h, [clockworkCol(W[0]), clockworkCol(W[1]), clockworkCol(W[2])], c); c.beginPath(); c.roundRect(x - w, y - h, w * 2, h * 2, 4 * k); c.fill();
+  c.strokeStyle = clockworkCol(W[3]); c.lineWidth = 0.9 * k; c.stroke();
+  c.strokeStyle = clockworkCol(W[2], 0.55); c.lineWidth = 0.6 * k; c.beginPath(); for (let q = -2; q <= 2; q++) { c.moveTo(x + q * w * 0.35, y - h + 2 * k); c.bezierCurveTo(x + q * w * 0.35 + 2 * k, y - h * 0.3, x + q * w * 0.35 - 2 * k, y + h * 0.3, x + q * w * 0.35, y + h - 2 * k); } c.stroke();
+  // a carved scroll of leaves (lit ridge, dark furrow)
+  c.lineWidth = 1.6 * k; c.strokeStyle = clockworkCol(W[3], 0.8); c.beginPath(); c.moveTo(x - w * 0.7, y + h * 0.5); c.bezierCurveTo(x - w * 0.3, y - h * 0.8, x + w * 0.3, y + h * 0.8, x + w * 0.7, y - h * 0.5); c.stroke();
+  c.lineWidth = 0.8 * k; c.strokeStyle = 'rgba(255,214,160,.55)'; c.beginPath(); c.moveTo(x - w * 0.7 - k * 0.6, y + h * 0.5 - k); c.bezierCurveTo(x - w * 0.3, y - h * 0.8 - k, x + w * 0.3, y + h * 0.8 - k, x + w * 0.7, y - h * 0.5 - k); c.stroke();
+  for (let q = 0; q < 4; q++) { const u = 0.15 + q * 0.23, lx = x + lerp(-w * 0.7, w * 0.7, u), ly = y + Math.sin(u * Math.PI * 2 + 2.2) * h * 0.45; c.fillStyle = clockworkLG(lx - 3 * k, ly - 3 * k, lx + 3 * k, ly + 3 * k, ['#e0b070', '#8a5226'], c); c.beginPath(); c.ellipse(lx, ly - 3 * k * (q % 2 ? -1 : 1), 2.2 * k, 4 * k, q % 2 ? 0.6 : -0.6, 0, TWO_PI); c.fill(); c.strokeStyle = clockworkCol(W[3], 0.6); c.lineWidth = 0.5 * k; c.stroke(); }
+  c.strokeStyle = 'rgba(255,220,170,.4)'; c.lineWidth = 1 * k; c.beginPath(); c.moveTo(x - w + 1.5 * k, y + h - 3 * k); c.lineTo(x - w + 1.5 * k, y - h + 1.5 * k); c.lineTo(x + w - 3 * k, y - h + 1.5 * k); c.stroke();
+}
+function clockworkDecorCleat(c, x, y, k, dir) {
+  const P = CLOCKWORK_P;
+  // a coil of bell rope hung on a brass cleat
+  c.fillStyle = 'rgba(30,14,4,.35)'; c.beginPath(); c.ellipse(x + 1.5 * k, y + 9 * k, 9 * k, 11 * k, 0, 0, TWO_PI); c.fill();
+  for (let q = 0; q < 4; q++) { c.strokeStyle = q % 2 ? '#b88a50' : '#e0c088'; c.lineWidth = 2.2 * k; c.beginPath(); c.ellipse(x, y + 8 * k, (7 - q * 0.6) * k, (10 - q * 0.5) * k, 0.1 * q, 0.2, Math.PI * 2 - 0.2); c.stroke(); }
+  c.strokeStyle = 'rgba(120,80,40,.7)'; c.lineWidth = 0.6 * k; c.beginPath(); c.ellipse(x, y + 8 * k, 7.4 * k, 10.4 * k, 0, 0, TWO_PI); c.stroke();
+  c.fillStyle = clockworkLG(x - 8 * k, y - 3 * k, x + 8 * k, y + 3 * k, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(x - 9 * k, y - 2.6 * k, 18 * k, 5.2 * k, 2.6 * k); c.fill();
+  c.strokeStyle = P.brass[3]; c.lineWidth = 0.7 * k; c.stroke(); clockworkRivet(c, x, y, 1.4 * k);
+}
+function clockworkDecorStripes(c, x, y, w, h, k) {
+  c.save(); c.beginPath(); c.roundRect(x - w, y - h, w * 2, h * 2, 2 * k); c.clip();
+  for (let q = -8; q < 10; q++) { c.fillStyle = q % 2 ? '#f0b830' : '#7a2e1e'; const xx = x - w + q * 7 * k; c.beginPath(); c.moveTo(xx, y + h); c.lineTo(xx + 7 * k, y + h); c.lineTo(xx + 7 * k + h * 2, y - h); c.lineTo(xx + h * 2, y - h); c.fill(); }
+  c.fillStyle = clockworkLG(0, y - h, 0, y + h, ['rgba(255,255,240,.25)', 'rgba(0,0,0,0)', 'rgba(40,10,0,.3)'], c); c.fillRect(x - w, y - h, w * 2, h * 2);
+  c.restore();
+  c.strokeStyle = 'rgba(70,30,10,.8)'; c.lineWidth = 0.8 * k; c.beginPath(); c.roundRect(x - w, y - h, w * 2, h * 2, 2 * k); c.stroke();
+}
+function clockworkRenderWallTile(side, k) {
+  const a0 = k * CLOCKWORK_TILE - 4, a1 = (k + 1) * CLOCKWORK_TILE + 4, dir = side ? 1 : -1, wx = a => side ? rightWall(a) : leftWall(a), P = CLOCKWORK_P;
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = clockworkSpan(), xa = side ? reach - 18 : s0, xb = side ? s1 : reach + 18;
+  const sp = clockworkCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c;
+  sp.xa = xa; sp.a1 = a1; sp.lamps = [];
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 70, A1 = a1 + 70, seed = (G.level && G.level.seed) || 0;
+  const pts = []; for (let a = A0; a <= A1 + 3; a += 3) pts.push([X(wx(a)), Y(a), a]);
+  const at = (a, d) => [X(wx(a) + dir * d), Y(a)];
+  const trace = (off = 0, from = A0, to = A1 + 3) => { c.beginPath(); let first = true; for (const [x, y, a] of pts) { if (a < from - 1.5 || a > to + 1.5) continue; const xx = x + dir * off * s; first ? c.moveTo(xx, y) : c.lineTo(xx, y); first = false; } };
+  const edge = side ? X(xb) + 40 : X(xa) - 40;
+  // ---- behind the plates: dark bronze, walnut posts and iron straps
+  const body = () => { c.beginPath(); c.moveTo(edge, Y(A0)); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(edge, Y(A1 + 3)); c.closePath(); };
+  body(); c.fillStyle = 'rgb(46,28,14)'; c.fill();
+  c.save(); body(); c.clip();
+  for (const [lw, col] of [[300, 'rgba(70,44,22,.6)'], [190, 'rgba(92,60,30,.5)']]) { c.strokeStyle = col; c.lineWidth = lw * s; trace(lw / 2); c.stroke(); }
+  // a walnut post (grain lines) and an iron strap (rivets) running up behind the plates
+  { const W = CLOCKWORK_WOOD; c.lineWidth = 34 * s; c.strokeStyle = clockworkCol(W[2]); trace(108); c.stroke(); c.lineWidth = 26 * s; c.strokeStyle = clockworkCol(W[1]); trace(106); c.stroke();
+    c.lineWidth = 0.8 * s; for (const o of [96, 102, 110, 116]) { c.strokeStyle = clockworkCol(W[3], 0.5); trace(o + Math.sin(o) * 1.5); c.stroke(); }
+    c.lineWidth = 1.2 * s; c.strokeStyle = 'rgba(255,210,150,.3)'; trace(side ? 94 : 120); c.stroke();
+    c.lineWidth = 12 * s; c.strokeStyle = clockworkCol(P.iron ? [70, 74, 90] : [70, 74, 90]); trace(76); c.stroke(); c.lineWidth = 9 * s; c.strokeStyle = '#5c6276'; trace(76); c.stroke();
+    c.lineWidth = 1 * s; c.strokeStyle = 'rgba(200,210,230,.45)'; trace(side ? 72 : 80); c.stroke();
+    for (let a = Math.ceil(A0 / 26) * 26; a < A1; a += 26) { const [x, y] = at(a, 76); clockworkRivet(c, x, y, 1.8 * s, P.steel); }
+  }
+  // ---- the plates (one per relief panel), in front of the posts
+  const L = G.level, fl = CLOCKWORK_DECOR[clockworkSecName((a0 + a1) / 2)] || 'dial';
+  if (L && L.panelOf) {
+    for (let i = L.panelOf(A0, side) - 1; i <= L.panelOf(A1, side) + 1; i++) {
+      const Pn = clockworkPanel(i, side, seed), Nn = clockworkPanel(i + 1, side, seed), pa0 = Pn.a0 + 2, pa1 = Nn.a0 - 2, j = Pn.j, dp = 64;
+      if (pa1 < A0 - 40 || pa0 > A1 + 40) continue;
+      const tone = (j * 7.3) % 1, plate = () => { trace(0, pa0, pa1); const [xe, ye] = at(pa1, dp), [xs, ys] = at(pa0, dp); c.lineTo(xe, ye); c.lineTo(xs, ys); c.closePath(); };
+      const [tx, ty] = at(pa1, dp), [bx, by] = at(pa0, 0);
+      plate(); c.fillStyle = clockworkLG(side ? bx : tx, ty, side ? tx : bx, by, tone < 0.33 ? ['#d8a85a', '#a8742e', '#70461a'] : tone < 0.66 ? ['#cc9a50', '#9a6a2a', '#663e16'] : ['#dcae66', '#ae7a36', '#76491c'], c); c.fill();
+      c.save(); plate(); c.clip();
+      // a soft shade along the plate's bottom (the plate above overhangs it) and light along its top
+      { const [x0, y0] = at(pa0, 0); c.fillStyle = clockworkLG(0, y0 - 14 * s, 0, y0, ['rgba(60,30,8,0)', 'rgba(60,30,8,.35)'], c); c.fillRect(Math.min(x0, X(wx(pa0) + dir * dp)) - 10, y0 - 14 * s, dp * s + 20, 14 * s); }
+      // the embossed frame (a lit ridge above a dark furrow), inset in the plate
+      const fa0 = pa0 + 11, fa1 = pa1 - 11, f0 = 11, f1 = 53;
+      if (fa1 - fa0 > 24) {
+        const frame = (dx, dy) => { c.beginPath(); const [p0x, p0y] = at(fa0, f0), [p1x, p1y] = at(fa1, f0), [p2x, p2y] = at(fa1, f1), [p3x, p3y] = at(fa0, f1); c.moveTo(p0x + dx, p0y + dy); trace(f0, fa0, fa1); c.lineTo(p1x + dx, p1y + dy); c.lineTo(p2x + dx, p2y + dy); c.lineTo(p3x + dx, p3y + dy); c.closePath(); };
+        frame(0, 0); c.strokeStyle = 'rgba(90,50,14,.7)'; c.lineWidth = 1.6 * s; c.stroke();
+        c.save(); c.translate(-0.9 * s, -0.9 * s); frame(0, 0); c.strokeStyle = 'rgba(255,232,170,.45)'; c.lineWidth = 0.9 * s; c.stroke(); c.restore();
+        // what is set into it
+        const ma = (fa0 + fa1) / 2, [mx, my] = at(ma, 32), room = (fa1 - fa0) * s;
+        const pick = hash2(i, seed + 731 + side);
+        if (fl === 'dial' && pick < 0.6) clockworkDecorDial(c, mx, my, s, j);
+        else if (fl === 'gear' && pick < 0.75) clockworkDecorPorthole(c, mx, my, s, j, (c2, x, y, r) => clockworkGearArt(c2, x + r * 0.35, y + r * 0.2, r * 1.05, 12, j * 3, P.brass, { spokes: 4, lw: 0.8 * s }));
+        else if (fl === 'pipe' && pick < 0.85) clockworkDecorPipe(c, mx, my - room / 2 - 10 * s, my + room / 2 + 10 * s, s, j);
+        else if (fl === 'wood' && pick < 0.85) clockworkDecorCarving(c, mx, my, 16 * s, Math.min(room / 2 - 3 * s, 34 * s), s);
+        else if (fl === 'escape' && pick < 0.7) clockworkDecorPorthole(c, mx, my, s, j, (c2, x, y, r) => { const ew = clockworkEscapeSprite(); c2.save(); c2.translate(x, y); c2.rotate(j * 6); c2.drawImage(ew.cv, -r * 1.2, -r * 1.2, r * 2.4, r * 2.4); c2.restore(); });
+        else if (fl === 'bell' && pick < 0.55) clockworkDecorCleat(c, mx, my - 6 * s, s, dir);
+        else if (fl === 'warn' && pick < 0.8) { clockworkDecorStripes(c, mx, my + 8 * s, 18 * s, 5 * s, s); sp.lamps.push([wx(ma) + dir * 32, ma + 8 + 14, j]); }
+        if (pick > 0.7 && fl !== 'warn' && (fa1 - fa0) > 50) sp.lamps.push([wx(fa1 - 12) + dir * 32, fa1 - 12, j]);
+      }
+      // rivets along the plate's top and bottom seams
+      for (const ra of [pa0 + 5, pa1 - 5]) for (let d = 8; d < dp - 4; d += 12) { const [x, y] = at(ra, d); clockworkRivet(c, x, y, 1.6 * s); }
+      // verdigris: green-blue weeping from a few rivets, gathering in the seam below
+      for (let q = 0; q < 4; q++) {
+        const h = hash2(i * 4 + q, seed + 741 + side); if (h > 0.55) continue;
+        const d = 8 + 12 * Math.floor(hash2(i * 4 + q, 742) * 4), [x, y] = at(pa1 - 5, d), len = (12 + 40 * h) * s;
+        c.strokeStyle = clockworkLG(0, y, 0, y + len, ['rgba(110,200,170,.55)', 'rgba(110,200,170,0)'], c); c.lineWidth = (2 + 2 * h) * s; c.beginPath(); c.moveTo(x, y + 1.5 * s); c.quadraticCurveTo(x + (h - 0.3) * 4 * s, y + len * 0.5, x + (h - 0.3) * 2 * s, y + len); c.stroke();
+      }
+      { const [x0, y0] = at(pa0 + 1, 2), [x1, y1] = at(pa0 + 1, dp - 4); c.strokeStyle = 'rgba(110,200,170,.28)'; c.lineWidth = 3 * s; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+      c.restore();
+      plate(); c.strokeStyle = '#5a3610'; c.lineWidth = 1 * s; c.stroke();
+      // the seam above it: a lit lip on the plate's top edge
+      { const [x0, y0] = at(pa1, 1), [x1, y1] = at(pa1, dp - 2); c.strokeStyle = 'rgba(255,236,180,.6)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(x0, y0 + 1 * s); c.lineTo(x1, y1 + 1 * s); c.stroke(); }
+    }
+  }
+  c.restore();
+  // ---- the lip: a rolled brass bead along the shaft, with its own rivets, lit where it faces up
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.lineWidth = 8 * s; c.strokeStyle = '#5a3610'; trace(3.6); c.stroke();
+  c.lineWidth = 6 * s; c.strokeStyle = '#b07a32'; trace(3.4); c.stroke();
+  c.lineWidth = 3 * s; c.strokeStyle = '#dcaa5a'; trace(side ? 2.6 : 2.4); c.stroke();
+  c.lineWidth = 1.2 * s; c.strokeStyle = 'rgba(255,244,200,.85)'; trace(side ? 2.0 : 1.4); c.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], slope = (x1 - x0) * dir;   // > 0: the wall steps out into the shaft going up (it faces up)
+    if (slope <= 0.3 * s) continue;
+    c.strokeStyle = `rgba(255,248,214,${clamp(slope / s * 0.4, 0, 0.9)})`; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+  }
+  trace(0); c.strokeStyle = 'rgba(90,50,14,.95)'; c.lineWidth = 0.9 * s; c.stroke();
+  for (let a = Math.ceil(A0 / 30) * 30; a < A1; a += 30) { const [x, y] = at(a, 3.5); clockworkRivet(c, x, y, 1.5 * s); }
+  return sp;
+}
+function drawClockworkWalls() {
+  clockworkCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = CLOCKWORK_TILE, bk = clockworkBeatK();
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = clockworkWallTile(side, k);
+    ctx.drawImage(t.cv, ox + t.xa * s, sy(t.a1), t.w, t.h);
+    // the beat lamps in the plates, flashing amber on the tower's tick (red in the Gauntlet)
+    for (const [lx, la, j] of t.lamps) { const y = sy(la); if (y < -20 || y > H + 20) continue; const on = j > 0.5 ? bk : clockworkBeatK2(); clockworkLamp(sx(lx), y, 2.8 * s, on, clockworkLampCol(la)); }
+  }
+  // render one tile ahead each frame (above the screen, where you are heading)
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!CLOCKWORK_CACHE.walls.has(side + ':' + k)) { clockworkWallTile(side, k); done = true; break; } if (done) break; }
+}
+// the off-beat (the tock) for half the lamps, and the lamps' colour by section
+const clockworkBeatK2 = () => { const B = CLOCKWORK.beat, u = pmod(clockworkT() + B / 2, B) / B; return Math.exp(-u * 7) * 0.8; };
+const clockworkLampCol = a => CLOCKWORK_DECOR[clockworkSecName(a)] === 'warn' ? [255, 70, 50] : [255, 180, 70];
+
+// ---- the backdrop: the tower's hollow core rising into warm amber gloom (calm, hazed, lower in contrast). Three
+// parallax layers drawn once per tile and blitted: the far wall (0.06) of walnut posts and beams with great backlit
+// clock faces and round windows; the middle (0.18) with gear trains on brass beams, hanging chains and weights; the near
+// (0.38) with each section's machinery (gears, boilers and pipes, cuckoo clocks on shelves, escape wheels, bells, red
+// warning lamps). The gears in all three tick round a tooth on every beat (live: cached gears drawn turned), pendulums
+// swing on the beat: the whole tower moves on one tick.
+const CLOCKWORK_LAYERS = [{ f: 0.06, LT: 600, id: 0 }, { f: 0.18, LT: 480, id: 1 }, { f: 0.38, LT: 420, id: 2 }];
+const CLOCKWORK_HAZE = [[98, 66, 42], [98, 66, 42], [98, 66, 42]];
+const clockworkMix = (C, k, h = CLOCKWORK_HAZE[0]) => C.map(q => { const v = typeof q !== 'string' ? q : q[0] === '#' ? q.slice(1, 7).match(/../g).map(x => parseInt(x, 16)) : q.match(/\d+/g).slice(0, 3).map(Number); return clockworkCol(v.map((x, i) => lerp(x, h[i], k))); });
+function clockworkLayerTile(L, k) {
+  const C = CLOCKWORK_CACHE.layers, key = L.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = clockworkSpan(), pa0 = k * L.LT - 3, pa1 = (k + 1) * L.LT + 3;
+  t = clockworkCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1;
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  t.c.lineJoin = 'round'; t.c.lineCap = 'round';
+  const col = { live: [] };
+  for (let kk = k - 1; kk <= k + 1; kk++) clockworkDrawLayer(t.c, L, kk, X, Y, x0, x1, col);
+  t.live = col.live.filter(g => g.a >= pa0 - 140 && g.a < pa1 + 140 && Math.floor(g.a / L.LT) === k);
+  { t.c.globalCompositeOperation = 'source-atop'; t.c.fillStyle = ['rgba(90,60,38,.55)', 'rgba(90,60,38,.38)', 'rgba(90,60,38,.24)'][L.id]; t.c.fillRect(0, 0, t.w, t.h); t.c.globalCompositeOperation = 'source-over'; }
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// a walnut beam across (c tile px; y its top, h its height in px), lit along its top, grain lines, brass end plates
+function clockworkBeam(c, xA, xB, y, h, k, mute) {
+  const W = mute ? clockworkMix(CLOCKWORK_WOOD.map(q => clockworkCol(q)), mute) : CLOCKWORK_WOOD.map(q => clockworkCol(q));
+  c.fillStyle = 'rgba(30,14,4,.3)'; c.fillRect(xA, y + h, xB - xA, h * 0.35);
+  c.fillStyle = clockworkLG(0, y, 0, y + h, [W[0], W[1], W[2]], c); c.fillRect(xA, y, xB - xA, h);
+  c.strokeStyle = W[3]; c.lineWidth = 0.8 * k; c.strokeRect(xA, y, xB - xA, h);
+  c.strokeStyle = W[2]; c.globalAlpha = 0.5; c.lineWidth = 0.6 * k; c.beginPath(); for (let q = 1; q < 4; q++) { const yy = y + h * q / 4; c.moveTo(xA, yy); for (let x = xA; x < xB; x += 30 * k) c.quadraticCurveTo(x + 15 * k, yy + Math.sin(x * 0.07 + q) * 1.2 * k, x + 30 * k, yy); } c.stroke(); c.globalAlpha = 1;
+  c.strokeStyle = 'rgba(255,220,170,.35)'; c.lineWidth = 1 * k; c.beginPath(); c.moveTo(xA, y + 1 * k); c.lineTo(xB, y + 1 * k); c.stroke();
+}
+function clockworkPost(c, x, yA, yB, w, k, mute) {
+  const W = mute ? clockworkMix(CLOCKWORK_WOOD.map(q => clockworkCol(q)), mute) : CLOCKWORK_WOOD.map(q => clockworkCol(q));
+  c.fillStyle = clockworkLG(x - w, 0, x + w, 0, [W[0], W[1], W[2]], c); c.fillRect(x - w, yA, w * 2, yB - yA);
+  c.strokeStyle = W[3]; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x - w, yA); c.lineTo(x - w, yB); c.moveTo(x + w, yA); c.lineTo(x + w, yB); c.stroke();
+  c.strokeStyle = W[2]; c.globalAlpha = 0.45; c.lineWidth = 0.6 * k; c.beginPath(); for (const q of [-0.4, 0.15, 0.55]) { c.moveTo(x + w * q, yA); c.lineTo(x + w * q + 1.5 * k, yB); } c.stroke(); c.globalAlpha = 1;
+}
+// a great clock face seen from behind, backlit through its glass (mirrored numerals, the hands' shadows)
+function clockworkBackFace(c, x, y, r, k, mute) {
+  c.fillStyle = clockworkRG(x, y, r * 1.5, ['rgba(255,214,140,.35)', 'rgba(255,190,110,0)'], c); clockworkCirc(c, x, y, r * 1.5); c.fill();
+  c.fillStyle = clockworkRG(x - r * 0.2, y - r * 0.25, r * 1.1, ['#fff0c8', '#f2c880', '#c88a48'], c); clockworkCirc(c, x, y, r); c.fill();
+  c.strokeStyle = 'rgba(120,70,30,.5)'; c.lineWidth = 2 * k; c.beginPath();
+  for (let i = 0; i < 12; i++) { const a = i * TWO_PI / 12; for (let q = 0; q < (i % 3 ? 1 : 3); q++) { const aa = a + (q - (i % 3 ? 0 : 1)) * 0.035; c.moveTo(x - Math.cos(aa) * r * 0.86, y + Math.sin(aa) * r * 0.86); c.lineTo(x - Math.cos(aa) * r * 0.7, y + Math.sin(aa) * r * 0.7); } } c.stroke();
+  c.strokeStyle = 'rgba(110,64,26,.55)'; c.lineWidth = 1 * k; for (const rr of [0.93, 0.62]) { clockworkCirc(c, x, y, r * rr); c.stroke(); }
+  // the glazing bars and the hands' silhouettes
+  c.strokeStyle = 'rgba(90,52,22,.55)'; c.lineWidth = 3 * k; c.beginPath(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; c.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); c.lineTo(x - Math.cos(a) * r, y - Math.sin(a) * r); } c.stroke();
+  c.fillStyle = 'rgba(70,40,16,.7)'; c.save(); c.translate(x, y); c.rotate(-0.9); c.beginPath(); c.roundRect(-3 * k, -r * 0.82, 6 * k, r * 0.86, 3 * k); c.fill(); c.rotate(2.4); c.beginPath(); c.roundRect(-4 * k, -r * 0.55, 8 * k, r * 0.6, 4 * k); c.fill(); c.restore();
+  const B = mute ? clockworkMix(CLOCKWORK_P.brass, mute) : CLOCKWORK_P.brass;
+  c.strokeStyle = clockworkLG(x - r, y - r, x + r, y + r, [B[0], B[1], B[2]], c); c.lineWidth = 7 * k; clockworkCirc(c, x, y, r + 3 * k); c.stroke();
+  c.strokeStyle = B[3]; c.lineWidth = 1 * k; clockworkCirc(c, x, y, r + 7 * k); c.stroke();
+}
+function clockworkRoundWindow(c, x, y, r, k) {
+  c.fillStyle = clockworkRG(x, y, r * 2.4, ['rgba(255,220,150,.3)', 'rgba(255,200,120,0)'], c); clockworkCirc(c, x, y, r * 2.4); c.fill();
+  c.fillStyle = clockworkRG(x - r * 0.3, y - r * 0.4, r * 1.2, ['#fff6d8', '#ffd890', '#e09a50'], c); clockworkCirc(c, x, y, r); c.fill();
+  c.strokeStyle = 'rgba(90,52,22,.8)'; c.lineWidth = 2.4 * k; c.beginPath(); c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x, y - r); c.lineTo(x, y + r); c.stroke();
+  clockworkCirc(c, x, y, r * 0.45); c.stroke();
+  const W = clockworkMix(CLOCKWORK_WOOD.map(q => clockworkCol(q)), 0.2);
+  c.strokeStyle = W[2]; c.lineWidth = 6 * k; clockworkCirc(c, x, y, r + 3 * k); c.stroke(); c.strokeStyle = W[0]; c.lineWidth = 1.4 * k; c.beginPath(); c.arc(x, y, r + 4.6 * k, 3.4, 5.0); c.stroke();
+}
+// a hanging chain with a counterweight (c tile px)
+function clockworkChainWeight(c, x, yA, yB, k, mute) {
+  const B = mute ? clockworkMix(CLOCKWORK_P.iron, mute) : CLOCKWORK_P.iron;
+  for (let y = yA, q = 0; y < yB; y += 5 * k, q++) { c.strokeStyle = B[3]; c.lineWidth = 2.2 * k; c.beginPath(); q % 2 ? c.moveTo(x, y - 3 * k) || c.lineTo(x, y + 3 * k) : c.ellipse(x, y, 2.2 * k, 3.4 * k, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = B[1]; c.lineWidth = 1.2 * k; c.stroke(); }
+  const wy = yB, ww = 9 * k, wh = 26 * k, Br = mute ? clockworkMix(CLOCKWORK_P.brass, mute) : CLOCKWORK_P.brass;
+  c.fillStyle = clockworkLG(x - ww, 0, x + ww, 0, [Br[1], Br[0], Br[1], Br[2]], c); c.beginPath(); c.roundRect(x - ww, wy, ww * 2, wh, 3 * k); c.fill(); c.strokeStyle = Br[3]; c.lineWidth = 0.8 * k; c.stroke();
+  for (const yy of [wy + 4 * k, wy + wh - 4 * k]) { c.strokeStyle = Br[3]; c.lineWidth = 0.6 * k; c.beginPath(); c.moveTo(x - ww, yy); c.lineTo(x + ww, yy); c.stroke(); }
+}
+function clockworkDrawLayer(c, L, k, X, Y, x0, x1, t) {
+  const id = L.id, LT = L.LT, base = k * LT, wa = (base + LT / 2) / L.f, fl = CLOCKWORK_DECOR[clockworkSecName(wa)] || 'dial', h = (q, n = 0) => hash2(k * 7 + n, 3100 + id * 37 + q);
+  if (id === 0) {
+    // the far wall: walnut posts, a beam each slot, one great feature (a backlit clock face, a round window, a pair of
+    // big slow gears)
+    for (const px of [62, 338]) clockworkPost(c, X(px), Y(base + LT + 10), Y(base - 10), 13 * s, s, 0.15);
+    const by = base + 420 + 40 * h(1); clockworkBeam(c, X(x0 - 20), X(x1 + 20), Y(by), 20 * s, s, 0.15);
+    for (const px of [62, 338]) { c.fillStyle = clockworkMix(CLOCKWORK_P.brass, 0.25)[1]; c.fillRect(X(px) - 15 * s, Y(by) - 2 * s, 30 * s, 24 * s); clockworkRivet(c, X(px) - 8 * s, Y(by) + 10 * s, 2 * s); clockworkRivet(c, X(px) + 8 * s, Y(by) + 10 * s, 2 * s); }
+    const kind = pmod(k, 3), fx = 200 + (h(2) - 0.5) * 120, fa = base + 200 + 60 * h(3);
+    if (kind === 0) clockworkBackFace(c, X(fx), Y(fa), (100 + 30 * h(4)) * s, s, 0.2);
+    else if (kind === 1) { clockworkRoundWindow(c, X(fx), Y(fa), 46 * s, s); t.live.push({ type: 'gear', x: fx + 110 * (h(5) < 0.5 ? 1 : -1), a: fa - 60, R: 70, n: 20, pal: 'far', dir: 1 }); }
+    else { t.live.push({ type: 'gear', x: fx - 50, a: fa, R: 90, n: 24, pal: 'far', dir: 1 }); t.live.push({ type: 'gear', x: fx - 50 + 90 + 50 - 6, a: fa + 30, R: 50, n: 13, pal: 'far', dir: -1, mesh: 24 }); }
+  } else if (id === 1) {
+    // the middle: a gear train on a brass beam; a chain and weight; a pendulum
+    const by = base + 120 + 120 * h(1), bx = 60 + 280 * h(2), w = 110;
+    clockworkBeam(c, X(bx - w), X(bx + w), Y(by), 12 * s, s, 0.1);
+    for (const px of [bx - w + 10, bx + w - 10]) clockworkBolt(c, X(px), Y(by) + 6 * s, 3 * s, clockworkMix(CLOCKWORK_P.brass, 0.1));
+    const R1 = 40 + 12 * h(3), n1 = Math.round(R1 / 3.4), R2 = 26, n2 = Math.round(R2 / 3.4), up = h(4) < 0.5 ? 1 : -1;
+    t.live.push({ type: 'gear', x: bx - 20, a: by + R1 + 4, R: R1, n: n1, pal: 'mid', dir: 1 });
+    t.live.push({ type: 'gear', x: bx - 20 + (R1 + R2 - 5) * 0.8, a: by + R1 + 4 + up * (R1 + R2 - 5) * 0.6, R: R2, n: n2, pal: 'mid2', dir: -1, mesh: n1 });
+    const cx = h(5) < 0.5 ? bx - w * 0.8 : bx + w * 0.8; clockworkChainWeight(c, X(cx), Y(by), Y(by - 90 - 70 * h(6)), s, 0.12);
+    if (h(7) < 0.7) t.live.push({ type: 'pend', x: 80 + 240 * h(8), a: base + 40 + 200 * h(9), L: 110 + 50 * h(10), pal: 'mid' });
+  } else {
+    // the near: each section's machinery, twice a slot (alternating walls)
+    for (let q = 0; q < 2; q++) {
+    const h = (qq, n = 0) => hash2(k * 7 + n + q * 3, 3100 + id * 37 + qq + q * 11);
+    const side = (hash2(k, 3150) < 0.5) !== (q === 1) ? 0 : 1, dd = side ? -1 : 1, a = base + 50 + q * 210 + 120 * h(2);
+    if (fl === 'dial' && q === 1) { clockworkDecorDial(c, X((side ? 400 : 0) + dd * 50), Y(a), s * 3.2, h(3)); continue; }
+      if (fl === 'gear' || fl === 'dial') t.live.push({ type: 'gear', x: (side ? 400 : 0) + dd * (30 + 30 * h(3)), a, R: 64 + 20 * h(4), n: 18, pal: 'near', dir: 1 });
+      if (fl === 'pipe') {
+        // a riveted copper boiler and its pipes
+        const bx = X((side ? 400 : 0) + dd * 40), byy = Y(a), r = 46 * s, P = CLOCKWORK_P;
+        c.fillStyle = clockworkLG(bx - r, 0, bx + r, 0, [P.copper[1], P.copper[0], P.copper[1], P.copper[2]], c); c.beginPath(); c.roundRect(bx - r, byy - 70 * s, r * 2, 140 * s, r); c.fill(); c.strokeStyle = P.copper[3]; c.lineWidth = 1.2 * s; c.stroke();
+        for (let q = -2; q <= 2; q++) { const yy = byy + q * 26 * s; c.strokeStyle = 'rgba(90,40,16,.6)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(bx - r + 4 * s, yy); c.lineTo(bx + r - 4 * s, yy); c.stroke(); for (let xx = -3; xx <= 3; xx++) clockworkRivet(c, bx + xx * 12 * s, yy + 3 * s, 1.4 * s, P.copper); }
+        clockworkDecorDial(c, bx + dd * 8 * s, byy - 30 * s, s * 1.3, h(5));
+        clockworkDecorPipe(c, bx + dd * (r + 10 * s), byy - 200 * s, byy + 30 * s, s * 1.2, h(6));
+        c.strokeStyle = P.copper[2]; c.lineWidth = 9 * s; c.beginPath(); c.moveTo(bx, byy + 70 * s); c.lineTo(bx, byy + 90 * s); c.lineTo(X(200), byy + 90 * s); c.stroke(); c.strokeStyle = P.copper[1]; c.lineWidth = 6 * s; c.stroke(); c.strokeStyle = 'rgba(255,220,190,.55)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(bx - 1.5 * s, byy + 70 * s); c.lineTo(bx - 1.5 * s, byy + 88 * s); c.lineTo(X(200), byy + 88 * s); c.stroke();
+        t.live.push({ type: 'steam', x: (side ? 400 : 0) + dd * 40, a: a + 74 });
+      }
+      if (fl === 'wood') {
+        // a shelf of little cuckoo clocks (static: the real ones are in the walls)
+        const sx0 = (side ? 400 : 0) + dd * 10, shy = a;
+        clockworkBeam(c, X(sx0 - 70), X(sx0 + 70), Y(shy), 8 * s, s, 0);
+        for (let q = -1; q <= 1; q++) { const hx = X(sx0 + q * 40), hy = Y(shy) - 34 * s; c.save(); c.globalAlpha = 0.5; c.translate(hx, hy + 12 * s); c.scale(0.5, 0.5); const hs = clockworkCuckooHouse(q % 2 ? 1 : -1); c.drawImage(hs.cv, -hs.ax / (1), -hs.ay, hs.w, hs.h); c.restore(); }
+      }
+      if (fl === 'escape') { t.live.push({ type: 'gear', x: (side ? 400 : 0) + dd * 30, a, R: 56, n: 15, pal: 'escape', dir: 1 }); t.live.push({ type: 'pend', x: (side ? 400 : 0) + dd * 70, a: a + 140, L: 170, pal: 'near' }); }
+      if (fl === 'bell') {
+        const bxw = (side ? 400 : 0) + dd * 50; clockworkBeam(c, X(bxw - 80), X(bxw + 80), Y(a + 70), 14 * s, s, 0);
+        t.live.push({ type: 'bell', x: bxw, a: a + 70, r: 34 + 10 * h(3) });
+        c.strokeStyle = '#d8b880'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(X(bxw + 40), Y(a + 70)); c.quadraticCurveTo(X(bxw + 46), Y(a - 60), X(bxw + 38), Y(a - 180)); c.stroke();
+      }
+      if (fl === 'warn') {
+        // a girder with hazard stripes and red lamps that flash on the beat
+        const gy = Y(a); clockworkDecorStripes(c, X(200), gy, (x1 - x0) * s * 0.5, 7 * s, s);
+        for (const lx of [80, 200, 320]) t.live.push({ type: 'lamp', x: lx, a: a + 14 });
+      }
+    }
+    // near rock-equivalent: iron brackets leaning in from beyond the edges
+    for (const left of [true, false]) {
+      const exx = left ? x0 - 20 : x1 + 20, d2 = left ? 1 : -1, by = base + 60 + 300 * hash2(k, 3301 + (left ? 0 : 1));
+      c.fillStyle = clockworkLG(0, Y(by + 14), 0, Y(by - 14), ['#7a8094', '#4a5064', '#30344a'], c);
+      c.beginPath(); c.moveTo(X(exx), Y(by + 12)); c.lineTo(X(exx + d2 * 70), Y(by + 12)); c.lineTo(X(exx + d2 * 70), Y(by)); c.lineTo(X(exx + d2 * 20), Y(by - 50)); c.lineTo(X(exx), Y(by - 50)); c.closePath(); c.fill();
+      c.strokeStyle = '#2a2e40'; c.lineWidth = 0.8 * s; c.stroke();
+      for (let q = 0; q < 4; q++) clockworkRivet(c, X(exx + d2 * (12 + q * 15)), Y(by + 6), 1.6 * s, CLOCKWORK_P.steel);
+    }
+  }
+}
+const CLOCKWORK_BGPAL = () => ({ far: clockworkMix(CLOCKWORK_P.brass, 0.6), mid: clockworkMix(CLOCKWORK_P.brass, 0.42), mid2: clockworkMix(CLOCKWORK_P.copper, 0.42), near: clockworkMix(CLOCKWORK_P.brass, 0.28), escape: clockworkMix(CLOCKWORK_P.brass, 0.32), fin: CLOCKWORK_P.brass });
+function clockworkBgGearSprite(R, n, pal) {
+  return clockworkSprite(`bgg${R | 0}_${n}_${pal}`, (R + 3) * 2 * s, (R + 3) * 2 * s, c => {
+    const C = CLOCKWORK_BGPAL()[pal], q = (R + 3) * s;
+    if (pal === 'escape') { clockworkGearArt(c, q, q, R * s, n, 0, C, { spokes: 0, holes: 4, depth: R * 0.3 * s, hub: R * 0.2 * s, hubC: clockworkMix(CLOCKWORK_P.steel, 0.32), lw: 1 }); return; }
+    clockworkGearArt(c, q, q, R * s, n, 0, C, { spokes: R > 45 ? 6 : 4, hubC: clockworkMix(CLOCKWORK_P.steel, { far: 0.6, mid: 0.42, mid2: 0.42, near: 0.28, fin: 0 }[pal] ?? 0.3), lw: 1 });
+  });
+}
+function drawClockworkBackground() {
+  clockworkCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = clockworkT(), B = CLOCKWORK.beat;
+  ctx.fillStyle = clockworkLG(0, 0, 0, H, [clockworkCol([104, 72, 46]), clockworkCol([74, 49, 30]), clockworkCol([40, 26, 15])]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  clockworkGlow(ox + playW * 0.5, -H * 0.1, playW * 1.2, [255, 200, 120], 0.16);
+  const n = Math.floor(T / B), snap = clockworkSnap(pmod(T, B) / CLOCKWORK.gear.snap);
+  for (const Ly of CLOCKWORK_LAYERS) {
+    const base = G.camAlt * Ly.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / Ly.LT); k * Ly.LT < pa1; k++) {
+      const t = clockworkLayerTile(Ly, k), y = H - (t.pa1 - base) * s;
+      ctx.drawImage(t.cv, ox + t.xa * s, y, t.w, t.h);
+      for (const g of t.live) {
+        const yy = H - (g.a - base) * s, x = sx(g.x);
+        if (g.type === 'gear') {
+          if (yy < Y0 - g.R * s || yy > Y1 + g.R * s) continue;
+          const sp = clockworkBgGearSprite(g.R, g.n, g.pal), ang = g.dir * (n + snap) * TWO_PI / g.n + (g.mesh ? Math.PI / g.n : 0), q = (g.R + 3) * s;
+          ctx.save(); ctx.translate(x, yy); ctx.rotate(ang); ctx.drawImage(sp.cv, -q, -q, q * 2, q * 2); ctx.restore();
+        } else if (g.type === 'pend') {
+          if (yy < Y0 - 30 || yy - g.L * s > Y1) continue;
+          clockworkPendulum(x, yy, g.L * s, Math.sin(T * Math.PI / B) * 0.22, g.pal === 'mid' ? 0.42 : 0.28);
+        } else if (g.type === 'lamp') {
+          if (yy < Y0 || yy > Y1) continue;
+          clockworkLamp(x, yy, 4 * s, clockworkBeatK(), [255, 70, 50]);
+        } else if (g.type === 'bell') {
+          if (yy < Y0 - 80 || yy > Y1 + 80) continue;
+          clockworkBgBell(x, yy, g.r * s, Math.sin(T * Math.PI / (B * 4)) * 0.12);
+        } else if (g.type === 'steam') {
+          if (yy < Y0 || yy > Y1) continue;
+          const pf = clockworkPuffSprite();
+          for (let q = 0; q < 3; q++) { const u = pmod(T * 0.4 + q / 3, 1), r = (10 + 22 * u) * s; ctx.globalAlpha = (1 - u) * 0.45; ctx.drawImage(pf.cv, x - r * 1.85 + u * 20 * s, yy - u * 80 * s - r * 2, r * 3.7, r * 3.7); }
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+    if (Ly.id === 0) drawClockworkShafts();
+  }
+  // the backdrop sits back in the gloom so the traps (full-strength brass and steel) read first
+  ctx.fillStyle = 'rgba(34,18,8,.26)'; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  drawClockworkMotes();
+}
+// a pendulum hanging from a bracket at (x, y) (screen), its rod length L px, swung by ang; mute: hazed toward the gloom
+function clockworkPendulum(x, y, L, ang, mute) {
+  const sp = clockworkSprite('pend' + mute, 60, 260, c => {
+    const B = mute ? clockworkMix(CLOCKWORK_P.brass, mute) : CLOCKWORK_P.brass;
+    c.fillStyle = clockworkLG(26, 0, 34, 0, [B[1], B[0], B[2]], c); c.fillRect(27.5, 6, 5, 210);
+    c.strokeStyle = B[3]; c.lineWidth = 0.6; c.strokeRect(27.5, 6, 5, 210);
+    c.fillStyle = clockworkRG(24, 216, 30, [B[0], B[1], B[2]], c); clockworkCirc(c, 30, 226, 24); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(110,60,14,.55)'; c.lineWidth = 1.2; clockworkCirc(c, 30, 226, 17); c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.5)'; c.lineWidth = 0.8; c.beginPath(); c.arc(30, 226, 18.4, 3.2, 5.3); c.stroke();
+    c.strokeStyle = 'rgba(255,255,245,.6)'; c.lineWidth = 3; c.beginPath(); c.arc(30, 226, 19, 3.5, 4.4); c.stroke();
+    c.fillStyle = clockworkRG(27, 4, 8, [B[0], B[1], B[2]], c); clockworkCirc(c, 30, 6, 6); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 0.8; c.stroke();
+  });
+  const k = L / 226;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.drawImage(sp.cv, -30 * k, -6 * k, 60 * k, 260 * k); ctx.restore();
+}
+function clockworkBgBell(x, y, r, ang) {
+  const sp = clockworkSprite('bgbell', 100, 100, c => {
+    const B = CLOCKWORK_P.brass;
+    c.translate(50, 8);
+    c.fillStyle = clockworkLG(-40, 0, 40, 0, [B[1], B[0], B[1], B[2], B[3]], c);
+    c.beginPath(); c.moveTo(-12, 4); c.quadraticCurveTo(-14, 30, -30, 60); c.quadraticCurveTo(-40, 70, -42, 76); c.lineTo(42, 76); c.quadraticCurveTo(40, 70, 30, 60); c.quadraticCurveTo(14, 30, 12, 4); c.quadraticCurveTo(0, -2, -12, 4); c.fill();
+    c.strokeStyle = B[3]; c.lineWidth = 1.2; c.stroke();
+    for (const yy of [20, 64, 70]) { c.strokeStyle = 'rgba(110,60,14,.55)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-36 * yy / 76, yy); c.quadraticCurveTo(0, yy + 3, 36 * yy / 76, yy); c.stroke(); }
+    c.strokeStyle = 'rgba(255,255,240,.65)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-7, 10); c.quadraticCurveTo(-10, 40, -24, 66); c.stroke();
+    c.fillStyle = clockworkLG(0, 76, 0, 86, [CLOCKWORK_P.iron[1], CLOCKWORK_P.iron[2]], c); clockworkCirc(c, 0, 80, 6); c.fill();
+    c.fillStyle = clockworkLG(-8, -6, 8, 6, [B[0], B[2]], c); c.fillRect(-8, -6, 16, 10);
+  });
+  const k = r / 42;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.drawImage(sp.cv, -50 * k, -8 * k, 100 * k, 100 * k); ctx.restore();
+}
+// warm shafts of light falling slantwise through the tower from its louvred windows, brass dust turning in them
+function drawClockworkShafts() {
+  const sp = clockworkSprite('shaft', 90, 400, c => {
+    c.fillStyle = clockworkLG(0, 0, 90, 0, ['rgba(255,226,170,0)', 'rgba(255,226,170,.5)', 'rgba(255,240,200,.85)', 'rgba(255,226,170,.5)', 'rgba(255,226,170,0)'], c); c.fillRect(0, 0, 90, 400);
+    c.globalCompositeOperation = 'destination-in'; c.fillStyle = clockworkLG(0, 0, 0, 400, ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, 90, 400);
+    // louvre slats: the light comes through in bands
+    c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.35)'; for (let x = 10; x < 90; x += 18) c.fillRect(x, 0, 5, 400);
+  });
+  const T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 2; i++) {
+    const x = ox + playW * (0.3 + 0.4 * i) + Math.sin(T * 0.1 + i * 2) * 14 * s, ang = (i ? -1 : 1) * 0.24, w = (80 + 26 * i) * s, h = H * 1.25, al = 0.09 + 0.03 * Math.sin(T * 0.5 + i);
+    ctx.save(); ctx.translate(x, -H * 0.1); ctx.rotate(ang); ctx.globalAlpha = al; ctx.drawImage(sp.cv, -w / 2, 0, w, h); ctx.globalAlpha = 1;
+    for (let q = 0; q < 8; q++) { const u = pmod(T * (0.03 + 0.02 * hash2(q, 3701 + i)) + hash2(q, 3702 + i), 1), my = u * h * 0.85, mx = (hash2(q, 3703 + i) - 0.5) * w * 0.6 + Math.sin(T * 0.8 + q) * 4 * s; clockworkTwinkle(ctx, mx, my, (2 + 2 * hash2(q, 3704)) * s, Math.sin(u * Math.PI) * (0.35 + 0.5 * Math.max(0, Math.sin(T * 2.2 + q * 1.7)) ** 4), [255, 236, 190]); }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// brass dust drifting through the tower (the motes)
+MOTE_DRIFT.ckdust = [-10, -26];
+{ const base = moteKind; moteKind = function (m, a) { return clockworkOn() ? 'ckdust' : base(m, a); }; }
+function drawClockworkMotes() {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 0.7 + m.ph) * 7 * s, y = m.y, r = (0.7 + m.sz * 1.0) * m.depth * s;
+    const tw = 0.4 + 0.6 * Math.max(0, Math.sin(G.t * 2 + m.ph * 3)) ** 3;
+    ctx.fillStyle = `rgba(255,214,140,${0.5 * m.depth * tw})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+}
+// the midground (0.55): iron girders reaching in from beyond the screen edge, a cog turning on each nose
+function clockworkGirderSprite(v) {
+  return clockworkSprite('girder' + v, 200, 90, c => {
+    c.translate(150, 30); const I = CLOCKWORK_P.iron;
+    const L = 150 + 0;
+    c.fillStyle = clockworkLG(0, -8, 0, 8, [I[0], I[1], I[2]], c); c.fillRect(-L, -8, L + 30, 16); c.strokeStyle = I[3]; c.lineWidth = 0.9; c.strokeRect(-L, -8, L + 30, 16);
+    // truss web
+    c.strokeStyle = I[2]; c.lineWidth = 3; c.beginPath(); for (let x = -L; x < 20; x += 22) { c.moveTo(x, 8); c.lineTo(x + 11, 40 - Math.max(0, x + 60) * 0.3); c.lineTo(x + 22, 8); } c.stroke();
+    c.strokeStyle = I[1]; c.lineWidth = 1.4; c.stroke();
+    c.fillStyle = clockworkLG(0, 36, 0, 46, [I[1], I[2]], c); c.beginPath(); c.moveTo(-L, 36); c.lineTo(-40, 36); c.lineTo(20, 10); c.lineTo(20, 14); c.lineTo(-38, 44); c.lineTo(-L, 44); c.closePath(); c.fill(); c.strokeStyle = I[3]; c.lineWidth = 0.8; c.stroke();
+    for (let x = -L + 6; x < 26; x += 12) clockworkRivet(c, x, 0, 1.6, CLOCKWORK_P.steel);
+    c.strokeStyle = 'rgba(230,236,250,.45)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-L, -7); c.lineTo(28, -7); c.stroke();
+    void v;
+  });
+}
+function drawClockworkMidground() {
+  clockworkCacheCheck();
+  const f = 0.55, slot = 300, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot), T = clockworkT(), B = CLOCKWORK.beat;
+  const turn = Math.floor(T / B) + clockworkSnap(pmod(T, B) / CLOCKWORK.gear.snap);
+  ctx.save(); ctx.globalAlpha = 0.85;
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 3401); if (r < 0.4) continue;
+    const side = hash2(i, 3402) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = clockworkGirderSprite(1);
+    if (y + 90 * s < -20 || y - 60 * s > H) continue;
+    const nose = (6 + 22 * r) * s, x = side ? cssW - nose : nose;
+    ctx.save(); ctx.translate(x, y); if (side) ctx.scale(-1, 1);
+    ctx.drawImage(sp.cv, -150 * s, -30 * s, 200 * s, 90 * s);
+    const g = clockworkBgGearSprite(20, 10, 'mid'), q = 23 * s; ctx.translate(14 * s, 0); ctx.rotate(turn * TWO_PI / 10 * (side ? -1 : 1)); ctx.drawImage(g.cv, -q, -q, q * 2, q * 2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// speed: brass glints streaking past along the walls and through the shaft
+function drawClockworkSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 41), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 42) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = clockworkCol(j < 0.7 ? [255, 206, 120] : [255, 245, 214], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: chains with counterweights and pendulum bobs hanging in front at the screen edges from beyond the top,
+// swinging on the beat (each drawn once, then blitted turned by its swing)
+function clockworkFgChainSprite(v) {
+  return clockworkSprite('fgchain' + v, 40, 330, c => {
+    c.translate(20, 0); const I = CLOCKWORK_P.iron, B = CLOCKWORK_P.brass, L = 210 + 70 * hash2(v, 3501), n = Math.floor(L / 7);
+    for (let q = 0; q < n; q++) {
+      const y = q * 7;
+      if (q % 2) { c.fillStyle = clockworkLG(-1.5, 0, 1.5, 0, [I[0], I[2]], c); c.fillRect(-1.6, y - 4, 3.2, 8); c.strokeStyle = I[3]; c.lineWidth = 0.6; c.strokeRect(-1.6, y - 4, 3.2, 8); }
+      else { c.strokeStyle = I[3]; c.lineWidth = 3.6; c.beginPath(); c.ellipse(0, y, 3.6, 5, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = I[1]; c.lineWidth = 2.2; c.stroke(); c.strokeStyle = 'rgba(230,236,250,.7)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, y, 3.6, 5, 0, 3.4, 4.6); c.stroke(); }
+    }
+    const ey = n * 7 + 2;
+    if (v % 2) {   // a fluted brass counterweight
+      c.fillStyle = clockworkLG(-10, 0, 10, 0, [B[1], B[0], B[1], B[2]], c); c.beginPath(); c.roundRect(-10, ey, 20, 40, 4); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 0.9; c.stroke();
+      c.strokeStyle = 'rgba(110,60,14,.5)'; c.lineWidth = 0.8; for (const xx of [-5, 0, 5]) { c.beginPath(); c.moveTo(xx, ey + 5); c.lineTo(xx, ey + 35); c.stroke(); }
+      c.fillStyle = clockworkLG(0, ey - 3, 0, ey + 3, [B[0], B[2]], c); c.fillRect(-12, ey - 2, 24, 5); c.fillRect(-12, ey + 38, 24, 5);
+    } else {       // a pendulum bob
+      c.fillStyle = clockworkRG(-4, ey + 12, 20, [B[0], B[1], B[2]], c); clockworkCirc(c, 0, ey + 16, 15); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 1; c.stroke();
+      c.strokeStyle = 'rgba(110,60,14,.55)'; c.lineWidth = 1; clockworkCirc(c, 0, ey + 16, 10); c.stroke();
+      c.strokeStyle = 'rgba(255,255,245,.6)'; c.lineWidth = 2.4; c.beginPath(); c.arc(0, ey + 16, 12, 3.5, 4.5); c.stroke();
+    }
+  });
+}
+function drawClockworkForeground() {
+  clockworkCacheCheck();
+  const f = 1.3, slot = 380, baseA = G.camAlt * f, T = clockworkT(), first = Math.floor((baseA - 320) / slot), last = Math.ceil((baseA + viewH + 300) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, 3511) < 0.55) continue;
+    const side = hash2(i, 3512) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = clockworkFgChainSprite(1 + (i & 3));
+    if (y + 330 * s < -20 || y - 20 > H) continue;
+    const x = side ? ox + playW - 6 * s : ox + 6 * s, sw = Math.sin(T * Math.PI / CLOCKWORK.beat / 2 + i) * 0.035;
+    ctx.save(); ctx.translate(x, y - 340 * s); ctx.rotate(sw); ctx.scale(s * 1.15, s * 1.15); ctx.drawImage(sp.cv, -20, 0, 40, 330); ctx.restore();
+  }
+}
+// The tower's light: a warm umber vignette, amber from the great clock's glass above, the finish chamber blazing as you
+// near it; while the wind-up key holds the clock, the world goes cool and still round the robot (a blue wash, a clock
+// ring counting the pause down).
+function drawClockworkLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75);
+  vg.addColorStop(0, 'rgba(40,18,6,0)'); vg.addColorStop(1, 'rgba(40,18,6,.34)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const tG = ctx.createLinearGradient(0, 0, 0, H * 0.45); tG.addColorStop(0, 'rgba(255,200,120,.07)'); tG.addColorStop(1, 'rgba(255,200,120,0)'); ctx.fillStyle = tG; ctx.fillRect(X0, Y0, WW, H * 0.45 + P);
+  ctx.restore();
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 200), k = clamp(1 - Math.abs(a.end + 200 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) clockworkGlow(cssW / 2, y, Math.max(cssW, H) * 0.75, [255, 210, 130], (0.12 + 0.18 * pay) * k);
+  }
+  if (G.clockworkStop > 0 && G.p) {
+    const k = clamp(G.clockworkStop / 0.25, 0, 1) * clamp((G.clockworkStopMax - G.clockworkStop) / 0.12 + 0.2, 0, 1), px = sx(G.p.x), py = sy(G.p.alt);
+    ctx.save(); ctx.fillStyle = `rgba(90,140,200,${0.18 * k})`; ctx.fillRect(X0, Y0, WW, HH);
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(200,230,255,${0.7 * k})`; ctx.lineWidth = 3 * s; ctx.lineCap = 'round';
+    const u = G.clockworkStop / (G.clockworkStopMax || 1.2), r = 62 * s;
+    ctx.beginPath(); ctx.arc(px, py, r, -Math.PI / 2, -Math.PI / 2 + TWO_PI * u); ctx.stroke();
+    ctx.lineWidth = 1.2 * s; ctx.beginPath(); for (let i = 0; i < 12; i++) { const aa = i * TWO_PI / 12; ctx.moveTo(px + Math.cos(aa) * (r + 5 * s), py + Math.sin(aa) * (r + 5 * s)); ctx.lineTo(px + Math.cos(aa) * (r + 10 * s), py + Math.sin(aa) * (r + 10 * s)); } ctx.stroke();
+    ctx.restore();
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (clockworkOn()) drawClockworkBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (clockworkOn()) drawClockworkMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (clockworkOn()) drawClockworkWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (clockworkOn()) drawClockworkLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (clockworkOn()) drawClockworkSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (clockworkOn()) drawClockworkForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { base(); if (clockworkOn()) drawClockworkFx(); }; }
+// ---- the finish: the Great Clock ----
+// The shaft opens into the tower's crown, behind the great clock: its huge glass face fills the chamber's back, blazing
+// amber with the evening outside, its numerals reversed, its hands' silhouettes at a minute to midnight. Under it the
+// great bronze bell hangs from an oak beam across the tower, and on a brass gantry beside it stands the Keeper, the
+// tower's brass automaton bell-ringer, his hammer over his shoulder, his chest dial ticking, his wind-up key turning.
+// Clear the stage and the minute hand strikes XII: the Keeper swings and the bell tolls three times, the gears spin, and
+// cogs and sparks rain down. The deck: two riveted brass catwalks with toothed noses sliding out of the walls to mesh
+// under you.
+const CLOCKWORK_FIN = { face: 480, faceR: 150, beam: 404, bellL: 112, gantry: 168, keeperX: 92 };
+function clockworkChamberRender(E) {
+  const key = 'chamber' + E; let sp = CLOCKWORK_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 120, A1 = E + 900, F = CLOCKWORK_FIN, P = CLOCKWORK_P, W = CLOCKWORK_WOOD.map(q => clockworkCol(q));
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = xl - 24, xb = xr + 24;
+  sp = clockworkCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1;
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s, mid = (xl + xr) / 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the crown's back: deep umber up high, warming toward the glowing glass
+  c.fillStyle = clockworkLG(0, Y(A1), 0, Y(E), ['#2e1a0e', '#5a3a20', '#8a5a32', '#6a4424'], c); c.fillRect(0, 0, sp.w, sp.h);
+  // the roof's rafters converging overhead, and walnut posts down the sides
+  for (let i = -4; i <= 4; i++) { const x0 = mid + i * 40, x1 = mid + i * 140; c.strokeStyle = W[3]; c.lineWidth = 16 * s; c.beginPath(); c.moveTo(X(x0), Y(A1 - 120)); c.lineTo(X(x1), Y(A1 + 40)); c.stroke(); c.strokeStyle = W[1]; c.lineWidth = 12 * s; c.stroke(); c.strokeStyle = 'rgba(255,214,160,.3)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(X(x0) - 5 * s, Y(A1 - 120)); c.lineTo(X(x1) - 5 * s, Y(A1 + 40)); c.stroke(); }
+  clockworkBeam(c, X(xa), X(xb), Y(A1 - 110), 18 * s, s, 0);
+  // the great clock's glass, lit from outside (a haloed disc of warm cream), its frame and glazing bars
+  const fx = X(mid), fy = Y(E + F.face), fr = F.faceR * s;
+  c.fillStyle = clockworkRG(fx, fy, fr * 2.2, ['rgba(255,220,150,.55)', 'rgba(255,190,110,.18)', 'rgba(255,190,110,0)'], c); c.fillRect(0, 0, sp.w, sp.h);
+  c.fillStyle = clockworkRG(fx - fr * 0.25, fy - fr * 0.3, fr * 1.1, ['#fff8e0', '#ffe2a4', '#f0b468', '#c87e3e'], c); clockworkCirc(c, fx, fy, fr); c.fill();
+  // the numerals seen from behind (mirrored Roman strokes) and the minute ring
+  c.save(); c.translate(fx, fy); c.scale(-1, 1);
+  const RN = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  c.fillStyle = 'rgba(110,62,26,.55)'; c.font = `bold ${22 * s}px Georgia, serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (let i = 0; i < 12; i++) { const a = -Math.PI / 2 + i * TWO_PI / 12; c.save(); c.translate(Math.cos(a) * fr * 0.78, Math.sin(a) * fr * 0.78); c.rotate(a + Math.PI / 2); c.fillText(RN[i], 0, 0); c.restore(); }
+  c.restore();
+  c.strokeStyle = 'rgba(110,62,26,.45)'; c.lineWidth = 1.4 * s; for (const r of [0.93, 0.64]) { clockworkCirc(c, fx, fy, fr * r); c.stroke(); }
+  c.lineWidth = 1 * s; c.beginPath(); for (let i = 0; i < 60; i++) { const a = i * TWO_PI / 60; c.moveTo(fx + Math.cos(a) * fr * 0.93, fy + Math.sin(a) * fr * 0.93); c.lineTo(fx + Math.cos(a) * fr * 0.89, fy + Math.sin(a) * fr * 0.89); } c.stroke();
+  c.strokeStyle = 'rgba(96,56,22,.6)'; c.lineWidth = 4 * s; c.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 6; c.moveTo(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr); c.lineTo(fx - Math.cos(a) * fr, fy - Math.sin(a) * fr); } c.stroke();
+  c.fillStyle = 'rgba(255,255,240,.28)'; c.beginPath(); c.ellipse(fx - fr * 0.4, fy - fr * 0.45, fr * 0.3, fr * 0.14, -0.6, 0, TWO_PI); c.fill();
+  // its brass frame: a heavy rolled ring, bolted, with four struts out to the walls (it never floats)
+  for (let i = 0; i < 4; i++) { const a = 0.6 + i * Math.PI / 2, ex = Math.cos(a) > 0 ? X(xb) : X(xa), ey = fy + Math.sin(a) * fr * 1.05 + Math.sin(a) * 40 * s; c.strokeStyle = P.iron[3]; c.lineWidth = 9 * s; c.beginPath(); c.moveTo(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr); c.lineTo(ex, ey); c.stroke(); c.strokeStyle = P.iron[1]; c.lineWidth = 6 * s; c.stroke(); c.strokeStyle = 'rgba(220,226,240,.45)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr - 2 * s); c.lineTo(ex, ey - 2 * s); c.stroke(); }
+  c.strokeStyle = P.brass[3]; c.lineWidth = 16 * s; clockworkCirc(c, fx, fy, fr + 7 * s); c.stroke();
+  c.strokeStyle = clockworkLG(fx - fr, fy - fr, fx + fr, fy + fr, [P.brass[0], P.brass[1], P.brass[2]], c); c.lineWidth = 13 * s; c.stroke();
+  c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 2 * s; c.beginPath(); c.arc(fx, fy, fr + 10 * s, 3.4, 5.0); c.stroke();
+  for (let i = 0; i < 24; i++) { const a = i * TWO_PI / 24; clockworkRivet(c, fx + Math.cos(a) * (fr + 7 * s), fy + Math.sin(a) * (fr + 7 * s), 2 * s); }
+  // the centre boss the hands turn on (the hands are live)
+  c.fillStyle = clockworkRG(fx - 4 * s, fy - 4 * s, 18 * s, [P.brass[0], P.brass[1], P.brass[2]], c); clockworkCirc(c, fx, fy, 14 * s); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1.2 * s; c.stroke();
+  // the oak beam across the tower the bell hangs from, its iron brackets into the walls
+  const by = Y(E + F.beam);
+  clockworkBeam(c, X(xa), X(xb), by - 12 * s, 26 * s, s, 0);
+  for (const e of [-1, 1]) { const wx2 = X(e < 0 ? xl : xr); c.fillStyle = clockworkLG(0, by, 0, by + 60 * s, P.iron.slice(0, 3), c); c.beginPath(); c.moveTo(wx2, by + 14 * s); c.lineTo(wx2 - e * 60 * s, by + 14 * s); c.lineTo(wx2 - e * 60 * s, by + 20 * s); c.lineTo(wx2 - e * 8 * s, by + 70 * s); c.lineTo(wx2, by + 70 * s); c.closePath(); c.fill(); c.strokeStyle = P.iron[3]; c.lineWidth = 1 * s; c.stroke(); for (let q = 0; q < 3; q++) clockworkRivet(c, wx2 - e * (10 + q * 18) * s, by + 17 * s, 1.8 * s, P.steel); }
+  // the bell's yoke on the beam
+  c.fillStyle = clockworkLG(fx - 24 * s, 0, fx + 24 * s, 0, P.iron.slice(0, 3), c); c.beginPath(); c.roundRect(fx - 26 * s, by + 10 * s, 52 * s, 14 * s, 4 * s); c.fill(); c.strokeStyle = P.iron[3]; c.lineWidth = 1 * s; c.stroke();
+  clockworkBolt(c, fx - 18 * s, by + 17 * s, 3 * s); clockworkBolt(c, fx + 18 * s, by + 17 * s, 3 * s);
+  // walnut columns up both sides with brass capitals, an axle plate on each for the big gears (live)
+  for (const e of [-1, 1]) {
+    const cx = X(e < 0 ? xl + 22 : xr - 22);
+    clockworkPost(c, cx, Y(A1), Y(E - 20), 18 * s, s, 0);
+    c.fillStyle = clockworkLG(0, by - 16 * s, 0, by, [P.brass[0], P.brass[1], P.brass[2]], c); c.fillRect(cx - 24 * s, by - 20 * s, 48 * s, 10 * s);
+    c.strokeStyle = P.brass[3]; c.lineWidth = 1 * s; c.strokeRect(cx - 24 * s, by - 20 * s, 48 * s, 10 * s);
+  }
+  // the gantry the Keeper stands on: a riveted brass walkway with a railing, on two diagonal braces from the right wall
+  const gy = Y(E + F.gantry), g0 = X(mid + 18), g1 = X(xr + 4);
+  for (const q of [0.25, 0.7]) { const bx = lerp(g0, g1, q); c.strokeStyle = P.iron[3]; c.lineWidth = 7 * s; c.beginPath(); c.moveTo(bx, gy + 8 * s); c.lineTo(g1, gy + 70 * s + q * 20 * s); c.stroke(); c.strokeStyle = P.iron[1]; c.lineWidth = 4.5 * s; c.stroke(); }
+  c.fillStyle = clockworkLG(0, gy, 0, gy + 12 * s, [P.brass[0], P.brass[1], P.brass[2]], c); c.beginPath(); c.roundRect(g0, gy, g1 - g0, 11 * s, 3 * s); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1 * s; c.stroke();
+  for (let x = g0 + 6 * s; x < g1; x += 12 * s) clockworkRivet(c, x, gy + 5.5 * s, 1.5 * s);
+  c.strokeStyle = 'rgba(255,248,214,.8)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(g0 + 3 * s, gy + 1 * s); c.lineTo(g1, gy + 1 * s); c.stroke();
+  // its railing (behind the Keeper)
+  c.strokeStyle = P.brass[2]; c.lineWidth = 2.6 * s; c.beginPath(); c.moveTo(g0 + 40 * s, gy - 40 * s); c.lineTo(g1, gy - 40 * s); for (let x = g0 + 40 * s; x < g1; x += 22 * s) { c.moveTo(x, gy); c.lineTo(x, gy - 40 * s); } c.stroke();
+  c.strokeStyle = P.brass[0]; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(g0 + 40 * s, gy - 41 * s); c.lineTo(g1, gy - 41 * s); c.stroke();
+  c.restore();
+  // fade the bottom into the shaft below
+  c.globalCompositeOperation = 'destination-in'; c.fillStyle = clockworkLG(0, Y(E - 120), 0, Y(A1), ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, sp.w, sp.h); c.globalCompositeOperation = 'source-over';
+  sp.xl = xl; sp.xr = xr; sp.mid = mid;
+  CLOCKWORK_CACHE.sprites.set(key, sp);
+  return sp;
+}
+// the great bell (its pivot at (0, 0) at the yoke, hanging down; world units): bronze, lit from the top left, raised
+// bands and an inscription band, a heavy clapper
+function clockworkBellArt() {
+  const L = CLOCKWORK_FIN.bellL;
+  return clockworkPiece('greatBell', -70, 70, -6, L + 24, c => {
+    const B = ['#ffe0a0', '#d89a48', '#9a5e22', '#5a3010'];
+    const bell = () => { c.beginPath(); c.moveTo(-20, 8); c.bezierCurveTo(-24, 40, -30, 70, -50, 92); c.quadraticCurveTo(-64, 102, -66, L); c.lineTo(66, L); c.quadraticCurveTo(64, 102, 50, 92); c.bezierCurveTo(30, 70, 24, 40, 20, 8); c.quadraticCurveTo(0, -2, -20, 8); c.closePath(); };
+    c.fillStyle = clockworkLG(0, L + 10, 0, L + 22, [CLOCKWORK_P.iron[1], CLOCKWORK_P.iron[2]], c); clockworkCirc(c, 0, L + 10, 9); c.fill();   // clapper
+    c.strokeStyle = CLOCKWORK_P.iron[3]; c.lineWidth = 1; c.stroke();
+    bell(); c.fillStyle = clockworkLG(-66, 0, 66, 0, [B[1], B[0], B[1], B[2], B[3]], c); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 1.4; c.stroke();
+    c.save(); bell(); c.clip();
+    for (const [yy, w] of [[30, 1], [44, 1], [94, 2], [104, 1.5]]) { const hw = yy < 60 ? 22 + yy * 0.12 : 50 + (yy - 92) * 1.2; c.strokeStyle = 'rgba(90,46,12,.6)'; c.lineWidth = w * 1.2; c.beginPath(); c.moveTo(-hw - 6, yy); c.quadraticCurveTo(0, yy + 4, hw + 6, yy); c.stroke(); c.strokeStyle = 'rgba(255,236,180,.5)'; c.lineWidth = w * 0.7; c.beginPath(); c.moveTo(-hw - 6, yy - 1.4); c.quadraticCurveTo(0, yy + 2.6, hw + 6, yy - 1.4); c.stroke(); }
+    // an inscription band of little embossed marks
+    c.fillStyle = 'rgba(110,60,16,.55)'; for (let q = -6; q <= 6; q++) c.fillRect(q * 4 - 1, 36, 2, 5);
+    c.fillStyle = clockworkLG(0, 0, 0, L, ['rgba(255,255,240,0)', 'rgba(60,24,0,.18)'], c); c.fillRect(-70, 0, 140, L);
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,240,.7)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-12, 12); c.bezierCurveTo(-15, 40, -20, 66, -36, 88); c.stroke();
+    c.strokeStyle = 'rgba(255,255,240,.35)'; c.lineWidth = 6; c.beginPath(); c.moveTo(-5, 14); c.bezierCurveTo(-7, 40, -9, 66, -18, 92); c.stroke();
+    c.fillStyle = clockworkLG(-66, L - 3, 66, L + 3, [B[0], B[2]], c); c.beginPath(); c.ellipse(0, L, 66, 4, 0, 0, TWO_PI); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 1; c.stroke();
+    // the crown loops on top
+    c.strokeStyle = B[3]; c.lineWidth = 6; c.beginPath(); c.arc(0, 4, 8, Math.PI, 0); c.stroke(); c.strokeStyle = B[1]; c.lineWidth = 4; c.stroke();
+  });
+}
+// the Keeper, the tower's brass automaton (live; frame: his feet at (0, 0), y down, world units; facing left toward the
+// bell): stubby legs with copper knees, a barrel body with a ticking chest dial, a wind-up key turning on his back, a
+// domed head with one big amber glass eye and a brass moustache, a long walnut hammer with a brass head
+function clockworkKeeper(T, swing, glow) {
+  const P = CLOCKWORK_P, c = ctx;
+  // the wind-up key on his back (turning: the bow foreshortens as it spins)
+  const kr = Math.cos(T * 2.4);
+  c.save(); c.translate(18, -46);
+  c.fillStyle = clockworkLG(0, -2, 0, 2, [P.brass[0], P.brass[2]]); c.fillRect(0, -2, 10, 4);
+  c.scale(1, 1); c.translate(14, 0); c.scale(Math.max(0.15, Math.abs(kr)), 1);
+  for (const e of [-1, 1]) { c.fillStyle = clockworkRG(-2, e * 7 - 2, 9, [P.brass[0], P.brass[1], P.brass[2]]); c.beginPath(); c.ellipse(0, e * 7, 5, 7, 0, 0, TWO_PI); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1; c.stroke(); c.fillStyle = '#4a2a10'; c.beginPath(); c.ellipse(0, e * 7, 1.8, 3, 0, 0, TWO_PI); c.fill(); }
+  c.restore();
+  // legs and boots
+  for (const e of [-1, 1]) {
+    c.fillStyle = clockworkLG(e * 7 - 5, 0, e * 7 + 5, 0, [P.brass[1], P.brass[0], P.brass[2]]); c.fillRect(e * 7 - 4.5, -26, 9, 20);
+    c.strokeStyle = P.brass[3]; c.lineWidth = 0.8; c.strokeRect(e * 7 - 4.5, -26, 9, 20);
+    c.fillStyle = clockworkRG(e * 7 - 2, -18, 6, [P.copper[0], P.copper[1], P.copper[2]]); clockworkCirc(c, e * 7, -16, 5); c.fill(); c.strokeStyle = P.copper[3]; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = clockworkLG(0, -8, 0, 0, [P.iron[0], P.iron[1], P.iron[2]]); c.beginPath(); c.roundRect(e * 7 - 8, -7, 15, 7, [4, 4, 1, 1]); c.fill(); c.strokeStyle = P.iron[3]; c.lineWidth = 0.8; c.stroke();
+  }
+  // the barrel body
+  const body = () => { c.beginPath(); c.roundRect(-19, -70, 38, 46, 12); };
+  body(); c.fillStyle = clockworkLG(-19, 0, 19, 0, [P.brass[1], P.brass[0], P.brass[1], P.brass[2]]); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+  for (const yy of [-62, -32]) { c.fillStyle = clockworkLG(0, yy - 3, 0, yy + 3, [P.copper[0], P.copper[2]]); c.fillRect(-19, yy - 2.6, 38, 5.2); c.strokeStyle = P.copper[3]; c.lineWidth = 0.6; c.strokeRect(-19, yy - 2.6, 38, 5.2); for (let q = -2; q <= 2; q++) clockworkRivet(c, q * 7, yy, 1.1, P.copper); }
+  // the chest dial (its hand jumps on the beat)
+  c.fillStyle = clockworkRG(-3, -50, 12, P.cream); clockworkCirc(c, 0, -47, 9); c.fill();
+  c.strokeStyle = clockworkLG(-9, -56, 9, -38, [P.brass[0], P.brass[2]]); c.lineWidth = 2.2; clockworkCirc(c, 0, -47, 10); c.stroke();
+  const ha = -Math.PI / 2 + Math.floor(T / CLOCKWORK.beat) * TWO_PI / 12;
+  c.strokeStyle = '#4a2a14'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(0, -47); c.lineTo(Math.cos(ha) * 7, -47 + Math.sin(ha) * 7); c.stroke();
+  c.fillStyle = '#c0392b'; clockworkCirc(c, 0, -47, 1.3); c.fill();
+  c.strokeStyle = 'rgba(255,255,240,.7)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(-13, -64); c.quadraticCurveTo(-16, -48, -13, -32); c.stroke();
+  // the head: a neck collar, a dome, a copper band, the eye, a moustache, a little crest gear
+  c.fillStyle = clockworkLG(0, -76, 0, -70, [P.iron[0], P.iron[2]]); c.fillRect(-7, -76, 14, 7);
+  const hy = -92;
+  c.fillStyle = clockworkRG(-6, hy - 8, 22, [P.brass[0], P.brass[1], P.brass[2]]); c.beginPath(); c.moveTo(-15, hy + 15); c.lineTo(-15, hy); c.arc(0, hy, 15, Math.PI, 0); c.lineTo(15, hy + 15); c.closePath(); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1.1; c.stroke();
+  c.fillStyle = clockworkLG(0, hy + 2, 0, hy + 7, [P.copper[0], P.copper[2]]); c.fillRect(-15, hy + 2, 30, 4.4);
+  clockworkGlow(-5, hy - 3, 18 + 14 * glow, [255, 190, 80], 0.45 + 0.4 * glow);
+  c.fillStyle = clockworkRG(-7, hy - 6, 9, ['#fffbe0', glow > 0.3 ? '#ffd860' : '#ffb440', '#c86a10']); clockworkCirc(c, -5, hy - 3, 6.4); c.fill();
+  c.strokeStyle = clockworkLG(-12, hy - 10, 2, hy + 4, [P.brass[0], P.brass[2]]); c.lineWidth = 2.4; clockworkCirc(c, -5, hy - 3, 7.4); c.stroke();
+  c.fillStyle = '#3a1e08'; clockworkCirc(c, -6.5, hy - 3, 2); c.fill(); c.fillStyle = '#fff'; clockworkCirc(c, -7.4, hy - 4.4, 1); c.fill();
+  c.fillStyle = clockworkLG(0, hy + 8, 0, hy + 12, [P.brass[0], P.brass[2]]); c.beginPath(); c.moveTo(-1, hy + 8); c.quadraticCurveTo(-8, hy + 7, -13, hy + 12); c.quadraticCurveTo(-7, hy + 11, -1, hy + 11); c.quadraticCurveTo(5, hy + 11, 9, hy + 12); c.quadraticCurveTo(5, hy + 7, -1, hy + 8); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 0.6; c.stroke();
+  c.strokeStyle = 'rgba(255,255,240,.7)'; c.lineWidth = 2; c.beginPath(); c.arc(0, hy, 12, 3.6, 4.4); c.stroke();
+  c.save(); c.translate(0, hy - 17); c.rotate(T * 0.8); clockworkGearArt(c, 0, 0, 6, 8, 0, P.brass, { spokes: 0, holes: 0, hub: 1.6, lw: 0.5 }); c.restore();
+  // the hammer arm (shoulder at (-10, -62); swing is the arm's screen angle)
+  c.save(); c.translate(-10, -62); c.rotate(swing);
+  c.fillStyle = clockworkLG(0, -4, 0, 4, [P.brass[0], P.brass[2]]); c.beginPath(); c.roundRect(0, -4, 20, 8, 4); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 0.8; c.stroke();
+  c.fillStyle = clockworkRG(-1, -2, 6, [P.copper[0], P.copper[1], P.copper[2]]); clockworkCirc(c, 0, 0, 5); c.fill();
+  c.fillStyle = clockworkLG(0, -2, 0, 2, CLOCKWORK_WOOD.slice(0, 3).map(q => clockworkCol(q))); c.fillRect(16, -2.2, 58, 4.4);
+  c.fillStyle = clockworkLG(70, -10, 84, 10, [P.brass[0], P.brass[1], P.brass[2]]); c.beginPath(); c.roundRect(68, -11, 15, 22, 3); c.fill(); c.strokeStyle = P.brass[3]; c.lineWidth = 1; c.stroke();
+  c.fillStyle = clockworkLG(0, -12, 0, -8, [P.brass[0], P.brass[2]]); c.fillRect(66.5, -12, 18, 3); c.fillRect(66.5, 9, 18, 3);
+  c.fillStyle = clockworkRG(16, -4, 7, [P.brass[0], P.brass[1], P.brass[2]]); clockworkCirc(c, 18, 0, 4.4); c.fill();
+  c.restore();
+}
+function drawClockworkDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = clockworkT(), F = CLOCKWORK_FIN, P = CLOCKWORK_P;
+  if (y < -260 || y - (900 * s) > H + 200) return;
+  clockworkCacheCheck();
+  const ch = clockworkChamberRender(E), ct = a.clearT >= 0 ? a.clearT : -1, pay = ct >= 0 ? Math.min(1, ct * 1.6) : 0;
+  ctx.drawImage(ch.cv, ox + ch.xa * s, sy(ch.a1), ch.w, ch.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 120; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 120; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  // the big gears on the columns, ticking on the beat (spinning fast on the clear)
+  const turn = Math.floor(T / CLOCKWORK.beat) + clockworkSnap(pmod(T, CLOCKWORK.beat) / CLOCKWORK.gear.snap) + (ct >= 0 ? ct * ct * 6 : 0);
+  for (const [gx, ga, R, n, dir] of [[ch.xl + 22, E + 300, 74, 20, 1], [ch.xr - 22, E + 640, 66, 18, -1], [ch.xl + 22, E + 640, 44, 12, -1]]) {
+    const sp = clockworkBgGearSprite(R, n, 'fin'), q = (R + 3) * s; ctx.save(); ctx.translate(sx(gx), sy(ga)); ctx.rotate(dir * turn * TWO_PI / n); ctx.drawImage(sp.cv, -q, -q, q * 2, q * 2); ctx.restore();
+  }
+  // the clock's hands: a minute to midnight, striking XII on the clear (silhouettes against the glass)
+  const fx = sx(ch.mid), fy = sy(E + F.face), strike = ct >= 0 ? clockworkSnap(clamp(ct / 0.3, 0, 1)) : 0;
+  const ma = -Math.PI / 2 - (1 - strike) * TWO_PI / 60, ha = -Math.PI / 2 - (1 - strike) * TWO_PI / 720;
+  for (const [ang, len, w] of [[ha, 0.58, 9], [ma, 0.86, 6]]) {
+    ctx.save(); ctx.translate(fx, fy); ctx.rotate(ang + Math.PI / 2); ctx.fillStyle = 'rgba(60,32,12,.85)';
+    ctx.beginPath(); ctx.moveTo(-w / 2 * s, 12 * s); ctx.lineTo(-w / 2 * s, -F.faceR * len * s * 0.8); ctx.lineTo(0, -F.faceR * len * s); ctx.lineTo(w / 2 * s, -F.faceR * len * s * 0.8); ctx.lineTo(w / 2 * s, 12 * s); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = clockworkRG(fx - 2 * s, fy - 2 * s, 7 * s, [P.brass[0], P.brass[2]]); clockworkCirc(ctx, fx, fy, 6 * s); ctx.fill();
+  // the bell: still, then swinging hard with each strike; rings of sound washing out from it
+  const strikes = [0.45, 1.25, 2.05], last = ct >= 0 ? strikes.filter(q => ct >= q).pop() : undefined, since = last != null ? ct - last : 9;
+  if (ct >= 0) { const nRung = strikes.filter(q => ct >= q).length; if ((G.clockworkRung || 0) < nRung) { G.clockworkRung = nRung; sfx('ckbell'); G.shake = Math.max(G.shake || 0, 4); } }
+  const bang = Math.sin(since * 9) * Math.exp(-since * 2.2) * 0.22, bx = fx, by = sy(E + F.beam) + 18 * s;
+  if (since < 3) for (let q = 0; q < 3; q++) { const u = since * 0.8 - q * 0.18; if (u <= 0 || u > 1) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,226,150,${(1 - u) * 0.6})`; ctx.lineWidth = (3 - 2 * u) * s; ctx.beginPath(); ctx.ellipse(bx, by + 80 * s, (70 + 160 * u) * s, (40 + 90 * u) * s, 0, 0, TWO_PI); ctx.stroke(); ctx.restore(); }
+  clockworkGlow(bx, by + 70 * s, (90 + 50 * pay) * s, [255, 200, 110], 0.12 + 0.25 * pay * Math.exp(-since));
+  ctx.save(); ctx.translate(bx, by); ctx.rotate(bang); clockworkBlit(clockworkBellArt(), 0, 0); ctx.restore();
+  // the Keeper on his gantry: hammer over his shoulder bobbing on the beat; on each strike he swings at the bell
+  const kx = sx(ch.mid + F.keeperX), ky = sy(E + F.gantry), bob = clockworkBeatK();
+  let sw = -0.95 - bob * 0.08;
+  if (ct >= 0) { for (const q of strikes) { const d = ct - (q - 0.22); if (d > 0 && d < 0.22) sw = lerp(-0.95, -2.2, (d / 0.22) ** 2); else if (d >= 0.22 && d < 0.7) sw = lerp(-2.2, -0.95, smooth(0.22, 0.7, d)); } }
+  ctx.save(); ctx.translate(kx, ky); ctx.scale(s * 1.15, s * 1.15); clockworkKeeper(T, sw, pay); ctx.restore();
+  // cogs and sparks raining down on the clear
+  if (pay > 0) for (let q = 0; q < 22; q++) {
+    const u = pmod(G.t * (0.4 + 0.2 * hash2(q, 3811)) + hash2(q, 3812), 1), x = lerp(ch.xl + 20, ch.xr - 20, hash2(q, 3813)), al = E + 760 - u * 760, al2 = Math.min(1, pay * 2) * Math.sin(u * Math.PI);
+    if (q % 3) { const sp = clockworkCogSprite(1 + (q & 1)), r = (6 + 4 * hash2(q, 3814)) * s; ctx.save(); ctx.globalAlpha = al2; ctx.translate(sx(x), sy(al)); ctx.rotate(G.t * 3 + q); ctx.drawImage(sp.cv, -r, -r, r * 2, r * 2); ctx.restore(); }
+    else clockworkTwinkle(ctx, sx(x), sy(al), 5 * s, al2, [255, 236, 170]);
+  }
+  ctx.restore();
+  // ---- the deck: two riveted brass catwalks with toothed noses sliding out of the walls to mesh under you
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 12 : R + 12), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet, e)), th = 12 * s, xa = Math.min(X0, X1), w = Math.abs(X1 - X0);
+    // the bracket under it into the wall
+    ctx.fillStyle = clockworkLG(0, y, 0, y + 40 * s, P.iron.slice(0, 3)); ctx.beginPath(); ctx.moveTo(X0, y + th); ctx.lineTo(X0 - side * 34 * s, y + th); ctx.lineTo(X0, y + th + 40 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.iron[3]; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    ctx.fillStyle = clockworkLG(0, y - 2 * s, 0, y + th, [P.brass[0], P.brass[1], P.brass[2]]); ctx.beginPath(); ctx.roundRect(xa, y - 2 * s, w, th, 2 * s); ctx.fill(); ctx.strokeStyle = P.brass[3]; ctx.lineWidth = 1 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,248,214,.85)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(xa + 2 * s, y - 1 * s); ctx.lineTo(xa + w - 2 * s, y - 1 * s); ctx.stroke();
+    ctx.strokeStyle = 'rgba(90,50,14,.6)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.moveTo(xa, y + th * 0.55); ctx.lineTo(xa + w, y + th * 0.55); ctx.stroke();
+    for (let x = xa + 6 * s; x < xa + w - 4 * s; x += 14 * s) clockworkRivet(ctx, x, y + th * 0.3, 1.4 * s);
+    // the toothed nose (it meshes with the other side's): two teeth on one side, offset on the other
+    ctx.fillStyle = clockworkLG(0, y - 2 * s, 0, y + th, [P.brass[0], P.brass[1], P.brass[2]]); ctx.strokeStyle = P.brass[3]; ctx.lineWidth = 0.8 * s;
+    for (const q of side < 0 ? [0, 2] : [1]) { ctx.beginPath(); ctx.roundRect(side < 0 ? X1 - 1 * s : X1 - 6 * s, y - 2 * s + q * 4 * s, 7 * s, 3.6 * s, 1.2 * s); ctx.fill(); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (clockworkOn()) drawClockworkDeck(); else base(); }; }
+// the payoff: midnight strikes: cogs and sparks burst up round you, a warm flash
+function clockworkClearBurst() {
+  const a = G.adv, p = G.p;
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; clockworkFx('cog', p.x, a.end + 30, Math.cos(an) * 220, Math.sin(an) * 220 + 160, 1.3, 6 + 4 * (k % 3), { v: 1 + (k & 1) }); }
+  for (let k = 0; k < 20; k++) { const an = k / 20 * TWO_PI; clockworkFx('spark', p.x, a.end + 30, Math.cos(an) * 300, Math.sin(an) * 300 + 100, 0.6, 2.2); }
+  puff(p.x, a.end + 30, 0, 40, 0.7, 22, 'star');
+  G.flashCol = [255, 226, 150]; G.clockworkRung = 0;
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (clockworkOn() && !boss) clockworkClearBurst(); }; }
+// ---- golden pocket watches: three in daring spots (in a piston's path, between a gear's teeth, under an anchor's
+// swing, in a cuckoo's reach), worth a big coin each, and the stage's watch mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'clockworkWatch') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.clockworkWatch = (st.clockworkWatch || 0) + 1, of = advGoalN('clockworkWatch');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Golden watch ${n}/${of}!` : 'Golden watch!', '#ffe08a', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 220, 140];
+  for (let k = 0; k < 16; k++) { const an = k / 16 * TWO_PI; puff(f.x, f.alt, Math.cos(an) * 190, Math.sin(an) * 190, 0.55, 2.4, 'ember', k % 3 ? [255, 210, 110] : [255, 250, 220]); }
+  for (let k = 0; k < 6; k++) { const an = k / 6 * TWO_PI + 0.3; clockworkFx('cog', f.x, f.alt, Math.cos(an) * 150, Math.sin(an) * 150 + 120, 1, 5 + (k % 2) * 2, { v: 1 + (k & 1) }); }
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe08a', big: true, sub: 'golden watch' });
+  vibrate([20, 30, 20]); sfx('ckwatch');
+}; }
+// The golden pocket watch (inside its pickup circle): a gold hunter case with its lid sprung open behind, a fluted crown
+// and bow with a loop of chain, a cream enamel dial with Roman ticks, blued hands ticking round, a glass dome glinting,
+// a warm glow, bobbing.
+function drawClockworkWatchArt(t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2, gl = 0.6 + 0.25 * Math.sin(t * 3.1 + ph), P = CLOCKWORK_P, Gd = ['#fff6c0', '#ffd860', '#d8a020', '#8a5a08'];
+  clockworkGlow(0, bob, 40, [255, 210, 110], 0.34 * gl + 0.1);
+  ctx.save(); ctx.translate(0, bob); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the lid, sprung open behind (an ellipse leaning back, its engraved inside)
+  ctx.fillStyle = clockworkLG(-10, -24, 10, -10, [Gd[1], Gd[2], Gd[3]]); ctx.beginPath(); ctx.ellipse(5, -14, 9.5, 5.5, 0.5, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = Gd[3]; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,250,210,.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.ellipse(5, -14, 6.5, 3.4, 0.5, 0, TWO_PI); ctx.stroke();
+  // the chain loop and the bow and crown
+  ctx.strokeStyle = Gd[3]; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(0, -16, 4.4, Math.PI, 0); ctx.stroke(); ctx.strokeStyle = Gd[1]; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = Gd[2]; ctx.lineWidth = 1.2; ctx.beginPath(); for (let q = 0; q < 5; q++) { const a = Math.PI * 1.1 + q * 0.32; ctx.moveTo(-6 + Math.cos(a) * 12, -20 + Math.sin(a) * 5); ctx.ellipse(-6 + Math.cos(a) * 12, -20 + Math.sin(a) * 5, 1.4, 1, a, 0, TWO_PI); } ctx.stroke();
+  ctx.fillStyle = clockworkLG(-3, -14, 3, -10, [Gd[0], Gd[2]]); ctx.beginPath(); ctx.roundRect(-3, -14.5, 6, 4.5, 1.2); ctx.fill(); ctx.strokeStyle = Gd[3]; ctx.lineWidth = 0.6; ctx.stroke();
+  // the case
+  ctx.fillStyle = clockworkRG(-4, -4, 16, [Gd[0], Gd[1], Gd[2], Gd[3]]); clockworkCirc(ctx, 0, 0, 11.5); ctx.fill(); ctx.strokeStyle = Gd[3]; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(140,90,10,.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); for (let i = 0; i < 24; i++) { const a = i * TWO_PI / 24; ctx.moveTo(Math.cos(a) * 10, Math.sin(a) * 10); ctx.lineTo(Math.cos(a) * 11.3, Math.sin(a) * 11.3); } ctx.stroke();
+  // the dial
+  ctx.fillStyle = clockworkRG(-2.4, -2.4, 10, P.cream); clockworkCirc(ctx, 0, 0, 8.6); ctx.fill(); ctx.strokeStyle = Gd[2]; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,50,20,.85)'; ctx.lineWidth = 0.6; ctx.beginPath(); for (let i = 0; i < 12; i++) { const a = i * TWO_PI / 12, l = i % 3 ? 7.2 : 6.2; ctx.moveTo(Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(Math.cos(a) * l, Math.sin(a) * l); } ctx.stroke();
+  const ma = -Math.PI / 2 + Math.floor(t * 2) * TWO_PI / 60, ha = -Math.PI / 2 + t * 0.2;
+  ctx.strokeStyle = '#2a3c8a'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(ha) * 4.4, Math.sin(ha) * 4.4); ctx.stroke();
+  ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(ma) * 6.6, Math.sin(ma) * 6.6); ctx.stroke();
+  ctx.fillStyle = '#c0392b'; clockworkCirc(ctx, 0, 0, 0.9); ctx.fill();
+  // the glass: a sheen across the upper left
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-3.4, -3.8, 3.4, 1.6, -0.7, 0, TWO_PI); ctx.fill();
+  clockworkSheen(ctx, 0, 0, 13, 0.5);
+  ctx.restore();
+  const u = (t * 0.7 + ph) % 1, a = Math.sin(u * Math.PI);
+  clockworkTwinkle(ctx, 7, -6 + bob, 6 * a, 0.9 * a);
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'clockworkWatch')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'clockworkWatch');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'clockworkWatch') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawClockworkWatchArt(G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the watch mission (a star), and its count on the HUD under the others
+ADV_GOALS.clockworkWatch = { text: g => `Find all ${g.n} golden watches`, done: (r, g) => (r.stats.clockworkWatch || 0) >= g.n, any: true, prog: (g, st) => `${st.clockworkWatch || 0}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv; if (!a || !a.st || a.st.theme !== 'clockwork') return;
+  const goals = advGoalList(a.lv, a.st), row = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  const g = goals.find(q => q.k === 'clockworkWatch'); if (!g) return;
+  const n = G.stats.clockworkWatch || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * row, txt = `${Math.min(n, g.n)}/${g.n}`;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(txt).width;
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#ffe9a0' : '#ffe7b8'; ctx.fillText(txt, xr, y);
+  ctx.translate(xr - tw - 13, y); ctx.scale(0.6, 0.6); drawClockworkWatchArt(G.t, 0);
+  ctx.restore();
+}; }
+// The stage on the island: level 26 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'clockwork' || (G.level && G.level.clockwork)) return;
+  G.level = createClockworkLevel(G.seed, st); G.clockworkT = 0; G.clockworkFx = []; G.clockworkKeyUsed = false; G.clockworkStop = 0; G.clockworkStopMax = 1.2; G.clockworkRung = 0; G.clockworkBi = null;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The great clock ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the tower's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRC = { CLOCKWORK, CLOCKWORK_STAGE, clockworkShapes, clockworkDanger, clockworkGearState, clockworkPistonState, clockworkCuckooState, clockworkAnchorState, createClockworkLevel, cache: CLOCKWORK_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Clockwork Tower, island level 26)
 // (game slot: Kooky Lab, island level 27)
 // (game slot: Pipe Organ Cavern, island level 28)
