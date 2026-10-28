@@ -6813,6 +6813,177 @@ const geodekingStats = { seeds: 0, traps: 0, searches: 0, worst: 0, jewels: 0, p
 const geodekingSummary = () => `PASS: Geode King: ${geodekingStats.seeds} layouts, a ${geodekingStats.gate} m approach to the Throne Doors then the Throne Hall, only its own traps (${Object.entries(geodekingStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')} before the gate), each taught alone first; shaft ${geodekingStats.minW.toFixed(0)}+ wide, wall slope ${geodekingStats.slope.toFixed(2)} (max ${GK.RULES.maxWallSlope}); resting guards leave ${geodekingStats.open.toFixed(0)}+ open and crossed halberds ${geodekingStats.shut.toFixed(0)} at most; chandelier gaps ${geodekingStats.chandGap.toFixed(0)}+ beyond the widest pilot, plugged ${geodekingStats.chandPlug.toFixed(0)} at most, ${geodekingStats.chandSide.toFixed(0)}+ round the far side; mirror gaps ${geodekingStats.mirGap.toFixed(0)}+ drifting ${geodekingStats.mirV.toFixed(0)} u/s at most; gongs never move (their rings only shove); beats ${geodekingStats.beatGap.toFixed(0)}+ apart; pickups ${geodekingStats.pick.toFixed(1)}+ from any reach; ${geodekingStats.traps} beats (${geodekingStats.arena} in the Throne Hall) × 6 phases and ${geodekingStats.jewels} crown jewels flown by the widest pilot (${geodekingStats.searches} searches, slowest ${geodekingStats.worst.toFixed(1)} s)`;
 // (test slot: Geode King, island level 15)
 // (test slot: Magma Core, island level 19)
+// ---------- Adventure: Bellows Drake (island level 20), an authored stage with its own traps and the dragon boss ----------
+// As the Anthill's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat of the climb and the first traps of the Hoard, and every hoard crown, flown by a
+// time-space search for the widest pilot on the traps' own clocks from 6 start phases. Everything of the four traps is
+// lethal (hearths, bellows and flames; hammers, helves, anvils and corbels; troughs and pours; drakelings).
+const DK = new Function(regions.join('\n') + '\nreturn { createDrakeLevel, drakeShapes, drakeDanger, drakeArena, drakeBellowsAt, drakeFlamePts, drakeHammerAt, drakeHammerGeo, drakeSluiceAt, drakePourPt, drakeWhelpAt, DRAKE, DRAKE_STAGE, DRAKE_TYPES, ADV_DRAKE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const drakeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, crowns: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, flameLane: Infinity, hamOpen: Infinity, sluiceGap: Infinity, whelpMid: Infinity, arenaTraps: 0, arenaChili: 0 };
+{
+  const R = DK.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = DK.ADV_DRAKE, X = DK.DRAKE;
+  const dfail = (rule, d) => fail('drake: ' + rule, d);
+  if (st0.theme !== 'drake' || !(st0.reward > 0)) dfail('Bellows Drake is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'boss') || !st0.goals.some(g => g.k === 'drakeCrowns' && g.n === 3) || !st0.goals.some(g => g.k === 'time' && g.s > 0)) dfail('three missions: beat the drake, 3 hoard crowns and a fast clear', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * DK.UNITS_PER_M - DK.drakeArena()) > 1e-6) dfail('the stage length runs to the Hoard', `${st0.len}`);
+  if (!(X.boss.hp > 0) || !(X.boss.at > 0)) dfail('the Hoard has its boss', JSON.stringify(X.boss));
+  // the stage's order: bellows, then hammers, then spillways, then drakelings, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { bellPair: 'drakeBellows', hamBell: 'drakeHammer', sluiceBell: 'drakeSluice', sluiceHam: 'drakeSluice', whelpPair: 'drakeWhelp', whelpSluice: 'drakeWhelp', whelpHam: 'drakeWhelp' };
+    const S = DK.DRAKE_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) dfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) dfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+      else if (kind === b && o.rest && firsts[b].rest && o.rest > firsts[b].rest + 1e-9) dfail('a drakeling never rests longer than at its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'drakeBellows,drakeHammer,drakeSluice,drakeWhelp') dfail('the forge teaches bellows, then hammers, then spillways, then drakelings', seen.join());
+    if (!S.some(sec => sec.calm && sec !== S[0])) dfail('the forge has a breather', '');
+    if (!S[S.length - 1].arena) dfail('the stage ends in the Hoard', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (DK.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) DK.drakeShapes(h, t, S); return S; };
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.drakeDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = DK.createDrakeLevel(DK.advSeed(st), st), hz = [], fr = [];
+    const top = level.arenaA0 + 8000;   // (the climb and the first stretch of the Hoard)
+    drakeStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < top; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) dfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) dfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1.filter(h => h.lo < top)); fr.push(...f1.filter(f => f.alt < top));
+    }
+    drakeStats.len = level.arenaA0 / 10;
+    for (const h of hz) if (!DK.DRAKE_TYPES.has(h.type)) dfail('the forge only has its own traps', h.type);
+    for (const h of hz) drakeStats.kinds[h.type] = (drakeStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    const beats = level.beats.filter(b => Math.min(...b.hs.map(h => h.lo)) < top);
+    for (let i = 1; i < beats.length; i++) { const p = beats[i - 1], q = beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); drakeStats.beatGap = Math.min(drakeStats.beatGap, g); if (g < 0) dfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) dfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.arenaA0 - 260 && h.lo < level.bossAt + 800)) dfail('the way into the Hoard and its first stretch are clear of traps (the boss turns to fight there)', '');
+    drakeStats.arenaTraps = hz.filter(h => h.lo > level.arenaA0).length;
+    for (let a = 0; a < top; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      drakeStats.minW = Math.min(drakeStats.minW, r - l); drakeStats.slope = Math.max(drakeStats.slope, l2 - l, r - r2);
+    }
+    if (drakeStats.minW < R.minWidth) dfail('the shaft is never narrower than minWidth', drakeStats.minW.toFixed(1));
+    if (drakeStats.slope > R.maxWallSlope) dfail('the walls never step in faster than maxWallSlope', drakeStats.slope.toFixed(2));
+    const straight = (h, lo, hi, which) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); for (const w of which) { const want = w === 'base' ? h.base : h.far, got = (w === 'base') === (h.side > 0) ? l : r; if (Math.abs(got - want) > 0.5) return false; } } return true; };
+    for (const h of hz) {
+      const lane = (S, d) => { const [l, r] = level.walls(h.alt); return d > 0 ? r - reachOf(S, d) : -reachOf(S, d) - l; };
+      if (h.type === 'drakeBellows') {
+        // its longest flame leaves the far lane open
+        const S = []; for (let t = 0; t < h.P; t += 0.02) DK.drakeShapes(h, t, S);
+        const ln = lane(S, h.side); drakeStats.flameLane = Math.min(drakeStats.flameLane, ln); if (ln < W + 50) dfail('a hearth\'s longest flame leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+        if (!straight(h, h.alt - 30, h.alt + 100, ['base'])) dfail('the wall is straight where a hearth is built in', `${h.alt}`);
+        const pumps = new Set(); for (let t = 0; t < h.P; t += 0.01) { const s = DK.drakeBellowsAt(h, t); if (s.ph === 'puff') pumps.add(s.i); } const n = pumps.size;
+        if (n !== 3) dfail('a bellows pumps three times a cycle', `${h.alt} ${n}`);
+      }
+      if (h.type === 'drakeHammer') {
+        // raised, it opens the shaft; down, it lies on its anvil; the hammer only ever moves down onto you from above
+        let open = 0; for (let t = 0; t < h.P; t += 0.01) { const s = DK.drakeHammerAt(h, t); if (s.ph === 'rest' || s.ph === 'tell') open += 0.01; }
+        drakeStats.hamOpen = Math.min(drakeStats.hamOpen, open); if (open < 1.4) dfail('a trip hammer stays raised long enough to pass', `${h.alt} ${open.toFixed(2)}`);
+        const g = DK.drakeHammerGeo(h, 0); if (Math.abs(g.hx - h.ax) > 0.5 || Math.abs(g.ha - h.alt) > 0.5) dfail('a trip hammer lands on its anvil', `${h.alt}`);
+        if (!straight(h, h.lo, h.hi, ['base', 'far'])) dfail('the walls are straight where a trip hammer swings', `${h.alt}`);
+      }
+      if (h.type === 'drakeSluice') {
+        drakeStats.sluiceGap = Math.min(drakeStats.sluiceGap, h.xr - h.xl - 2 * X.sluice.tr); if (h.xr - h.xl - 2 * X.sluice.tr < W + 60) dfail('a spillway\'s gap fits the widest pilot', `${h.alt}`);
+        for (let t = 0; t < h.P; t += 0.02) for (const q of DK.drakeShapes(h, t, [])) { const a = q.k === 'c' ? q.a : Math.max(q.a0, q.a1); if (a > h.alt + 0.5) dfail('a spillway\'s pour only falls', `${h.alt}`); }
+        if (!straight(h, h.alt - 10, h.alt + 10, ['base', 'far'])) dfail('the walls are straight where a spillway\'s troughs run', `${h.alt}`);
+      }
+      if (h.type === 'drakeWhelp') {
+        // perched, a drakeling leaves the middle of the shaft clear; dashing, it stays between the walls
+        let mid = Infinity;
+        for (let t = 0; t < h.P; t += 0.02) {
+          const s = DK.drakeWhelpAt(h, t), S = DK.drakeShapes(h, t, []);
+          for (const q of S) { const xs = q.k === 'c' ? [[q.x, q.r, q.a]] : [[q.x0, q.r, q.a0], [q.x1, q.r, q.a1]]; for (const [x, r, a] of xs) { const [l, rr] = level.walls(a); if (x - r < l - 0.5 || x + r > rr + 0.5) dfail('a drakeling stays between the walls', `${h.alt}`); } }
+          if (s.ph !== 'dash') { const [l, r] = level.walls(h.alt); mid = Math.min(mid, s.wall > 0 ? r - reachOf(S, 1) : -reachOf(S, -1) - l); }
+        }
+        drakeStats.whelpMid = Math.min(drakeStats.whelpMid, mid); if (mid < W + 120) dfail('a perched drakeling leaves the shaft wide open', `${h.alt} ${mid.toFixed(0)}`);
+        if (!straight(h, h.alt - 60, h.alt + 40, ['base', 'far'])) dfail('the walls are straight where a drakeling perches', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = DK.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) dfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the hoard crowns, the Vaults' ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(DK.laneSize().w / 2 + 6 + DK.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of DK.drakeDanger(h)) dd = Math.min(dd, DK.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) drakeStats.pick = Math.min(drakeStats.pick, dd);
+      if (dd < need - 0.5) dfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < DK.pickR(fr[i]) + DK.pickR(fr[j]) + DK.PICK_GAP - 0.01) dfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'drakeCrown').length !== 3) dfail('the forge holds exactly 3 hoard crowns', `${fr.filter(f => f.kind === 'drakeCrown').length}`);
+    if (fr.some(f => f.kind === 'drakeCrown' && f.alt > level.arenaA0)) dfail('the hoard crowns are all on the climb (not in the boss fight)', '');
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) dfail('the forge keeps a chili line', `${gap | 0}`);
+    let ag = 0, al = level.arenaA0; drakeStats.arenaChili = 0; for (const f of fr) if (f.kind === 'chili' && f.alt > level.arenaA0) { ag = Math.max(ag, f.alt - al); al = f.alt; drakeStats.arenaChili++; }
+    if (ag > 460) dfail('the Hoard keeps a close chili line for the boss fight', `${ag | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of beats) {
+      const bi = beats.indexOf(b), prevTop = bi > 0 ? Math.max(...beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      drakeStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        drakeStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) dfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.drakeDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else drakeStats.worst = Math.max(drakeStats.worst, tm);
+      }
+    }
+    // every hoard crown can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'drakeCrown')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        drakeStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < DK.COCO_R + W / 2 - 4);
+        if (tm < 0) dfail('every hoard crown can be grabbed and escaped by the widest pilot', `crown at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      drakeStats.crowns++;
+    }
+  }
+}
+const drakeSummary = () => `PASS: Bellows Drake: ${drakeStats.seeds} layouts × ${drakeStats.len} m to the Hoard (+800 m of it checked), only its own traps (${Object.entries(drakeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${drakeStats.minW.toFixed(0)}+ wide, wall slope ${drakeStats.slope.toFixed(2)} (max ${DK.RULES.maxWallSlope}); longest flames leave ${drakeStats.flameLane.toFixed(0)}+ lanes, hammers raised ${drakeStats.hamOpen.toFixed(1)}+ s a cycle, spillway gaps ${drakeStats.sluiceGap.toFixed(0)}+ (pours only fall), perched drakelings leave ${drakeStats.whelpMid.toFixed(0)}+ open; Hoard: ${drakeStats.arenaTraps} traps spread out, ${drakeStats.arenaChili} chilies close together; beats ${drakeStats.beatGap.toFixed(0)}+ apart; pickups ${drakeStats.pick.toFixed(1)}+ from any reach; ${drakeStats.traps} beats × 6 phases and ${drakeStats.crowns} hoard crowns flown by the widest pilot (${drakeStats.searches} searches, slowest ${drakeStats.worst.toFixed(1)} s)`;
 // (test slot: Bellows Drake, island level 20)
 
 console.log(advSummary());
@@ -6850,4 +7021,5 @@ console.log(snapjawSummary());
 console.log(basaltSummary());
 console.log(idolsSummary());
 console.log(geodekingSummary());
+console.log(drakeSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
