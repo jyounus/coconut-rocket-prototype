@@ -10,7 +10,7 @@ set -e
 cd "$(dirname "$0")"
 DEST=../../audio/music
 mkdir -p "$DEST"
-if [ $# -gt 0 ]; then names="$*"; else names=$(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync('out/tracks.json','utf8'))).join(' '))"); fi
+if [ $# -gt 0 ]; then names="$*"; elif [ -n "$KIT" ]; then names=""; else names=$(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync('out/tracks.json','utf8'))).join(' '))"); fi
 for n in $names; do
   [ -f "out/$n.wav" ] || { echo "no render for $n (node render.mjs $n)"; exit 1; }
   for f in out/$n.wav out/$n-*.wav; do
@@ -19,7 +19,7 @@ for n in $names; do
     afconvert -f m4af -d aac -b "$rate" -q 127 "$f" "$DEST/$b.mp4"
   done
 done
-node -e "
+[ -n "$names" ] && node -e "
 const fs = require('fs'), all = JSON.parse(fs.readFileSync('out/tracks.json', 'utf8')), dest = '$DEST', names = '$names'.split(' ').filter(Boolean);
 const tj = dest + '/tracks.json', classic = fs.existsSync(tj) ? JSON.parse(fs.readFileSync(tj, 'utf8')) : {};
 let touched = false;
@@ -30,9 +30,10 @@ for (const n of names) {
 }
 if (touched) fs.writeFileSync(tj, JSON.stringify(classic, null, 1));
 "
-ls -la "$DEST" | grep -E "$(echo $names | tr ' ' '|')"
-# The sound studio's instrument kit (KIT=1 node render.mjs): single notes at 96 kbps into prototype/audio/kit/.
-if [ -d out/kit ]; then
+[ -n "$names" ] && ls -la "$DEST" | grep -E "$(echo $names | tr ' ' '|')"
+# The sound studio's instrument kit (KIT=1 node render.mjs, then KIT=1 ./encode.sh): single notes at 96 kbps into
+# prototype/audio/kit/ (only when asked, so a composer encoding their own track never rewrites the shared kit).
+if [ -n "$KIT" ] && [ -d out/kit ]; then
   mkdir -p ../../audio/kit
   for f in out/kit/*.wav; do afconvert -f m4af -d aac -b 96000 -q 127 "$f" "../../audio/kit/$(basename "$f" .wav).mp4"; done
   cp out/kit/kit.json ../../audio/kit/kit.json

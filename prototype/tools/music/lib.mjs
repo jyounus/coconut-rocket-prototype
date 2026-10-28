@@ -325,9 +325,12 @@ export const human = (t, v, dt = 0.006, dv = 0.06) => [t + (rnd() - 0.5) * dt, M
 // the track's render: the bar map, buffers, the score's compose(S) and the mixdown. def (a track module's default):
 //   name, label, bpm, form [[section, bars]], loop (bars), join (bars), keyTr (semitones from D minor, for the game's
 //   tonal sound effects), chords { section: [chord names per bar, cycled] }, up { section: semitones } (a key change),
-//   seed, mix { send, level, room, damp, master }, compose(S)
+//   seed, mix { send, level, room, damp, master }, compose(S), grid (optional: the steps per bar the studio's note
+//   editor snaps to: 12 for a 12/8 bar of eighth-note triplets, either for the whole track or per section, e.g.
+//   { A: 12, B: 12 }; 16, sixteenths, when not given)
 // S: bufs, sp (a 16th, s), bar (s), beat (s), map [{ b, sec, i, n, t0, ch (name, at pitch), C (chord), last, intoNew,
-//   next }], note(stem, id, midi, t, o), rev(stem, id, filter, tEnd, o), rnd, plus the helpers above.
+//   next }], note(stem, id, midi, t, o), rev(stem, id, filter, tEnd, o), rnd, N(...) and late(t) (the seam helpers
+//   below), plus the helpers above.
 export function renderTrack(def) {
   const sp = 60 / def.bpm / 4, bar = sp * 16, map = [];
   for (const [sec, n] of def.form) for (let i = 0; i < n; i++) {
@@ -343,11 +346,22 @@ export function renderTrack(def) {
     // it starts on the bar line instead, so the seam has nothing cut in half)
     note: (stem, id, midi, t, o = {}) => note(bufs, stem, id, midi, t < loopStart && t > loopStart - 0.08 ? loopStart : t, { trim: true, ...o }),
     rev: (stem, id, filter, tEnd, o = {}) => reversed(bufs, stem, id, filter, tEnd, { trim: true, ...o }), rnd };
+  // (opt-in helpers for the seam, shared from the composers' own: N is S.note for a note in the intro that must be gone
+  // by the loop's first bar line (its hold and release cut to end 5 ms before it, percussion included: whatever rang
+  // over it would be missing when the loop comes round); late(t) nudges a hit that falls on the loop's first bar line
+  // 4 ms later, so the seam itself never lands inside an attack)
+  S.N = (stem, id, midi, t, o = {}) => {
+    const by = loopStart - 0.005; if (t >= loopStart - 0.08) return S.note(stem, id, midi, t, o);
+    if (t >= by) return;
+    const rel = Math.min(o.rel ?? 0.25, by - t), dur = Math.max(0, Math.min(o.dur ?? 10, by - t - rel));
+    return S.note(stem, id, midi, t, { ...o, dur, rel });
+  };
+  S.late = t => Math.abs(t - loopStart) < 0.012 ? loopStart + 0.004 : t;
   def.compose(S);
   const sections = []; map.forEach((B, b) => { if (B.i === 0) sections.push({ name: B.sec, at: +(b * bar).toFixed(6) }); });
   // (for the studio's note editor: each bar's chord, its tones and the key's scale there, as pitch classes)
   const keyAt = B => (def.keyOf ? def.keyOf(B) : def.key ? { tonic: pc(def.key.tonic + B.up), scale: def.key.scale } : null);
   const harmony = map.map(B => { const k = keyAt(B); return { c: B.ch, t: B.C.tones.slice(0, 3), s: k ? SCALES[k.scale].map(x => pc(k.tonic + x)) : null }; });
   return finish({ name: def.name, bufs, N, loopStart, loopEnd, bpm: def.bpm, bars: map.length, sections, join: def.join * bar, digits: 6, ...(def.mix || {}),
-    extra: { label: def.label, keyTr: def.keyTr ?? 0, harmony } });
+    extra: { label: def.label, keyTr: def.keyTr ?? 0, harmony, ...(def.grid ? { grid: def.grid } : {}) } });
 }
