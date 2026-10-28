@@ -5956,6 +5956,13 @@ const hollowpalmStats = { seeds: 0, traps: 0, searches: 0, worst: 0, bugs: 0, pi
 }
 const hollowpalmSummary = () => `PASS: Hollow Palm: ${hollowpalmStats.seeds} layouts × ${hollowpalmStats.len} m, only its own traps (${Object.entries(hollowpalmStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${hollowpalmStats.minW.toFixed(0)}+ wide, wall slope ${hollowpalmStats.slope.toFixed(2)} (max ${HP.RULES.maxWallSlope}); sap stubs leave ${hollowpalmStats.sapLane.toFixed(0)}+ lanes and their blobs only fall (${hollowpalmStats.drop.toFixed(0)} at most), beaks never spear upward and leave ${hollowpalmStats.peckLane.toFixed(0)}+, crabs' lunges ${hollowpalmStats.crabLane.toFixed(0)}+, owls' wings only sweep down and leave ${hollowpalmStats.owlLane.toFixed(0)}+; beats ${hollowpalmStats.beatGap.toFixed(0)}+ apart; pickups ${hollowpalmStats.pick.toFixed(1)}+ from any reach; ${hollowpalmStats.traps} beats × 6 phases flown clean of sap and ${hollowpalmStats.bugs} jewel beetles grabbed by the widest pilot (${hollowpalmStats.searches} searches, slowest ${hollowpalmStats.worst.toFixed(1)} s)`;
 // (test slot: Hollow Palm, island level 41)
+// (test slot: Idol's Climb, island level 6)
+// (test slot: Snapjaw Swamp, island level 8)
+// (test slot: Jelly Drift, island level 12)
+// (test slot: Basalt Deep, island level 14)
+// (test slot: Geode King, island level 15)
+// (test slot: Magma Core, island level 19)
+// (test slot: Bellows Drake, island level 20)
 
 console.log(advSummary());
 console.log(templeSummary());
