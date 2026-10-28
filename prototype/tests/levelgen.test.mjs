@@ -5796,6 +5796,195 @@ const anthillStats = { seeds: 0, traps: 0, searches: 0, worst: 0, eggs: 0, pick:
 }
 const anthillSummary = () => `PASS: Anthill Underworks: ${anthillStats.seeds} layouts × ${anthillStats.len} m, only its own traps (${Object.entries(anthillStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${anthillStats.minW.toFixed(0)}+ wide, wall slope ${anthillStats.slope.toFixed(2)} (max ${AH.RULES.maxWallSlope}); soldier twigs leave ${anthillStats.marchLane.toFixed(0)}+ lanes, antlions' full lunges ${anthillStats.jawLane.toFixed(0)}+, leaf gaps ${anthillStats.leafGap.toFixed(0)}+ (never lethal), roly-polies only roll down (${anthillStats.rolyFree.toFixed(1)}+ s quiet per cycle); side tunnels ${anthillStats.tunnels.toFixed(0)}+ from traps; beats ${anthillStats.beatGap.toFixed(0)}+ apart; pickups ${anthillStats.pick.toFixed(1)}+ from any reach; ${anthillStats.traps} beats × 6 phases and ${anthillStats.eggs} royal eggs flown by the widest pilot (${anthillStats.searches} searches, slowest ${anthillStats.worst.toFixed(1)} s)`;
 // (test slot: Anthill Underworks, island level 39)
+// ---------- Adventure: Bamboo Pagoda (island level 40), an authored stage with its own traps ----------
+// As the Candy Caverns' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases, wave phases and looks), then every beat and every dragon pearl flown by a time-space search for the
+// widest pilot on the traps' own clocks from 6 start phases. Spinners (hinge, boom, wheel), gong frames, rockets and their
+// sparks and dragons are lethal; the gong's shockwave only shoves, but the search treats it as lethal too (a way through
+// that never touches a wave is a way through whatever it shoves).
+const PG = new Function(regions.join('\n') + '\nreturn { createPagodaLevel, pagodaShapes, pagodaDanger, pagodaEnd, pagodaSpinAt, pagodaSpinPiv, pagodaGongAt, pagodaGongDur, pagodaRockAt, pagodaRockGeo, pagodaRockPos, pagodaSpark, pagodaDragAt, pagodaDragDur, pagodaDragPt, PAGODA, PAGODA_STAGE, PAGODA_TYPES, ADV_PAGODA, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const pagodaStats = { seeds: 0, traps: 0, searches: 0, worst: 0, pearls: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, spinLane: Infinity, stowReach: 0, gongLane: Infinity, rockTop: -Infinity, sparkRise: -Infinity, dragBand: 0, peek: 0, lanterns: 0 };
+{
+  const R = PG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = PG.ADV_PAGODA, X = PG.PAGODA, DT = 1 / 15;
+  const pfail = (rule, d) => fail('pagoda: ' + rule, d);
+  if (st0.theme !== 'pagoda' || !(st0.reward > 0)) pfail('Bamboo Pagoda is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'pagodaPearls' && g.n === 3) || !st0.goals.some(g => g.k === 'pagodaLanterns' && g.n > 0)) pfail('three missions: the shrine, 3 dragon pearls and the lanterns', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * PG.UNITS_PER_M - PG.pagodaEnd()) > 1e-6) pfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: spinners, then gongs, then rockets, then dragons, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { spinPair: 'pagodaSpinner', gongPair: 'pagodaGong', gongSpin: 'pagodaGong', rockPair: 'pagodaRocket', rockGong: 'pagodaRocket', rockSpin: 'pagodaRocket', dragPair: 'pagodaDragon', dragRocket: 'pagodaDragon', dragSpin: 'pagodaDragon', dragGong: 'pagodaDragon' };
+    const S = PG.PAGODA_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) pfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) pfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'pagodaSpinner,pagodaGong,pagodaRocket,pagodaDragon') pfail('the pagoda teaches spinners, then gongs, then rockets, then dragons', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) pfail('the pagoda has a breather', '');
+    if (!S[S.length - 1].finish) pfail('the stage ends at the shrine', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (PG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) PG.pagodaShapes(h, t, S, undefined, DT); return S; };
+  // how far a set of shapes reaches out from the wall on side d (the furthest point into the shaft)
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.pagodaDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = PG.createPagodaLevel(PG.advSeed(st), st), hz = [], fr = [];
+    pagodaStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) pfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) pfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    pagodaStats.len = level.end / 10;
+    for (const h of hz) if (!PG.PAGODA_TYPES.has(h.type)) pfail('the pagoda only has its own traps', h.type);
+    for (const h of hz) pagodaStats.kinds[h.type] = (pagodaStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); pagodaStats.beatGap = Math.min(pagodaStats.beatGap, g); if (g < 0) pfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.alt !== q.alt && p.hi > q.lo && q.hi > p.lo) pfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) pfail('the shrine below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      pagodaStats.minW = Math.min(pagodaStats.minW, r - l); pagodaStats.slope = Math.max(pagodaStats.slope, l2 - l, r - r2);
+    }
+    if (pagodaStats.minW < R.minWidth) pfail('the shaft is never narrower than minWidth', pagodaStats.minW.toFixed(1));
+    if (pagodaStats.slope > R.maxWallSlope) pfail('the walls never step in faster than maxWallSlope', pagodaStats.slope.toFixed(2));
+    // the closest a pilot's centre can ever come to a wall (the steering keeps it 6 off, plus half the narrowest pilot)
+    const OUT = 6 + 5;   // (a pilot's hitbox comes no closer than 6 to a wall: see steerRange)
+    for (const h of hz) {
+      const [l0, r0] = level.walls(h.alt), lane = (S, d) => d > 0 ? r0 - reachOf(S, d) : -reachOf(S, d) - l0;
+      const straight = (lo, hi, why) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs((h.side > 0 ? r : l) - h.far) > 0.5 || Math.abs((h.side > 0 ? l : r) - h.base) > 0.5) { pfail(why, `${h.alt}`); break; } } };
+      if (h.type === 'pagodaSpinner') {
+        // boom level and wheel whirling: the far lane stays open; stowed (and re-arming upright) it is out of anyone's reach
+        // and only that ever moves up; swinging, it only comes down
+        straight(h.alt - 40, h.alt + X.spin.len + 40, 'the walls are straight round a spinner');
+        let worst = Infinity, stow = 0, th0 = null;
+        for (let t = 0; t < h.P; t += 0.02) {
+          const s2 = PG.pagodaSpinAt(h, t), S = PG.pagodaShapes(h, t, []);
+          worst = Math.min(worst, lane(S, h.side));
+          if (s2.ph === 'rest' || s2.ph === 'rearm' || s2.ph === 'tell') stow = Math.max(stow, reachOf(S.slice(2), h.side) - h.side * h.base);   // (the boom and its wheel: the hinge drum never moves)
+          if (s2.ph === 'swing' && th0 != null && s2.th > th0 + 1e-9) pfail('a spinner\'s boom only swings down', `${h.alt}`);
+          th0 = s2.ph === 'swing' ? s2.th : null;
+        }
+        pagodaStats.spinLane = Math.min(pagodaStats.spinLane, worst); pagodaStats.stowReach = Math.max(pagodaStats.stowReach, stow);
+        if (worst < W + 40) pfail('a spinner leaves the far lane open', `${h.alt} ${worst.toFixed(0)}`);
+        if (stow > OUT - 6) pfail('a stowed spinner is out of reach', `${h.alt} ${stow.toFixed(1)}`);
+      }
+      if (h.type === 'pagodaGong') {
+        straight(h.alt - 40, h.alt + 40, 'the walls are straight round a gong');
+        const S = PG.pagodaShapes(h, 0, [], 'body'), ln = lane(S, h.side); pagodaStats.gongLane = Math.min(pagodaStats.gongLane, ln);
+        if (ln < W + 120) pfail('a gong leaves a wide lane', `${h.alt}`);
+        if (h.P < X.gong.tell + PG.pagodaGongDur(h) + 1) pfail('one wave at a time per gong', `${h.alt}`);
+      }
+      if (h.type === 'pagodaRocket') {
+        // a rocket never climbs above its tube's mouth (plus its little zig-zag); a burst's sparks barely rise and then
+        // fall; every rocket bursts short of the far wall; one volley at a time
+        straight(h.lo, h.hi, 'the walls are straight where rockets fly and burst');
+        const g = PG.pagodaRockGeo(h);
+        g.R.forEach((r, i) => {
+          for (let tau = 0; tau <= r.tF; tau += 0.01) { const p = PG.pagodaRockPos(h, i, tau); pagodaStats.rockTop = Math.max(pagodaStats.rockTop, p.a - r.Sa); if (p.a > r.Sa + X.rock.zz + 1e-9) pfail('a rocket never climbs', `${h.alt}`); }
+          for (let kk = 0; kk < X.rock.sp; kk++) for (let b = 0; b <= X.rock.burst; b += 0.01) { const q = PG.pagodaSpark(h, i, kk, b); pagodaStats.sparkRise = Math.max(pagodaStats.sparkRise, q.a - r.Ea); if (q.a > r.Ea + 4) pfail('a burst\'s sparks barely rise', `${h.alt}`); }
+          if (Math.abs(Math.abs(h.far - r.Ex) - X.rock.tip) > 0.5) pfail('every rocket bursts short of the far wall', `${h.alt}`);
+        });
+        if (h.P < g.vol + 1) pfail('one volley at a time per rack', `${h.alt}`);
+      }
+      if (h.type === 'pagodaDragon') {
+        // the dragon's track: inside its band; the peeking head out of reach; one dance at a time; doors on straight walls
+        straight(h.alt - 50, h.alt + 50, 'the walls are straight where a dragon dances');
+        let up = 0, dn = 0, peek = 0;
+        for (let t = 0; t < h.P; t += 0.02) {
+          const s2 = PG.pagodaDragAt(h, t), S = PG.pagodaShapes(h, t, []);
+          for (const q of S) { const a0 = q.k === 'c' ? q.a : Math.min(q.a0, q.a1), a1 = q.k === 'c' ? q.a : Math.max(q.a0, q.a1); up = Math.max(up, a1 + q.r - h.alt); dn = Math.max(dn, h.alt - a0 + q.r); }
+          if (s2.ph === 'tell' && S.length) peek = Math.max(peek, reachOf(S, h.side) - h.side * h.base);
+        }
+        pagodaStats.dragBand = Math.max(pagodaStats.dragBand, up, dn); pagodaStats.peek = Math.max(pagodaStats.peek, peek);
+        if (h.alt - dn < h.lo - 0.5 || h.alt + up > h.hi + 0.5) pfail('a dragon stays on its track', `${h.alt} ${up.toFixed(1)} ${dn.toFixed(1)}`);
+        if (peek > OUT - 6) pfail('a peeking dragon is out of reach', `${h.alt} ${peek.toFixed(1)}`);
+        if (h.P < X.drag.tell + PG.pagodaDragDur(h) + 1) pfail('one dance at a time per dragon', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = PG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) pfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the dragon pearls, the Tea House's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(PG.laneSize().w / 2 + 6 + PG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of PG.pagodaDanger(h)) dd = Math.min(dd, PG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) pagodaStats.pick = Math.min(pagodaStats.pick, dd);
+      if (dd < need - 0.5) pfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < PG.pickR(fr[i]) + PG.pickR(fr[j]) + PG.PICK_GAP - 0.01) pfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'pearl').length !== 3) pfail('the pagoda holds exactly 3 dragon pearls', `${fr.filter(f => f.kind === 'pearl').length}`);
+    const nl = fr.filter(f => f.kind === 'lantern').length; pagodaStats.lanterns = nl;
+    if (nl < st0.goals.find(g => g.k === 'pagodaLanterns').n * 1.5) pfail('there are plenty of lanterns for the lantern mission', `${nl}`);
+    for (const f of fr) if (f.kind === 'lantern' && !level.strings.some(s2 => s2.id === f.str)) pfail('every lantern hangs on a string', `${f.alt | 0}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) pfail('the pagoda keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      // (it starts 150 under the beat, or just over the last beat's reach where that is closer)
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      pagodaStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + DT, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        pagodaStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) pfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.pagodaDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else pagodaStats.worst = Math.max(pagodaStats.worst, tm);
+      }
+    }
+    // every dragon pearl can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'pearl')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        pagodaStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < PG.COCO_R + W / 2 - 4);
+        if (tm < 0) pfail('every dragon pearl can be grabbed and escaped by the widest pilot', `pearl at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      pagodaStats.pearls++;
+    }
+  }
+}
+const pagodaSummary = () => `PASS: Bamboo Pagoda: ${pagodaStats.seeds} layouts × ${pagodaStats.len} m, only its own traps (${Object.entries(pagodaStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${pagodaStats.minW.toFixed(0)}+ wide, wall slope ${pagodaStats.slope.toFixed(2)} (max ${PG.RULES.maxWallSlope}); spinners leave ${pagodaStats.spinLane.toFixed(0)}+ lanes and stow ${pagodaStats.stowReach.toFixed(0)} off the wall, gongs leave ${pagodaStats.gongLane.toFixed(0)}+, rockets climb ${pagodaStats.rockTop.toFixed(1)} at most and their sparks rise ${pagodaStats.sparkRise.toFixed(1)}, dragons stay ${pagodaStats.dragBand.toFixed(0)} of their track and peek ${pagodaStats.peek.toFixed(0)} out; beats ${pagodaStats.beatGap.toFixed(0)}+ apart; pickups ${pagodaStats.pick.toFixed(1)}+ from any reach, ${pagodaStats.lanterns} lanterns; ${pagodaStats.traps} beats × 6 phases and ${pagodaStats.pearls} dragon pearls flown by the widest pilot (${pagodaStats.searches} searches, slowest ${pagodaStats.worst.toFixed(1)} s)`;
 // (test slot: Bamboo Pagoda, island level 40)
 // ---------- Adventure: Hollow Palm (island level 41), an authored stage with its own traps ----------
 // As the Monkey Carnival's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
@@ -5994,4 +6183,5 @@ console.log(sandstormSummary());
 console.log(beanstalkSummary());
 console.log(hollowpalmSummary());
 console.log(anthillSummary());
+console.log(pagodaSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
