@@ -5636,6 +5636,165 @@ const sandstormStats = { seeds: 0, traps: 0, searches: 0, worst: 0, dry: 0, gems
 }
 const sandstormSummary = () => `PASS: Sandstorm Canyon: ${sandstormStats.seeds} layouts × ${sandstormStats.len} m, only its own traps (${Object.entries(sandstormStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; gusts up to ${sandstormStats.gust.toFixed(0)} u/s; shaft ${sandstormStats.minW.toFixed(0)}+ wide, wall slope ${sandstormStats.slope.toFixed(2)} (max ${SS.RULES.maxWallSlope}) over ${sandstormStats.bands} sandstone bands; open lanes past scorpion stings ${sandstormStats.lane.sandstormScorp.toFixed(0)}+ (minLane ${SS.RULES.minLane}), beside sandfalls ${sandstormStats.lane.sandstormFall.toFixed(0)}+ and past their foot ledges ${(sandstormStats.lane.ledge ?? 0).toFixed(0)}+; beats ${sandstormStats.beatGap.toFixed(0)}+ apart; pickups ${sandstormStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${sandstormStats.traps} beats (${sandstormStats.dry} dry runs past sandfalls) and ${sandstormStats.gems} scarabs (reach and escape) flown by the widest pilot (slowed by sand, pushed by gusts) in ${sandstormStats.searches} searches, the slowest pass ${sandstormStats.worst.toFixed(1)} s`;
 // (test slot: Sandstorm Canyon, island level 38)
+// ---------- Adventure: Anthill Underworks (island level 39), an authored stage with its own traps ----------
+// As the Monkey Carnival's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases and looks), then every beat and every royal egg flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases. Lethal: the soldier twigs and their soldiers, the antlions' rims, heads and
+// jaws, the roly-poly balls. The leaf parades only push (never lethal), so the searches fly through them.
+const AH = new Function(regions.join('\n') + '\nreturn { createAnthillLevel, anthillShapes, anthillDanger, anthillEnd, anthillMarchAt, anthillPathAt, anthillJawsAt, anthillJawPts, anthillLeafPos, anthillRolyAt, anthillRolyGeo, anthillRolyPos, ANTHILL, ANTHILL_STAGE, ANTHILL_TYPES, ADV_ANTHILL, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const anthillStats = { seeds: 0, traps: 0, searches: 0, worst: 0, eggs: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, marchLane: Infinity, jawLane: Infinity, leafGap: Infinity, rolyFree: Infinity, tunnels: Infinity };
+{
+  const R = AH.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = AH.ADV_ANTHILL, X = AH.ANTHILL;
+  const afail = (rule, d) => fail('anthill: ' + rule, d);
+  if (st0.theme !== 'anthill' || !(st0.reward > 0)) afail('Anthill Underworks is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'anthillEggs' && g.n === 3) || !st0.goals.some(g => g.k === 'anthillClean' && g.n > 0)) afail('three missions: the Queen\'s Chamber, 3 royal eggs and clean leaf parades', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * AH.UNITS_PER_M - AH.anthillEnd()) > 1e-6) afail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: soldiers, then antlions, then leaf parades, then roly-polies, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { marchPair: 'anthillMarch', jawPair: 'anthillJaws', jawMarch: 'anthillJaws', leafPair: 'anthillLeaf', leafJaws: 'anthillLeaf', leafMarch: 'anthillLeaf', rolyLeaf: 'anthillRoly', rolyJaws: 'anthillRoly', rolyMarch: 'anthillRoly' };
+    const S = AH.ANTHILL_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) afail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) afail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+      else if (kind === b && o.v && firsts[b].v && o.v < firsts[b].v - 1e-9) afail('a parade is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'anthillMarch,anthillJaws,anthillLeaf,anthillRoly') afail('the anthill teaches soldiers, then antlions, then leaf parades, then roly-polies', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) afail('the anthill has a breather', '');
+    if (!S[S.length - 1].finish) afail('the stage ends at the Queen\'s Chamber', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (AH.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) AH.anthillShapes(h, t, S); return S; };
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.anthillDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = AH.createAnthillLevel(AH.advSeed(st), st), hz = [], fr = [];
+    anthillStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) afail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) afail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    anthillStats.len = level.end / 10;
+    for (const h of hz) if (!AH.ANTHILL_TYPES.has(h.type)) afail('the anthill only has its own traps', h.type);
+    for (const h of hz) anthillStats.kinds[h.type] = (anthillStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); anthillStats.beatGap = Math.min(anthillStats.beatGap, g); if (g < 0) afail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) afail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) afail('the Queen\'s Chamber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      anthillStats.minW = Math.min(anthillStats.minW, r - l); anthillStats.slope = Math.max(anthillStats.slope, l2 - l, r - r2);
+    }
+    if (anthillStats.minW < R.minWidth) afail('the shaft is never narrower than minWidth', anthillStats.minW.toFixed(1));
+    if (anthillStats.slope > R.maxWallSlope) afail('the walls never step in faster than maxWallSlope', anthillStats.slope.toFixed(2));
+    const straight = (h, lo, hi, which) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); for (const w of which) { const want = w === 'base' ? h.base : h.far, got = (w === 'base') === (h.side > 0) ? l : r; if (Math.abs(got - want) > 0.5) return false; } } return true; };
+    for (const h of hz) {
+      const lane = (S, d) => { const [l, r] = level.walls(h.alt); return d > 0 ? r - reachOf(S, d) : -reachOf(S, d) - l; };
+      if (h.type === 'anthillMarch') {
+        // at home the soldiers leave a wide lane; marched out, the chain's lead reaches the far wall (a living bridge)
+        let worst = Infinity; for (let t = 0; t < h.P; t += 0.05) { const st = AH.anthillMarchAt(h, t); if (st.ph !== 'rest') continue; worst = Math.min(worst, lane(AH.anthillShapes(h, t, []), h.side)); }
+        anthillStats.marchLane = Math.min(anthillStats.marchLane, worst); if (worst < W + 60) afail('a soldier twig leaves a wide lane while its column is home', `${h.alt} ${worst.toFixed(0)}`);
+        if (AH.anthillPathAt(h, h.tw)[1] !== h.alt || h.tw < h.wd * 0.4) afail('a soldier twig reaches well out', `${h.alt}`);
+        if (!straight(h, h.alt - 20, h.alt + 30, ['base', 'far'])) afail('the walls are straight where a soldier twig and its bridge hold', `${h.alt}`);
+      }
+      if (h.type === 'anthillJaws') {
+        const S = []; for (let t = 0; t < h.P; t += 0.02) AH.anthillShapes(h, t, S);
+        const ln = lane(S, h.side); anthillStats.jawLane = Math.min(anthillStats.jawLane, ln); if (ln < W + 40) afail('an antlion\'s full lunge leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+        if (!straight(h, h.lo, h.hi, ['base'])) afail('the wall is straight where an antlion lunges from', `${h.alt}`);
+      }
+      if (h.type === 'anthillLeaf') {
+        if (AH.anthillShapes(h, 0, []).length) afail('a leaf parade is never lethal', `${h.alt}`);
+        // the gap between two leaves fits the widest pilot with room (leaf pieces are 2 × 19 wide)
+        const gap = h.span / X.leaf.n - 2 * 19; anthillStats.leafGap = Math.min(anthillStats.leafGap, gap); if (gap < W + 40) afail('the gaps in a leaf parade fit the widest pilot', `${h.alt} ${gap.toFixed(0)}`);
+      }
+      if (h.type === 'anthillRoly') {
+        // the ball only ever falls, rolls between the walls, and its cycle leaves time to climb past it
+        const g = AH.anthillRolyGeo(h); let pa = Infinity;
+        for (let tau = 0; tau <= 2 * g.tC; tau += 0.01) { const p = AH.anthillRolyPos(h, tau); if (p.a > pa + 1e-9) afail('a roly-poly only ever rolls down', `${h.alt}`); pa = p.a; const [l, r] = level.walls(p.a); if (p.x - X.roly.r < l - 0.5 || p.x + X.roly.r > r + 0.5) afail('a roly-poly stays between the walls', `${h.alt}`); }
+        const free = h.P - X.roly.tell - 2 * g.tC - X.roly.sink; anthillStats.rolyFree = Math.min(anthillStats.rolyFree, free);
+        if (!straight(h, h.lo, h.hi, ['base', 'far'])) afail('the walls are straight where a roly-poly ricochets', `${h.alt}`);
+      }
+    }
+    for (const tn of level.tunnels) { const dd = Math.min(...hz.map(h => Math.max(h.lo - tn.alt, tn.alt - h.hi, 0))); anthillStats.tunnels = Math.min(anthillStats.tunnels, dd); if (dd < 100) afail('side tunnels sit clear of the traps', `${tn.alt}`); }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = AH.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) afail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the royal eggs, the Nursery's clutch)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(AH.laneSize().w / 2 + 6 + AH.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of AH.anthillDanger(h)) dd = Math.min(dd, AH.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) anthillStats.pick = Math.min(anthillStats.pick, dd);
+      if (dd < need - 0.5) afail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < AH.pickR(fr[i]) + AH.pickR(fr[j]) + AH.PICK_GAP - 0.01) afail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'egg').length !== 3) afail('the anthill holds exactly 3 royal eggs', `${fr.filter(f => f.kind === 'egg').length}`);
+    if (hz.filter(h => h.type === 'anthillLeaf').length < st0.goals.find(g => g.k === 'anthillClean').n + 4) afail('there are plenty of leaf parades for the clean-pass mission', '');
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) afail('the anthill keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      anthillStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        anthillStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) afail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.anthillDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else anthillStats.worst = Math.max(anthillStats.worst, tm);
+      }
+    }
+    // every royal egg can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'egg')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        anthillStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < AH.COCO_R + W / 2 - 4);
+        if (tm < 0) afail('every royal egg can be grabbed and escaped by the widest pilot', `egg at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      anthillStats.eggs++;
+    }
+  }
+}
+const anthillSummary = () => `PASS: Anthill Underworks: ${anthillStats.seeds} layouts × ${anthillStats.len} m, only its own traps (${Object.entries(anthillStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${anthillStats.minW.toFixed(0)}+ wide, wall slope ${anthillStats.slope.toFixed(2)} (max ${AH.RULES.maxWallSlope}); soldier twigs leave ${anthillStats.marchLane.toFixed(0)}+ lanes, antlions' full lunges ${anthillStats.jawLane.toFixed(0)}+, leaf gaps ${anthillStats.leafGap.toFixed(0)}+ (never lethal), roly-polies only roll down (${anthillStats.rolyFree.toFixed(1)}+ s quiet per cycle); side tunnels ${anthillStats.tunnels.toFixed(0)}+ from traps; beats ${anthillStats.beatGap.toFixed(0)}+ apart; pickups ${anthillStats.pick.toFixed(1)}+ from any reach; ${anthillStats.traps} beats × 6 phases and ${anthillStats.eggs} royal eggs flown by the widest pilot (${anthillStats.searches} searches, slowest ${anthillStats.worst.toFixed(1)} s)`;
 // (test slot: Anthill Underworks, island level 39)
 // (test slot: Bamboo Pagoda, island level 40)
 // ---------- Adventure: Hollow Palm (island level 41), an authored stage with its own traps ----------
@@ -5827,4 +5986,5 @@ console.log(carnivalSummary());
 console.log(sandstormSummary());
 console.log(beanstalkSummary());
 console.log(hollowpalmSummary());
+console.log(anthillSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
