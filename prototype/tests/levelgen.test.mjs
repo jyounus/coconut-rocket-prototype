@@ -1981,6 +1981,305 @@ console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every l
 }
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 // Level slots: each new themed level puts its test block immediately before its slot line.
+// ---------- Adventure: Murk Mire (island level 7), an authored stage with its own traps ----------
+// As the frost's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every firefly jar flown by the widest pilot. Clocked traps (vents, spouts) by
+// the time-space search from 6 start phases (a vent's column counts at full height from just before it belches, so the
+// search never leans on play holding it); snappers from the moment they are set off, from either side and the middle,
+// the search kept inside their reach (so they strike again the moment they can, as for a pilot who never backs off);
+// and the wisps, which follow the pilot, by a scripted flight on the game's own wisp step (lure it to one wall, wait,
+// dart to the other and climb), swept over its choices until one gets through. (This block reports its own failures:
+// it runs after the shared report.)
+{
+const BG = new Function(regions.join('\n') + '\nreturn { createBogLevel, bogShapes, bogDanger, bogEnd, bogVentAt, bogPlume, bogSnapAt, bogSnapCycle, bogSnapTau, bogSpoutAt, bogStream, bogWispStep, bogWispPos, BOG, BOG_STAGE, BOG_TYPES, ADV_BOG, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const bClamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const bogStats = { seeds: 0, traps: 0, searches: 0, runs: 0, worst: 0, jars: 0, pick: Infinity, minW: Infinity, slope: 0, ventLane: Infinity, snapLane: Infinity, biteGap: Infinity, spoutLane: Infinity, oneBite: 0, oneBiteWorst: 0, wispRatio: 0, len: 0, kinds: {} };
+const before = failures.size;
+{
+  const R = BG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, X = BG.BOG, st0 = BG.ADV_BOG;
+  if (st0.theme !== 'bog' || !(st0.reward > 0)) fail('the Murk Mire is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'bogJars' && g.n === 3) || !st0.goals.some(g => g.k === 'bogOneBite')) fail('the Murk Mire has three missions: the Bog Heart, 3 firefly jars and never bitten twice', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * BG.UNITS_PER_M - BG.bogEnd()) > 1e-6) fail('the Murk Mire stage length matches its layout', `${st0.len}`);
+  // the stage's order: vents, then snappers, then spouts, then wisps, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { ventPair: 'vent', snapPair: 'snap', snapVent: 'vent', spoutPair: 'spout', spoutVent: 'spout', snapSpout: 'spout', wispPair: 'wisp', wispSnap: 'wisp', wispVent: 'vent' };
+    for (const sec of BG.BOG_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each bog trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a bog trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'vent,snap,spout,wisp') fail('the Murk Mire teaches vents, then snappers, then spouts, then wisps', seen.join());
+    if (!BG.BOG_STAGE.some(sec => sec.calm && !sec.finish && sec !== BG.BOG_STAGE[0])) fail('the Murk Mire has a breather', '');
+    if (!BG.BOG_STAGE[BG.BOG_STAGE.length - 1].finish) fail('the Murk Mire ends in the Bog Heart\'s hollow', '');
+  }
+  // a wisp is always slower sideways than any pilot (330 a second in the searches), so a lure always wins ground
+  bogStats.wispRatio = X.wisp.v / 330;
+  if (X.wisp.v > 0.5 * 330) fail('a wisp drifts at under half a pilot\'s sideways speed', `${X.wisp.v}`);
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (BG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  const wallsOk = (level, x, a) => { const [l, r] = level.walls(a); return x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2; };
+  // every trap's shapes at search time t: vents strict, snappers on a run of strikes from trig0 (their set-off), spouts
+  // on their clocks (wisps never enter a search)
+  const shapesAt = (traps, t, trig0) => { const S = []; for (const h of traps) { if (h.type === 'bogVent') BG.bogShapes(h, t, S, 'strict'); else if (h.type === 'bogSnap') BG.bogShapes(trig0.has(h) ? { ...h, trig0: trig0.get(h) } : h, t, S); else BG.bogShapes(h, t, S); } return S; };
+  // the search (as the frost's), with an optional waypoint: `via(x, a)` must be touched before the goal counts; trig0:
+  // each snapper's set-off time (absent: resting, as if it were never set off: only for snappers out of reach)
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via, trig0 = new Map(), maxT = 12) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= maxT / DT; step++) {
+      const t = t0 + step * DT, S = shapesAt(traps, t, trig0);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, ok = wallsOk(level, x, a) && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  // The scripted flight through a beat with wisps (and whatever else is in it), on the game's own wisp step and snapper
+  // trigger: stage by stage from the bottom, a wisp is lured to one wall (to wall `side`, then held there `wait` s or
+  // until it has come over), the pilot darts to the other wall and climbs past once clear; a snapper is baited from its
+  // trigger line and passed in its far lane once it is `q` into its recoil; a vent or a spout is passed in its far lane
+  // (the vent: after `wait`). The same kinematics as the search (440 up, 380 down, 330 sideways a second). Returns
+  // { ok, t, touched }.
+  function runBeat(level, traps, x0, a0, t0, plan, goalA, touch) {
+    const DT = 1 / 30, SX = 330 * DT, UP = 440 * DT, DN = 380 * DT, live = traps.map(h => h.type === 'bogWisp' ? { ...h, wx: h.home, wv: 0 } : h.type === 'bogSnap' ? { ...h, trigT: null } : h);
+    let x = x0, a = a0, t = t0, touched = false;
+    const go = (tx, ta) => { x += bClamp(tx - x, -SX, SX); a += bClamp(ta - a, -DN, UP); };
+    const tick = () => {
+      t += DT;
+      const pLow = a - Hh / 2, pTop = a + Hh / 2;
+      for (const h of live) {
+        if (h.type === 'bogWisp') BG.bogWispStep(h, DT, x, pLow, pTop);
+        if (h.type === 'bogSnap') {
+          const tau = h.trigT == null ? null : t - h.trigT, inZone = pTop > h.trigLo && pLow < h.alt + 60;
+          if ((tau == null || tau >= BG.bogSnapCycle()) && inZone) h.trigT = t; else if (tau != null && tau >= BG.bogSnapCycle()) h.trigT = null;
+        }
+      }
+      const S = []; for (const h of live) { if (h.type === 'bogVent') BG.bogShapes(h, t, S, 'strict'); else BG.bogShapes(h, t, S); }
+      if (!wallsOk(level, x, a) || capHit(S, x, a, M)) return false;
+      if (touch && touch(x, a)) touched = true;
+      return true;
+    };
+    const lanes = alt => { let l = -Infinity, r = Infinity; for (let q = alt - Hh / 2 - 10; q <= alt + Hh / 2 + 50; q += 6) { const [a0, a1] = level.walls(q); l = Math.max(l, a0); r = Math.min(r, a1); } return [l + W / 2 + 16, r - W / 2 - 16]; };
+    const farOf = (hs, alt) => lanes(alt)[hs > 0 ? 1 : 0];
+    let side = plan.side;   // the wall the pilot is on (-1 left, 1 right)
+    for (const stg of plan.stages) {
+      const h = live[stg.i];
+      if (h.type === 'bogWisp') {
+        const Wp = BG.BOG.wisp, ah = h.alt - Wp.r - Wp.bob - Hh / 2 - 14, [xl, xr] = lanes(ah), lure = side < 0 ? xl : xr, other = side < 0 ? xr : xl;
+        let n = 0;
+        while (Math.abs(x - lure) > 0.5 || Math.abs(a - ah) > 0.5) { go(lure, ah); if (!tick()) return { ok: false, t: t - t0 }; if (++n > 600) return { ok: false, t: t - t0 }; }
+        let w = 0;
+        while (w < stg.wait || (Math.abs(h.wx - lure) > 34 && h.wx > h.lim[0] + 1 && h.wx < h.lim[1] - 1 && w < 4)) { w += DT; go(lure, ah); if (!tick()) return { ok: false, t: t - t0 }; }
+        let climbing = false; n = 0;
+        while (a - Hh / 2 < h.alt + Wp.r + Wp.bob + 8) {
+          if (!climbing && Math.abs(x - h.wx) >= Wp.r + W / 2 + 40) climbing = true;
+          go(climbing ? lanes(a)[side < 0 ? 1 : 0] : other, climbing ? a + 100 : ah);
+          if (!tick()) return { ok: false, t: t - t0 };
+          if (++n > 600) return { ok: false, t: t - t0 };
+        }
+        side = -side;
+      } else if (h.type === 'bogSnap') {
+        const Sn = BG.BOG.snap, ah = h.trigLo - Hh / 2 + 6, [xl, xr] = lanes(h.alt), far = h.side > 0 ? xr : xl;
+        let n = 0;
+        while (h.trigT == null) { go(far, ah); if (!tick()) return { ok: false, t: t - t0 }; if (++n > 600) return { ok: false, t: t - t0 }; }
+        const passAt = Sn.tell + Sn.lunge + Sn.hold + Sn.recoil * stg.q;
+        while (t - h.trigT < passAt) { go(far, ah); if (!tick()) return { ok: false, t: t - t0 }; }
+        while (a - Hh / 2 < h.alt + 40) { go(farOf(h.side, a), a + 100); if (!tick()) return { ok: false, t: t - t0 }; }
+        side = h.side > 0 ? 1 : -1;
+      } else {   // a vent or a spout: wait below it, then climb its far lane
+        const top = h.type === 'bogVent' ? h.alt + 30 : h.alt + BG.BOG.spout.r + 10, hold = h.lo - Hh / 2 - 20, [xl, xr] = lanes(h.alt), far = h.side > 0 ? xr : xl;
+        let w = 0;
+        while (w < stg.wait) { w += DT; go(far, Math.min(a, hold)); if (!tick()) return { ok: false, t: t - t0 }; }
+        let n = 0;
+        while (a - Hh / 2 < top) { go(farOf(h.side, a), a + 100); if (!tick()) return { ok: false, t: t - t0 }; if (++n > 600) return { ok: false, t: t - t0 }; }
+        side = h.side > 0 ? 1 : -1;
+      }
+    }
+    let n = 0;
+    while (a - Hh / 2 < goalA) { go(x, a + 100); if (!tick()) return { ok: false, t: t - t0 }; if (++n > 300) break; }
+    return { ok: a - Hh / 2 >= goalA, t: t - t0, touched };
+  }
+  // every plan for a beat: each wisp lured to either wall first, waits for wisps and vents swept, snappers passed at
+  // three points of their recoil
+  function plans(hs) {
+    const order = hs.map((h, i) => ({ h, i })).sort((p, q) => p.h.alt - q.h.alt), out = [];
+    const waits = [0, 0.35, 0.7, 1.05, 1.4, 1.75, 2.1, 2.45, 2.8, 3.2];
+    const rec = (k, acc) => {
+      if (k === order.length) { out.push(acc); return; }
+      const { h, i } = order[k];
+      if (h.type === 'bogSnap') { for (const q of [0.35, 0.55, 0.75]) rec(k + 1, [...acc, { i, q }]); }
+      else if (h.type === 'bogSpout') { for (const w of waits) rec(k + 1, [...acc, { i, wait: w }]); }
+      else if (h.type === 'bogVent') { for (const w of [0, 1.2, 2.4]) rec(k + 1, [...acc, { i, wait: w }]); }
+      else for (const w of k === 0 ? waits : [0, 0.7, 1.4, 2.1]) rec(k + 1, [...acc, { i, wait: w }]);
+    };
+    rec(0, []);
+    return out.flatMap(stages => [{ side: -1, stages }, { side: 1, stages }]);
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = BG.createBogLevel(BG.advSeed(st), st), hz = [], fr = [];
+    bogStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100 || (h1[sh].trigLo ?? Infinity) < cam + VIEW + 100) fail('bog traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('bog pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    bogStats.len = level.end / 10;
+    for (const h of hz) if (!BG.BOG_TYPES.has(h.type)) fail('the Murk Mire only has its own traps', h.type);
+    for (const h of hz) bogStats.kinds[h.type] = (bogStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps (a snapper from its trigger line) start above the last beat's reach
+    const reachLo = h => h.type === 'bogSnap' ? h.trigLo : h.lo;
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(reachLo)) - Math.max(...p.hs.map(h => h.hi)); bogStats.beatGap = Math.min(bogStats.beatGap ?? Infinity, g); if (g < 0) fail('bog beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Bog Heart\'s hollow below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      bogStats.minW = Math.min(bogStats.minW, r - l); bogStats.slope = Math.max(bogStats.slope, l2 - l, r - r2);
+    }
+    if (bogStats.minW < R.minWidth) fail('the Murk Mire shaft is never narrower than minWidth', bogStats.minW.toFixed(1));
+    if (bogStats.slope > R.maxWallSlope) fail('the Murk Mire walls never step in faster than maxWallSlope', bogStats.slope.toFixed(2));
+    // static lanes: past a vent's widest column, past a resting snapper and past a dribbling spout, minLane; a snapper's
+    // bite leaves no gap any pilot fits (it is a gate: bait it); a spout's full surge splashes on the far wall; nothing
+    // a stream does rises
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt), lane = S => { const [x0, x1] = ext(S); return h.side > 0 ? r - x1 : x0 - l; };
+      if (h.type === 'bogVent') { const m = lane(BG.bogDanger(h)); bogStats.ventLane = Math.min(bogStats.ventLane, m); if (m < R.minLane) fail('a gas vent and its widest column leave a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'bogSnap') {
+        const m = lane(BG.bogShapes(h, 0, [])); bogStats.snapLane = Math.min(bogStats.snapLane, m); if (m < R.minLane) fail('a resting snapper leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        let g = Infinity; for (let t = 0; t < BG.bogSnapCycle(); t += 0.01) { const S = BG.bogShapes({ ...h, trig0: 0 }, t, []); const st = BG.bogSnapAt(h, t); if (st.k >= 1) g = Math.min(g, lane(S)); }
+        bogStats.biteGap = Math.min(bogStats.biteGap, g); if (!(g < W)) fail('a snapper\'s bite leaves no gap a pilot fits', `${g.toFixed(1)} at ${h.alt}`);
+      }
+      if (h.type === 'bogSpout') {
+        const m = lane(BG.bogShapes({ ...h, ph: 0 }, 0, [])); bogStats.spoutLane = Math.min(bogStats.spoutLane, m); if (m < R.minLane) fail('a dribbling spout leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        const full = BG.bogStream(h, h.vFull, null); if (!full.hit) fail('a spout\'s full surge splashes on the far wall', `${h.alt}`);
+        for (const v of [BG.BOG.spout.vLow, h.vFull * 0.5, h.vFull]) { const { pts } = BG.bogStream(h, v, null); for (let i = 1; i < pts.length; i++) if (pts[i][1] > pts[i - 1][1] + 1e-9) { fail('an acid stream never rises', `${h.alt}`); break; } }
+      }
+      if (h.type === 'bogWisp') { const [wl, wr] = level.walls(h.alt); if (h.lim[0] - BG.BOG.wisp.r < wl || h.lim[1] + BG.BOG.wisp.r > wr) fail('a wisp keeps off the walls', `${h.alt}`); }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = BG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('bog pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the jars, the Sunken Willow's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(BG.laneSize().w / 2 + 6 + BG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of BG.bogDanger(h)) dd = Math.min(dd, BG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) bogStats.pick = Math.min(bogStats.pick, dd);
+      if (dd < need - 0.5) fail('bog pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < BG.pickR(fr[i]) + BG.pickR(fr[j]) + BG.PICK_GAP - 0.01) fail('bog pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'jar').length !== 3) fail('the Murk Mire holds exactly 3 firefly jars', `${fr.filter(f => f.kind === 'jar').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('the Murk Mire keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the flights run on the stage itself and two more seeds)
+    const touchOf = f => (x, a) => BG.shapeDist({ k: 's', x0: x, a0: a - (Hh / 2 - W / 2), x1: x, a1: a + (Hh / 2 - W / 2), r: 0 }, f.x, f.alt) < BG.COCO_R + W / 2 - 4;
+    for (const b of level.beats) {
+      const hi = Math.max(...b.hs.map(h => h.hi)) + 90, jar = fr.find(f => f.kind === 'jar' && b.hs.some(h => h.jar && Math.abs(f.alt - h.alt) < 600));
+      bogStats.traps++;
+      if (b.hs.some(h => h.type === 'bogWisp')) {
+        // the scripted flight: from below the beat, from 6 phases of its clocks; the jar's beat also touching the jar
+        const lo = Math.min(...b.hs.map(h => h.type === 'bogSnap' ? h.trigLo : h.lo)) - 260, traps = hz.filter(h => h.lo < hi + 60 && (h.trigLo ?? h.lo) < hi + 60 && h.hi > lo - 60);
+        for (let p = 0; p < 6; p++) {
+          const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo);
+          let best = null;
+          for (const pl of plans(b.hs)) {
+            const plan = { side: pl.side, stages: pl.stages.map(sg => ({ ...sg, i: traps.indexOf(b.hs[sg.i]) })) };
+            bogStats.runs++;
+            const res = runBeat(level, traps, (l + r) / 2, lo, t0, plan, hi - 10 - 90, null);
+            if (res.ok) { best = res; break; }
+          }
+          if (!best) fail('every wisp beat can be flown by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+          else bogStats.worst = Math.max(bogStats.worst, best.t);
+        }
+        if (jar) {
+          let ok = false;
+          for (const pl of plans(b.hs)) { const plan = { side: pl.side, stages: pl.stages.map(sg => ({ ...sg, i: traps.indexOf(b.hs[sg.i]) })) }; bogStats.runs++; const res = runBeat(level, traps, (level.walls(lo)[0] + level.walls(lo)[1]) / 2, lo, k * 0.29, plan, hi - 100, touchOf(jar)); if (res.ok && res.touched) { ok = true; break; } }
+          if (!ok) fail('every firefly jar can be grabbed and escaped by the widest pilot', `jar at ${jar.alt | 0} (wisp), seed ${k}`); else bogStats.jars++;
+        }
+        continue;
+      }
+      const snaps = b.hs.filter(h => h.type === 'bogSnap').sort((p, q) => p.alt - q.alt);
+      // the part below the first snapper's reach (or the whole beat): the search from 6 phases
+      const clocked = b.hs.filter(h => h.type !== 'bogSnap' && (!snaps.length || h.alt < snaps[0].alt));
+      if (clocked.length) {
+        const lo = Math.min(...clocked.map(h => h.lo)) - 150, top = snaps.length ? snaps[0].trigLo - Hh / 2 - 4 : hi, traps = hz.filter(h => h.lo < top + 200 && h.hi > lo - 60 && h.type !== 'bogWisp');
+        for (let p = 0; p < 6; p++) {
+          const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+          bogStats.searches++;
+          const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= top - 10, lo, top + 20);
+          if (tm < 0) fail('every bog trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+          else bogStats.worst = Math.max(bogStats.worst, tm);
+        }
+        if (jar && !snaps.length) {
+          const own = b.hs.find(h => h.jar), lo2 = own.lo - 200, hi2 = own.hi + 100, tr2 = hz.filter(h => h.lo < hi2 + 60 && h.hi > lo2 - 60), [l, r] = level.walls(lo2 + 40);
+          for (let p = 0; p < 6; p++) {
+            bogStats.searches++;
+            const tm = fly(level, tr2, (l + r) / 2, lo2 + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi2 - 10, lo2, hi2 + 20, touchOf(jar));
+            if (tm < 0) fail('every firefly jar can be grabbed and escaped by the widest pilot', `jar at ${jar.alt | 0}, phase ${p}, seed ${k}`);
+          }
+          bogStats.jars++;
+        }
+      }
+      // each snapper: from its trigger line the moment it is set off (from either side and the middle, the beat's
+      // clocked traps at 3 phases), never dropping out of its reach; and (the mission) past it before it strikes again
+      for (const sn of snaps) {
+        const a0 = sn.trigLo - Hh / 2 + 1, top = snaps.find(q => q.alt > sn.alt) ? snaps.find(q => q.alt > sn.alt).trigLo - Hh / 2 - 4 : hi, traps = hz.filter(h => h.lo < top + 200 && h.hi > a0 - 300 && h.type !== 'bogWisp'), [l, r] = level.walls(a0);
+        const trig = t0 => new Map([[sn, t0]]);
+        // (a start inside a gas column's reach is left out: there play holds the vent while you sit in it)
+        const gasAt = traps.filter(h => h.type === 'bogVent').flatMap(h => BG.bogDanger(h)), starts = [l + W / 2 + 12, (l + r) / 2, r - W / 2 - 12].filter(x0 => !capHit(gasAt, x0, a0, M));
+        if (!starts.length) fail('every snapper can be set off from somewhere clear of the gas', `${sn.alt}`);
+        for (const x0 of starts) for (let p = 0; p < 3; p++) {
+          const t0 = p * 1.37 + k * 0.41;
+          bogStats.searches++;
+          const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= top - 10, a0, top + 20, null, trig(t0));
+          if (tm < 0) fail('every snapper can be passed by the widest pilot from wherever it is set off', `${b.kind} at ${b.a} (${b.sec.name}), from x ${x0.toFixed(0)}, phase ${p}, seed ${k}`);
+          else bogStats.worst = Math.max(bogStats.worst, tm);
+        }
+        {
+          const again = BG.bogSnapCycle() + X.snap.tell;
+          bogStats.searches++;
+          const lane = sn.side > 0 ? r - W / 2 - 14 : l + W / 2 + 14, tm = fly(level, traps, lane, a0, 0, (x, a) => a - Hh / 2 > sn.alt + 34, a0, sn.hi + Hh + 40, null, trig(0), again);
+          if (tm < 0 || tm > again) fail('every snapper can be passed before it bites again (the mission)', `${sn.alt}: ${tm.toFixed(2)} s vs ${again.toFixed(2)} s, seed ${k}`);
+          else { bogStats.oneBite++; bogStats.oneBiteWorst = Math.max(bogStats.oneBiteWorst, tm / again); }
+        }
+        if (jar && sn.jar) {
+          let ok = false;
+          for (const x0 of [l + W / 2 + 12, (l + r) / 2, r - W / 2 - 12]) { bogStats.searches++; if (fly(level, traps, x0, a0, k * 0.29, (x, a) => a >= top - 10, a0, top + 20, touchOf(jar), trig(k * 0.29)) >= 0) ok = true; }
+          if (!ok) fail('every firefly jar can be grabbed and escaped by the widest pilot', `jar at ${jar.alt | 0} (snapper), seed ${k}`); else bogStats.jars++;
+        }
+      }
+    }
+  }
+}
+const bogSummary = () => `PASS: Murk Mire: ${bogStats.seeds} layouts × ${bogStats.len} m, only its own traps (${Object.entries(bogStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${bogStats.minW.toFixed(0)}+ wide, wall slope ${bogStats.slope.toFixed(2)} (max ${BG.RULES.maxWallSlope}); lanes past gas columns ${bogStats.ventLane.toFixed(0)}+, resting snappers ${bogStats.snapLane.toFixed(0)}+, dribbling spouts ${bogStats.spoutLane.toFixed(0)}+ (minLane ${BG.RULES.minLane}), a snapper's bite leaves ${bogStats.biteGap.toFixed(0)} (a gate), full surges splash on the far wall and never rise, wisps drift at ${Math.round(bogStats.wispRatio * 100)}% of a pilot's sideways speed; beats ${(bogStats.beatGap ?? 0).toFixed(0)}+ apart; pickups ${bogStats.pick.toFixed(1)}+ from any reach; ${bogStats.traps} beats and ${bogStats.jars} jar flights (grab and escape) by the widest pilot (${bogStats.searches} searches, ${bogStats.runs} scripted wisp runs, slowest ${bogStats.worst.toFixed(1)} s); ${bogStats.oneBite} snappers passed before they bite again (at worst ${Math.round(bogStats.oneBiteWorst * 100)}% of the time)`;
+globalThis.bogSummary = bogSummary;
+if (failures.size > before) {
+  console.log(`FAILED: Murk Mire: ${failures.size - before} rule(s) broken`);
+  for (const [rule, { count, example }] of [...failures].slice(before)) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+  process.exitCode = 1;
+}
+}
 // (test slot: Murk Mire, island level 7)
 // ---------- Adventure: the Hidden Lagoon (island level 11), an authored stage with its own traps ----------
 // As the grotto's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -2324,4 +2623,5 @@ console.log(stormSummary());
 console.log(mineSummary());
 console.log(geodeSummary());
 console.log(lagoonSummary());
+console.log(bogSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
