@@ -5564,6 +5564,411 @@ const ADV_HIVE = { name: 'Honeycomb Hive', theme: 'hive', seed: 'isl-5-hive', re
 // Level slots: each new themed level puts its own LEVELGEN-marked block (the stage, its
 // traps' shapes and its layout) immediately before its slot line, so levels built in parallel never share an anchor.
 // (LEVELGEN slot: Murk Mire, island level 7)
+/* LEVELGEN:BEGIN */
+// ---------- Hidden Lagoon (island level 11): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Sunken Temple (see createTempleLevel): a calm flooded cave mouth, then one new trap at a
+// time, each taught alone and slow before it is combined (the Piranha Pools, the Jellyfish Drift, the Cascades, the
+// Gulper Hollow), a breather (the Glowing Shallows), the Undertow Gauntlet, then the Hidden Lagoon itself and its finish
+// shelf. Its own shaft (smooth water-worn teal rock), its own traps and its own look (G.theme 'lagoon', see the lagoon
+// drawing); it runs pinned to the jungle (pinJungle) like the temple, so nothing of the endless zones shows up.
+// The traps (every one leaves a lane or a timing that the widest pilot fits through):
+// - lagoonFish (Leaping Piranha): two rock ledges jut from facing walls, each with a pool sunk in its top. A piranha
+//   lurks in one pool; for `tell` s it peeks out (the pool churns, a red glow), then leaps across in an arc `H` high to
+//   the other pool (T s), lurks there, and leaps back. The fish and the ledges hurt; the lane between the ledge tips is
+//   always at least minLane.
+// - lagoonJelly (Drifting Jellyfish): a glowing jelly drifting slowly from wall to wall, bobbing with each stroke of its
+//   bell, long stinging tentacles trailing under it. Every P s its stinging cells light up root to tip (`tell` s), then
+//   the tentacles flare out wide and crackle for `on` s. The bell and tentacles hurt.
+// - lagoonFall (Cascade): a waterfall pours out of a cleft high in a wall and falls as a sheet that breaks into spray.
+//   Most of the time it trickles; every P s it gurgles (`tell` s) and gushes for `gush` s. A gushing sheet never kills:
+//   it sweeps you down and out of it (the pufferfish pilot rides it without being swept down: its perk). The spout's rock hurts.
+// - lagoonGulp (Gulper): a huge old grouper in a hollow in the wall. Every P s its gills flare (`tell` s), then it gapes
+//   and inhales for `suck` s, dragging everything near its mouth toward it (never faster than you can steer away),
+//   gulps shut and burps a stream of bubbles. Its head and jaws hurt; the lane past its widest gape is minLane.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const LAGOON = {
+  relief: [9, 5, 2.5], lump: 11,                    // wall relief: three swells, plus a smooth water-worn bulge here and there
+  fish: { len: 76, H: 78, T: 1.15, tell: 1.05, k: 1.3, ease: 340 },
+  jelly: { k: 1.18, bw: 26, bh: 22, tent: 96, rise: 30, flare: 1.9, tell: 0.8, on: 0.6, r: 3.6, amp: 0.5, ease: 320 },
+  fall: { len: 300, out0: 24, out1: 70, w0: 30, w1: 104, on: 0.4, tell: 0.85, gush: 1.7, ebb: 0.4, push: 300, ease: 300 },
+  gulp: { R: 240, Ra: 150, pull: 150, mouth: 62, T: { tell: 0.85, suck: 1.45, gulp: 0.12, burp: 0.5 }, ease: 360 },
+  chiliGap: 470, end: 380,
+};
+const LAGOON_TYPES = new Set(['lagoonFish', 'lagoonJelly', 'lagoonFall', 'lagoonGulp']);
+// The stage, bottom to top (as TEMPLE_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). conch: a golden conch shell sits in that beat (3 in all).
+const LAGOON_STAGE = [
+  { name: 'Lagoon Mouth', w: 376, len: 1000, calm: true },
+  { name: 'Piranha Pools', w: 364, beats: [[480, 'fish', { P: 4.3 }], [620, 'fish', { P: 4.1, ph: 0.3 }], [600, 'fish', { P: 3.9, ph: 0.6 }],
+    [640, 'fishStack', { P: 4.0 }], [760, 'fish', { P: 3.7, ph: 0.15, conch: true }], [620, 'fishStack', { P: 3.8, ph: 0.4 }]], tail: 600 },
+  { name: 'Jellyfish Drift', w: 356, beats: [[520, 'jelly', { P: 4.2, Pd: 8.4 }], [560, 'jelly', { P: 4.0, Pd: 7.8, ph: 0.5 }], [560, 'jellyPair', { P: 4.0, Pd: 7.4 }],
+    [620, 'jellyFish', { P: 3.9 }], [760, 'jelly', { P: 3.7, Pd: 6.8, ph: 0.2 }], [560, 'jellyPair', { P: 3.6, Pd: 6.6, ph: 0.25 }]], tail: 600 },
+  { name: 'The Cascades', w: 360, beats: [[520, 'fall', { side: 1, P: 4.9 }], [600, 'fall', { side: -1, P: 4.7, ph: 0.4 }], [620, 'fallPair', { P: 4.7 }],
+    [790, 'fallJelly', { P: 4.5 }], [810, 'fallPair', { P: 4.4, ph: 0.3, conch: true }], [790, 'fall', { side: 1, P: 4.2, ph: 0.7 }]], tail: 620 },
+  { name: 'Gulper Hollow', w: 360, beats: [[520, 'gulp', { side: 1, P: 5.2 }], [620, 'gulp', { side: -1, P: 5.0, ph: 0.4 }], [640, 'gulpPair', { P: 5.0 }],
+    [800, 'gulpJelly', { P: 4.8 }], [730, 'gulp', { side: 1, P: 4.6, ph: 0.6, conch: true }], [660, 'gulpFish', { P: 4.6 }]], tail: 620 },
+  { name: 'Glowing Shallows', w: 384, len: 1400, calm: true },
+  { name: 'Undertow Gauntlet', w: 352, beats: [[500, 'fishStack', { P: 3.6 }], [770, 'jellyPair', { P: 3.5, Pd: 6.4 }], [640, 'fallPair', { P: 4.2 }],
+    [910, 'gulpJelly', { P: 4.4, ph: 0.3 }], [720, 'fish', { P: 3.4, ph: 0.5 }], [620, 'fallJelly', { P: 4.1, ph: 0.6 }], [930, 'gulpPair', { P: 4.4, ph: 0.2 }],
+    [760, 'jellyFish', { P: 3.4, ph: 0.4 }], [740, 'fall', { side: -1, P: 4.0 }], [760, 'gulpJelly', { P: 4.3, ph: 0.55 }], [680, 'gulpFish', { P: 4.3, ph: 0.7 }], [700, 'jellyPair', { P: 3.3, Pd: 6.2, ph: 0.6 }],
+    [720, 'jellyFish', { P: 3.4, ph: 0.8 }], [700, 'fishStack', { P: 3.5, ph: 0.2 }]], tail: 780 },
+  { name: 'The Hidden Lagoon', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height (the finish shelf), from the layout alone
+const lagoonEnd = () => { let y = 0; for (const sec of LAGOON_STAGE) { if (sec.finish) return y + LAGOON.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// A piranha on its clock: lurking in pool `pool` (0 the left one, 1 the right) with its tell (0..1) and the time since
+// it landed there, or leaping (leap 0..1) out of pool `from`.
+function lagoonFishState(h, t) {
+  const F = LAGOON.fish, half = h.P / 2, u = pmod(t / h.P + h.ph, 1) * h.P, seg = u < half ? 0 : 1, v = u - seg * half, rest = half - F.T, from = seg ^ h.flip;
+  if (v < rest) return { pool: from, tell: smooth(rest - F.tell, rest, v), since: v, leap: -1, from };
+  return { pool: -1, tell: 0, since: v - rest, leap: (v - rest) / F.T, from };
+}
+// the fish's centre on its leap at w (0..1) out of pool `from`, and its heading (unit vector along the arc, world)
+function lagoonFishPos(h, w, from) {
+  const x0 = h.px[from], x1 = h.px[1 - from], dx = x1 - x0, da = 4 * h.H * (1 - 2 * w), m = Math.hypot(dx, da) || 1;
+  return { x: lerp(x0, x1, w), a: h.alt + 4 + 4 * h.H * w * (1 - w), fx: dx / m, fa: da / m, dir: dx >= 0 ? 1 : -1 };
+}
+// a piranha's body (body and tail capsules along its heading, scale k), fitted to its drawing
+function lagoonFishBody(S, p) {
+  const k = LAGOON.fish.k, at = l => [p.x + p.fx * l * k, p.a + p.fa * l * k];
+  const [b0x, b0a] = at(-8), [b1x, b1a] = at(8), [t0x, t0a] = at(-18), [t1x, t1a] = at(-27);
+  S.push({ k: 's', x0: b0x, a0: b0a, x1: b1x, a1: b1a, r: 12.5 * k });
+  S.push({ k: 's', x0: t0x, a0: t0a, x1: t1x, a1: t1a, r: 6.5 * k });
+}
+// one rock ledge with its pool (side 0 left wall, 1 right), fitted to its drawing: the slab along its top and its
+// thick root against the wall
+function lagoonLedge(S, h, side) {
+  const d = side ? -1 : 1, b = side ? h.R : h.L, A = h.alt, n = h.len;
+  S.push({ k: 's', x0: b - d * 14, a0: A - 7, x1: b + d * (n - 9), a1: A - 6, r: 8 });
+  S.push({ k: 's', x0: b - d * 8, a0: A - 20, x1: b + d * n * 0.42, a1: A - 15, r: 11 });
+}
+
+// A jellyfish on its clocks: its bell's centre (x, a), the stroke's squeeze (pulse 0..1), the sting's tell (0..1) and
+// its flare (0..1: the tentacles thrown out wide and crackling).
+function lagoonJellyState(h, t) {
+  const J = LAGOON.jelly, x = h.cx + h.amp * Math.sin(Math.PI * 2 * (t / h.Pd + h.ph));
+  const q = pmod(t / h.Ps + h.sph, 1), pulse = q < 0.16 ? smooth(0, 0.16, q) : 1 - smooth(0.16, 0.55, q);
+  const lift = J.rise * (q < 0.22 ? smooth(0, 0.22, q) : 1 - smooth(0.22, 1, q));
+  const v = pmod(t / h.P + h.stph, 1) * h.P, t1 = h.P - J.on, t0 = t1 - J.tell;
+  const tell = v >= t0 && v < t1 ? (v - t0) / J.tell : 0, flare = v >= t1 ? smooth(t1, t1 + 0.12, v) * (1 - smooth(h.P - 0.12, h.P, v)) : 0;
+  return { x, a: h.alt + lift, pulse, tell, flare, t };
+}
+// a point v (0 root .. 1 tip) down tentacle i (of 7) of a jelly in state st
+function lagoonTentacle(st, i, v) {
+  const J = LAGOON.jelly, k = J.k, bx = (-1 + i / 3) * 17 * k * (1 - 0.14 * st.pulse), L = J.tent * k * (0.84 + 0.16 * ((i * 5) % 3) / 2) * (1 - 0.2 * st.pulse);
+  return [st.x + bx * (1 + v * (0.3 + 1.0 * st.flare)) + Math.sin(st.t * 2.1 - v * 4.5 + i * 1.3) * v * 8 * k * (1 - 0.6 * st.flare), st.a - 4 * k - v * L * (1 - 0.22 * st.flare)];
+}
+// a jelly's shapes in state st: its bell (as squeezed by the stroke), its oral arms, every tentacle (thicker crackling
+// while flared), fitted to its drawing
+function lagoonJellyBody(S, st) {
+  const J = LAGOON.jelly, k = J.k, bw = J.bw * k * (1 - 0.15 * st.pulse), bh = J.bh * k * (1 + 0.15 * st.pulse);
+  S.push({ k: 's', x0: st.x - bw * 0.45, a0: st.a + bh * 0.35, x1: st.x + bw * 0.45, a1: st.a + bh * 0.35, r: bh * 0.62 });
+  S.push({ k: 's', x0: st.x, a0: st.a - 2, x1: st.x, a1: st.a - 40 * k, r: 5 });
+  const r = J.r + 2.4 * st.flare;
+  for (let i = 0; i < 7; i++) {
+    let p = lagoonTentacle(st, i, 0);
+    for (let j = 1; j <= 3; j++) { const q = lagoonTentacle(st, i, j / 3); S.push({ k: 's', x0: p[0], a0: p[1], x1: q[0], a1: q[1], r }); p = q; }
+  }
+}
+
+// A cascade on its clock: g, how full it pours (0 a trickle .. 1 a gush), and its tell (0..1). It sweeps you while g
+// is at least LAGOON.fall.on.
+function lagoonFallFlow(h, t) {
+  const F = LAGOON.fall, u = pmod(t / h.P + h.ph, 1) * h.P, t0 = h.P - F.tell - F.gush - F.ebb;
+  if (u < t0) return { g: 0, tell: 0, u };
+  let v = u - t0;
+  if (v < F.tell) return { g: 0.12 * smooth(0, 1, v / F.tell), tell: v / F.tell, u };
+  v -= F.tell;
+  if (v < F.gush) return { g: 0.12 + 0.88 * smooth(0, 0.14, v), tell: 0, u, gush: v };
+  v -= F.gush;
+  return { g: 1 - smooth(0, 1, v / F.ebb), tell: 0, u };
+}
+// the sheet's middle at depth dep under the spout, and its width there when pouring at g
+const lagoonFallX = (h, dep) => h.base + h.side * (LAGOON.fall.out0 + (LAGOON.fall.out1 - LAGOON.fall.out0) * Math.sqrt(clamp(dep / 140, 0, 1)));
+const lagoonFallW = (dep, g) => lerp(LAGOON.fall.w0, LAGOON.fall.w1, smooth(0, 1, dep / LAGOON.fall.len)) * (0.14 + 0.86 * g);
+// the sheet as capsules (the part that sweeps you), at pour g
+function lagoonFallSheet(S, h, g) {
+  const F = LAGOON.fall, N = 6;
+  for (let i = 0; i < N; i++) {
+    const d0 = F.len * i / N, d1 = F.len * (i + 1) / N, w = lagoonFallW((d0 + d1) / 2, g);
+    S.push({ k: 's', x0: lagoonFallX(h, d0), a0: h.top - d0, x1: lagoonFallX(h, d1), a1: h.top - d1, r: w / 2 });
+  }
+  return S;
+}
+// the spout's rock, fitted to its drawing: the lip the water slides over and the brow above the cleft
+function lagoonSpout(S, h) {
+  const d = h.side, b = h.base, A = h.top;
+  S.push({ k: 's', x0: b - d * 12, a0: A - 4, x1: b + d * (LAGOON.fall.out0 + 2), a1: A - 1, r: 8 });
+  S.push({ k: 'c', x: b + d * 6, a: A + 24, r: 15 });
+}
+
+// A gulper on its clock: how wide its jaws gape (0..1), its tell, how hard it sucks (0..1), and its burp.
+function lagoonGulpState(h, t) {
+  const T = LAGOON.gulp.T, u = pmod(t / h.P + h.ph, 1) * h.P, rest = h.P - T.tell - T.suck - T.gulp - T.burp;
+  if (u < rest) return { open: 0, tell: 0, suck: 0, burp: 0, u };
+  let v = u - rest;
+  if (v < T.tell) return { open: 0.12 * smooth(0, 1, v / T.tell), tell: v / T.tell, suck: 0, burp: 0, u };
+  v -= T.tell;
+  if (v < T.suck) return { open: 0.12 + 0.88 * smooth(0, 0.22, v / T.suck), tell: 0, suck: smooth(0, 0.14, v / T.suck), burp: 0, u, sucking: v };
+  v -= T.suck;
+  if (v < T.gulp) return { open: 1 - v / T.gulp, tell: 0, suck: 1 - v / T.gulp, burp: 0, u, gulp: 1 };
+  v -= T.gulp;
+  return { open: 0, tell: 0, suck: 0, burp: 1 - v / T.burp, u };
+}
+// a gulper's jaw tips at gape o: [upper, lower] as [x, a]
+function lagoonJaws(h, o) {
+  const d = h.side, b = h.base, A = h.alt;
+  return [[b + d * (74 + 12 * o), A + 10 + 26 * o], [b + d * (72 + 12 * o), A - 8 - 24 * o]];
+}
+// a gulper's shapes at gape o, fitted to its drawing: its great head in the hollow, and both jaws to their lips
+function lagoonGulpBody(S, h, o) {
+  const d = h.side, b = h.base, A = h.alt, [up, lo] = lagoonJaws(h, o);
+  S.push({ k: 'c', x: b + d * 8, a: A + 2, r: 34 });
+  S.push({ k: 's', x0: b + d * 30, a0: A + 14, x1: up[0], a1: up[1], r: 11 });
+  S.push({ k: 's', x0: b + d * 28, a0: A - 12, x1: lo[0], a1: lo[1], r: 11 });
+  return S;
+}
+// the suck at (x, a): the sideways speed toward the mouth (signed, world units per second), 0 outside the pull
+function lagoonGulpPull(h, st, x, a) {
+  const G0 = LAGOON.gulp; if (!(st.suck > 0)) return 0;
+  const mx = h.base + h.side * G0.mouth, dx = x - mx, da = (a - h.alt) * G0.R / G0.Ra, D = Math.hypot(dx, da);
+  if (D >= G0.R) return 0;
+  return -Math.sign(dx || h.side) * G0.pull * st.suck * Math.pow(1 - D / G0.R, 0.7);
+}
+
+// Every collision shape of a lagoon trap at time t, fitted to its drawing. kind: undefined for the lethal ones, 'body'
+// the solid parts only (the same thing for every trap but a cascade), 'sheet' a cascade's sweeping sheet while it gushes.
+function lagoonShapes(h, t, S = [], kind) {
+  if (h.type === 'lagoonFish') {
+    lagoonLedge(S, h, 0); lagoonLedge(S, h, 1);
+    const st = lagoonFishState(h, t), k = LAGOON.fish.k;
+    if (st.leap >= 0) lagoonFishBody(S, lagoonFishPos(h, st.leap, st.from));
+    else if (st.tell > 0.15) { const x = h.px[st.pool], a = h.alt + 1 + 6 * st.tell; S.push({ k: 's', x0: x - 9 * k, a0: a, x1: x + 7 * k, a1: a, r: 6 }); }
+  } else if (h.type === 'lagoonJelly') lagoonJellyBody(S, lagoonJellyState(h, t));
+  else if (h.type === 'lagoonFall') {
+    if (kind !== 'sheet') lagoonSpout(S, h);
+    if (kind === 'sheet') { const fl = lagoonFallFlow(h, t); if (fl.g >= LAGOON.fall.on) lagoonFallSheet(S, h, fl.g); }
+  } else if (h.type === 'lagoonGulp') lagoonGulpBody(S, h, lagoonGulpState(h, t).open);
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): both ledges and the fish's whole arc both ways, a
+// jelly at every point of its drift, stroke and flare, a spout and its full gush, a gulper at its widest gape.
+function lagoonDanger(h) {
+  const S = [];
+  if (h.type === 'lagoonFish') { lagoonLedge(S, h, 0); lagoonLedge(S, h, 1); for (const from of [0, 1]) for (let k = 0; k <= 16; k++) lagoonFishBody(S, lagoonFishPos(h, k / 16, from)); }
+  else if (h.type === 'lagoonJelly') { for (let k = 0; k < 40; k++) lagoonJellyBody(S, { x: h.cx + h.amp * Math.sin(Math.PI * 2 * k / 40), a: h.alt + LAGOON.jelly.rise * (k % 3) / 2, pulse: (k % 4) / 3, tell: 0, flare: k % 2, t: k * 0.37 }); }
+  else if (h.type === 'lagoonFall') { lagoonSpout(S, h); lagoonFallSheet(S, h, 1); }
+  else if (h.type === 'lagoonGulp') lagoonGulpBody(S, h, 1);
+  return S;
+}
+
+// The Hidden Lagoon's shaft, laid out in full from LAGOON_STAGE (the seed only nudges looks and phases). It answers the
+// same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createLagoonLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x1A6007) >>> 0), L0 = LAGOON;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of LAGOON_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = lagoonEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the rock's relief on a side: three slow swells and a smooth water-worn bulge now and then, eased flat where a trap
+  // is mounted (so it sits on a flat face) and over the launch cave. Never steeper than RULES.maxWallSlope.
+  const ph0 = (seed & 0xfff) / 0xfff * 6.283;
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 60 && a < f.a1 + 60) k = Math.max(k, smooth(f.a0 - 60, f.a0, a) * (1 - smooth(f.a1, f.a1 + 60, a))); return k; };
+  const lumpAt = (a, side) => { const i = Math.round(a / 300), j = hash2(i, (seed & 0xffff) + 83 + side * 11); if (j < 0.4) return 0; const c = i * 300 + (j - 0.7) * 90, u = (a - c) / 110; return Math.abs(u) < 1 ? L0.lump * (0.6 + 0.4 * j) * (1 - u * u) * (1 - u * u) : 0; };
+  const reliefAt = (a, side) => {
+    const p = ph0 + side * 2.1, [l0, l1, l2] = L0.relief;
+    const r = l0 * (0.5 + 0.5 * Math.sin(a / 71 + p)) + l1 * (0.5 + 0.5 * Math.sin(a / 33 + p * 1.6)) + l2 * (0.5 + 0.5 * Math.sin(a / 15 + p * 2.7)) + lumpAt(a, side);
+    return r * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng();
+  const make = {
+    fish(A, o) {
+      flat(A - 50, A + 30, 0);
+      return [{ type: 'lagoonFish', alt: A, P: o.P, ph: o.ph ?? ph(), flip: rng() < 0.5 ? 1 : 0, H: L0.fish.H, lo: A - 40, hi: A + L0.fish.H + 30, ease: L0.fish.ease, conch: !!o.conch }];
+    },
+    fishStack(A, o) {   // two pairs of pools 320 apart, half a cycle out of step
+      const p0 = o.ph ?? ph();
+      return [...make.fish(A, { P: o.P, ph: p0 }), ...make.fish(A + 320, { P: o.P, ph: p0 + 0.5 })];
+    },
+    jelly(A, o) {
+      const J = L0.jelly; flat(A - J.tent * J.k - 40, A + 60, 0);   // (smooth walls where it drifts: room on both sides)
+      return [{ type: 'lagoonJelly', alt: A, P: o.P, Pd: o.Pd || 7.6, Ps: 2.5 + rng() * 0.5, ph: o.ph ?? ph(), sph: rng(), stph: rng(), lo: A - J.tent * J.k - 40, hi: A + J.rise + J.bh * J.k * 1.15 + 16, ease: J.ease, conch: !!o.conch }];
+    },
+    jellyPair(A, o) {   // two jellies 240 apart drifting opposite ways: a zigzag
+      const p0 = o.ph ?? ph();
+      return [...make.jelly(A, { P: o.P, Pd: o.Pd, ph: p0 }), ...make.jelly(A + 240, { P: o.P, Pd: o.Pd, ph: p0 + 0.5 })];
+    },
+    jellyFish(A, o) {   // a piranha pair, a jelly drifting above it
+      return [...make.fish(A, { P: o.P, ph: o.ph }), ...make.jelly(A + 420, { P: o.P, Pd: 7 })];
+    },
+    fall(A, o) {
+      const F = L0.fall; flat(A - 20, A + F.len + 50, o.side > 0 ? -1 : 1);
+      return [{ type: 'lagoonFall', side: o.side, alt: A, top: A + F.len, P: o.P, ph: o.ph ?? ph(), lo: A - 30, hi: A + F.len + 44, ease: F.ease, conch: !!o.conch }];
+    },
+    fallPair(A, o) {   // cascades on facing walls a step apart, half a cycle out of step: one gushes while the other trickles
+      const p0 = o.ph ?? ph(), d = rng() < 0.5 ? 1 : -1;
+      const a = make.fall(A, { side: d, P: o.P, ph: p0 }), b = make.fall(A + 230, { side: -d, P: o.P, ph: p0 + 0.5, conch: o.conch });
+      return [...a, ...b];
+    },
+    fallJelly(A, o) {   // a cascade, a jelly drifting above its spout (a sweep only ever carries you down, away from it)
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.fall(A, { side: d, P: o.P, ph: o.ph }), ...make.jelly(A + L0.fall.len + 220, { P: o.P - 0.4, Pd: 7.2 })];
+    },
+    gulp(A, o) {
+      flat(A - 70, A + 70, o.side > 0 ? -1 : 1);
+      return [{ type: 'lagoonGulp', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), lo: A - 150, hi: A + 150, ease: L0.gulp.ease, conch: !!o.conch }];
+    },
+    gulpPair(A, o) {   // gulpers on facing walls 320 apart, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = rng() < 0.5 ? 1 : -1;
+      return [...make.gulp(A, { side: d, P: o.P, ph: p0 }), ...make.gulp(A + 320, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    gulpJelly(A, o) {   // a gulper, a jelly drifting just above its pull
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.gulp(A, { side: d, P: o.P, ph: o.ph }), ...make.jelly(A + 320, { P: o.P - 0.6, Pd: 7 })];
+    },
+    gulpFish(A, o) {   // a gulper, then a piranha pair above it
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.gulp(A, { side: d, P: o.P, ph: o.ph }), ...make.fish(A + 210, { P: o.P - 0.8 })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, lagoon: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions, reaches, drifts
+  for (const b of beats) for (const h of b.hs) {
+    if (h.type === 'lagoonFish') {
+      const F = L0.fish, [L, R] = lOpening(h.alt - 40, h.alt + 10), gap = R - L;
+      h.L = L; h.R = R; h.len = Math.min(F.len, (gap - RULES.minLane - 6) / 2);
+      h.px = [L + h.len * 0.52, R - h.len * 0.52]; h.x = (L + R) / 2;
+    } else if (h.type === 'lagoonJelly') {
+      const J = L0.jelly, [L, R] = lOpening(h.lo, h.hi), half = 17 * J.k * (1 + 1.3) + 8;
+      h.L = L; h.R = R; h.cx = (L + R) / 2; h.amp = Math.max(0, (R - L) / 2 - half - 30) * 0.92; h.x = h.cx;
+    } else if (h.type === 'lagoonFall') {
+      const [L, R] = lOpening(h.alt - 20, h.top + 30);
+      h.base = h.side > 0 ? L : R; h.x = lagoonFallX(h, L0.fall.len * 0.5);
+    } else if (h.type === 'lagoonGulp') {
+      const [L, R] = lOpening(h.alt - 60, h.alt + 60);
+      h.base = h.side > 0 ? L : R; h.x = h.base + h.side * 50;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, lagoonDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + L0.end - 120, 0.5);
+    else {   // the Shallows: a ring of coconuts round the middle (a golden one at each quarter), then a weave
+      const cA = sc.a0 + 360, cx = mid(cA);
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 92, cA + Math.sin(an) * 92, k % 4 ? 'coco' : 'gold', { clear: -Infinity }); }
+      weave(sc.a0 + 560, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way: up the middle between a piranha's pools, the lanes beside a jelly's drift, the
+  // dry lane beside a cascade, the far lane past a gulper. And the golden conchs, each a dare.
+  let conchs = 0;
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      if (h.type === 'lagoonFish') {
+        column(h.x, h.lo - 120, 2, 44, { clear: 30 }); add(h.x, h.hi + 40, 'coco', { bonus: true });
+        if (h.conch) { add(h.x, h.alt + h.H * 0.52, 'lagoonConch', { conch: true, clear: -Infinity }); conchs++; }
+      } else if (h.type === 'lagoonJelly') {
+        for (const s of [-1, 1]) add(h.cx + s * (h.amp + 30), h.lo - 60, 'coco', { clear: 30 });
+        add(h.cx, h.hi + 50, 'coco', { clear: 30 });
+      } else if (h.type === 'lagoonFall') {
+        const [l, r] = lWalls(h.alt + 150), edge = lagoonFallX(h, L0.fall.len) + h.side * L0.fall.w1 / 2, x = h.side > 0 ? (edge + r) / 2 : (l + edge) / 2;
+        column(x, h.lo - 60, 3, 40, { clear: 30 }); add(x, h.hi + 30, 'coco', { clear: 30 });
+        if (h.conch) { add(lagoonFallX(h, L0.fall.len * 0.55), h.top - L0.fall.len * 0.55, 'lagoonConch', { conch: true, clear: -Infinity }); conchs++; }
+      } else if (h.type === 'lagoonGulp') {
+        const [l, r] = lWalls(h.alt), reach = h.base + h.side * 100, x = h.side > 0 ? (reach + r) / 2 + 20 : (l + reach) / 2 - 20;
+        column(x, h.lo - 30, 2, 44, { clear: 30 }); add(x, h.hi + 20, 'coco', { clear: 30 });
+        if (h.conch) { add(h.base + h.side * 112, h.alt + 4, 'lagoonConch', { conch: true, clear: -Infinity }); conchs++; }
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = top.hi + 90, a1 = Math.min(...next.hs.map(h => h.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the temple's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= L0.chiliGap + 130; j++) if (spots[j].a - last >= L0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < L0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, lagoon: true, sections: secs, beats, top: topA, conchs,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 11): its own shaft (createLagoonLevel), the lagoon look (G.theme), its missions (the
+// lagoon's heart, 3 golden conchs, never swept down a waterfall) and its length in metres (from the layout).
+const ADV_LAGOON = { name: 'Hidden Lagoon', theme: 'lagoon', seed: 'isl-11-lagoon', reward: 190, target: 0, len: lagoonEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the hidden lagoon' }, { k: 'lagoonConch', n: 3 }, { k: 'lagoonDry' }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Hidden Lagoon, island level 11)
 /* LEVELGEN:BEGIN */
 // ---------- the Amethyst Geode (island level 16): the stage, its traps' shapes and its layout ----------
@@ -34695,7 +35100,7 @@ const ISLAND = {
     { id: 8,  name: 'Snapjaw Swamp',     region: 'bog',     pilot: 'dachshund', perk: 'Snappers lunge at the hot dog, not you' },
     { id: 9,  name: 'Gobblebloom',       region: 'jungle',  pilot: 'chameleon', perk: 'Hot-chili shots burn the plant boss', boss: 'flytrap', stage: 4 },
     { id: 10, name: 'Glowshroom Grotto', region: 'grotto',  pilot: 'mushroom',  perk: 'Immune to spore clouds', stage: 'grotto' },
-    { id: 11, name: 'Hidden Lagoon',     region: 'lagoon',  pilot: 'puffer',    perk: 'Swims fast through the water' },
+    { id: 11, name: 'Hidden Lagoon',     region: 'lagoon',  pilot: 'puffer',    perk: 'Rides the waterfalls without being swept down', stage: 'lagoon' },
     { id: 12, name: 'Jelly Drift',       region: 'lagoon',  pilot: 'duck',      perk: 'Stings bounce off the rubber duck' },
     { id: 13, name: 'Old Gold Mine',     region: 'mine',    pilot: 'mole',      perk: 'Rides the rails: runaway carts can\'t hurt him', stage: 'mine' },
     { id: 14, name: 'Basalt Deep',       region: 'caves',   pilot: 'firefly',   perk: 'Lights up the dark tunnels' },
@@ -34788,6 +35193,7 @@ ADV_STAGES.storm = ADV_STORM;   // (island level 18, Thunder Rift: see createSto
 ADV_STAGES.mine = ADV_MINE;   // (island level 13, Old Gold Mine: see createMineLevel)
 ADV_STAGES.grotto = ADV_GROTTO;   // (island level 10, Glowshroom Grotto: see createGrottoLevel)
 ADV_STAGES.geode = ADV_GEODE;   // (island level 16, Amethyst Geode: see createGeodeLevel)
+ADV_STAGES.lagoon = ADV_LAGOON;   // (island level 11, Hidden Lagoon: see createLagoonLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -45900,6 +46306,1710 @@ ADV_GOALS.mineOutrun = { text: () => 'Outrun every falling scaffold', done: r =>
 if (/[?&]debug\b/.test(location.search)) window.CRM = { MINE, MINE_STAGE, gatePhase, gatePeriod, mineShapes, mineDashState, mineTntState, mineScafPose, mineBuckets, mineCartAt, mineDanger, createMineLevel, mineDressing, scr: (x, a) => [sx(x), sy(a)], walls: a => walls(a), cssW: () => cssW };
 // Level slots: each new themed level puts its game block (look, traps, pickups, sounds) immediately before its slot line.
 // (game slot: Murk Mire, island level 7)
+// ---------- the Hidden Lagoon (island level 11): its look, traps, golden conchs, the cascades' sweep and sounds ----------
+// The stage's shaft and traps are laid out by createLagoonLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'lagoon': a flooded cave of smooth, wet, teal-green rock lit by aquamarine water light, with caustic
+// nets dancing over everything, sun shafts falling from a hidden skylight, waterfalls pouring down the far walls, moss
+// dripping off every lip and bubbles rising (nothing of it shows anywhere else: Daily and Practice never set a theme).
+// Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left, every edge a darker shade of its own
+// colour (never black), detail as line pairs (a dark furrow under a lit ridge), sheen strokes and soft glows.
+// Performance: everything static (the walls' rock, the backdrop's layers, the ledges, spouts and the lagoon's set) is
+// drawn once into cached canvases at the screen's pixel density (in tiles down the height, rendered a little ahead of
+// the camera, one per frame) and blitted; only the living things (water, fish, jellies, the gulper, light) draw per frame.
+const LP = {
+  rock: [[150, 196, 186], [70, 116, 114], [30, 62, 66], [10, 26, 32]], rockEdge: [14, 36, 40],
+  moss: ['#a6dc7a', '#5aa462', '#28603f'], mossEdge: '#1d4a36',
+  aqua: [110, 242, 228], deep: [40, 170, 190], foam: [232, 255, 250], coral: [255, 122, 172], peach: [255, 168, 120], sun: [255, 238, 176], lime: [190, 255, 150],
+  pal: { bgTop: [74, 142, 150], bgBot: [18, 56, 70], far: [58, 112, 124], far2: [46, 96, 110], wall: [30, 60, 66], wallIn: [6, 16, 20], rim: [130, 240, 226] },
+};
+const lagoonOn = () => !!(G && G.theme === 'lagoon');
+{ const base = pal; pal = function (key, a) { return lagoonOn() && LP.pal[key] ? LP.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function lagoonLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function lagoonRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function lagoonGlow(x, y, r, col, a, c = ctx) { if (a < 0.004 || r < 0.5) return; c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = lagoonRG(x, y, r, [rgbaA(col, a), rgbaA(col, a * 0.32), rgbaA(col, 0)], c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.restore(); }
+function lagoonSheen(x, y, r, a = 0.45, from = 3.5, to = 4.9, c = ctx) { c.save(); c.strokeStyle = `rgba(255,255,255,${a})`; c.lineWidth = Math.max(0.8, r * 0.16); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.68, from, to); c.stroke(); c.restore(); }
+const lagoonMix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+const lagoonLift = (c, k) => c.map(v => clamp(v + k, 0, 255));
+const lagoonCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+// a smooth closed blob through pts (midpoint quadratics)
+function lagoonBlob(c, pts) {
+  const N = pts.length, m = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  c.beginPath(); c.moveTo(...m(pts[N - 1], pts[0]));
+  for (let i = 0; i < N; i++) { const p = pts[i], q = pts[(i + 1) % N]; c.quadraticCurveTo(p[0], p[1], ...m(p, q)); }
+  c.closePath();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function lagoonCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0);
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const LAGOON_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map(), queue: 0 };
+function lagoonCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (LAGOON_CACHE.key !== key) { LAGOON_CACHE.key = key; LAGOON_CACHE.walls.clear(); LAGOON_CACHE.layers.clear(); LAGOON_CACHE.sprites.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function lagoonSprite(name, w, h, draw) {
+  let sp = LAGOON_CACHE.sprites.get(name);
+  if (!sp) { sp = lagoonCanvas(w, h); draw(sp.c, sp.w, sp.h); LAGOON_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// is the pilot the pufferfish (it swims right up the waterfalls: its perk)?
+const lagoonSwimmer = () => { const pl = pilot(); return !!(pl && pl.character && pl.character.id === 'puffer'); };
+const lagoonVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- sounds (synth) ----
+const LAGOON_SFX = {
+  // a piranha about to leap: the pool churning, a bubbling gurgle rising
+  lfgurgle: (t, B, v) => { for (let i = 0; i < 7; i++) vTone(B, t + i * 0.08, 260 + i * 70 + Math.random() * 60, { f2: 520 + i * 90, glide: 0.06, type: 'sine', v: 0.035 * v, dur: 0.07 }); vNoise(B, t, { type: 'lowpass', f: 900, f2: 1600, v: 0.04 * v, dur: 0.6, a: 0.2 }); },
+  // the leap out: a sharp splash and a whip of a tail
+  lfsplash: (t, B, v) => { vNoise(B, t, { f: 2600, f2: 900, q: 0.9, v: 0.14 * v, dur: 0.28 }); vNoise(B, t + 0.02, { type: 'highpass', f: 5000, v: 0.06 * v, dur: 0.35, a: 0.03 }); vTone(B, t, 420, { f2: 160, glide: 0.12, v: 0.05 * v, dur: 0.14 }); },
+  // landing back in a pool: a deep plop
+  lfplop: (t, B, v) => { vTone(B, t, 340, { f2: 120, glide: 0.1, type: 'sine', v: 0.1 * v, dur: 0.16 }); vNoise(B, t, { type: 'lowpass', f: 2200, f2: 500, v: 0.1 * v, dur: 0.3 }); },
+  // a jelly's stinging cells charging: a rising glassy shimmer
+  ljcharge: (t, B, v) => { [84, 88, 91, 96].forEach((m, i) => vTone(B, t + i * 0.13, mf(m), { type: 'sine', v: 0.025 * v, dur: 0.4, a: 0.05 })); vTone(B, t, 220, { f2: 880, glide: 0.75, type: 'triangle', v: 0.015 * v, dur: 0.75, a: 0.3 }); },
+  // the flare: a soft electric crackle and a wobbly zap
+  ljzap: (t, B, v) => { for (let i = 0; i < 6; i++) vNoise(B, t + i * 0.05 + Math.random() * 0.03, { type: 'highpass', f: 3500 + Math.random() * 3000, v: 0.05 * v, dur: 0.03 }); vTone(B, t, 900, { f2: 300, glide: 0.4, type: 'square', lp: 2200, v: 0.03 * v, dur: 0.45, vib: [24, 60], vibAt: 0 }); },
+  // a cascade about to gush: water gargling up in the cleft
+  lwgurgle: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 400, f2: 1400, v: 0.07 * v, dur: 0.85, a: 0.4 }); for (let i = 0; i < 5; i++) vTone(B, t + 0.1 + i * 0.14, 180 + i * 40, { f2: 320 + i * 40, glide: 0.08, v: 0.03 * v, dur: 0.1 }); },
+  // the gush: a roaring rush of water
+  lwgush: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 3200, f2: 1400, v: 0.13 * v, dur: 1.6, a: 0.06 }); vNoise(B, t, { f: 600, q: 0.7, v: 0.07 * v, dur: 1.5, a: 0.1 }); vTone(B, t, 70, { f2: 55, glide: 1, type: 'triangle', v: 0.05 * v, dur: 1.2, a: 0.1 }); },
+  // swept down by it: a sloshy whump
+  lwsweep: (t, B) => { vNoise(B, t, { type: 'lowpass', f: 1800, f2: 300, v: 0.16, dur: 0.4 }); vTone(B, t, 200, { f2: 80, glide: 0.25, v: 0.08, dur: 0.3 }); },
+  // the pufferfish swimming up a waterfall: a happy bubbly trill
+  lwswim: (t, B) => { [72, 79, 84, 91].forEach((m, i) => vTone(B, t + i * 0.05, mf(m), { f2: mf(m + 4), glide: 0.04, type: 'sine', v: 0.05, dur: 0.1 })); vNoise(B, t, { type: 'highpass', f: 4200, v: 0.03, dur: 0.3 }); },
+  // a gulper waking: a deep wet grumble
+  lgtell: (t, B, v) => { vTone(B, t, 65, { f2: 90, glide: 0.8, type: 'sawtooth', lp: 260, v: 0.06 * v, dur: 0.85, a: 0.2 }); vNoise(B, t + 0.2, { type: 'lowpass', f: 500, v: 0.04 * v, dur: 0.6, a: 0.2 }); },
+  // its inhale: a long hollow suck
+  lgsuck: (t, B, v) => { vNoise(B, t, { f: 500, f2: 1600, q: 2.5, v: 0.09 * v, dur: 1.4, a: 0.25 }); vTone(B, t, 110, { f2: 70, glide: 1.4, type: 'triangle', v: 0.04 * v, dur: 1.4, a: 0.3 }); },
+  // the gulp: a deep, wet clomp
+  lggulp: (t, B, v) => { vTone(B, t, 150, { f2: 50, glide: 0.1, type: 'square', lp: 700, v: 0.1 * v, dur: 0.16 }); vNoise(B, t, { type: 'lowpass', f: 1400, f2: 300, v: 0.12 * v, dur: 0.2 }); },
+  // the burp: a run of bubbles
+  lgburp: (t, B, v) => { for (let i = 0; i < 8; i++) vTone(B, t + i * 0.05, 220 + Math.random() * 400, { f2: 600 + Math.random() * 600, glide: 0.04, type: 'sine', v: 0.04 * v, dur: 0.05 }); },
+  // a golden conch: a seashell's hollow call and a sparkling run
+  lconch: (t, B) => { vTone(B, t, mf(62), { f2: mf(69), glide: 0.18, type: 'triangle', v: 0.07, dur: 0.7, a: 0.04, vib: [5, 4] }); [81, 86, 88, 93, 98].forEach((m, i) => vTone(B, t + 0.1 + i * 0.06, mf(m), { type: 'sine', v: 0.06, dur: 0.45 })); vNoise(B, t + 0.1, { type: 'highpass', f: 7000, v: 0.035, dur: 0.8 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = LAGOON_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1);
+}; }
+
+// ---- water droplets, foam and bubbles (the lagoon's own little particles: they fall, pop and fade) ----
+function lagoonDrop(x, a, vx, va, life, r, kind = 'drop') { const D = G.lgDrops || (G.lgDrops = []); if (D.length > 170) D.shift(); D.push({ x, a, vx, va, life, max: life, r, kind }); }
+function lagoonSplash(x, a, n, up = 1, k = 1) { for (let i = 0; i < n; i++) { const an = Math.PI * (0.15 + 0.7 * Math.random()); lagoonDrop(x + (Math.random() - 0.5) * 14 * k, a, Math.cos(an) * (60 + Math.random() * 120) * k, Math.sin(an) * (120 + Math.random() * 180) * up * k, 0.6 + Math.random() * 0.4, (1 + Math.random() * 1.6) * k); } }
+function updateLagoonDrops(dt) {
+  const D = G.lgDrops; if (!D) return;
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    if (q.kind === 'bubble') { q.va += 60 * dt; q.vx *= 1 - dt * 2.5; q.x += Math.sin(q.life * 9 + q.r) * 12 * dt; }
+    else { q.va -= 640 * dt; q.vx *= 1 - dt * 0.8; }
+    q.x += q.vx * dt; q.a += q.va * dt;
+  }
+}
+function drawLagoonDrops() {
+  const D = G.lgDrops; if (!D || !D.length) return;
+  const bub = lagoonBubbleSprite();
+  ctx.save();
+  for (const q of D) {
+    const y = sy(q.a); if (y < -20 || y > H + 20) continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), r = q.r * s;
+    if (q.kind === 'bubble') { const R = r * (1 + 0.3 * (1 - t)); ctx.globalAlpha = Math.min(1, t * 2.5) * 0.9; ctx.drawImage(bub.cv, x - R, y - R, R * 2, R * 2); continue; }
+    // a drop: a little teardrop stretched along its fall, lit on top
+    ctx.globalAlpha = Math.min(1, t * 2);
+    const sp = Math.hypot(q.vx, q.va) || 1, st = Math.min(3, sp / 140), ux = q.vx / sp, uy = -q.va / sp;
+    ctx.fillStyle = 'rgba(150,236,232,.85)'; ctx.beginPath(); ctx.ellipse(x - ux * st * r * 0.5, y - uy * st * r * 0.5, r * (1 + st * 0.6), r * 0.8, Math.atan2(uy, ux), 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = 'rgba(240,255,252,.9)'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.42, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+}
+// one bubble, drawn once: a clear sphere with an aqua rim, a bright window glint and a soft lower-right reflection
+function lagoonBubbleSprite() {
+  return lagoonSprite('bubble', 24, 24, c => {
+    const R = 10.5;
+    c.translate(12, 12);
+    c.fillStyle = lagoonRG(2, 3, R, ['rgba(160,255,245,0)', 'rgba(160,255,245,.08)', 'rgba(170,255,248,.35)'], c); c.beginPath(); c.arc(0, 0, R, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(200,255,250,.75)'; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 1.6; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, R * 0.68, 3.5, 4.5); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-R * 0.42, -R * 0.44, R * 0.2, R * 0.13, -0.7, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(120,230,230,.5)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R * 0.7, 0.3, 1.3); c.stroke();
+  });
+}
+
+// ---- the traps at play ----
+CAUSES.lagoonFish = 'Bitten by a leaping piranha';
+CAUSES.lagoonJelly = 'Stung by a jellyfish';
+CAUSES.lagoonFall = 'Crashed into a waterfall\'s spout';
+CAUSES.lagoonGulp = 'Gulped down by a gulper';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'lagoonFish' ? [255, 110, 70] : cause === 'lagoonJelly' ? [255, 120, 220] : cause === 'lagoonFall' ? [120, 230, 230] : cause === 'lagoonGulp' ? [140, 220, 120] : base(cause); }; }
+// the lethal shapes (a cascade's sheet sweeps, it never kills: see the steering)
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!LAGOON_TYPES.has(h.type)) return base(h);
+  return lagoonShapes(h, G.t).map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.lagoon) { updateLagoonTraps(dt); updateLagoonDrops(dt); } base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.lagoon) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && LAGOON_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// The cascade's sweep: a gushing sheet touching the pilot carries it down (toward LAGOON.fall.push) and pushes it out of
+// the sheet toward the open shaft (a shove against the steering, so it lets go once you are out). The gulper's suck
+// drags it toward the mouth (a shove of up to LAGOON_DRAG units against the steering, so a steady finger is pulled
+// toward the jaws and steering away always wins). Never through a wall.
+const LAGOON_DRAG = 80;
+function lagoonSheetOver() {
+  if (!G.level || !G.level.lagoon) return null;
+  const lo = pilotLow(), hi = pilotHigh();
+  for (const h of G.hazards) if (h.type === 'lagoonFall' && hi > h.alt - 40 && lo < h.top + 40) { const fl = lagoonFallFlow(h, G.t); if (fl.g >= LAGOON.fall.on && lagoonFallSheet([], h, fl.g).some(shapeHits)) return { h, g: fl.g }; }
+  return null;
+}
+function lagoonDragAt(x, a) { let v = 0; if (!G.level || !G.level.lagoon) return 0; for (const h of G.hazards) if (h.type === 'lagoonGulp' && Math.abs(h.alt - a) < LAGOON.gulp.Ra) v += lagoonGulpPull(h, h.st || lagoonGulpState(h, G.t), x, a); return v; }
+{ const base = steer; steer = function (dt) {
+  base(dt);
+  if (!lagoonOn() || G.state !== 'play') return;
+  const p = G.p, kSp = lerp(80, 5, cfg.lag), [lo, hi] = steerRange();
+  const w = lagoonSheetOver();
+  if (w) {
+    const h = w.h, cyc = Math.floor(G.t / h.P + h.ph);
+    if (lagoonSwimmer()) {   // the pufferfish swims right up it, happily
+      if (h.swum !== cyc) { h.swum = cyc; sfx('lwswim'); if (!G.lgSwimPop || G.t - G.lgSwimPop > 3) { G.lgSwimPop = G.t; chainEvent('Rides the falls!', '#bff8f0', 1.2); } }
+      if (Math.random() < dt * 30) lagoonDrop(p.x + (Math.random() - 0.5) * 30, p.alt - 20, (Math.random() - 0.5) * 40, -20, 0.9, 2 + Math.random() * 2.5, 'bubble');
+    } else {
+      p.vy = lerp(p.vy, -LAGOON.fall.push, 1 - Math.exp(-dt * 10));
+      p.vx += h.side * 120 * kSp * dt;
+      p.tilt = lerp(p.tilt, clamp(-h.side * 0.3, -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 6));
+      if (h.caught !== cyc) {
+        h.caught = cyc; G.stats.lagoonWet = (G.stats.lagoonWet || 0) + 1; sfx('lwsweep'); vibrate(20); G.shake = Math.max(G.shake, 2.5);
+        chainEvent(G.stats.lagoonWet === 1 && advGoalHas('lagoonDry') ? 'Swept down a waterfall!' : 'Splash!', '#bff0ff', 1.1);
+      }
+      if (Math.random() < dt * 40) lagoonDrop(p.x + (Math.random() - 0.5) * 50, p.alt + 20 + Math.random() * 20, (Math.random() - 0.5) * 160, -60 - Math.random() * 80, 0.6, 1.5 + Math.random() * 1.5);
+    }
+    G.lgWetT = 1.6;
+  }
+  const v = lagoonDragAt(p.x, p.alt);
+  if (v) {
+    p.vx += (v / LAGOON.gulp.pull) * LAGOON_DRAG * kSp * dt;
+    p.tilt = lerp(p.tilt, clamp(Math.sign(v) * 0.32 * Math.min(1, Math.abs(v) / 90), -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 6));
+    if (Math.random() < dt * 14) lagoonDrop(p.x - Math.sign(v) * 30, p.alt + (Math.random() - 0.5) * 40, v * 1.6, 0, 0.6, 1.8 + Math.random() * 2, 'bubble');
+  }
+  if (p.x < lo || p.x > hi) { p.x = clamp(p.x, lo, hi); p.vx *= 0.2; }
+  if (G.lgWetT > 0) { G.lgWetT -= dt; if (Math.random() < dt * 10 * G.lgWetT) lagoonDrop(p.x + (Math.random() - 0.5) * 34, p.alt - 10, (Math.random() - 0.5) * 30, -40, 0.7, 1.4 + Math.random()); }
+}; }
+function updateLagoonTraps(dt) {
+  const top = G.camAlt + viewH;
+  for (const h of G.hazards) {
+    if (!LAGOON_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'lagoonFish') {
+      const st = lagoonFishState(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('lfgurgle', { v: lagoonVol(h.alt) });
+      if (vis && st.leap >= 0 && was.leap < 0) { sfx('lfsplash', { v: lagoonVol(h.alt) }); lagoonSplash(h.px[st.from], h.alt + 2, 14); }
+      if (vis && st.leap < 0 && was.leap >= 0) { sfx('lfplop', { v: lagoonVol(h.alt) }); lagoonSplash(h.px[st.pool], h.alt + 2, 12, 0.8); }
+      if (vis && st.tell > 0.2 && Math.random() < dt * 16) lagoonDrop(h.px[st.pool] + (Math.random() - 0.5) * h.len * 0.5, h.alt + 1, 0, 30, 0.5, 1.5 + Math.random() * 1.5, 'bubble');
+      if (vis && st.leap >= 0 && Math.random() < dt * 30) { const p = lagoonFishPos(h, st.leap, st.from); lagoonDrop(p.x - p.fx * 20, p.a - p.fa * 20, (Math.random() - 0.5) * 30, -20, 0.5, 1 + Math.random() * 1.2); }
+      h.st = st;
+    } else if (h.type === 'lagoonJelly') {
+      const st = lagoonJellyState(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('ljcharge', { v: lagoonVol(h.alt) * 0.8 });
+      if (vis && st.flare > 0.5 && !(was.flare > 0.5)) sfx('ljzap', { v: lagoonVol(h.alt) });
+      h.st = st;
+    } else if (h.type === 'lagoonFall') {
+      const fl = lagoonFallFlow(h, G.t), was = h.st || fl;
+      if (vis && fl.tell > 0 && !(was.tell > 0)) sfx('lwgurgle', { v: lagoonVol(h.top) });
+      if (vis && fl.gush != null && was.gush == null) sfx('lwgush', { v: lagoonVol(h.alt + 150) });
+      // spray: where the sheet breaks up at its foot, and off the lip as it gushes
+      if (vis && Math.random() < dt * (4 + 26 * fl.g)) { const x = lagoonFallX(h, LAGOON.fall.len) + (Math.random() - 0.5) * lagoonFallW(LAGOON.fall.len, fl.g); lagoonDrop(x, h.alt + 10, (Math.random() - 0.5) * 60, -120 - Math.random() * 80, 0.7, 1.2 + Math.random() * 1.6); }
+      h.st = fl;
+    } else if (h.type === 'lagoonGulp') {
+      const gs = lagoonGulpState(h, G.t), was = h.st || gs;
+      if (vis && gs.tell > 0 && !(was.tell > 0)) sfx('lgtell', { v: lagoonVol(h.alt) });
+      if (vis && gs.sucking != null && was.sucking == null) sfx('lgsuck', { v: lagoonVol(h.alt) });
+      if (vis && gs.gulp && !was.gulp) { sfx('lggulp', { v: lagoonVol(h.alt) }); if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 2.5); }
+      if (vis && gs.burp > 0 && !(was.burp > 0)) sfx('lgburp', { v: lagoonVol(h.alt) });
+      // the suck: bubbles and bits streaming in from round the mouth; the burp: a stream of bubbles out
+      const mx = h.base + h.side * LAGOON.gulp.mouth;
+      if (vis && gs.suck > 0.2 && Math.random() < dt * 22) { const an = (Math.random() - 0.5) * 2.4, R = 120 + Math.random() * 110, x = mx + h.side * Math.cos(an) * R, a = h.alt + Math.sin(an) * R * 0.6; lagoonDrop(x, a, (mx - x) * 1.6, (h.alt - a) * 1.6, 0.55, 1.5 + Math.random() * 2, 'bubble'); }
+      if (vis && gs.burp > 0.3 && Math.random() < dt * 40) lagoonDrop(mx + h.side * 20, h.alt + (Math.random() - 0.5) * 16, h.side * (60 + Math.random() * 80), 40 + Math.random() * 60, 1.1, 2 + Math.random() * 3, 'bubble');
+      h.st = gs;
+    }
+  }
+}
+// ---- the lagoon's traps, drawn (each to its hitbox capsules) ----
+// A cached piece of a trap's static rock: drawn once at the screen's scale in the trap's own frame (x out from the wall
+// along d, y down), anchored at (0, 0); blitted with lagoonPiece(sp, X, Y).
+function lagoonRockPiece(name, d, x0, x1, y0, y1, draw) {
+  const key = name + (d > 0 ? 'L' : 'R');
+  let sp = LAGOON_CACHE.sprites.get(key);
+  if (!sp) {
+    sp = lagoonCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = d > 0 ? -x0 * s : x1 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(d * s, s); sp.c.lineJoin = 'round'; sp.c.lineCap = 'round'; draw(sp.c);
+    LAGOON_CACHE.sprites.set(key, sp);
+  }
+  return sp;
+}
+function lagoonPiece(sp, X, Y) { ctx.drawImage(sp.cv, X - sp.ax, Y - sp.ay, sp.w, sp.h); }
+// wet teal stone, lit from above: a slab's colours (top lit .. underside deep)
+const LAGOON_STONE = ['#a8dcd0', '#5f9e98', '#2c6466', '#123c42'];
+// a moss cushion along a top edge from x0 to x1 at y (local), drooping strands with a drop at their tips
+function lagoonMossRun(c, x0, x1, y, seed, drip = 1) {
+  const n = Math.max(2, Math.round(Math.abs(x1 - x0) / 5));
+  // hanging strands first (behind the cushion)
+  c.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const hj = hash2(i, seed + 7); if (hj > 0.55 * drip) continue;
+    const x = lerp(x0, x1, (i + 0.5) / n), L = 5 + 14 * hash2(i, seed + 8);
+    c.strokeStyle = LP.mossEdge; c.lineWidth = 2.2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 1.5, y + L * 0.5, x + 0.5, y + L); c.stroke();
+    c.strokeStyle = LP.moss[1]; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = 'rgba(200,255,246,.85)'; c.beginPath(); c.ellipse(x + 0.5, y + L + 1.6, 1.2, 1.6, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x + 0.1, y + L + 1.1, 0.45, 0, TWO_PI); c.fill();
+  }
+  // the cushion: lumps lit from the top left, a darker own-green edge
+  for (let i = 0; i <= n; i++) {
+    const x = lerp(x0, x1, i / n), r = 2.6 + 2.2 * hash2(i, seed), yy = y - 0.8 - r * 0.35;
+    c.fillStyle = lagoonRG(x - r * 0.35, yy - r * 0.45, r * 1.4, [LP.moss[0], LP.moss[1], LP.moss[2]], c); c.beginPath(); c.arc(x, yy, r, 0, TWO_PI); c.fill();
+  }
+  c.strokeStyle = 'rgba(29,74,54,.7)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x0, y + 0.6); c.lineTo(x1, y + 0.6); c.stroke();
+  // tiny lit tips
+  c.fillStyle = 'rgba(230,255,200,.75)';
+  for (let i = 0; i <= n; i += 2) { const x = lerp(x0, x1, i / n) - 0.8, r = 2.6 + 2.2 * hash2(i, seed); c.beginPath(); c.arc(x, y - 1 - r * 0.9, 0.7, 0, TWO_PI); c.fill(); }
+}
+// a little branching coral (pink or peach) growing up from (x, y), height hh
+function lagoonCoral(c, x, y, hh, col, seed) {
+  const dark = lagoonCol(lagoonLift(col, -90)), mid = lagoonCol(col), lite = lagoonCol(lagoonLift(col, 60));
+  const br = (x0, y0, ang, L, w, dep) => {
+    const x1 = x0 + Math.sin(ang) * L, y1 = y0 - Math.cos(ang) * L;
+    c.strokeStyle = dark; c.lineWidth = w + 1.2; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    c.strokeStyle = mid; c.lineWidth = w; c.stroke();
+    c.strokeStyle = lite; c.lineWidth = Math.max(0.5, w * 0.35); c.beginPath(); c.moveTo(x0 - w * 0.2, y0); c.lineTo(x1 - w * 0.2, y1); c.stroke();
+    if (dep > 0) { br(x1, y1, ang - 0.5 - 0.2 * hash2(dep, seed), L * 0.68, w * 0.72, dep - 1); br(x1, y1, ang + 0.45 + 0.2 * hash2(dep, seed + 1), L * 0.62, w * 0.72, dep - 1); }
+    else { c.fillStyle = lite; c.beginPath(); c.arc(x1, y1, w * 0.7, 0, TWO_PI); c.fill(); }
+  };
+  c.lineCap = 'round'; br(x, y, (hash2(seed, 3) - 0.5) * 0.4, hh * 0.45, 2.6, 2);
+}
+// a sea anemone (a bulb of glowing tentacles) sitting at (x, y)
+function lagoonAnemone(c, x, y, r, col) {
+  for (let k = -4; k <= 4; k++) {
+    const an = k * 0.32, x1 = x + Math.sin(an) * r * 1.3, y1 = y - Math.cos(an) * r * 1.2;
+    c.strokeStyle = lagoonCol(lagoonLift(col, -80)); c.lineWidth = 2.6; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.sin(an) * r * 0.4, y - r * 0.8, x1, y1); c.stroke();
+    c.strokeStyle = lagoonCol(col); c.lineWidth = 1.6; c.stroke();
+    c.fillStyle = lagoonCol(lagoonLift(col, 70)); c.beginPath(); c.arc(x1, y1, 1.2, 0, TWO_PI); c.fill();
+  }
+  c.fillStyle = lagoonRG(x - r * 0.3, y - r * 0.2, r, [lagoonCol(lagoonLift(col, 40)), lagoonCol(lagoonLift(col, -60))], c); c.beginPath(); c.ellipse(x, y, r * 0.75, r * 0.4, 0, 0, TWO_PI); c.fill();
+}
+
+// -- Leaping Piranha: the two ledges, each with its pool, and the fish --
+// A ledge's rock (cached): a slab of wet teal stone jutting from the wall, its top worn into a basin (the pool), moss on
+// its rim and roots, a coral sprig, strata as line pairs, a lit top and its shadowed underside, and a trickle spilling
+// over the tip. Its slab and root are exactly its two capsules.
+function lagoonLedgeArt(h, d) {
+  const n = h.len, rx = n * 0.34, pc = n * 0.52;
+  return lagoonRockPiece('ledge' + Math.round(n), d, -30, n + 12, -16, 50, c => {
+    const body = () => { c.beginPath(); c.moveTo(-26, -3); c.lineTo(n - 9, -3.5); c.quadraticCurveTo(n + 2, -2.5, n, 4); c.quadraticCurveTo(n - 4, 13, n * 0.6, 15);
+      c.quadraticCurveTo(n * 0.42, 20, n * 0.38, 26); c.quadraticCurveTo(n * 0.2, 36, -4, 33); c.lineTo(-26, 38); c.closePath(); };
+    // a soft shadow it casts on the wall under it
+    c.fillStyle = 'rgba(6,24,28,.35)'; c.beginPath(); c.moveTo(-24, 30); c.quadraticCurveTo(n * 0.3, 40, n * 0.2, 48); c.lineTo(-24, 48); c.fill();
+    body(); c.fillStyle = lagoonLG(0, -4, 0, 36, LAGOON_STONE, c); c.fill();
+    c.save(); body(); c.clip();
+    // rounded form: lit along the top, the underside turning away
+    c.fillStyle = lagoonLG(0, 6, 0, 16, ['rgba(14,48,52,0)', 'rgba(14,48,52,.45)'], c); c.fillRect(-30, 6, n + 40, 40);
+    // strata: two line pairs following the slab
+    for (const [yy, k] of [[6, 0.85], [15, 0.6]]) {
+      c.strokeStyle = 'rgba(16,52,56,.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-26, yy + 1); c.quadraticCurveTo(n * 0.4, yy + 3, n * k, yy - 1); c.stroke();
+      c.strokeStyle = 'rgba(200,244,234,.32)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-26, yy + 2.3); c.quadraticCurveTo(n * 0.4, yy + 4.3, n * k, yy + 0.3); c.stroke();
+    }
+    // a few pits and pebbles in the rock, lit on top
+    for (let k = 0; k < 5; k++) { const x = -18 + (n + 4) * hash2(k, n + 3), y = 8 + 22 * hash2(k, n + 4), r = 1.2 + 1.6 * hash2(k, n + 5); c.fillStyle = 'rgba(12,40,44,.55)'; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(190,240,230,.3)'; c.beginPath(); c.arc(x - 0.3, y + r * 0.5, r * 0.6, 0.2, Math.PI - 0.2); c.fill(); }
+    c.restore();
+    body(); c.strokeStyle = '#0f3a40'; c.lineWidth = 1.2; c.stroke();
+    // the lit top face and its bright arris
+    c.strokeStyle = 'rgba(214,255,244,.75)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-24, -2.4); c.lineTo(n - 9, -2.9); c.quadraticCurveTo(n + 1, -2, n - 0.6, 3); c.stroke();
+    // the basin sunk in its top: a dark rim of worn rock, the water drawn live
+    c.fillStyle = '#123c42'; c.beginPath(); c.ellipse(pc, -1.5, rx + 2.4, 5.2, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(190,240,230,.55)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(pc, -1.2, rx + 2.6, 5.4, 0, 0.2, Math.PI - 0.2); c.stroke();
+    // moss on the rim and down the root, a coral sprig and an anemone by the basin
+    lagoonMossRun(c, -24, pc - rx - 3, -3, 31 + n, 0.8);
+    lagoonMossRun(c, pc + rx + 3, n - 6, -3.4, 47 + n, 1);
+    lagoonCoral(c, -14, -4, 10, LP.coral, n | 0);
+    if (pc + rx + 6 < n - 5) lagoonAnemone(c, pc + rx + 5, -4, 3.2, [255, 170, 110]);
+    // a trickle spilling off the tip (its moving glints drawn live)
+    c.strokeStyle = 'rgba(150,240,232,.45)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(n - 1, 4); c.quadraticCurveTo(n + 1, 18, n + 1.5, 46); c.stroke();
+  });
+}
+// the pool's water (live): a lit surface with ripples (churning in the tell), and a glint
+function lagoonPool(x, y, rx, t, churn) {
+  ctx.fillStyle = lagoonLG(0, y - 4 * s, 0, y + 3 * s, ['#c8fff4', '#40c8c8', '#147280']); ctx.beginPath(); ctx.ellipse(x, y, rx, 3.6 * s, 0, 0, TWO_PI); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(x, y, rx, 3.6 * s, 0, 0, TWO_PI); ctx.clip();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1 * s;
+  const n = 2 + Math.round(churn * 3);
+  for (let k = 0; k < n; k++) { const u = pmod(t * (0.7 + churn * 1.8) + k / n, 1); ctx.globalAlpha = (1 - u) * (0.45 + churn * 0.5); ctx.beginPath(); ctx.ellipse(x + Math.sin(k * 3.1 + t * churn * 3) * rx * 0.3, y, (2 + u * rx / s * 0.8) * s, (0.8 + u * 2.4) * s, 0, 0, TWO_PI); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.1 * s; ctx.beginPath(); ctx.ellipse(x, y, rx * 0.72, 2.3 * s, 0, 3.6, 4.4); ctx.stroke();
+}
+// The piranha (ported from the concept, at game scale): a deep blunt fish, steel-blue back to a hot red belly, scales as
+// lit arcs, golden speckles, a wagging tail, fins, a jutting underbite of ivory teeth and a big scowling eye. Drawn
+// facing +x in its own frame (units of the fish's scale), open 0..1 gapes its jaw.
+function lagoonPiranha(c, t, open, tell = 0) {
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // tail, wagging
+  c.save(); c.translate(-17, 0); c.rotate(Math.sin(t * 24) * 0.28);
+  c.beginPath(); c.moveTo(3, 0); c.quadraticCurveTo(-5, -5, -14, -14); c.quadraticCurveTo(-9, -4, -10, 0); c.quadraticCurveTo(-9, 4, -14, 14); c.quadraticCurveTo(-5, 5, 3, 0); c.closePath();
+  c.fillStyle = lagoonLG(0, -14, 0, 14, ['#ffb35a', '#e24a2a', '#ffb35a'], c); c.fill(); c.strokeStyle = '#8a2414'; c.lineWidth = 1.1; c.stroke();
+  c.strokeStyle = 'rgba(255,225,170,.55)'; c.lineWidth = 0.7; for (const a of [-0.8, -0.35, 0.35, 0.8]) { c.beginPath(); c.moveTo(0, 0); c.lineTo(-11, a * 13); c.stroke(); }
+  c.restore();
+  const fin = (c0, c1) => { c.fillStyle = lagoonLG(0, -6, 0, 6, [c0, c1], c); c.fill(); c.strokeStyle = '#7a2412'; c.lineWidth = 1; c.stroke(); };
+  c.beginPath(); c.moveTo(-11, -10); c.quadraticCurveTo(-7, -22, 4, -21); c.quadraticCurveTo(-1, -16, 3, -12); c.closePath(); fin('#ff9d48', '#c4361e');
+  c.strokeStyle = 'rgba(255,220,170,.5)'; c.lineWidth = 0.6; for (const k of [-6, -2, 1]) { c.beginPath(); c.moveTo(k, -12); c.lineTo(k - 1, -18); c.stroke(); }
+  c.beginPath(); c.moveTo(-11, 9); c.quadraticCurveTo(-7, 18, 0, 17.5); c.quadraticCurveTo(-2, 13, 1, 11); c.closePath(); fin('#e24a2a', '#ff9d48');
+  const body = () => { c.beginPath(); c.moveTo(18, -2); c.bezierCurveTo(15, -15, -3, -18, -13, -9); c.quadraticCurveTo(-19, -4, -19, 0); c.quadraticCurveTo(-19, 4, -13, 9); c.bezierCurveTo(-3, 17, 9, 16, 15, 9); c.lineTo(10, 4); c.closePath(); };
+  body(); const g = c.createLinearGradient(0, -16, 0, 15); g.addColorStop(0, '#b8dcee'); g.addColorStop(0.3, '#5d8aae'); g.addColorStop(0.56, '#e8703f'); g.addColorStop(1, '#a82a18'); c.fillStyle = g; c.fill();
+  c.save(); body(); c.clip();
+  c.lineWidth = 0.7;
+  for (let row = -2; row <= 2; row++) for (let k = 0; k < 5; k++) { const x = -12 + k * 5 + (row & 1) * 2.5, y = row * 4.6; c.strokeStyle = row < 0 ? 'rgba(220,245,255,.42)' : 'rgba(255,205,150,.42)'; c.beginPath(); c.arc(x, y, 2.6, -1.2, 1.2); c.stroke(); }
+  c.fillStyle = 'rgba(255,230,140,.65)'; for (let k = 0; k < 7; k++) { c.beginPath(); c.arc(-10 + k * 3.6, 2 + Math.sin(k * 2.3) * 3, 0.8, 0, TWO_PI); c.fill(); }
+  c.fillStyle = lagoonLG(0, 3, 0, 17, ['rgba(110,16,10,0)', 'rgba(110,16,10,.5)'], c); c.fillRect(-20, 3, 40, 15);
+  c.strokeStyle = 'rgba(50,80,110,.6)'; c.lineWidth = 1.3; c.beginPath(); c.arc(-5, 0, 11, -0.9, 0.9); c.stroke();
+  c.strokeStyle = 'rgba(220,240,255,.35)'; c.lineWidth = 0.8; c.beginPath(); c.arc(-3.8, 0, 11, -0.9, 0.9); c.stroke();
+  if (tell > 0) { c.fillStyle = `rgba(255,60,80,${0.25 * tell})`; c.fillRect(-20, -18, 40, 36); }
+  c.restore();
+  lagoonSheen(-2, -2, 15, 0.5, 3.6, 4.7, c);
+  body(); const ge = c.createLinearGradient(0, -16, 0, 16); ge.addColorStop(0, '#2f4c6c'); ge.addColorStop(1, '#6e1a10'); c.strokeStyle = ge; c.lineWidth = 1.3; c.stroke();
+  // the gape and the underbite
+  const o = open;
+  c.fillStyle = '#5a0e1c'; c.beginPath(); c.moveTo(18, -2); c.lineTo(9, 3); c.lineTo(19, 5 + o * 9); c.closePath(); c.fill();
+  const tooth = (x0, y0, x1, y1, tx, ty) => { c.beginPath(); c.moveTo(x0, y0); c.lineTo(tx, ty); c.lineTo(x1, y1); c.closePath(); c.fill(); c.stroke(); };
+  c.fillStyle = '#fffbee'; c.strokeStyle = '#b8a27e'; c.lineWidth = 0.6;
+  for (let k = 0; k < 3; k++) { const x0 = 11 + k * 2.6; tooth(x0, 1 - k * 0.9, x0 + 2.6, 0.2 - k * 0.9, x0 + 1.4, 4 - k * 0.6); }
+  c.save(); c.translate(9, 4); c.rotate(o * 0.55);
+  c.beginPath(); c.moveTo(-3, 1); c.quadraticCurveTo(6, 0, 12, -2); c.quadraticCurveTo(11, 6, 3, 9); c.quadraticCurveTo(-3, 8, -3, 1); c.closePath();
+  c.fillStyle = lagoonLG(0, -2, 0, 9, ['#e8743e', '#a82a18'], c); c.fill(); c.strokeStyle = '#6e1a10'; c.lineWidth = 1.1; c.stroke();
+  c.fillStyle = '#fffbee'; c.strokeStyle = '#b8a27e'; c.lineWidth = 0.6;
+  for (let k = 0; k < 4; k++) { const x0 = -1 + k * 3, y0 = 0.6 - k * 0.7; tooth(x0, y0, x0 + 2.8, y0 - 0.6, x0 + 1.6, y0 - 4.2); }
+  c.restore();
+  // the eye (the game's cartoon eye), a scowling brow
+  const ex = 6, ey = -6, r = 4.4;
+  c.fillStyle = lagoonRG(ex - r * 0.3, ey - r * 0.3, r * 1.3, ['#ffffff', '#f2e6d8', '#c9b49e'], c); c.beginPath(); c.ellipse(ex, ey, r, r * 1.08, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = tell > 0.3 ? '#ff5a3a' : '#ffd23a'; c.beginPath(); c.arc(ex + r * 0.17, ey + r * 0.08, r * 0.62, 0, TWO_PI); c.fill();
+  c.fillStyle = '#1a0d14'; c.beginPath(); c.arc(ex + r * 0.2, ey + r * 0.1, r * 0.32, 0, TWO_PI); c.fill();
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(ex - r * 0.05, ey - r * 0.22, r * 0.17, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#24364e'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(1, -12.5 + tell); c.lineTo(11, -9.5 - tell); c.stroke();
+}
+function drawLagoonFish(h) {
+  const st = h.st || lagoonFishState(h, G.t), k = LAGOON.fish.k, T = G.t + h.alt * 0.01, ya = sy(h.alt), near = glowK;
+  const rx = h.len * 0.34 * s, wy = ya - 0.6 * s;
+  // the ledges
+  lagoonPiece(lagoonLedgeArt(h, 1), sx(h.L), ya);
+  lagoonPiece(lagoonLedgeArt(h, -1), sx(h.R), ya);
+  // the trickles' glints sliding down off each tip
+  ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(240,255,252,.7)'; ctx.lineWidth = 1 * s; ctx.setLineDash([4 * s, 9 * s]); ctx.lineDashOffset = -T * 70 * s;
+  for (const [xx, d] of [[h.L + h.len - 1, 1], [h.R - h.len + 1, -1]]) { ctx.beginPath(); ctx.moveTo(sx(xx), ya - 4 * s); ctx.quadraticCurveTo(sx(xx + d * 2), ya - 18 * s, sx(xx + d * 2.5), ya - 46 * s); ctx.stroke(); }
+  ctx.restore();
+  // the pools (the one it lurks in churns, glowing red as it peeks)
+  for (const i of [0, 1]) {
+    const churn = st.pool === i ? st.tell : 0, x = sx(h.px[i]);
+    if (churn > 0.1) dangerGlow(x, wy - 8 * s, 34, (0.15 + 0.3 * churn) * near + 0.05);
+    lagoonPool(x, wy, rx, T + i, churn);
+  }
+  // splash rings: where it just landed, and where it just left
+  const ring = (x, u) => { if (u < 0 || u > 1) return; ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - u)})`; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.ellipse(x, wy, (5 + u * 26) * s, (1.5 + u * 4) * s, 0, 0, TWO_PI); ctx.stroke(); };
+  if (st.leap < 0) ring(sx(h.px[st.pool]), st.since / 0.5); else ring(sx(h.px[st.from]), st.leap * LAGOON.fish.T / 0.5);
+  if (st.leap < 0) {
+    // lurking: its back and eye break the surface as it peeks (clipped at the waterline), bubbles churning up
+    if (st.tell > 0.02) {
+      const x = sx(h.px[st.pool]), d = st.pool === 0 ? 1 : -1, bob = Math.sin(G.t * 9) * 1.2 * st.tell;
+      ctx.save(); ctx.beginPath(); ctx.rect(x - 60 * s, wy - 60 * s, 120 * s, 60 * s + 0.5 * s); ctx.clip();
+      ctx.translate(x - d * 2 * s, wy + (10 - 9 * st.tell) * k * s + bob * s); ctx.scale(d * k * s, k * s); ctx.rotate(-0.25);
+      lagoonPiranha(ctx, G.t, 0.2 * st.tell, st.tell);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(220,255,250,.8)'; ctx.lineWidth = 1 * s;
+      for (let j = 0; j < 4; j++) { const u = pmod(G.t * 1.8 + j / 4, 1); ctx.beginPath(); ctx.arc(x + Math.sin(j * 2.2) * 9 * s, wy - (2 + u * 16 * st.tell) * s, (1.2 + j * 0.3) * s, 0, TWO_PI); ctx.stroke(); }
+      // the telegraph: a trail of droplets marks the arc it is about to leap, drawing itself out from the pool and
+      // brightening as the leap nears (a soft wide dot under a bright core, warm red-white)
+      const reach = Math.min(1, st.tell * 1.5);
+      for (let j = 0; j <= 14; j++) {
+        const w = j / 14; if (w > reach) break;
+        const q = lagoonFishPos(h, w, st.pool), qx = sx(q.x), qy = sy(q.a + 6), r = (1.6 + 1.2 * Math.sin(w * Math.PI)) * s, al = Math.min(1, st.tell * 1.2) * (0.6 + 0.4 * Math.sin(G.t * 10 - j * 0.8) ** 2);
+        ctx.fillStyle = `rgba(255,90,80,${al * 0.45})`; ctx.beginPath(); ctx.arc(qx, qy, r * 2, 0, TWO_PI); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,230,${al})`; ctx.beginPath(); ctx.arc(qx, qy, r, 0, TWO_PI); ctx.fill();
+      }
+    }
+  } else {
+    // leaping: along its arc, gaping, a spray trail shed behind it; clipped at the waterline as it leaves and lands
+    const p = lagoonFishPos(h, st.leap, st.from), X = sx(p.x), Y = sy(p.a);
+    dangerGlow(X, Y, 38, 0.3 * near + 0.1);
+    for (let j = 1; j <= 5; j++) {
+      const w = st.leap - j * 0.04; if (w < 0) break;
+      const q = lagoonFishPos(h, w, st.from); ctx.fillStyle = `rgba(210,255,250,${0.75 - j * 0.13})`; ctx.beginPath(); ctx.arc(sx(q.x) + Math.sin(j * 5) * 3 * s, sy(q.a) + (Math.cos(j * 3) * 4 + j * j * 0.8) * s, (1.8 - j * 0.2) * s, 0, TWO_PI); ctx.fill();
+    }
+    ctx.save();
+    if (st.leap < 0.12 || st.leap > 0.88) { ctx.beginPath(); ctx.rect(-1000, -1000, cssW + 2000, wy + 1000); ctx.clip(); }
+    ctx.translate(X, Y);
+    if (p.fx >= 0) ctx.rotate(Math.atan2(-p.fa, p.fx)); else { ctx.rotate(Math.atan2(p.fa, -p.fx)); ctx.scale(-1, 1); }
+    ctx.scale(k * s, k * s);
+    lagoonPiranha(ctx, G.t, 0.4 + 0.6 * Math.sin(st.leap * Math.PI));
+    ctx.restore();
+  }
+}
+
+// -- Drifting Jellyfish (ported from the concept): a glowing pink bell that squeezes with each stroke, frilly oral arms
+// and seven long tentacles that sway with a lag down their length (drawn along exactly the hitbox's path, as thick as
+// its capsules). Its stinging cells light root to tip in the tell, then the tentacles flare out wide and crackle. --
+function drawLagoonJelly(h) {
+  const st = h.st || lagoonJellyState(h, G.t), J = LAGOON.jelly, k = J.k, T = G.t, near = glowK;
+  const C = { lo: [160, 46, 160], mid: [242, 112, 212], hi: [255, 234, 250], edge: '#7c2380', g: [255, 120, 214] };
+  const X = sx(st.x), Y = sy(st.a);
+  lagoonGlow(X, Y - 6 * s, 64 * s, C.g, 0.16 + 0.16 * st.tell + 0.12 * st.flare);
+  if (st.tell > 0.05 || st.flare > 0.05) dangerGlow(X, Y + 50 * s, 64, (0.12 + 0.3 * Math.max(st.tell, st.flare)) * near + 0.05);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // the tentacles
+  const r = J.r + 2.4 * st.flare, wave = st.tell > 0 ? st.tell : st.flare > 0 ? 1 : -1;
+  for (let i = 0; i < 7; i++) {
+    const pts = []; for (let j = 0; j <= 10; j++) { const [x, a] = lagoonTentacle(st, i, j / 10); pts.push([sx(x), sy(a)]); }
+    const line = () => { ctx.beginPath(); pts.forEach(([x, y], j) => j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); };
+    line(); ctx.strokeStyle = rgbaA(C.lo, 0.38); ctx.lineWidth = r * 2 * s; ctx.stroke();
+    line(); ctx.strokeStyle = lagoonCol(lagoonMix(C.mid, [200, 255, 255], st.flare), 0.85); ctx.lineWidth = 1.4 * s; ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const wv = pmod(T * 0.9 + i * 0.13, 1);
+    for (let j = 1; j <= 10; j++) {
+      const v = j / 10, lit = wave >= 0 ? (v <= wave ? 1 : 0) : 0, b = wave >= 0 ? lit * (0.5 + 0.5 * st.tell + st.flare) : Math.exp(-((v - wv) ** 2) / 0.012) * 0.8, [px, py] = pts[j];
+      ctx.fillStyle = wave >= 0 && lit ? `rgba(${st.flare > 0.3 ? '200,255,255' : '255,150,190'},${0.25 + b * 0.6})` : rgbaA(C.hi, 0.15 + b * 0.6);
+      ctx.beginPath(); ctx.arc(px, py, (0.8 + b * 1.4) * s, 0, TWO_PI); ctx.fill();
+    }
+    if (st.flare > 0.4) {   // crackling sparks along it
+      ctx.strokeStyle = `rgba(200,255,255,${(st.flare - 0.4) * 1.5})`; ctx.lineWidth = 1 * s;
+      const j0 = 2 + Math.floor(pmod(T * 13 + i * 3, 7)), [px, py] = pts[j0];
+      ctx.beginPath(); ctx.moveTo(px - 4 * s, py - 3 * s); ctx.lineTo(px + 2 * s, py); ctx.lineTo(px - 2 * s, py + 3 * s); ctx.lineTo(px + 4 * s, py + 6 * s); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // the oral arms: two frilly ribbons
+  ctx.translate(X, Y); ctx.scale(k * s, k * s);
+  for (const d of [-1, 1]) {
+    ctx.beginPath();
+    for (let j = 0; j <= 8; j++) { const v = j / 8, px = d * (4 + Math.sin(T * 2.4 + v * 6 + d) * 4 * v + v * 2), py = 2 + v * 32; j ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.strokeStyle = rgbaA(C.lo, 0.6); ctx.lineWidth = 5; ctx.stroke(); ctx.strokeStyle = rgbaA(C.mid, 0.85); ctx.lineWidth = 2.6; ctx.stroke();
+    ctx.strokeStyle = rgbaA(C.hi, 0.6); ctx.lineWidth = 0.8; ctx.setLineDash([2, 3]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // the bell
+  const bw = J.bw * (1 - 0.15 * st.pulse), bh = J.bh * (1 + 0.15 * st.pulse);
+  const bell = () => { ctx.beginPath(); ctx.moveTo(-bw, 3); ctx.bezierCurveTo(-bw * 1.02, -bh * 1.3, bw * 1.02, -bh * 1.3, bw, 3); for (let q = 7; q >= 0; q--) { const xa = -bw + (q / 8) * bw * 2; ctx.quadraticCurveTo(xa + bw / 8, 7 + (q % 2) * 1.5, xa, 3); } ctx.closePath(); };
+  bell(); ctx.fillStyle = lagoonRG(-bw * 0.35, -bh * 0.6, bw * 1.7, [rgbaA(C.hi, 0.97), rgbaA(C.mid, 0.93), rgbaA(C.lo, 0.92)]); ctx.fill();
+  ctx.save(); bell(); ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let q = 0; q < 4; q++) { const a = q / 4 * TWO_PI + 0.4, gx = Math.cos(a) * 7, gy = -6 + Math.sin(a) * 4; ctx.fillStyle = lagoonRG(gx, gy, 7, [rgbaA(C.hi, 0.55), rgbaA(C.mid, 0)]); ctx.beginPath(); ctx.ellipse(gx, gy, 6, 4, a, 0, TWO_PI); ctx.fill(); }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = rgbaA(C.hi, 0.35); ctx.lineWidth = 1;
+  for (let q = -3; q <= 3; q++) { ctx.beginPath(); ctx.moveTo(q * bw * 0.28, 4); ctx.quadraticCurveTo(q * bw * 0.32, -bh * 0.5, q * bw * 0.12, -bh * 0.95); ctx.stroke(); }
+  ctx.fillStyle = lagoonLG(0, -4, 0, 8, [rgbaA(C.lo, 0), rgbaA(C.lo, 0.6)]); ctx.fillRect(-bw, -4, bw * 2, 12);
+  ctx.fillStyle = rgbaA(C.hi, 0.7);
+  for (let q = 0; q < 6; q++) { ctx.beginPath(); ctx.arc(-bw * 0.6 + q * bw * 0.24, -bh * 0.75 + Math.sin(q * 1.9) * 3 + (q === 0 || q === 5 ? 8 : 0), 1, 0, TWO_PI); ctx.fill(); }
+  if (st.tell > 0) { ctx.fillStyle = `rgba(255,70,120,${0.22 * st.tell})`; ctx.fillRect(-bw, -bh * 1.3, bw * 2, bh * 1.5); }
+  ctx.restore();
+  bell(); ctx.strokeStyle = C.edge; ctx.lineWidth = 1.2; ctx.stroke();
+  // the face: big eyes, brows that knit as it charges, blush, a little mouth that gasps with each stroke
+  const sting = Math.max(st.tell, st.flare), ey = -bh * 0.32;
+  for (const d of [-1, 1]) {
+    const ex = d * 7.2, r = 4.4, look = Math.sin(T * 0.9 + h.alt) * 0.6;
+    ctx.fillStyle = lagoonRG(ex - r * 0.3, ey - r * 0.3, r * 1.3, ['#ffffff', '#f2e6d8', '#c9b49e']); ctx.beginPath(); ctx.ellipse(ex, ey, r, r * 1.08, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = sting > 0.4 ? '#36e8ff' : '#2a9ee0'; ctx.beginPath(); ctx.arc(ex + look * r * 0.3, ey + r * 0.08, r * 0.62, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#1a0d14'; ctx.beginPath(); ctx.arc(ex + look * r * 0.36, ey + r * 0.1, r * 0.32, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex + look * r * 0.3 - r * 0.22, ey - r * 0.22, r * 0.17, 0, TWO_PI); ctx.fill();
+  }
+  ctx.strokeStyle = C.edge; ctx.lineWidth = 1.5;
+  for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(d * 2.5, ey - 4.6 + sting * 1.2); ctx.lineTo(d * 11, ey - 6.4 - sting * 1.4); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,90,150,.45)'; for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(d * 13, -bh * 0.12, 3.2, 1.8, 0, 0, TWO_PI); ctx.fill(); }
+  ctx.fillStyle = C.edge; ctx.beginPath(); ctx.ellipse(0, -bh * 0.08, 2 + st.pulse, 1 + st.pulse * 1.5, 0, 0, TWO_PI); ctx.fill();
+  lagoonSheen(-1, -bh * 0.28, bw * 0.95, 0.55, 3.5, 4.5);
+  ctx.restore();
+}
+
+// -- the Cascade: a waterfall pouring out of a cleft in the wall. The spout (cached): a mossy stone lip jutting out of a
+// dark cleft, a heavy rounded brow of rock over it with ferns, both exactly its capsules. The water (live): a thin
+// glassy ribbon most of the time; in the tell it gargles and bulges at the lip; then it gushes, a broad sheet racing
+// down in foamy streaks (exactly the sheet capsules that sweep you) and breaking into spray and mist at its foot. --
+function lagoonSpoutArt(d) {
+  const F = LAGOON.fall;
+  return lagoonRockPiece('spout', d, -30, F.out0 + 18, -48, 22, c => {
+    // the cleft: a dark slot in the wall the water wells out of
+    c.fillStyle = lagoonLG(0, -16, 0, 6, ['#0a2a30', '#062026'], c); c.beginPath(); c.moveTo(-26, -14); c.quadraticCurveTo(-6, -20, 8, -12); c.lineTo(10, 2); c.quadraticCurveTo(-8, 6, -26, 4); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(110,242,228,.18)'; c.beginPath(); c.ellipse(0, -4, 10, 5, 0, 0, TWO_PI); c.fill();
+    // the brow: a heavy rounded boulder over the cleft (its capsule: r 15 at (6, -24))
+    const brow = () => { lagoonBlob(c, [[-24, -30], [-12, -42], [6, -40.5], [19, -30], [20, -16], [8, -10], [-10, -12], [-26, -16]]); };
+    brow(); c.fillStyle = lagoonRG(-2, -36, 30, ['#b4e4d8', '#5f9e98', '#1e5458'], c); c.fill(); c.strokeStyle = '#0f3a40'; c.lineWidth = 1.2; c.stroke();
+    c.save(); brow(); c.clip();
+    c.strokeStyle = 'rgba(16,52,56,.55)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-18, -22); c.quadraticCurveTo(0, -18, 16, -24); c.stroke();
+    c.strokeStyle = 'rgba(200,244,234,.3)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-18, -20.8); c.quadraticCurveTo(0, -16.8, 16, -22.8); c.stroke();
+    c.fillStyle = lagoonLG(0, -18, 0, -10, ['rgba(10,40,44,0)', 'rgba(10,40,44,.5)'], c); c.fillRect(-30, -18, 60, 10);
+    c.restore();
+    lagoonSheen(-2, -30, 14, 0.4, 3.5, 4.6, c);
+    lagoonMossRun(c, -22, 16, -38.5, 211, 1.2);
+    // ferns on the brow
+    for (const [fx, fa] of [[-14, -0.5], [12, 0.4]]) {
+      c.strokeStyle = '#2a6a40'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(fx, -40); c.quadraticCurveTo(fx + fa * 10, -50, fx + fa * 20, -48); c.stroke();
+      for (let q = 1; q <= 4; q++) { const u = q / 5, x = fx + fa * 20 * u, y = -40 - 9 * Math.sin(u * 2.6); c.fillStyle = q % 2 ? '#7ccc6a' : '#5aa462'; c.beginPath(); c.ellipse(x - 1.5, y - 2, 1.6, 3.4, -0.6 + fa, 0, TWO_PI); c.fill(); c.beginPath(); c.ellipse(x + 1.5, y - 1.4, 1.6, 3.4, 0.6 + fa, 0, TWO_PI); c.fill(); }
+    }
+    // the lip: a worn stone shelf the water slides over (its capsule: r 8 from (-12, 4) to (out0 + 2, 1))
+    const lip = () => { c.beginPath(); c.moveTo(-26, -3); c.quadraticCurveTo(F.out0 * 0.5, -6.5, F.out0 + 6, -3); c.quadraticCurveTo(F.out0 + 11, 2, F.out0 + 4, 7); c.quadraticCurveTo(F.out0 * 0.4, 12, -26, 12); c.closePath(); };
+    lip(); c.fillStyle = lagoonLG(0, -6, 0, 12, LAGOON_STONE, c); c.fill(); c.strokeStyle = '#0f3a40'; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(214,255,244,.7)'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(-22, -3.4); c.quadraticCurveTo(F.out0 * 0.5, -6, F.out0 + 5, -2.6); c.stroke();
+    c.strokeStyle = 'rgba(16,52,56,.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-20, 5); c.quadraticCurveTo(F.out0 * 0.4, 6.5, F.out0 + 2, 3); c.stroke();
+    lagoonMossRun(c, -24, F.out0 - 8, 9, 227, 1.4);
+  });
+}
+function drawLagoonFall(h) {
+  const F = LAGOON.fall, fl = h.st || lagoonFallFlow(h, G.t), g = fl.g, T = G.t + h.alt * 0.013, d = h.side, near = glowK;
+  // the sheet: its two edges down its length (a little ragged and wobbling), filled glassy aqua with foam, streaks
+  // racing down it, foam bunching at the lip; more opaque and foamier the harder it pours
+  const N = 14, L = [], R = [];
+  const wob = fl.tell > 0 ? Math.sin(G.t * 30) * 2 * fl.tell : 0;
+  for (let i = 0; i <= N; i++) {
+    const dep = F.len * i / N, cx = lagoonFallX(h, dep) + wob * (1 - i / N), w = lagoonFallW(dep, g) / 2 * (1 + 0.06 * Math.sin(T * 9 + i * 1.7)), a = h.top - dep;
+    L.push([sx(cx - w), sy(a)]); R.push([sx(cx + w), sy(a)]);
+  }
+  const sheet = () => { ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let i = N; i >= 0; i--) ctx.lineTo(...R[i]); ctx.closePath(); };
+  const yTop = sy(h.top), yBot = sy(h.alt), alpha = 0.5 + 0.35 * g;
+  ctx.save();
+  // a cool glow round a gushing sheet (it is water: aqua, never danger red)
+  if (g > 0.2) lagoonGlow(sx(lagoonFallX(h, F.len * 0.5)), sy(h.top - F.len * 0.5), (60 + 60 * g) * s, LP.aqua, 0.12 * g);
+  sheet(); ctx.fillStyle = lagoonLG(0, yTop, 0, yBot, [`rgba(210,255,250,${alpha})`, `rgba(110,226,224,${alpha * 0.8})`, `rgba(80,200,210,${alpha * 0.55})`, 'rgba(170,240,240,0)']); ctx.fill();
+  ctx.save(); sheet(); ctx.clip();
+  // across its width: lit left, shaded right (rounded volume)
+  const xm = sx(lagoonFallX(h, F.len * 0.5)), wm = lagoonFallW(F.len * 0.5, g) * s;
+  ctx.fillStyle = lagoonLG(xm - wm / 2, 0, xm + wm / 2, 0, ['rgba(255,255,255,.28)', 'rgba(255,255,255,0)', 'rgba(20,90,110,.22)']); ctx.fillRect(xm - wm, yTop, wm * 2, yBot - yTop);
+  // streaks racing down
+  ctx.lineCap = 'round';
+  const ns = 3 + Math.round(6 * g);
+  for (let q = 0; q < ns; q++) {
+    const f = (q + 0.5) / ns - 0.5, sp = 160 + 120 * g + 30 * hash2(q, 5);
+    ctx.setLineDash([(10 + 14 * g) * s, (14 + 10 * hash2(q, 6)) * s]); ctx.lineDashOffset = -(T * sp + q * 37) * s;
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.4 * g})`; ctx.lineWidth = (1 + 1.4 * g) * s;
+    ctx.beginPath(); for (let i = 0; i <= N; i++) { const dep = F.len * i / N, x = sx(lagoonFallX(h, dep) + f * lagoonFallW(dep, g) * 0.9), y = sy(h.top - dep); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // foam clumps tumbling down it
+  for (let q = 0; q < 4 + 8 * g; q++) {
+    const u = pmod(T * (0.6 + 0.3 * g) + hash2(q, 9), 1), dep = u * F.len, f = (hash2(q, 10) - 0.5) * 0.8, x = sx(lagoonFallX(h, dep) + f * lagoonFallW(dep, g)), y = sy(h.top - dep), r = (2 + 3 * g) * (1 - u * 0.4) * s;
+    ctx.fillStyle = `rgba(240,255,252,${0.55 * g + 0.15})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.arc(x + r, y + r * 0.4, r * 0.7, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+  // its own-hue edge
+  ctx.lineJoin = 'round'; ctx.strokeStyle = `rgba(40,150,170,${0.35 + 0.3 * g})`; ctx.lineWidth = 1 * s;
+  ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.beginPath(); R.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  // the foot: the sheet breaking into spray and mist (no basin: nothing below it)
+  const fx = sx(lagoonFallX(h, F.len)), fw = lagoonFallW(F.len, g) * s;
+  lagoonGlow(fx, yBot, (20 + 40 * g) * s + fw * 0.4, [220, 255, 250], 0.25 + 0.3 * g);
+  ctx.fillStyle = `rgba(235,255,252,${0.3 + 0.4 * g})`;
+  for (let q = 0; q < 7; q++) { const u = pmod(T * 1.4 + q / 7, 1), x = fx + (hash2(q, 12) - 0.5) * fw * 1.1, y = yBot + u * 22 * s, r = (2 + 4 * g) * (1 - u) * s; ctx.globalAlpha = 1 - u; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // the spout's rock over the water's source; the water bulging and gargling over its lip in the tell
+  const X0 = sx(h.base), Y0 = sy(h.top);
+  dangerGlow(sx(h.base + d * 8), sy(h.top + 10), 40, 0.16 * near);
+  lagoonPiece(lagoonSpoutArt(d), X0, Y0);
+  const lipX = sx(h.base + d * (F.out0 - 2)), bulge = 0.25 + 0.75 * Math.max(g, fl.tell);
+  ctx.fillStyle = lagoonRG(lipX - d * 2 * s, Y0 - 4 * s, 11 * s * bulge, ['rgba(240,255,252,.95)', 'rgba(150,240,232,.7)', 'rgba(110,220,220,0)']); ctx.beginPath(); ctx.ellipse(lipX, Y0 - 1 * s, (6 + 8 * bulge) * s, (3 + 3 * bulge) * s, 0, 0, TWO_PI); ctx.fill();
+  if (fl.tell > 0) {
+    lagoonGlow(lipX, Y0 - 2 * s, 30 * s, LP.aqua, 0.35 * fl.tell);
+    ctx.strokeStyle = 'rgba(230,255,252,.85)'; ctx.lineWidth = 1 * s;
+    for (let q = 0; q < 5; q++) { const u = pmod(G.t * 2.4 + q / 5, 1); ctx.beginPath(); ctx.arc(lipX + (hash2(q, 14) - 0.5) * 16 * s, Y0 - (3 + u * 12 * fl.tell) * s, (1 + q * 0.3) * s, 0, TWO_PI); ctx.stroke(); }
+  }
+}
+
+// -- the Gulper: a huge old grouper filling a hollow in the wall. The hollow (cached): a dark water-worn cave mouth
+// rimmed with barnacled stone and coral. The fish (live): a great warm-brown head mottled with teal spots, a cream
+// belly, thick pouting lips (exactly its jaw capsules), a gill cover that flares in the tell, a sleepy eye that pops wide
+// open, and a red throat when it gapes; streamlines and bubbles pour into its mouth as it sucks. --
+function lagoonHollowArt(d) {
+  return lagoonRockPiece('hollow', d, -84, 26, -78, 72, c => {
+    // the hollow's back: deep teal-black, a water-worn cave in the rock the fish fills (all of it inside the wall)
+    const mouth = () => lagoonBlob(c, [[-60, -48], [-22, -58], [4, -50], [9, -22], [9, 20], [4, 48], [-22, 56], [-58, 44], [-72, 0]]);
+    mouth(); c.fillStyle = lagoonRG(-10, 0, 70, ['#031418', '#06222a', '#0e3a42'], c); c.fill();
+    c.strokeStyle = 'rgba(110,242,228,.12)'; c.lineWidth = 1; for (const r of [26, 40]) { c.beginPath(); c.ellipse(-24, 0, r, r * 0.9, 0, 1.9, 4.4); c.stroke(); }
+    // rim stones round its mouth: lumpy, lit from the top left, barnacled, the lowest mossy (never past the wall line)
+    const rocks = [[-48, -54, 12], [-24, -60, 13], [-2, -54, 11], [2, -36, 8], [2, 34, 8], [-2, 50, 11], [-24, 58, 13], [-48, 52, 12]];
+    rocks.forEach(([x, y, r], i) => {
+      const pts = []; for (let q = 0; q < 7; q++) { const an = q / 7 * TWO_PI, rr = r * (0.82 + 0.3 * hash2(i * 7 + q, 401)); pts.push([x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.86]); }
+      lagoonBlob(c, pts); c.fillStyle = lagoonRG(x - r * 0.4, y - r * 0.5, r * 1.5, ['#b8e6da', '#5f9e98', '#1a4c52'], c); c.fill(); c.strokeStyle = '#0f3a40'; c.lineWidth = 1.1; c.stroke();
+      c.strokeStyle = 'rgba(230,255,248,.45)'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, r * 0.66, 3.6, 4.6); c.stroke();
+      if (hash2(i, 403) < 0.55) for (let q = 0; q < 3; q++) { const bx = x + (hash2(i * 3 + q, 404) - 0.5) * r, by = y + (hash2(i * 3 + q, 405) - 0.3) * r * 0.8, br = 1.6 + 1.2 * hash2(i * 3 + q, 406); c.fillStyle = lagoonRG(bx - br * 0.3, by - br * 0.4, br * 1.3, ['#fff8ee', '#d8ccb8', '#8a7c6a'], c); c.beginPath(); c.arc(bx, by, br, 0, TWO_PI); c.fill(); c.strokeStyle = '#7a6c5a'; c.lineWidth = 0.6; c.stroke(); c.fillStyle = '#5a4c3e'; c.beginPath(); c.arc(bx, by, br * 0.35, 0, TWO_PI); c.fill(); }
+    });
+    lagoonMossRun(c, -58, 0, 46, 421, 1.2);
+    lagoonCoral(c, -30, -68, 12, LP.coral, 7); lagoonCoral(c, -54, -62, 9, LP.peach, 9);
+    lagoonAnemone(c, -36, 64, 3.6, [190, 255, 150]);
+  });
+}
+function drawLagoonGulp(h) {
+  const gs = h.st || lagoonGulpState(h, G.t), d = h.side, o = gs.open, T = G.t + h.alt * 0.01, near = glowK, G0 = LAGOON.gulp;
+  const X = sx(h.base), Y = sy(h.alt);
+  lagoonPiece(lagoonHollowArt(d), X, Y);
+  dangerGlow(sx(h.base + d * 50), Y, 70, (0.12 + 0.3 * gs.tell + 0.3 * gs.suck) * near + 0.04);
+  // the suck: streamlines curving into its mouth, racing inward
+  const mx = sx(h.base + d * G0.mouth), my = Y;
+  if (gs.suck > 0.05) {
+    ctx.save(); ctx.lineCap = 'round'; ctx.globalCompositeOperation = 'lighter';
+    for (let q = 0; q < 9; q++) {
+      const an = (q / 8 - 0.5) * 2.2, u = pmod(G.t * 1.6 + hash2(q, 31), 1), R0 = (G0.R * (1 - u)) * s, R1 = Math.max(0, R0 - 50 * s);
+      const p0 = [mx + d * Math.cos(an) * R0, my - Math.sin(an) * R0 * G0.Ra / G0.R], p1 = [mx + d * Math.cos(an * 0.8) * R1, my - Math.sin(an * 0.8) * R1 * G0.Ra / G0.R];
+      ctx.strokeStyle = `rgba(200,255,250,${0.35 * gs.suck * Math.sin(u * Math.PI)})`; ctx.lineWidth = 1.6 * s;
+      ctx.beginPath(); ctx.moveTo(...p0); ctx.quadraticCurveTo((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2 - 6 * s * Math.sign(an), ...p1); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.save(); ctx.translate(X, Y); ctx.scale(d * s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const shake = gs.tell > 0.3 ? Math.sin(G.t * 40) * 0.8 * gs.tell : 0;
+  ctx.translate(0, shake);
+  const [up, lo] = lagoonJaws({ side: 1, base: 0, alt: 0 }, o);
+  const skinG = (y0, y1, lit) => lagoonLG(0, y0, 0, y1, lit ? ['#f2b884', '#c07a48', '#8a4e2a'] : ['#d89a68', '#a0603a', '#6a3a1e']);
+  const mottle = (x0, y0, w, hh, n, seed) => { for (let q = 0; q < n; q++) { const x = x0 + w * hash2(q, seed), y = y0 + hh * hash2(q, seed + 1), r = 1.4 + 2.2 * hash2(q, seed + 2); ctx.fillStyle = 'rgba(40,110,120,.5)'; ctx.beginPath(); ctx.arc(x, y, r + 0.8, 0, TWO_PI); ctx.fill(); ctx.fillStyle = 'rgba(130,214,212,.65)'; ctx.beginPath(); ctx.arc(x - 0.3, y - 0.3, r * 0.6, 0, TWO_PI); ctx.fill(); } };
+  // its body, filling the hollow behind the head: a great dark flank, a spiny dorsal fin along its back
+  ctx.fillStyle = lagoonLG(0, -36, 0, 36, ['#9a5a34', '#6a3a1e', '#4a2814']); ctx.beginPath(); ctx.ellipse(-46, 2, 44, 36, 0, 0, TWO_PI); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(-46, 2, 44, 36, 0, 0, TWO_PI); ctx.clip(); mottle(-84, -28, 60, 50, 9, 61); ctx.restore();
+  ctx.beginPath(); ctx.moveTo(-74, -26); for (let q = 0; q <= 6; q++) { const x = -70 + q * 10, sp = -44 - 6 * Math.sin(q * 1.3 + 0.5) - 3 * Math.sin(G.t * 2 + q) * (0.3 + gs.tell); ctx.lineTo(x, sp); ctx.lineTo(x + 5, -36); } ctx.lineTo(-8, -34); ctx.closePath();
+  ctx.fillStyle = lagoonLG(0, -52, 0, -30, ['rgba(255,170,110,.9)', 'rgba(170,80,40,.85)']); ctx.fill(); ctx.strokeStyle = '#6a3418'; ctx.lineWidth = 1; ctx.stroke();
+  // the mouth's inside: a red throat behind the jaws, ribbed, darkening deep in, a pink tongue
+  if (o > 0.04) {
+    ctx.fillStyle = lagoonRG(40, 0, 44, ['#2a0410', '#7a1428', '#d04a58']);
+    ctx.beginPath(); ctx.moveTo(26, -12); ctx.lineTo(up[0] + 2, -up[1] + 4); ctx.lineTo(lo[0] + 2, -lo[1] - 4); ctx.lineTo(24, 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,150,160,.35)'; ctx.lineWidth = 1.2; for (const f of [-0.5, 0, 0.5]) { ctx.beginPath(); ctx.moveTo(32, f * 8); ctx.quadraticCurveTo(50, f * 22 * o, 66, f * 36 * o); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(255,140,160,.7)'; ctx.beginPath(); ctx.ellipse(46, 6 + 8 * o, 11, 3.5 * o + 1, 0, 0, TWO_PI); ctx.fill();
+  }
+  // a jaw: a thick wedge of the head's own skin out to its tip (its capsule, r 11), a fat pouting lip along the mouth side
+  const jaw = (root, tip, lit) => {
+    const jx = tip[0], jy = -tip[1], ang = Math.atan2(jy - root[1], jx - root[0]), len = Math.hypot(jx - root[0], jy - root[1]), m = lit ? 1 : -1;   // m: which side the mouth is
+    ctx.save(); ctx.translate(root[0], root[1]); ctx.rotate(ang);
+    const shape = () => { ctx.beginPath(); ctx.moveTo(-10, -17 * m); ctx.quadraticCurveTo(len * 0.3, -13 * m, len, -11.5 * m); ctx.quadraticCurveTo(len + 12, -9 * m, len + 11, 0); ctx.quadraticCurveTo(len + 10, 9 * m, len, 11 * m); ctx.lineTo(-10, 12 * m); ctx.closePath(); };
+    shape(); ctx.fillStyle = skinG(-14, 14, lit); ctx.fill();
+    ctx.save(); shape(); ctx.clip(); mottle(0, -10 * m, len * 0.3, 8 * m, 3, lit ? 71 : 73);
+    // the lips: the outer half of the jaw is one fat rounded pout of salmon-pink flesh (a grouper's lips), creased where
+    // it meets the skin, lit along the top, a darker line along the mouth
+    const lp0 = len * 0.3, lipS = () => { ctx.beginPath(); ctx.moveTo(lp0, -12 * m); ctx.quadraticCurveTo(lp0 - 7, 0, lp0, 12 * m); ctx.lineTo(len, 12 * m); ctx.quadraticCurveTo(len + 13, 11 * m, len + 12, 0); ctx.quadraticCurveTo(len + 13, -12 * m, len, -12 * m); ctx.closePath(); };
+    lipS(); ctx.fillStyle = lagoonLG(0, -12 * m, 0, 12 * m, lit ? ['#ffd0b8', '#f08a7a', '#c0505a'] : ['#f4a898', '#d86a6a', '#a03e4a']); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,30,40,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(lp0, -12 * m); ctx.quadraticCurveTo(lp0 - 7, 0, lp0, 12 * m); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,220,200,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(lp0 + 1.6, -11 * m); ctx.quadraticCurveTo(lp0 - 5, 0, lp0 + 1.6, 11 * m); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,240,230,.65)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(lp0 + 4, -7 * m); ctx.quadraticCurveTo(len * 0.7, -9 * m, len + 6, -6 * m); ctx.stroke();
+    ctx.strokeStyle = 'rgba(110,24,36,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(lp0 + 2, 8 * m); ctx.quadraticCurveTo(len * 0.7, 9 * m, len + 8, 5 * m); ctx.stroke();
+    ctx.restore();
+    shape(); ctx.strokeStyle = '#6a3418'; ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.strokeStyle = `rgba(255,236,210,${lit ? 0.55 : 0.25})`; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(0, -12 * m); ctx.quadraticCurveTo(len * 0.5, -11.5 * m, len + 2, -8.5 * m); ctx.stroke();
+    // little peg teeth on the lip when it gapes
+    if (o > 0.1) { ctx.fillStyle = '#fff6e8'; ctx.strokeStyle = '#b8a07e'; ctx.lineWidth = 0.5; for (let q = 1; q <= 6; q++) { const x = q * len / 6.5, y = 12 * m; ctx.beginPath(); ctx.moveTo(x - 1.5, y); ctx.lineTo(x, y + 3.4 * m); ctx.lineTo(x + 1.5, y); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+    ctx.restore();
+  };
+  jaw([28, 12], lo, 0);
+  // the head: a great rounded dome out of the hollow (its capsule: r 34 at (8, -2)), mottled warm brown to a cream chin
+  const head = () => lagoonBlob(ctx, [[-30, -30], [-8, -41], [18, -37], [37, -21], [41, -2], [35, 17], [15, 33], [-10, 36], [-30, 26]]);
+  head(); ctx.fillStyle = lagoonLG(0, -42, 0, 36, ['#f2b884', '#b8703e', '#c88a56', '#f4dcb0']); ctx.fill();
+  ctx.save(); head(); ctx.clip();
+  ctx.fillStyle = lagoonRG(2, -26, 50, ['rgba(255,226,190,.4)', 'rgba(255,226,190,0)']); ctx.fillRect(-36, -50, 84, 90);
+  mottle(-24, -36, 56, 46, 15, 51);
+  ctx.lineWidth = 0.8;
+  for (let row = 0; row < 4; row++) for (let q = 0; q < 5; q++) { const x = -22 + q * 7 + (row & 1) * 3.5, y = -12 + row * 7; ctx.strokeStyle = 'rgba(120,60,30,.35)'; ctx.beginPath(); ctx.arc(x, y + 0.8, 3.2, 0.3, Math.PI - 0.3); ctx.stroke(); ctx.strokeStyle = 'rgba(255,230,190,.3)'; ctx.beginPath(); ctx.arc(x, y - 0.6, 3.2, 3.5, 5.9); ctx.stroke(); }
+  ctx.fillStyle = lagoonLG(0, 14, 0, 36, ['rgba(255,240,210,0)', 'rgba(255,240,210,.55)']); ctx.fillRect(-36, 14, 84, 24);
+  // the shade where it sinks back into the hollow
+  ctx.fillStyle = lagoonLG(-30, 0, -6, 0, ['rgba(40,18,8,.5)', 'rgba(40,18,8,0)']); ctx.fillRect(-36, -44, 30, 84);
+  ctx.restore();
+  head(); ctx.strokeStyle = '#6a3418'; ctx.lineWidth = 1.4; ctx.stroke();
+  lagoonSheen(6, -12, 34, 0.45, 3.7, 4.7);
+  for (const [bx, by, br] of [[-10, -36, 2.6], [-4, -38.5, 2], [2, -38, 1.6]]) { ctx.fillStyle = lagoonRG(bx - br * 0.3, by - br * 0.4, br * 1.3, ['#fff8ee', '#d8ccb8', '#8a7c6a']); ctx.beginPath(); ctx.arc(bx, by, br, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#7a6c5a'; ctx.lineWidth = 0.6; ctx.stroke(); ctx.fillStyle = '#5a4c3e'; ctx.beginPath(); ctx.arc(bx, by, br * 0.35, 0, TWO_PI); ctx.fill(); }
+  jaw([30, -14], up, 1);
+  // the gill cover: a curved plate behind the cheek, flaring out red in the tell and as it sucks
+  const fl = Math.max(gs.tell, gs.suck * 0.6);
+  ctx.save(); ctx.translate(-8, -2); ctx.rotate(-0.2 * fl);
+  ctx.fillStyle = lagoonLG(-10, 0, 6, 0, ['#8a4a28', '#d08a5a']); ctx.beginPath(); ctx.moveTo(0, -27); ctx.quadraticCurveTo(-13 - 6 * fl, 0, 0, 27); ctx.quadraticCurveTo(-4, 0, 0, -27); ctx.fill();
+  if (fl > 0.05) { ctx.fillStyle = `rgba(220,40,70,${0.8 * fl})`; ctx.beginPath(); ctx.moveTo(-1, -23); ctx.quadraticCurveTo(-11 - 6 * fl, 0, -1, 23); ctx.quadraticCurveTo(-6, 0, -1, -23); ctx.fill(); }
+  ctx.strokeStyle = '#5a2c14'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, -27); ctx.quadraticCurveTo(-13 - 6 * fl, 0, 0, 27); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,220,180,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(2, -23); ctx.quadraticCurveTo(-9 - 6 * fl, 0, 2, 23); ctx.stroke();
+  ctx.restore();
+  // the pectoral fin: a fan of translucent orange with rays, sculling slowly
+  ctx.save(); ctx.translate(4, 20); ctx.rotate(0.5 + Math.sin(G.t * 2.4 + h.alt) * 0.15);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-10, 18, -2, 26); ctx.quadraticCurveTo(8, 24, 14, 16); ctx.quadraticCurveTo(10, 6, 0, 0); ctx.closePath();
+  ctx.fillStyle = lagoonLG(0, 0, 0, 26, ['rgba(255,190,130,.95)', 'rgba(230,120,70,.8)']); ctx.fill(); ctx.strokeStyle = '#8a4220'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(140,60,24,.55)'; ctx.lineWidth = 0.8; for (const a of [-0.3, 0.1, 0.5, 0.9]) { ctx.beginPath(); ctx.moveTo(1, 2); ctx.lineTo(1 + Math.sin(a) * 22, 2 + Math.cos(a) * 22); ctx.stroke(); }
+  ctx.restore();
+  // the eye: sleepy half-lidded at rest, popping wide and glaring red-orange in the tell and the suck
+  const wide = Math.max(gs.tell, gs.suck, gs.burp * 0.3), ex = 12, ey = -22, r = 9.5;
+  ctx.fillStyle = 'rgba(80,40,20,.4)'; ctx.beginPath(); ctx.arc(ex + 0.6, ey + 1, r + 2.4, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = lagoonRG(ex - r * 0.3, ey - r * 0.3, r * 1.3, ['#ffffff', '#f2e6d8', '#c9b49e']); ctx.beginPath(); ctx.arc(ex, ey, r, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = wide > 0.3 ? '#ff7a2a' : '#d8a020'; ctx.beginPath(); ctx.arc(ex + 1.5, ey + 0.5, r * 0.62, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#1a0d14'; ctx.beginPath(); ctx.arc(ex + 1.8, ey + 0.6, r * (0.34 - 0.12 * wide), 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 1.2, ey - 2, r * 0.2, 0, TWO_PI); ctx.fill();
+  // its lid, drooping sleepily until it wakes
+  const lid = 0.55 * (1 - wide);
+  if (lid > 0.02) { ctx.fillStyle = lagoonLG(0, ey - r, 0, ey, ['#d89a68', '#a86038']); ctx.beginPath(); ctx.arc(ex, ey, r + 0.6, Math.PI + 0.1, -0.1); ctx.lineTo(ex + r, ey - r + 2 * r * lid); ctx.quadraticCurveTo(ex, ey - r + 2.4 * r * lid, ex - r, ey - r + 2 * r * lid); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#6a3418'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ex - r, ey - r + 2 * r * lid); ctx.quadraticCurveTo(ex, ey - r + 2.4 * r * lid, ex + r, ey - r + 2 * r * lid); ctx.stroke(); }
+  ctx.strokeStyle = '#6a3418'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(ex, ey, r, 0, TWO_PI); ctx.stroke();
+  ctx.strokeStyle = '#5a2c14'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(ex - 8, ey - 9 - 2 * wide); ctx.quadraticCurveTo(ex, ey - 12 - 2 * wide, ex + 8, ey - 8 + 2 * wide); ctx.stroke();
+  ctx.restore();
+  if (gs.tell > 0.05) lagoonGlow(sx(h.base + d * 14), sy(h.alt + 24), 16 * s, [255, 120, 60], 0.4 * gs.tell);
+}
+DRAW.lagoonFish = drawLagoonFish; DRAW.lagoonJelly = drawLagoonJelly; DRAW.lagoonFall = drawLagoonFall; DRAW.lagoonGulp = drawLagoonGulp;
+// ---- the lagoon's scene ----
+// Walls: smooth, wet, water-worn teal rock (the edge drawn is exactly the collision line): big rounded pillows of stone
+// creased by the water, flowstone drapes hanging down the face with a drip at each tip, tide lines, wet streaks, smooth
+// pebbles, spiral shell fossils, starfish and barnacles, moss cushions and glowing algae; along the shaft a real lip of
+// polished stone (lit where it faces up, shaded where it overhangs, chipped, with moss cushions spilling over it and
+// dripping). What grows on the rock changes with the section (greener round the Piranha Pools, coral-pink in the
+// Jellyfish Drift, streaming wet in the Cascades, barnacled in the Gulper Hollow, sunny with coral in the Shallows).
+// All of it is drawn once into cached tiles (LAGOON_TILE high, both sides) and blitted; caustics dance over it live.
+const LAGOON_TILE = 200;
+const LAGOON_FLAVOUR = {
+  'Lagoon Mouth':      { moss: 1.0, coral: 0.4, flow: 0.7, shells: 0.6, algae: 0.5, barn: 0.3, star: 0.5, glow: [110, 242, 228] },
+  'Piranha Pools':     { moss: 1.4, coral: 0.3, flow: 0.6, shells: 0.5, algae: 0.4, barn: 0.3, star: 0.4, glow: [170, 255, 150] },
+  'Jellyfish Drift':   { moss: 0.6, coral: 1.0, flow: 0.5, shells: 0.6, algae: 1.1, barn: 0.2, star: 0.7, glow: [255, 140, 220] },
+  'The Cascades':      { moss: 1.1, coral: 0.3, flow: 1.6, shells: 0.3, algae: 0.6, barn: 0.2, star: 0.3, glow: [110, 242, 228] },
+  'Gulper Hollow':     { moss: 0.8, coral: 0.5, flow: 0.6, shells: 0.8, algae: 0.4, barn: 1.4, star: 0.5, glow: [190, 255, 150] },
+  'Glowing Shallows':  { moss: 1.0, coral: 1.4, flow: 0.5, shells: 1.0, algae: 1.4, barn: 0.4, star: 1.2, glow: [255, 220, 140] },
+  'Undertow Gauntlet': { moss: 0.7, coral: 0.4, flow: 1.1, shells: 0.4, algae: 0.8, barn: 0.7, star: 0.3, glow: [110, 242, 228] },
+  'The Hidden Lagoon': { moss: 1.4, coral: 1.2, flow: 0.8, shells: 0.8, algae: 1.0, barn: 0.3, star: 1.0, glow: [255, 230, 150] },
+};
+function lagoonFlavour(a) {
+  const S = G.level && G.level.sections; if (!S) return LAGOON_FLAVOUR['Lagoon Mouth'];
+  let sc = S[0]; for (const q of S) if (a >= q.a0) sc = q;
+  return LAGOON_FLAVOUR[sc.name] || LAGOON_FLAVOUR['Lagoon Mouth'];
+}
+// the play-space x range (world) the cached art covers: the screen plus room for the zoom pulling back
+const lagoonSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function lagoonWallTile(side, k) {
+  const C = LAGOON_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = lagoonRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+function lagoonRenderWallTile(side, k) {
+  const a0 = k * LAGOON_TILE - 4, a1 = (k + 1) * LAGOON_TILE + 4, dir = side ? 1 : -1, wx = a => side ? rightWall(a) : leftWall(a);
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = lagoonSpan(), xa = side ? reach - 18 : s0, xb = side ? s1 : reach + 18;
+  const sp = lagoonCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c;
+  sp.xa = xa; sp.a1 = a1;
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 70, A1 = a1 + 70;
+  const inw = a => side ? -rightWall(a) : leftWall(a);
+  const pts = []; for (let a = A0; a <= A1 + 3; a += 3) pts.push([X(wx(a)), Y(a), a, (inw(a + 4) - inw(a - 4)) / 8]);
+  const at = (a, d) => [X(wx(a) + dir * d), Y(a)];
+  const trace = (off = 0) => { c.beginPath(); pts.forEach(([x, y], i) => { const xx = x + dir * off * s; i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); };
+  const edge = side ? X(xb) + 40 : X(xa) - 40;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // ---- the body: deep petrol teal, lit toward the shaft (wide soft strokes following the edge, so it never tiles)
+  const body = () => { c.beginPath(); c.moveTo(edge, Y(A0)); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(edge, Y(A1 + 3)); c.closePath(); };
+  body(); c.fillStyle = 'rgb(14,40,46)'; c.fill();
+  c.save(); body(); c.clip();
+  for (const [lw, col] of [[260, 'rgba(36,84,90,.55)'], [150, 'rgba(48,100,104,.5)'], [80, 'rgba(62,118,118,.45)'], [34, 'rgba(78,136,132,.4)']]) { c.strokeStyle = col; c.lineWidth = lw * s; trace(lw / 2); c.stroke(); }
+  // big rounded pillows of water-worn stone, each a soft lit dome creased underneath (a dark furrow under a lit ridge),
+  // deeper ones fainter
+  for (let r = Math.floor(A0 / 44) - 1; r * 44 < A1 + 44; r++) for (let j = 0; j < 5; j++) {
+    const hj = hash2(r * 5 + j, 1301 + side); if (hj < 0.18) continue;
+    const ac = r * 44 + 22 + (hash2(r * 5 + j, 1302) - 0.5) * 24 + (j % 2) * 22, d = 12 + j * 36 + (hash2(r * 5 + j, 1303) - 0.5) * 14;
+    const rx = (20 + 14 * hj) * s, ry = (15 + 9 * hash2(r * 5 + j, 1304)) * s, [x, y] = at(ac, d), fade = clamp(1 - d / 210, 0.15, 1);
+    c.fillStyle = lagoonRG(x - rx * 0.35, y - ry * 0.45, rx * 1.15, [`rgba(150,206,196,${0.2 * fade})`, `rgba(110,170,164,${0.08 * fade})`, 'rgba(110,170,164,0)'], c);
+    c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = `rgba(6,26,32,${0.5 * fade})`; c.lineWidth = 1.6 * s; c.beginPath(); c.ellipse(x, y + 0.6 * s, rx, ry, 0, 0.35, Math.PI - 0.35); c.stroke();
+    c.strokeStyle = `rgba(170,224,212,${0.22 * fade})`; c.lineWidth = 1 * s; c.beginPath(); c.ellipse(x, y - 1.2 * s, rx * 0.97, ry * 0.97, 0, 0.45, Math.PI - 0.45); c.stroke();
+    c.strokeStyle = `rgba(200,240,230,${0.16 * fade})`; c.lineWidth = 1.2 * s; c.beginPath(); c.ellipse(x, y, rx * 0.8, ry * 0.75, 0, 3.6, 4.7); c.stroke();
+  }
+  // tide lines: faint wavy bands across the face where the water once stood (a dark line under a lit one)
+  for (let r = Math.floor(A0 / 58) - 1; r * 58 < A1 + 58; r++) {
+    const hj = hash2(r, 1311 + side); if (hj < 0.45) continue;
+    const ab = r * 58 + 20 * hash2(r, 1312), tl = (dd, dy) => { c.beginPath(); for (let d = -4; d <= 230; d += 10) { const [x, y] = at(ab + 4 * Math.sin(d * 0.05 + r) + d * 0.04, d); d === -4 ? c.moveTo(x, y + dy) : c.lineTo(x, y + dy); } };
+    tl(0, 1.2 * s); c.strokeStyle = 'rgba(6,26,32,.32)'; c.lineWidth = 1.4 * s; c.stroke();
+    tl(0, 0); c.strokeStyle = 'rgba(160,220,208,.16)'; c.lineWidth = 0.9 * s; c.stroke();
+  }
+  // flowstone drapes: rounded ribs of stone hanging down the face, each lit on its left, shaded right, a wavy tip
+  // with a drip bead; denser in the Cascades
+  for (let r = Math.floor(A0 / 84) - 1; r * 84 < A1 + 84; r++) for (let j = 0; j < 3; j++) {
+    const fv = lagoonFlavour(r * 84), hj = hash2(r * 3 + j, 1321 + side); if (hj > 0.42 * fv.flow) continue;
+    const atop = r * 84 + 40 * hash2(r * 3 + j, 1322), len = 46 + 70 * hash2(r * 3 + j, 1323), d = 22 + j * 46 + 14 * hash2(r * 3 + j, 1324), w = 7 + 6 * hash2(r * 3 + j, 1325);
+    const L = [], R = []; for (let q = 0; q <= 8; q++) { const a = atop - len * q / 8, ww = w * (1 - 0.35 * q / 8) * (1 + 0.12 * Math.sin(q * 1.7 + r)); L.push(at(a, d - ww / 2)); R.push(at(a, d + ww / 2)); }
+    const tip = at(atop - len - 5, d);
+    const drape = () => { c.beginPath(); L.forEach(([x, y], q) => q ? c.lineTo(x, y) : c.moveTo(x, y)); c.quadraticCurveTo(tip[0] - 3 * s, tip[1], tip[0], tip[1]); c.quadraticCurveTo(tip[0] + 3 * s, tip[1], R[8][0], R[8][1]); for (let q = 7; q >= 0; q--) c.lineTo(...R[q]); c.closePath(); };
+    const xl = Math.min(L[4][0], R[4][0]), xr = Math.max(L[4][0], R[4][0]);
+    drape(); c.fillStyle = lagoonLG(xl, 0, xr, 0, ['rgba(170,226,214,.34)', 'rgba(84,144,138,.3)', 'rgba(10,36,42,.36)'], c); c.fill();
+    c.strokeStyle = 'rgba(12,40,46,.5)'; c.lineWidth = 0.9 * s; c.stroke();
+    c.strokeStyle = 'rgba(220,255,246,.3)'; c.lineWidth = 0.9 * s; c.beginPath(); for (let q = 0; q <= 7; q++) { const x = lerp(L[q][0], R[q][0], 0.28), y = L[q][1]; q ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke();
+    c.fillStyle = 'rgba(200,250,244,.75)'; c.beginPath(); c.ellipse(tip[0], tip[1] + 2 * s, 1.4 * s, 1.9 * s, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(tip[0] - 0.4 * s, tip[1] + 1.4 * s, 0.5 * s, 0, TWO_PI); c.fill();
+  }
+  // wet streaks: thin wavy runs of water down the face (a dark wet line beside a glint)
+  for (let r = Math.floor(A0 / 26) - 1; r * 26 < A1 + 26; r++) {
+    const fv = lagoonFlavour(r * 26), hj = hash2(r, 1331 + side); if (hj > 0.3 * fv.flow) continue;
+    const atop = r * 26, len = 50 + 100 * hash2(r, 1332), d = 10 + 150 * hash2(r, 1333);
+    const run = dx => { c.beginPath(); for (let q = 0; q <= 10; q++) { const a = atop - len * q / 10, [x, y] = at(a, d + 2.2 * Math.sin(q * 1.3 + r)); q ? c.lineTo(x + dx, y) : c.moveTo(x + dx, y); } };
+    run(0); c.strokeStyle = 'rgba(6,24,30,.3)'; c.lineWidth = 1.8 * s; c.stroke();
+    run(-1.1 * s); c.strokeStyle = 'rgba(180,240,232,.2)'; c.lineWidth = 0.7 * s; c.stroke();
+  }
+  // smooth pebbles set in the rock, lit from the top left with a glint
+  for (let r = Math.floor(A0 / 21) - 1; r * 21 < A1 + 21; r++) {
+    const hj = hash2(r, 1341 + side); if (hj > 0.4) continue;
+    const a = r * 21 + 10 * hash2(r, 1342), d = 8 + 130 * hash2(r, 1343), [x, y] = at(a, d), rr = (2.8 + 3.4 * hash2(r, 1344)) * s, fade = clamp(1.1 - d / 180, 0.3, 1);
+    c.globalAlpha = fade;
+    c.fillStyle = 'rgba(6,24,30,.45)'; c.beginPath(); c.ellipse(x + 0.6 * s, y + 0.9 * s, rr * 1.15, rr * 0.85, hj * 3, 0, TWO_PI); c.fill();
+    c.fillStyle = lagoonRG(x - rr * 0.35, y - rr * 0.4, rr * 1.4, hj < 0.12 ? ['#fff2e0', '#d8b49a', '#8a6a5a'] : ['#e0f4ee', '#8ab8b0', '#3e6a6a'], c); c.beginPath(); c.ellipse(x, y, rr * 1.1, rr * 0.8, hj * 3, 0, TWO_PI); c.fill();
+    c.strokeStyle = hj < 0.12 ? 'rgba(110,70,56,.8)' : 'rgba(30,70,72,.8)'; c.lineWidth = 0.6 * s; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.75)'; c.beginPath(); c.ellipse(x - rr * 0.4, y - rr * 0.32, rr * 0.3, rr * 0.18, -0.5, 0, TWO_PI); c.fill();
+    c.globalAlpha = 1;
+  }
+  // spiral shell fossils, cream and peach, ridged
+  for (let r = Math.floor(A0 / 120) - 1; r * 120 < A1 + 120; r++) {
+    const fv = lagoonFlavour(r * 120), hj = hash2(r, 1351 + side); if (hj > 0.45 * fv.shells) continue;
+    const a = r * 120 + 60 * hash2(r, 1352), d = 16 + 70 * hash2(r, 1353), [x, y] = at(a, d), R = (6 + 4 * hash2(r, 1354)) * s;
+    c.save(); c.translate(x, y); c.rotate(hj * 6);
+    c.fillStyle = 'rgba(6,24,30,.4)'; c.beginPath(); c.arc(0.7 * s, 1 * s, R * 1.08, 0, TWO_PI); c.fill();
+    c.fillStyle = lagoonRG(-R * 0.35, -R * 0.4, R * 1.5, ['#fff6e6', '#f0c8a0', '#a8705a'], c); c.beginPath(); c.arc(0, 0, R, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#8a5a46'; c.lineWidth = 0.8 * s; c.stroke();
+    c.beginPath(); for (let q = 0; q <= 40; q++) { const an = q * 0.42, rr = R * (1 - q / 44); const px = Math.cos(an) * rr, py = Math.sin(an) * rr; q ? c.lineTo(px, py) : c.moveTo(px, py); } c.strokeStyle = 'rgba(138,90,70,.75)'; c.lineWidth = 0.9 * s; c.stroke();
+    c.strokeStyle = 'rgba(138,90,70,.4)'; c.lineWidth = 0.6 * s; for (let q = 0; q < 10; q++) { const an = q * 0.63; c.beginPath(); c.moveTo(Math.cos(an) * R * 0.55, Math.sin(an) * R * 0.55); c.lineTo(Math.cos(an) * R * 0.95, Math.sin(an) * R * 0.95); c.stroke(); }
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1 * s; c.beginPath(); c.arc(0, 0, R * 0.7, 3.6, 4.6); c.stroke();
+    c.restore();
+  }
+  // barnacle clusters (thick in the Gulper Hollow)
+  for (let r = Math.floor(A0 / 70) - 1; r * 70 < A1 + 70; r++) {
+    const fv = lagoonFlavour(r * 70), hj = hash2(r, 1361 + side); if (hj > 0.35 * fv.barn) continue;
+    const a = r * 70 + 40 * hash2(r, 1362), d = 6 + 40 * hash2(r, 1363);
+    for (let q = 0; q < 6; q++) {
+      const [x, y] = at(a + (hash2(r * 6 + q, 1364) - 0.5) * 14, d + (hash2(r * 6 + q, 1365) - 0.5) * 12), br = (1.8 + 1.8 * hash2(r * 6 + q, 1366)) * s;
+      c.fillStyle = lagoonRG(x - br * 0.3, y - br * 0.4, br * 1.3, ['#fff8ee', '#d0c4b0', '#7a6c5a'], c); c.beginPath(); c.arc(x, y, br, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#6a5c4a'; c.lineWidth = 0.5 * s; c.stroke(); c.fillStyle = '#4a3e32'; c.beginPath(); c.arc(x, y, br * 0.36, 0, TWO_PI); c.fill();
+    }
+  }
+  // glowing algae: clusters of soft glowing dots tucked in creases (aqua; pink in the Jellyfish Drift, gold in the sun)
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (let r = Math.floor(A0 / 46) - 1; r * 46 < A1 + 46; r++) {
+    const fv = lagoonFlavour(r * 46), hj = hash2(r, 1371 + side); if (hj > 0.3 * fv.algae) continue;
+    const a = r * 46 + 30 * hash2(r, 1372), d = 8 + 90 * hash2(r, 1373), [x, y] = at(a, d), col = fv.glow;
+    c.fillStyle = lagoonRG(x, y, 16 * s, [rgbaA(col, 0.16), rgbaA(col, 0)], c); c.beginPath(); c.arc(x, y, 16 * s, 0, TWO_PI); c.fill();
+    for (let q = 0; q < 6; q++) { const px = x + (hash2(r * 6 + q, 1374) - 0.5) * 16 * s, py = y + (hash2(r * 6 + q, 1375) - 0.5) * 10 * s; c.fillStyle = rgbaA(lagoonLift(col, 60), 0.75); c.beginPath(); c.arc(px, py, (0.7 + 0.8 * hash2(r * 6 + q, 1376)) * s, 0, TWO_PI); c.fill(); }
+  }
+  c.restore();
+  // moss cushions on the face near the lip: a few soft lumpy mounds, each one shape lit from the top left, a lit rim, a
+  // darker skirt where it meets the rock
+  for (let r = Math.floor(A0 / 52) - 1; r * 52 < A1 + 52; r++) {
+    const fv = lagoonFlavour(r * 52), hj = hash2(r, 1381 + side); if (hj > 0.24 * fv.moss) continue;
+    const a = r * 52 + 24 * hash2(r, 1382), d = 14 + 22 * hash2(r, 1383), [x, y] = at(a, d), R = (6 + 5 * hash2(r, 1386)) * s;
+    const bumps = []; for (let q = 0; q < 4; q++) bumps.push([x + (q - 1.5) * R * 0.62, y - Math.sin((q + 0.5) / 4 * Math.PI) * R * 0.35 + (hash2(r * 4 + q, 1384) - 0.5) * R * 0.2, R * (0.5 + 0.25 * hash2(r * 4 + q, 1385))]);
+    c.beginPath(); for (const [bx, by, br] of bumps) { c.moveTo(bx + br, by); c.arc(bx, by, br, 0, TWO_PI); }
+    c.fillStyle = lagoonLG(x - R, y - R, x + R * 0.4, y + R * 0.6, ['#a8dc78', '#5aa050', '#2e6a3a'], c); c.fill();
+    c.fillStyle = 'rgba(20,60,40,.35)'; c.beginPath(); c.ellipse(x, y + R * 0.45, R * 1.2, R * 0.22, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(220,255,180,.5)'; c.lineWidth = 0.9 * s; for (const [bx, by, br] of bumps) { c.beginPath(); c.arc(bx, by, br * 0.78, 3.6, 4.7); c.stroke(); }
+  }
+  c.restore();
+  // ---- the lip: a band of smooth polished stone along the edge (the right wall's faces the light from the top left;
+  // the left's sits in its own shade with a lit arris), lit where it faces up, shaded where it overhangs
+  const lipW = a => 6.6 + 1.6 * Math.sin(a * 0.047 + side * 2) + 1.2 * Math.sin(a * 0.131 + side);
+  const inner = pts.map(([x, y, a]) => [x + dir * lipW(a) * s, y]);
+  const lipPath = () => { trace(0); for (let i = inner.length - 1; i >= 0; i--) c.lineTo(...inner[i]); c.closePath(); };
+  lipPath(); c.fillStyle = side ? 'rgb(98,156,148)' : 'rgb(74,126,122)'; c.fill();
+  c.save(); lipPath(); c.clip();
+  c.strokeStyle = side ? 'rgba(170,222,210,.5)' : 'rgba(130,186,178,.42)'; c.lineWidth = 4 * s; trace(1.4); c.stroke();
+  const bucket = (test, col, lw, off) => { c.strokeStyle = col; c.lineWidth = lw * s; c.beginPath(); for (let i = 1; i < pts.length; i++) if (test(pts[i][3])) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; c.moveTo(x0 + dir * off * s, y0); c.lineTo(x1 + dir * off * s, y1); } c.stroke(); };
+  bucket(n => n < -0.12, 'rgba(206,250,238,.32)', 9, 3.5); bucket(n => n < -0.3, 'rgba(226,255,246,.32)', 6, 2.4);
+  bucket(n => n > 0.12, 'rgba(8,32,38,.34)', 10, 4); bucket(n => n > 0.3, 'rgba(8,32,38,.34)', 7, 3);
+  // joints across the lip where the polished stone breaks into blocks (a furrow over a lit edge)
+  for (let a = Math.floor(A0 / 23) * 23; a < A1; a += 23) {
+    const hj = hash2(a / 23, 1391 + side); if (hj < 0.5) continue;
+    const aa = a + 8 * hj, [x, y] = at(aa, 0), w = lipW(aa) * s, sl = (hj - 0.75) * 5 * s;
+    c.strokeStyle = 'rgba(14,46,50,.7)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x + dir * w, y + sl); c.stroke();
+    c.strokeStyle = 'rgba(200,244,232,.4)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x, y + 1.1 * s); c.lineTo(x + dir * w, y + sl + 1.1 * s); c.stroke();
+  }
+  c.restore();
+  // chips worn out of the edge: a notch in shadow with its lit upper facet
+  for (let a = Math.floor(A0 / 21) * 21; a < A1; a += 21) {
+    const hj = hash2(a / 21, 1393 + side); if (hj < 0.45) continue;
+    const aa = a + 8 * hash2(a / 21, 1394), cc = 2.2 + 2.2 * hj, dd = (2.4 + 2.4 * hash2(a / 21, 1395)) * s, xa2 = X(wx(aa + cc)), xb2 = X(wx(aa - cc)), xm = X(wx(aa)) + dir * dd, ya2 = Y(aa + cc), yb2 = Y(aa - cc), ym = Y(aa) - 0.5 * s;
+    c.fillStyle = 'rgba(20,56,60,.95)'; c.beginPath(); c.moveTo(xa2, ya2); c.quadraticCurveTo(xm, ym, xb2, yb2); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(180,232,220,.7)'; c.beginPath(); c.moveTo(xa2, ya2); c.lineTo(xm, ym); c.lineTo(lerp(xa2, xm, 0.35), lerp(ya2, ym, 0.75)); c.closePath(); c.fill();
+  }
+  // the furrow behind the lip, the lit arris, a wet glint here and there on the up-facing stretches, the own-hue edge
+  c.lineCap = 'butt';
+  c.beginPath(); inner.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.strokeStyle = 'rgba(6,26,30,.6)'; c.lineWidth = 1.8 * s; c.stroke();
+  c.beginPath(); inner.forEach(([x, y], i) => i ? c.lineTo(x + dir * 1.6 * s, y) : c.moveTo(x + dir * 1.6 * s, y)); c.strokeStyle = 'rgba(150,206,196,.2)'; c.lineWidth = 1 * s; c.stroke();
+  bucket(n => n < 0.12, side ? 'rgba(220,255,246,.5)' : 'rgba(176,226,216,.36)', 1.1, 0.9);
+  c.lineCap = 'round';
+  for (let i = 4; i < pts.length - 4; i += 4) { if (!(pts[i][3] < -0.05) || hash2(i, 1397 + side) < 0.55) continue; const [x0, y0] = pts[i], [x1, y1] = pts[i + 2]; c.strokeStyle = 'rgba(240,255,252,.62)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(x0 + dir * 2 * s, y0); c.lineTo(x1 + dir * 2 * s, y1); c.stroke(); }
+  c.strokeStyle = 'rgba(12,44,48,.95)'; c.lineWidth = 1.1 * s; trace(0); c.stroke();
+  // moss cushions spilling over the lip, strands dripping into the shaft (never more than a few units in)
+  for (let a = Math.floor(A0 / 29) * 29; a < A1; a += 29) {
+    const fv = lagoonFlavour(a), hj = hash2(a / 29, 1401 + side); if (hj > 0.42 * fv.moss) continue;
+    const aa = a + 12 * hash2(a / 29, 1402), n = 4 + Math.floor(4 * hash2(a / 29, 1403)), seed = a + side * 7;
+    // hanging strands with a drop at their tips
+    for (let q = 0; q < n; q++) {
+      if (hash2(q, seed + 11) > 0.6) continue;
+      const ab = aa + (q - n / 2) * 3.2, [x, y] = at(ab, 1), L = (4 + 8 * hash2(q, seed + 12)) * s, xs = x - dir * (2 + 3 * hash2(q, seed + 13)) * s;
+      c.strokeStyle = LP.mossEdge; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(xs, y + L * 0.4, xs, y + L); c.stroke();
+      c.strokeStyle = LP.moss[1]; c.lineWidth = 1.1 * s; c.stroke();
+      c.fillStyle = 'rgba(200,255,246,.85)'; c.beginPath(); c.ellipse(xs, y + L + 1.5 * s, 1.1 * s, 1.5 * s, 0, 0, TWO_PI); c.fill();
+    }
+    for (let q = 0; q <= n; q++) {
+      const ab = aa + (q - n / 2) * 3.4, d = 1.5 + 3 * hash2(q, seed), [x, y] = at(ab, d), r = (2.4 + 2 * hash2(q, seed + 1)) * s;
+      c.fillStyle = lagoonRG(x - r * 0.35, y - r * 0.45, r * 1.4, LP.moss, c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+    }
+    const [tx, ty] = at(aa + n * 1.7, 3); c.fillStyle = 'rgba(230,255,200,.7)'; c.beginPath(); c.arc(tx - 1 * s, ty - 1.6 * s, 0.8 * s, 0, TWO_PI); c.fill();
+  }
+  // ferns sprouting from cracks near the lip, curling out over it; a starfish clinging here and there; coral sprigs
+  for (let a = Math.floor(A0 / 67) * 67; a < A1; a += 67) {
+    const fv = lagoonFlavour(a), hj = hash2(a / 67, 1411 + side), aa = a + 30 * hash2(a / 67, 1412);
+    if (hj < 0.18) {
+      const [x, y] = at(aa, 6), fl = -dir;
+      for (const [an, L] of [[-0.3, 16], [0.2, 13], [-0.8, 11]]) {
+        c.strokeStyle = '#2a6a40'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x, y); const ex = x + fl * Math.cos(an) * L * s, ey = y - Math.sin(0.9 - an * 0.4) * L * s; c.quadraticCurveTo(x + fl * L * 0.3 * s, y - L * 0.9 * s, ex, ey); c.stroke();
+        for (let q = 1; q <= 5; q++) { const u = q / 6, bx = lerp(x, ex, u) + fl * Math.sin(u * 3) * 2 * s, by = lerp(y, ey, u) - Math.sin(u * Math.PI) * L * 0.35 * s; c.fillStyle = q % 2 ? '#86d070' : '#5aa462'; c.beginPath(); c.ellipse(bx, by - 1.6 * s, 1.3 * s, 2.8 * s, fl * 0.6, 0, TWO_PI); c.fill(); c.beginPath(); c.ellipse(bx + fl * 1.2 * s, by + 1 * s, 1.3 * s, 2.6 * s, fl * 2.2, 0, TWO_PI); c.fill(); }
+      }
+    } else if (hj < 0.18 + 0.2 * fv.star) {
+      const [x, y] = at(aa, 9 + 10 * hash2(a / 67, 1413)), R = (5 + 2 * hash2(a / 67, 1414)) * s, rot = hj * 9;
+      const star = () => { c.beginPath(); for (let q = 0; q < 10; q++) { const an = rot + q * Math.PI / 5, rr = q % 2 ? R * 0.42 : R; q ? c.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr) : c.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); } c.closePath(); };
+      c.fillStyle = 'rgba(6,24,30,.4)'; c.save(); c.translate(0.8 * s, 1 * s); star(); c.fill(); c.restore();
+      star(); c.fillStyle = lagoonRG(x - R * 0.3, y - R * 0.4, R * 1.3, ['#ffd0a0', '#ff8a5a', '#c04a3a'], c); c.fill(); c.strokeStyle = '#8a2e24'; c.lineWidth = 0.7 * s; c.stroke();
+      c.fillStyle = 'rgba(255,240,210,.85)'; for (let q = 0; q < 5; q++) { const an = rot + q * Math.PI * 2 / 5; c.beginPath(); c.arc(x + Math.cos(an) * R * 0.55, y + Math.sin(an) * R * 0.55, 0.6 * s, 0, TWO_PI); c.fill(); }
+    } else if (hj < 0.2 + 0.2 * fv.star + 0.22 * fv.coral) {
+      const [x, y] = at(aa, 4); c.save(); c.translate(x, y); c.scale(s, s); lagoonCoral(c, 0, 0, 9 + 5 * hash2(a / 67, 1415), hash2(a / 67, 1416) < 0.6 ? LP.coral : LP.peach, a | 0); c.restore();
+    }
+  }
+  return sp;
+}
+// the wall's outline for clipping the live light over it (screen)
+function lagoonWallPath(side, bot, top) {
+  const wx = side ? rightWall : leftWall, edge = side ? cssW + 60 + drawPad * s : -60 - drawPad * s;
+  ctx.moveTo(edge, sy(bot)); for (let a = bot; a <= top + 8; a += 8) ctx.lineTo(sx(wx(a)), sy(a)); ctx.lineTo(edge, sy(top + 8)); ctx.closePath();
+}
+// a tileable caustic net (drawn once): wobbly cells of bright lines, like light through rippling water
+function lagoonCausticSprite() {
+  return lagoonSprite('caustic', 180, 180, c => {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let i = 0; i < 16; i++) {
+      const cx = 180 * hash2(i, 1501), cy = 180 * hash2(i, 1502), R = 14 + 12 * hash2(i, 1503);
+      for (const ox2 of [-180, 0, 180]) for (const oy2 of [-180, 0, 180]) {
+        const x = cx + ox2, y = cy + oy2; if (x < -40 || x > 220 || y < -40 || y > 220) continue;
+        const pts = []; for (let k = 0; k < 7; k++) { const an = k / 7 * TWO_PI + hash2(i, k), rr = R * (0.8 + 0.4 * hash2(i * 7 + k, 1504)); pts.push([x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.75]); }
+        lagoonBlob(c, pts); c.strokeStyle = 'rgba(170,255,240,.45)'; c.lineWidth = 1.1; c.stroke();
+        c.strokeStyle = 'rgba(230,255,250,.45)'; c.lineWidth = 0.45; c.stroke();
+      }
+    }
+  });
+}
+let lagoonCausticPat = null, lagoonCausticKey = '';
+function lagoonCaustics(alpha, k = 1) {
+  const sp = lagoonCausticSprite();
+  if (lagoonCausticKey !== LAGOON_CACHE.key || !lagoonCausticPat) { lagoonCausticPat = ctx.createPattern(sp.cv, 'repeat'); lagoonCausticKey = LAGOON_CACHE.key; }
+  const P = drawPad * s + 60, T = G.t, sc = 1 / dpr * k, base = G.camAlt * s;
+  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = lagoonCausticPat;
+  for (const [vx, vy, a, ph] of [[9, 5, 1, 0], [-7, 11, 0.8, 90]]) {
+    const m = new DOMMatrix().translate(pmod(T * vx + ph, 180 * k), pmod(base + T * vy + ph, 180 * k)).scale(sc * (a === 1 ? 1 : 1.3));
+    lagoonCausticPat.setTransform(m); ctx.globalAlpha = alpha * a * (0.75 + 0.25 * Math.sin(T * 0.7 + ph));
+    ctx.fillRect(-P, -P, cssW + 2 * P, H + 2 * P);
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+}
+function drawLagoonWalls() {
+  lagoonCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = LAGOON_TILE;
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = lagoonWallTile(side, k);
+    ctx.drawImage(t.cv, ox + t.xa * s, sy(t.a1), t.w, t.h);
+  }
+  // render one tile ahead each frame (above the screen, where you are heading), so new rock never stalls a frame
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!LAGOON_CACHE.walls.has(side + ':' + k)) { lagoonWallTile(side, k); done = true; break; } if (done) break; }
+  // the live light on the rock: caustic nets dancing over it, and drops falling from the moss
+  ctx.save(); ctx.beginPath(); lagoonWallPath(0, bot, top); lagoonWallPath(1, bot, top); ctx.clip();
+  lagoonCaustics(0.2);
+  ctx.restore();
+  ctx.save();
+  for (let a = Math.floor(bot / 29) * 29; a < top; a += 29) for (const side of [0, 1]) {
+    const hj = hash2(a / 29, 1401 + side); if (hj > 0.42 * lagoonFlavour(a).moss || hash2(a / 29, 1421 + side) > 0.5) continue;
+    const u = pmod(G.t * 0.55 + hash2(a / 29, 1422), 1), aa = a + 12 * hash2(a / 29, 1402), x = sx((side ? rightWall(aa) : leftWall(aa))) - (side ? 1 : -1) * 4 * s, y0 = sy(aa) + 12 * s;
+    const fall = u < 0.55 ? 0 : (u - 0.55) * (u - 0.55) * 900, r = (u < 0.55 ? u / 0.55 : 1) * 1.6 * s;
+    if (fall > 160) continue;
+    ctx.fillStyle = `rgba(200,255,246,${0.85 * (1 - fall / 160)})`; ctx.beginPath(); ctx.ellipse(x, y0 + fall * s, r, r * (1.2 + Math.min(1, fall / 40)), 0, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---- the backdrop: a flooded cavern pushed far back (calm, hazy, lower in contrast), three parallax layers drawn once
+// per tile and blitted: the far cave (0.06) with drowned stalactites and pale waterfalls, the middle (0.18) with
+// ledges, moss and nearer falls, the near rock (0.38) leaning in from the edges with ferns and
+// hanging vines. Sun shafts slant down from a hidden skylight; the waterfalls' water and mist move live.
+const LAGOON_LAYERS = [{ f: 0.06, LT: 520, id: 0 }, { f: 0.18, LT: 460, id: 1 }, { f: 0.38, LT: 420, id: 2 }];
+function lagoonLayerTile(L, k) {
+  const C = LAGOON_CACHE.layers, key = L.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = lagoonSpan(), pa0 = k * L.LT - 3, pa1 = (k + 1) * L.LT + 3;
+  t = lagoonCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1; t.falls = [];
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  t.c.lineJoin = 'round'; t.c.lineCap = 'round';
+  lagoonDrawLayer(t.c, L, k, X, Y, x0, x1, t.falls);
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// a rock mass in a layer: a smooth lumpy silhouette with a soft lit top-left rim and a darker underside (no flat shapes)
+function lagoonLayerRock(c, pts, col, lit, k) {
+  lagoonBlob(c, pts);
+  let y0 = Infinity, y1 = -Infinity, xa = Infinity, xb = -Infinity; for (const [x, y] of pts) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); xa = Math.min(xa, x); xb = Math.max(xb, x); }
+  c.fillStyle = lagoonLG(xa, y0, xa + (xb - xa) * 0.3, y1, [lagoonCol(lagoonLift(col, 14 * lit)), lagoonCol(col), lagoonCol(lagoonLift(col, -10 * k))], c); c.fill();
+  c.strokeStyle = lagoonCol(lagoonLift(col, -12 * k), 0.8); c.lineWidth = 1 * s; c.stroke();
+}
+function lagoonDrawLayer(c, L, k, X, Y, x0, x1, falls) {
+  const id = L.id, LT = L.LT, cols = [[64, 120, 130], [44, 94, 104], [28, 68, 76]], col = cols[id], seedK = id * 1000 + 1601;
+  // every item from the tiles either side too (drawn whole wherever it overlaps), so the tiles join seamlessly
+  for (let kk = k - 1; kk <= k + 1; kk++) {
+    const base = kk * LT;
+    // side masses: rock walls of the cave beyond, both sides, lumpy, stacked (their shaft-side faces lit)
+    for (let i = 0; i < 4; i++) for (const sd of [0, 1]) {
+      const hj = hash2(kk * 8 + i * 2 + sd, seedK), pa = base + i * LT / 4 + hj * 40, reach = [70, 50, 40][id] + 50 * hash2(kk * 8 + i * 2 + sd, seedK + 1);
+      const ex = sd ? 400 - reach : reach, out = sd ? x1 + 40 : x0 - 40, h2 = LT / 4 * (0.8 + 0.6 * hj);
+      const pts = [[X(out), Y(pa + h2)], [X(lerp(out, ex, 0.6)), Y(pa + h2 * 0.95)], [X(ex), Y(pa + h2 * 0.55)], [X(ex + (sd ? 8 : -8)), Y(pa + h2 * 0.1)], [X(lerp(out, ex, 0.7)), Y(pa - h2 * 0.15)], [X(out), Y(pa - h2 * 0.2)]];
+      lagoonLayerRock(c, pts, lagoonLift(col, (hj - 0.5) * 8), sd ? 0.6 : 1, 1);
+      // a lit rim on its upper shaft-side shoulder (a line pair)
+      c.strokeStyle = lagoonCol(lagoonLift(col, 34), 0.5); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(lerp(out, ex, 0.6)), Y(pa + h2 * 0.93)); c.quadraticCurveTo(X(ex), Y(pa + h2 * 0.8), X(ex), Y(pa + h2 * 0.5)); c.stroke();
+      // creases across its face (a dark furrow under a lit ridge), a shaded hollow under its brow, wet glints
+      for (let q = 0; q < 3; q++) {
+        const u = 0.25 + 0.22 * q + 0.08 * hash2(kk * 12 + i * 3 + q, seedK + 4), ya = pa + h2 * (0.75 - 0.6 * u), xa2 = lerp(out, ex, 0.15), xb2 = lerp(out, ex, 0.75 + 0.15 * hash2(q, kk + i));
+        c.strokeStyle = lagoonCol(lagoonLift(col, -16), 0.6); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(xa2), Y(ya)); c.quadraticCurveTo(X(lerp(xa2, xb2, 0.5)), Y(ya - 6 + 4 * q), X(xb2), Y(ya + 3)); c.stroke();
+        c.strokeStyle = lagoonCol(lagoonLift(col, 20), 0.4); c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(xa2), Y(ya + 2.4)); c.quadraticCurveTo(X(lerp(xa2, xb2, 0.5)), Y(ya - 3.6 + 4 * q), X(xb2), Y(ya + 5.4)); c.stroke();
+      }
+      c.fillStyle = lagoonCol(lagoonLift(col, -14), 0.35); c.beginPath(); c.ellipse(X(lerp(out, ex, 0.7)), Y(pa + h2 * 0.05), Math.abs(ex - out) * 0.22 * s, h2 * 0.08 * s, 0, 0, TWO_PI); c.fill();
+      // stalactites hanging under the mass (drowned spikes)
+      for (let q = 0; q < 3; q++) {
+        if (hash2(kk * 24 + i * 6 + sd * 3 + q, seedK + 2) < 0.45) continue;
+        const tx = lerp(out, ex, 0.55 + 0.15 * q), ty = pa - h2 * 0.12, len = (18 + 40 * hash2(kk * 24 + i * 6 + q, seedK + 3)) * (1 + 0.3 * id), w = 6 + 5 * id;
+        c.fillStyle = lagoonLG(X(tx - w), 0, X(tx + w), 0, [lagoonCol(lagoonLift(col, 10)), lagoonCol(col), lagoonCol(lagoonLift(col, -8))], c);
+        c.beginPath(); c.moveTo(X(tx - w), Y(ty + 4)); c.quadraticCurveTo(X(tx - w * 0.3), Y(ty - len * 0.5), X(tx), Y(ty - len)); c.quadraticCurveTo(X(tx + w * 0.3), Y(ty - len * 0.5), X(tx + w), Y(ty + 4)); c.closePath(); c.fill();
+        c.fillStyle = `rgba(200,255,246,${0.3 + 0.1 * id})`; c.beginPath(); c.arc(X(tx), Y(ty - len - 2), (1 + 0.3 * id) * s, 0, TWO_PI); c.fill();
+      }
+      // moss along its top, in the nearer layers
+      for (let q = 0; q < (id ? 6 : 4); q++) { const u = q / 6, mx = X(lerp(out, ex, 0.3 + 0.6 * u)), my = Y(pa + h2 * (0.97 - 0.3 * u * u)) + 1 * s, r = (2.2 + 2 * hash2(q, kk + i)) * s * (0.8 + 0.3 * id); c.fillStyle = lagoonRG(mx - r * 0.3, my - r * 0.4, r * 1.3, [lagoonCol(lagoonMix(col, [120, 200, 110], 0.55 + 0.1 * id)), lagoonCol(lagoonMix(col, [60, 140, 80], 0.5)), lagoonCol(lagoonMix(col, [30, 80, 50], 0.4))], c); c.beginPath(); c.arc(mx, my, r, 0, TWO_PI); c.fill(); }
+    }
+    // a waterfall pouring down from high out of sight, fading in out of the gloom (its body here; its streaks and mist
+    // move live)
+    if (id < 2) for (let i = 0; i < (id ? 2 : 1); i++) {
+      const hj = hash2(kk * 3 + i, seedK + 5); if (hj < 0.25) continue;
+      const fx = id ? (i ? 300 : 100) + (hj - 0.5) * 80 : 120 + 160 * hj, ftop = base + LT * (0.55 + 0.4 * hash2(kk * 3 + i, seedK + 6)), flen = LT * (0.75 + 0.3 * hash2(kk, seedK + 7)), fw = (id ? 9 : 14) + 8 * hash2(kk * 3 + i, seedK + 8);
+      const lc = lagoonLift(col, id ? 70 : 56);
+      // its body as three nested veils (wide and faint to narrow and brighter), so its edges are soft, fading as it falls
+      for (const [k2, al] of [[1.35, 0.16], [0.95, 0.2], [0.5, 0.22]]) {
+        const w2 = fw * k2;
+        c.fillStyle = lagoonLG(0, Y(ftop), 0, Y(ftop - flen), [lagoonCol(lc, 0), lagoonCol(lc, al * 1.5), lagoonCol(lc, al), lagoonCol(lc, 0)], c);
+        c.beginPath(); c.moveTo(X(fx - w2 * 0.8), Y(ftop - 2)); c.quadraticCurveTo(X(fx - w2 * 1.05), Y(ftop - 40), X(fx - w2 * 1.3), Y(ftop - flen)); c.lineTo(X(fx + w2 * 1.3), Y(ftop - flen)); c.quadraticCurveTo(X(fx + w2 * 1.05), Y(ftop - 40), X(fx + w2 * 0.8), Y(ftop - 2)); c.closePath(); c.fill();
+      }
+      c.strokeStyle = lagoonCol(lagoonLift(lc, 40), 0.35); c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(fx - fw * 0.6), Y(ftop)); c.lineTo(X(fx - fw * 0.75), Y(ftop - flen * 0.8)); c.stroke();
+      falls.push({ x: fx, top: ftop, len: flen, w: fw, col: lc });
+    }
+    // the near layer: hanging vines and moss curtains off the masses, leaves as pairs
+    if (id === 2) for (let i = 0; i < 3; i++) {
+      const hj = hash2(kk * 3 + i, seedK + 12); if (hj < 0.4) continue;
+      const sd = hash2(kk * 3 + i, seedK + 13) < 0.5 ? 0 : 1, vx = sd ? 330 + 40 * hj : 70 - 40 * hj, vtop = base + LT * (0.3 + 0.6 * hash2(kk * 3 + i, seedK + 14)), len = 90 + 140 * hash2(kk * 3 + i, seedK + 15);
+      for (let q = 0; q < 4; q++) {
+        const x = vx + (q - 1.5) * 9, L2 = len * (0.6 + 0.4 * hash2(q, kk + i)), path = () => { c.beginPath(); c.moveTo(X(x), Y(vtop)); c.quadraticCurveTo(X(x + 8), Y(vtop - L2 * 0.5), X(x + 3), Y(vtop - L2)); };
+        path(); c.strokeStyle = lagoonCol([22, 58, 52]); c.lineWidth = 2.6 * s; c.stroke();
+        path(); c.strokeStyle = lagoonCol([46, 96, 78]); c.lineWidth = 1.4 * s; c.stroke();
+        for (let j = 1; j <= 6; j++) { const u = j / 7, lx = X(lerp(x, x + 3, u) + 8 * 2 * u * (1 - u)), ly = Y(vtop - L2 * u), d = j % 2 ? 1 : -1; c.fillStyle = j % 2 ? lagoonCol([70, 132, 96]) : lagoonCol([52, 110, 82]); c.beginPath(); c.ellipse(lx + d * 3 * s, ly, 3.4 * s, 1.6 * s, d * 0.6, 0, TWO_PI); c.fill(); }
+      }
+    }
+  }
+  // depth haze over the far layers: they sink into the distance (lighter, bluer)
+  if (id < 2) { c.fillStyle = id ? 'rgba(80,150,160,.14)' : 'rgba(96,166,174,.26)'; c.fillRect(0, 0, (x1 - x0) * s, (LT + 6) * s); }
+}
+function drawLagoonBackground() {
+  lagoonCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t;
+  ctx.fillStyle = lagoonLG(0, 0, 0, H, [lagoonCol([70, 140, 150]), lagoonCol([38, 98, 112]), lagoonCol([18, 56, 70])]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // a soft brightness high in the cave, where the sun gets in
+  lagoonGlow(ox + playW * 0.3, -H * 0.1, playW * 1.1, [170, 240, 220], 0.16);
+  for (const L of LAGOON_LAYERS) {
+    const base = G.camAlt * L.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / L.LT); k * L.LT < pa1; k++) {
+      const t = lagoonLayerTile(L, k), y = H - (t.pa1 - base) * s;
+      ctx.drawImage(t.cv, ox + t.xa * s, y, t.w, t.h);
+      // the falls' water racing down and their mist (live)
+      for (const fa of t.falls) {
+        const yt = H - (fa.top - base) * s, yb = H - (fa.top - fa.len - base) * s; if (yb < Y0 || yt > Y1) continue;
+        const x = sx(fa.x), w = fa.w * s;
+        // layered ribbons of water: soft wide bands and fine bright threads, each with its own speed and uneven dashes
+        ctx.save(); ctx.lineCap = 'round';
+        for (let q = -2; q <= 2; q++) {
+          const hq = hash2(q + 3, fa.x | 0), wide = q & 1;
+          ctx.strokeStyle = lagoonCol(lagoonLift(fa.col, wide ? 34 : 70), (L.id ? 0.22 : 0.16) * (wide ? 1 : 0.9)); ctx.lineWidth = (wide ? 3.4 : 1) * s;
+          ctx.setLineDash([(14 + 26 * hq) * s, (8 + 12 * hash2(q, 77)) * s, (6 + 10 * hq) * s, (20 + 18 * hash2(q, 78)) * s]); ctx.lineDashOffset = -(T * (80 + 40 * hq) + q * 37) * s;
+          ctx.beginPath(); ctx.moveTo(x + q * w * 0.36, yt + fa.len * 0.22 * s); ctx.quadraticCurveTo(x + q * w * 0.4, (yt + yb) / 2, x + q * w * 0.52, yb); ctx.stroke();
+        }
+        ctx.setLineDash([]); ctx.restore();
+        lagoonGlow(x, yb, w * 3.4, lagoonLift(fa.col, 40), L.id ? 0.2 : 0.14);
+      }
+    }
+    if (L.id === 0) lagoonGlow(ox + playW * 0.5, H * 0.5, playW * 0.8, [110, 220, 210], 0.05);
+  }
+  // sun shafts slanting down from the skylight far above, slowly swaying
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const sw = Math.sin(T * 0.13 + i * 2.1) * 30 * s, x0 = ox + playW * (0.12 + 0.3 * i) + sw - G.camAlt * 0.02 * s % (playW * 0.3), w0 = (34 + 22 * i) * s, w1 = w0 * 2.4, dx = H * 0.32;
+    const g = ctx.createLinearGradient(0, Y0, 0, H * 0.95); g.addColorStop(0, 'rgba(255,250,210,.11)'); g.addColorStop(0.6, 'rgba(200,255,236,.05)'); g.addColorStop(1, 'rgba(200,255,236,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0, Y0); ctx.lineTo(x0 + w0, Y0); ctx.lineTo(x0 + w0 + dx + w1, H); ctx.lineTo(x0 + dx, H); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  drawLagoonBubbles();
+}
+// bubbles rising through the cave (the motes), wobbling, bigger and brighter the nearer they are
+MOTE_DRIFT.lbubble = [-34, -70];
+{ const base = moteKind; moteKind = function (m, a) { return lagoonOn() ? 'lbubble' : base(m, a); }; }
+function drawLagoonBubbles() {
+  const bub = lagoonBubbleSprite();
+  ctx.save();
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 1.6 + m.ph) * 6 * s, y = m.y, r = (1.5 + m.sz * 1.5) * m.depth * s;
+    ctx.globalAlpha = 0.4 + 0.5 * m.depth; ctx.drawImage(bub.cv, x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+// the midground (0.55): moss curtains hanging off rock shelves that reach in from beyond the screen edge, dripping,
+// with glowing algae beads (drawn for the left side; mirrored for the right)
+function lagoonCurtainSprite(v) {
+  return lagoonSprite('curtain' + v, 220, 190, c => {
+    c.translate(170, 24); c.lineCap = 'round'; c.lineJoin = 'round';
+    // the shelf of rock it hangs from: out of the cave wall off-screen, a rounded nose
+    const shelf = () => lagoonBlob(c, [[-170, -22], [-110, -24], [-40, -18], [18, -12], [44, -2], [34, 9], [-10, 12], [-80, 14], [-170, 20]]);
+    shelf(); c.fillStyle = lagoonLG(-40, -22, -20, 14, ['#5a9a92', '#2e646a', '#183e46'], c); c.fill();
+    c.save(); shelf(); c.clip();
+    for (let q = 0; q < 4; q++) { const x0 = -150 + q * 46; c.strokeStyle = 'rgba(16,46,52,.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0, -16); c.quadraticCurveTo(x0 + 10, -2, x0 + 4, 12); c.stroke(); c.strokeStyle = 'rgba(170,230,220,.3)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x0 + 2, -16); c.quadraticCurveTo(x0 + 12, -2, x0 + 6, 12); c.stroke(); }
+    c.fillStyle = 'rgba(14,40,46,.4)'; c.fillRect(-180, 6, 240, 12);
+    c.restore();
+    shelf(); c.strokeStyle = '#1e4a50'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(190,240,228,.45)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-160, -19); c.quadraticCurveTo(-60, -22, 30, -8); c.stroke();
+    for (let q = 0; q < 14; q++) {
+      const x = -96 + q * 9.5 + (hash2(q, v) - 0.5) * 4, L = (40 + 100 * hash2(q, v + 9)) * (q < 4 ? 0.5 : 1), sw = (hash2(q, v + 3) - 0.5) * 10;
+      const strand = () => { c.beginPath(); c.moveTo(x, 6); c.quadraticCurveTo(x + sw, 6 + L * 0.5, x + sw * 0.4, 6 + L); };
+      strand(); c.strokeStyle = '#1d4a36'; c.lineWidth = 3.4; c.stroke();
+      strand(); c.strokeStyle = q % 2 ? '#4a9458' : '#3e8450'; c.lineWidth = 2; c.stroke();
+      strand(); c.strokeStyle = 'rgba(190,240,160,.35)'; c.lineWidth = 0.7; c.stroke();
+      if (hash2(q, v + 5) < 0.4) { const bx = x + sw * 0.6, by = 6 + L * 0.7; c.fillStyle = 'rgba(150,255,230,.25)'; c.beginPath(); c.arc(bx, by, 5, 0, TWO_PI); c.fill(); c.fillStyle = '#d8fff4'; c.beginPath(); c.arc(bx, by, 1.4, 0, TWO_PI); c.fill(); }
+      c.fillStyle = 'rgba(210,255,246,.8)'; c.beginPath(); c.ellipse(x + sw * 0.4, 8 + L, 1.3, 1.8, 0, 0, TWO_PI); c.fill();
+    }
+    // the moss cushion along the shelf's top edge, one lumpy mound
+    c.beginPath(); for (let q = 0; q < 12; q++) { const x = -150 + q * 15, r = 5 + 3 * hash2(q, v + 7), y = -19 + (x > 0 ? x * 0.18 : 0); c.moveTo(x + r, y); c.arc(x, y, r, 0, TWO_PI); }
+    c.fillStyle = lagoonLG(0, -28, 0, -10, ['#a8dc78', '#5aa050', '#2e6a3a'], c); c.fill();
+  });
+}
+function drawLagoonMidground() {
+  lagoonCacheCheck();
+  const f = 0.55, slot = 260, baseA = G.camAlt * f, first = Math.floor((baseA - 260) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  ctx.save(); ctx.globalAlpha = 0.85;
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 1701); if (r < 0.35) continue;
+    const side = hash2(i, 1702) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = lagoonCurtainSprite(1 + (i & 3));
+    if (y + 190 * s < -20 || y - 30 > H) continue;
+    // the shelf's nose a little way in from the edge; the rest of it runs off the screen
+    const nose = (16 + 30 * r) * s, x = side ? cssW - nose : nose;
+    ctx.save(); ctx.translate(x, y); if (side) ctx.scale(-1, 1);
+    ctx.drawImage(sp.cv, -170 * s, -24 * s, 220 * s, 190 * s); ctx.restore();
+  }
+  ctx.restore();
+}
+// speed: aqua streaks up the walls and through the shaft
+function drawLagoonSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 6 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 21), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 22) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = rgbaA(j < 0.6 ? LP.aqua : [220, 255, 240], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(16 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 7)), len = (14 + 46 * hash2(i, 8)) * (0.5 + 1.4 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 9)) + hash2(i, 10) * H * 2) % (H + 200)) - 100;
+    ctx.strokeStyle = rgbaA([210, 255, 250], 0.04 + 0.16 * k * hash2(i, 11)); ctx.lineWidth = 1 + 1.4 * hash2(i, 12) * k;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: a few hanging vines in front at the screen edges, deep teal-green (never black), leaves as pairs, a drop
+// at each tip, swaying (each drawn once, then blitted turned by its sway)
+function lagoonVineSprite(v) {
+  return lagoonSprite('vine' + v, 60, 300, c => {
+    c.translate(30, 0); c.lineCap = 'round'; c.lineJoin = 'round';
+    const L = 200 + 80 * hash2(v, 1801), bez = u => [2 * u * (1 - u) * 14 + u * u * 6, L * u];
+    const vine = (dx = 0) => { c.beginPath(); c.moveTo(dx, 0); c.quadraticCurveTo(14 + dx, L * 0.5, 6 + dx, L); };
+    vine(); c.strokeStyle = '#123a32'; c.lineWidth = 7; c.stroke();
+    vine(); c.strokeStyle = '#2a6a50'; c.lineWidth = 4.6; c.stroke();
+    vine(-1.4); c.strokeStyle = 'rgba(150,220,170,.45)'; c.lineWidth = 1.4; c.stroke();
+    for (let q = 1; q <= 12; q++) {
+      const u = q / 13, [bx, by] = bez(u), d = q % 2 ? 1 : -1, ln = 10 + 6 * hash2(q, v);
+      c.save(); c.translate(bx, by); c.rotate(d * (0.9 + 0.3 * hash2(q, v + 1)));
+      c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(ln * 0.5, -ln * 0.32, ln, 0); c.quadraticCurveTo(ln * 0.5, ln * 0.32, 0, 0); c.closePath();
+      c.fillStyle = lagoonLG(0, -4, 0, 4, ['#6ab884', '#3a8460', '#1e5240'], c); c.fill(); c.strokeStyle = '#174436'; c.lineWidth = 0.8; c.stroke();
+      c.strokeStyle = 'rgba(200,255,210,.4)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(1, 0); c.lineTo(ln * 0.85, 0); c.stroke();
+      c.restore();
+    }
+    const [tx, ty] = bez(1); c.fillStyle = 'rgba(210,255,246,.9)'; c.beginPath(); c.ellipse(tx, ty + 4, 2, 2.8, 0, 0, TWO_PI); c.fill();
+  });
+}
+function drawLagoonForeground() {
+  lagoonCacheCheck();
+  const f = 1.3, slot = 340, baseA = G.camAlt * f, T = G.t, first = Math.floor((baseA - 320) / slot), last = Math.ceil((baseA + viewH + 300) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, G.seed + 91) < 0.5) continue;
+    const side = hash2(i, G.seed + 92) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = lagoonVineSprite(1 + (i & 3));
+    if (y + 300 * s < -20 || y - 20 > H) continue;
+    const x = side ? ox + playW + 2 * s : ox - 2 * s, sw = Math.sin(T * 0.8 + i) * 0.05;
+    ctx.save(); ctx.translate(x, y - 20 * s); ctx.rotate(sw); ctx.scale(side ? -s : s, s); ctx.drawImage(sp.cv, -30, 0, 60, 300); ctx.restore();
+  }
+}
+// The lagoon's light: a gentle deep-teal vignette, a warm brightness from the skylight at the top, and the hidden
+// lagoon's sunlit glow rising as you near the finish.
+function drawLagoonLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75);
+  vg.addColorStop(0, 'rgba(4,22,28,0)'); vg.addColorStop(1, 'rgba(4,22,28,.3)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const topG = ctx.createLinearGradient(0, 0, 0, H * 0.5); topG.addColorStop(0, 'rgba(255,240,190,.06)'); topG.addColorStop(1, 'rgba(255,240,190,0)'); ctx.fillStyle = topG; ctx.fillRect(X0, Y0, WW, H * 0.5 - Y0);
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 160), k = clamp(1 - Math.abs(a.end + 160 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,236,170,${(0.1 + 0.12 * pay) * k})`); g.addColorStop(0.5, `rgba(110,242,228,${(0.08 + 0.08 * pay) * k})`); g.addColorStop(1, 'rgba(110,242,228,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+{ const base = drawBackground; drawBackground = function () { if (lagoonOn()) drawLagoonBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (lagoonOn()) drawLagoonMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (lagoonOn()) drawLagoonWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (lagoonOn()) drawLagoonLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (lagoonOn()) drawLagoonSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (lagoonOn()) drawLagoonForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { base(); if (lagoonOn()) drawLagoonDrops(); }; }
+// ---- the finish: the Hidden Lagoon itself ----
+// A sunlit chamber built into the top of the shaft: its back wall glows warm where the sun pours in through a ragged
+// skylight hung with vines; two waterfalls spill from crevices into a still, glowing lagoon; on a mossy rock island in the
+// middle rests Old Shellbeard, a giant ancient sea turtle (moss and a coral sprig growing on his shell, barnacles, a
+// starfish), who lifts his head and smiles when you make it. The finish deck is two shelves of polished stone crusted
+// with coral that grow out of the walls to meet under you. The chamber's rock, skylight, island and the turtle's body are
+// drawn once; the water, light, the falls and his head move live. (Decoration only: nothing here has a hitbox.)
+const LAGOON_POOL = 34, LAGOON_ISLE = 128;
+// the turtle, facing left (his shell's underside on the island at y 0, x 0 its middle; world units, y down)
+function lagoonTurtleBody(c) {
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const skin = (x0, y0, x1, y1) => lagoonLG(x0, y0, x1, y1, ['#c4f0a8', '#5cb47a', '#2a7656'], c), skinEdge = '#1e5a40';
+  // the rear flipper, tucked behind
+  c.beginPath(); c.moveTo(56, -8); c.quadraticCurveTo(84, -6, 96, 6); c.quadraticCurveTo(80, 10, 52, 4); c.closePath(); c.fillStyle = skin(60, -8, 70, 10); c.fill(); c.strokeStyle = skinEdge; c.lineWidth = 1.3; c.stroke();
+  // the front flipper: a long paddle reaching forward onto the rock, scaled
+  const fl = () => { c.beginPath(); c.moveTo(-40, -12); c.bezierCurveTo(-70, -10, -104, 0, -116, 8); c.quadraticCurveTo(-96, 12, -60, 6); c.quadraticCurveTo(-44, 4, -34, -2); c.closePath(); };
+  fl(); c.fillStyle = skin(-80, -10, -76, 10); c.fill(); c.strokeStyle = skinEdge; c.lineWidth = 1.4; c.stroke();
+  c.save(); fl(); c.clip();
+  for (let q = 0; q < 7; q++) { const x = -48 - q * 10, y = -4 + q * 1.4; c.fillStyle = 'rgba(240,255,240,.35)'; c.beginPath(); c.ellipse(x, y - 1, 4, 2.6, 0.2, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(58,100,86,.45)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(x, y, 4.4, 3, 0.2, 0.2, Math.PI - 0.2); c.stroke(); }
+  c.restore();
+  c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-46, -10); c.quadraticCurveTo(-80, -6, -106, 3); c.stroke();
+  // the shell: a great dome, amber-brown scutes worn smooth, lit from the top left (the sun)
+  const shell = () => { c.beginPath(); c.moveTo(-74, -4); c.bezierCurveTo(-70, -58, -20, -74, 12, -72); c.bezierCurveTo(50, -70, 78, -40, 78, -6); c.quadraticCurveTo(0, 6, -74, -4); c.closePath(); };
+  // the plastron's cream rim under it
+  c.fillStyle = lagoonLG(0, -8, 0, 6, ['#fff4d8', '#e0c48e', '#a8864e'], c); c.beginPath(); c.moveTo(-76, -6); c.quadraticCurveTo(0, 12, 80, -8); c.quadraticCurveTo(0, 2, -76, -6); c.fill();
+  shell(); c.fillStyle = lagoonRG(-24, -60, 120, ['#ffc260', '#e8862a', '#a84c14', '#5e2608'], c); c.fill();
+  c.save(); shell(); c.clip();
+  // the scutes: a row of five along the top, costal plates either side, marginal plates round the rim; each domed with
+  // its growth rings (a dark ring under a lit one) and dark seams between
+  const scute = (pts, cx, cy) => {
+    c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+    c.fillStyle = lagoonRG(cx - 4, cy - 5, 26, ['rgba(255,236,180,.55)', 'rgba(220,150,80,.12)', 'rgba(90,50,20,.25)'], c); c.fill();
+    c.strokeStyle = '#6a2e0c'; c.lineWidth = 1.8; c.stroke();
+    for (const k of [0.62, 0.36]) { c.beginPath(); pts.forEach(([x, y], i) => { const px = cx + (x - cx) * k, py = cy + (y - cy) * k; i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.closePath(); c.strokeStyle = 'rgba(110,60,24,.5)'; c.lineWidth = 1; c.stroke(); c.save(); c.translate(-0.6, -0.8); c.strokeStyle = 'rgba(255,230,180,.35)'; c.lineWidth = 0.7; c.stroke(); c.restore(); }
+  };
+  const top = [[-54, -40], [-30, -60], [-2, -68], [28, -66], [54, -50]];
+  for (let i = 0; i < 4; i++) { const [x0, y0] = top[i], [x1, y1] = top[i + 1]; scute([[x0, y0], [x1, y1], [x1 + 4, y1 + 22], [x0 + 4, y0 + 24]], (x0 + x1) / 2 + 2, (y0 + y1) / 2 + 11); }
+  for (let i = 0; i < 4; i++) { const [x0, y0] = top[i], [x1, y1] = top[i + 1]; scute([[x0 + 4, y0 + 24], [x1 + 4, y1 + 22], [x1 + 8, -8], [x0 + 6, -8]], (x0 + x1) / 2 + 5, (y0 + y1) / 2 + 30); }
+  for (let i = 0; i < 13; i++) { const x = -72 + i * 12, y = -6 + 0.0035 * (x - 2) * (x - 2) - 6; c.strokeStyle = 'rgba(78,44,20,.7)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x + 2, y + 12); c.stroke(); }
+  // moss and algae patches on top (he is very old), a soft shadow under the rim
+  for (let q = 0; q < 14; q++) { const x = -30 + 60 * hash2(q, 1901), y = -70 + 22 * hash2(q, 1902) + Math.abs(x) * 0.12, r = 3 + 4 * hash2(q, 1903); c.fillStyle = lagoonRG(x - r * 0.3, y - r * 0.4, r * 1.3, LP.moss, c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); }
+  c.fillStyle = lagoonLG(0, -16, 0, 2, ['rgba(60,30,10,0)', 'rgba(60,30,10,.45)'], c); c.fillRect(-80, -16, 160, 20);
+  c.restore();
+  shell(); c.strokeStyle = '#6a2c0a'; c.lineWidth = 2; c.stroke();
+  // a broad sun sheen on the dome
+  c.strokeStyle = 'rgba(255,250,230,.55)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-58, -36); c.quadraticCurveTo(-36, -64, 4, -68); c.stroke();
+  c.fillStyle = 'rgba(255,255,240,.7)'; c.beginPath(); c.ellipse(-34, -58, 6, 3, -0.5, 0, TWO_PI); c.fill();
+  // barnacles, a coral sprig growing out of his shell and a starfish hitching a ride
+  for (const [bx, by, br] of [[30, -60, 3.2], [36, -56, 2.4], [26, -55, 2], [52, -40, 2.6], [-50, -30, 2.2]]) { c.fillStyle = lagoonRG(bx - br * 0.3, by - br * 0.4, br * 1.3, ['#fff8ee', '#d8ccb8', '#8a7c6a'], c); c.beginPath(); c.arc(bx, by, br, 0, TWO_PI); c.fill(); c.strokeStyle = '#7a6c5a'; c.lineWidth = 0.6; c.stroke(); c.fillStyle = '#5a4c3e'; c.beginPath(); c.arc(bx, by, br * 0.35, 0, TWO_PI); c.fill(); }
+  lagoonCoral(c, 8, -70, 22, LP.coral, 3);
+  { const x = 46, y = -26, R = 8, rot = 0.3; c.beginPath(); for (let q = 0; q < 10; q++) { const an = rot + q * Math.PI / 5, rr = q % 2 ? R * 0.42 : R; q ? c.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr) : c.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); } c.closePath(); c.fillStyle = lagoonRG(x - 2, y - 3, 10, ['#ffd0a0', '#ff8a5a', '#c04a3a'], c); c.fill(); c.strokeStyle = '#8a2e24'; c.lineWidth = 0.8; c.stroke(); }
+}
+// his head (live): a wrinkled old face on a thick neck, a hooked beak, a wise heavy-lidded eye; on the clear he lifts it,
+// opens his eye wide and smiles
+function lagoonTurtleHead(X, Y, k, T, lift, blink) {
+  ctx.save(); ctx.translate(X, Y); ctx.scale(k, k); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const nod = Math.sin(T * 0.8) * 0.03 - 0.28 * lift;
+  ctx.translate(-66, -26); ctx.rotate(nod);
+  // the neck: a thick tapering trunk of loose old skin from his shell to his head, soft folds across it, paler underneath
+  const neck = () => { ctx.beginPath(); ctx.moveTo(22, -22); ctx.bezierCurveTo(8, -30, -6, -22, -20, -15); ctx.quadraticCurveTo(-25, -3, -20, 8); ctx.bezierCurveTo(-8, 6, 6, 18, 22, 22); ctx.quadraticCurveTo(30, 0, 22, -22); ctx.closePath(); };
+  neck(); ctx.fillStyle = lagoonLG(0, -22, 0, 18, ['#c4f0a8', '#6cbc84', '#3a8462', '#b8e4a4']); ctx.fill();
+  ctx.save(); neck(); ctx.clip();
+  for (const [x, w, a] of [[-12, 9, 0.3], [4, 12, 0.24]]) {
+    ctx.strokeStyle = `rgba(58,100,86,${a})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 2, -w - 6); ctx.quadraticCurveTo(x - 3, -w * 0.4 - 4, x + 1, -w * 0.1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(240,255,240,.35)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(x + 3.4, -w - 6); ctx.quadraticCurveTo(x - 1.6, -w * 0.4 - 4, x + 2.4, -w * 0.1); ctx.stroke();
+    ctx.strokeStyle = `rgba(58,100,86,${a * 0.7})`; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x, 4); ctx.quadraticCurveTo(x + 4, 9, x + 2, 14); ctx.stroke();
+  }
+  for (let q = 0; q < 7; q++) { const x = -18 + q * 5.5, y = -12 + 4 * hash2(q, 1941); ctx.fillStyle = 'rgba(70,120,100,.35)'; ctx.beginPath(); ctx.arc(x, y, 1.2 + hash2(q, 1942), 0, TWO_PI); ctx.fill(); }
+  ctx.restore();
+  neck(); ctx.strokeStyle = '#1e5a40'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = 'rgba(240,255,240,.45)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(10, -20); ctx.bezierCurveTo(0, -22, -10, -18, -19, -13); ctx.stroke();
+  // the head
+  const head = () => { ctx.beginPath(); ctx.moveTo(-18, -14); ctx.bezierCurveTo(-30, -26, -56, -24, -62, -10); ctx.quadraticCurveTo(-66, -2, -60, 4); ctx.quadraticCurveTo(-46, 14, -20, 10); ctx.closePath(); };
+  head(); ctx.fillStyle = lagoonRG(-40, -18, 34, ['#d8f8c0', '#74c48c', '#2e7a5a']); ctx.fill();
+  ctx.save(); head(); ctx.clip();
+  // head plates as lit polygons
+  for (const [x, y, w] of [[-34, -18, 7], [-44, -17, 6], [-26, -12, 6], [-38, -9, 5]]) { ctx.fillStyle = 'rgba(255,255,250,.3)'; ctx.beginPath(); ctx.moveTo(x - w, y); ctx.lineTo(x, y - w * 0.6); ctx.lineTo(x + w, y); ctx.lineTo(x, y + w * 0.6); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(58,100,86,.5)'; ctx.lineWidth = 0.8; ctx.stroke(); }
+  ctx.fillStyle = lagoonLG(0, 0, 0, 12, ['rgba(255,250,230,0)', 'rgba(255,250,230,.45)']); ctx.fillRect(-70, 0, 60, 14);
+  ctx.restore();
+  head(); ctx.strokeStyle = '#1e5a40'; ctx.lineWidth = 1.6; ctx.stroke();
+  // the beak and the smile (wider on the clear)
+  ctx.fillStyle = lagoonLG(-66, -6, -56, 6, ['#f4e2b0', '#c8a868']); ctx.beginPath(); ctx.moveTo(-58, -8); ctx.quadraticCurveTo(-68, -6, -66, 2); ctx.quadraticCurveTo(-62, 3, -57, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#8a6a34'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = '#2e5446'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-58, 1); ctx.quadraticCurveTo(-46, 5 + 3 * lift, -34, 1 - 2 * lift); ctx.stroke();
+  if (lift > 0.3) { ctx.fillStyle = 'rgba(255,140,150,.45)'; ctx.beginPath(); ctx.ellipse(-32, -2, 4, 2.2, 0, 0, TWO_PI); ctx.fill(); }
+  ctx.fillStyle = '#2e5446'; ctx.beginPath(); ctx.arc(-62, -8, 0.9, 0, TWO_PI); ctx.fill();   // a nostril
+  // the eye: big, kind, heavy-lidded; wide open on the clear, blinking now and then
+  const ex = -44, ey = -12, r = 5.2, open = clamp((0.45 + 0.55 * lift) * (1 - blink), 0.05, 1);
+  ctx.fillStyle = 'rgba(58,100,86,.45)'; ctx.beginPath(); ctx.arc(ex + 0.5, ey + 0.8, r + 2, 0, TWO_PI); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(ex, ey, r, r * open, 0, 0, TWO_PI); ctx.clip();
+  ctx.fillStyle = lagoonRG(ex - 1.5, ey - 1.5, r * 1.3, ['#ffffff', '#f2e6d8', '#c9b49e']); ctx.fillRect(ex - r, ey - r, r * 2, r * 2);
+  ctx.fillStyle = '#5a3a1e'; ctx.beginPath(); ctx.arc(ex - 1.2, ey + 0.3, r * 0.62, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#1a0d14'; ctx.beginPath(); ctx.arc(ex - 1.4, ey + 0.4, r * 0.32, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 2.6, ey - 1.4, r * 0.2, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#3a6456'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.ellipse(ex, ey, r + 0.5, r * open + 0.5, 0, Math.PI, 0); ctx.stroke();
+  ctx.strokeStyle = 'rgba(58,100,86,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(ex, ey + 2, r + 3.5, 0.5, Math.PI - 0.5); ctx.stroke();   // a wrinkle under it
+  ctx.strokeStyle = '#3a6456'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(ex - 7, ey - r - 3 - 2 * lift); ctx.quadraticCurveTo(ex, ey - r - 5.5 - 2 * lift, ex + 7, ey - r - 2.4); ctx.stroke();   // his bushy old brow
+  lagoonSheen(-42, -12, 18, 0.4, 3.6, 4.6);
+  ctx.restore();
+}
+// The chamber's still parts (drawn once): the sunlit back wall between the walls, the skylight, the island and the turtle
+function lagoonChamberRender(E) {
+  const key = 'chamberR' + E; let sp = LAGOON_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 120, A1 = E + 900, [x0, x1] = [Math.min(...[A0, E, A1].map(a => leftWall(a))) - 30, Math.max(...[A0, E, A1].map(a => rightWall(a))) + 30];
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = Math.min(x0, xl - 20), xb = Math.max(x1, xr + 20);
+  sp = lagoonCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1;
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the interior (between the walls)
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the back wall: warm sunlit teal rock, brighter up toward the skylight
+  // the back wall: a rock vault, deep teal under its dark ceiling, warmest round the skylight and above the lagoon,
+  // darker toward the walls
+  c.fillStyle = lagoonLG(0, Y(A1), 0, Y(E), ['#123a44', '#2a6a6e', '#5aa294', '#3e8a86', '#1a5660'], c); c.fillRect(0, 0, sp.w, sp.h);
+  c.fillStyle = lagoonRG(X((xa + xb) / 2 - 20), Y(E + 540), 320 * s, ['rgba(255,236,170,.42)', 'rgba(200,236,190,.2)', 'rgba(200,236,190,0)'], c); c.fillRect(0, 0, sp.w, sp.h);
+  c.fillStyle = lagoonLG(X(xl), 0, X(xr), 0, ['rgba(8,34,42,.55)', 'rgba(8,34,42,0)', 'rgba(8,34,42,0)', 'rgba(8,34,42,.55)'], c); c.fillRect(0, 0, sp.w, sp.h);
+  // big soft pillows of rock in it, lit from the sun above
+  for (let i = 0; i < 34; i++) {
+    const x = lerp(xa, xb, hash2(i, 1951)), a = lerp(E + 40, A1 - 80, hash2(i, 1952)), rx = (30 + 30 * hash2(i, 1953)) * s, ry = rx * 0.7, yy = Y(a), xx = X(x);
+    c.fillStyle = lagoonRG(xx - rx * 0.3, yy - ry * 0.5, rx * 1.2, ['rgba(255,250,220,.22)', 'rgba(255,250,220,.06)', 'rgba(255,250,220,0)'], c); c.beginPath(); c.ellipse(xx, yy, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(20,70,74,.3)'; c.lineWidth = 1.6 * s; c.beginPath(); c.ellipse(xx, yy + 0.6 * s, rx, ry, 0, 0.35, Math.PI - 0.35); c.stroke();
+    c.strokeStyle = 'rgba(240,255,240,.25)'; c.lineWidth = 1 * s; c.beginPath(); c.ellipse(xx, yy, rx * 0.8, ry * 0.75, 0, 3.6, 4.7); c.stroke();
+  }
+  // the vault's ceiling: rounded drapes of dark rock hanging down round the skylight, lit gold on the edges that face it
+  for (let i = 0; i < 9; i++) {
+    const x = lerp(xa, xb, (i + 0.5) / 9 + (hash2(i, 1955) - 0.5) * 0.06), top = A1 + 10, len = 90 + 150 * hash2(i, 1956) + (Math.abs(i - 4) * 30), w = 22 + 16 * hash2(i, 1957);
+    const toSun = x < (xa + xb) / 2 - 20 ? 1 : -1, path = () => { c.beginPath(); c.moveTo(X(x - w * 1.6), Y(top)); c.bezierCurveTo(X(x - w), Y(top - len * 0.6), X(x - w * 0.3), Y(top - len), X(x), Y(top - len)); c.bezierCurveTo(X(x + w * 0.3), Y(top - len), X(x + w), Y(top - len * 0.6), X(x + w * 1.6), Y(top)); c.closePath(); };
+    path(); c.fillStyle = lagoonLG(X(x - w), 0, X(x + w), 0, toSun > 0 ? ['#16424a', '#123842', '#2e6a62'] : ['#2e6a62', '#123842', '#16424a'], c); c.fill();
+    c.strokeStyle = 'rgba(10,40,46,.8)'; c.lineWidth = 1.2 * s; c.stroke();
+    c.strokeStyle = 'rgba(255,226,150,.45)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(x + toSun * w * 1.2), Y(top - len * 0.25)); c.bezierCurveTo(X(x + toSun * w * 0.8), Y(top - len * 0.7), X(x + toSun * w * 0.3), Y(top - len + 4), X(x), Y(top - len + 2)); c.stroke();
+    c.fillStyle = 'rgba(200,255,240,.7)'; c.beginPath(); c.arc(X(x), Y(top - len - 3), 1.6 * s, 0, TWO_PI); c.fill();
+  }
+  // the skylight: a real opening up through the rock to the jungle. Through it, layered with depth: a bright warm sky
+  // with the sun's glow, far canopy in pale blue-green haze, nearer palm fronds darker and greener, the nearest leaves
+  // hanging over the opening's top edge almost in silhouette (lit at their edges). The opening has thickness: its upper
+  // inside face in shadow, the sill along the bottom lit gold by the sun, a collar of rock round it with moss and ferns,
+  // and vines hanging off the rim.
+  const sx0 = X((xa + xb) / 2 - 20), sy0 = Y(E + 560), sr = 92 * s;
+  const holePts = (k, dy) => { const pts = []; for (let q = 0; q < 12; q++) { const an = q / 12 * TWO_PI, rr = sr * k * (0.86 + 0.24 * hash2(q, 1961)); pts.push([sx0 + Math.cos(an) * rr * 1.22, sy0 + dy + Math.sin(an) * rr * 0.66]); } return pts; };
+  const hole = () => lagoonBlob(c, holePts(1, 0)), inner = () => lagoonBlob(c, holePts(0.9, 14 * s)), collar = () => lagoonBlob(c, holePts(1.22, 4 * s));
+  // the collar: a raised lip of rock round the opening, lit from the top left
+  collar(); c.fillStyle = lagoonLG(sx0 - sr, sy0 - sr, sx0 + sr * 0.6, sy0 + sr, ['#5a9c8e', '#2e6a68', '#173e46'], c); c.fill(); c.strokeStyle = 'rgba(14,44,50,.8)'; c.lineWidth = 1.4 * s; c.stroke();
+  c.save(); collar(); c.clip();
+  for (let q = 0; q < 10; q++) { const an = q / 10 * TWO_PI + 0.2, x = sx0 + Math.cos(an) * sr * 1.3, y = sy0 + Math.sin(an) * sr * 0.74; c.strokeStyle = 'rgba(12,40,46,.5)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x - Math.cos(an) * 16 * s, y - Math.sin(an) * 9 * s); c.stroke(); c.strokeStyle = 'rgba(200,240,226,.25)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(x + 1.4 * s, y - 1 * s); c.lineTo(x + 1.4 * s - Math.cos(an) * 16 * s, y - 1 * s - Math.sin(an) * 9 * s); c.stroke(); }
+  c.restore();
+  // the collar's stones: big rounded blocks of rock fitted round the opening, each lit from the top left, a crease under
+  // its lit ridge; moss cushions on the upper ones
+  for (let q = 0; q < 14; q++) {
+    const an = q / 14 * TWO_PI + 0.1 * hash2(q, 1971), x = sx0 + Math.cos(an) * sr * 1.32, y = sy0 + 4 * s + Math.sin(an) * sr * 0.74, rx = (24 + 8 * hash2(q, 1972)) * s, ry = (15 + 5 * hash2(q, 1973)) * s, rot = Math.atan2(Math.cos(an) * 0.74, -Math.sin(an) * 1.32);
+    c.save(); c.translate(x, y); c.rotate(rot);
+    lagoonBlob(c, [[-rx, 0], [-rx * 0.7, -ry], [rx * 0.6, -ry * 1.05], [rx, -ry * 0.1], [rx * 0.7, ry], [-rx * 0.6, ry * 0.95]]);
+    c.restore();
+    c.fillStyle = lagoonRG(x - rx * 0.4, y - ry * 0.6, rx * 1.4, ['#7cbcaa', '#3e7e78', '#1c4a50'], c); c.fill(); c.strokeStyle = 'rgba(14,44,50,.85)'; c.lineWidth = 1.2 * s; c.stroke();
+    c.strokeStyle = 'rgba(220,255,240,.35)'; c.lineWidth = 1.1 * s; c.beginPath(); c.ellipse(x, y, rx * 0.7, ry * 0.6, 0, 3.5, 4.8); c.stroke();
+    if (Math.sin(an) < -0.35) { c.beginPath(); for (let j = 0; j < 4; j++) { const mx = x + (j - 1.5) * rx * 0.45, my = y - ry * 0.75 + Math.abs(j - 1.5) * 2 * s, mr = (5 + 3 * hash2(q * 4 + j, 1974)) * s; c.moveTo(mx + mr, my); c.arc(mx, my, mr, 0, TWO_PI); } c.fillStyle = lagoonLG(0, y - ry - 8 * s, 0, y - ry * 0.4, ['#a8dc78', '#5aa050', '#2e6a3a'], c); c.fill();
+      for (let j = 0; j < 3; j++) { const dx = x + (j - 1) * rx * 0.5, dl = (6 + 10 * hash2(q * 3 + j, 1975)) * s; c.strokeStyle = '#3e8450'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(dx, y - ry * 0.5); c.quadraticCurveTo(dx + 2 * s, y - ry * 0.5 + dl * 0.6, dx, y - ry * 0.5 + dl); c.stroke(); c.fillStyle = 'rgba(210,255,246,.8)'; c.beginPath(); c.arc(dx, y - ry * 0.5 + dl + 1.5 * s, 1.2 * s, 0, TWO_PI); c.fill(); } }
+  }
+  // the opening's inside: its upper inner face (the rock's thickness) in shadow
+  hole(); c.fillStyle = lagoonLG(0, sy0 - sr * 0.7, 0, sy0, ['#0c2e36', '#1e4e52', '#3a7466'], c); c.fill();
+  c.save(); hole(); c.clip(); inner(); c.clip();
+  // the sky beyond: bright and warm round the sun, cooler blue up high
+  c.fillStyle = lagoonLG(0, sy0 - sr * 0.6, 0, sy0 + sr * 0.7, ['#6cc0e8', '#b4e6f2', '#fff4d0'], c); c.fillRect(sx0 - sr * 2, sy0 - sr * 1.2, sr * 4, sr * 2.4);
+  c.fillStyle = lagoonRG(sx0 - sr * 0.35, sy0 + sr * 0.15, sr * 0.6, ['rgba(255,255,236,1)', 'rgba(255,240,190,.6)', 'rgba(255,240,190,0)'], c); c.fillRect(sx0 - sr * 2, sy0 - sr * 1.2, sr * 4, sr * 2.4);
+  // a palm frond: a curved stem with leaflets both sides drooping off it, filled with its own colour, lit edge
+  const frond = (x, y, ang, len, fill, lit, droop = 0.5) => {
+    const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len + droop * len * 0.5, cx2 = x + Math.cos(ang) * len * 0.5, cy2 = y + Math.sin(ang) * len * 0.5 - len * 0.12;
+    const at = u => [(1 - u) * (1 - u) * x + 2 * u * (1 - u) * cx2 + u * u * ex, (1 - u) * (1 - u) * y + 2 * u * (1 - u) * cy2 + u * u * ey];
+    c.strokeStyle = fill; c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(cx2, cy2, ex, ey); c.stroke();
+    for (let q = 1; q <= 7; q++) {
+      const u = q / 8, [px, py] = at(u), [qx, qy] = at(u + 0.02), da = Math.atan2(qy - py, qx - px), L = len * 0.34 * Math.sin(u * Math.PI * 0.9 + 0.2);
+      for (const sd of [-1, 1]) {
+        const a2 = da + sd * 1.0 + 0.5, tx = px + Math.cos(a2) * L, ty = py + Math.sin(a2) * L + L * 0.25;
+        c.fillStyle = fill; c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo((px + tx) / 2 + sd * Math.sin(da) * 5 * s, (py + ty) / 2 - Math.cos(da) * 5 * s, tx, ty); c.quadraticCurveTo((px + tx) / 2 - sd * Math.sin(da) * 1.5 * s, (py + ty) / 2 + 3.5 * s, px + Math.cos(da) * 5 * s, py + Math.sin(da) * 5 * s); c.closePath(); c.fill();
+        if (lit) { c.strokeStyle = lit; c.lineWidth = 0.7 * s; c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo((px + tx) / 2 + sd * Math.sin(da) * 2.5 * s, (py + ty) / 2 - Math.cos(da) * 5 * s, tx, ty); c.stroke(); }
+      }
+    }
+  };
+  // far canopy: soft rounded crowns in pale haze along the sky's lower edge, then distant palms
+  for (let q = 0; q < 8; q++) { const x = sx0 + (q / 7 - 0.5) * sr * 2.6, y = sy0 + sr * (0.42 + 0.12 * hash2(q, 1967)), r = (18 + 14 * hash2(q, 1968)) * s; c.fillStyle = 'rgba(150,206,190,.55)'; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.arc(x + r * 0.8, y + r * 0.2, r * 0.75, 0, TWO_PI); c.fill(); }
+  for (const [fx, fa, fl] of [[-0.5, -2.2, 34], [-0.5, -0.9, 30], [0.55, -0.6, 36], [0.55, -2.4, 30], [0.55, -1.5, 26]]) frond(sx0 + fx * sr, sy0 + sr * 0.3, fa, fl * s, 'rgba(120,180,150,.75)', null, 0.4);
+  // nearer palms, deeper green
+  for (const [fx, fy, fa, fl] of [[-0.95, 0.1, -0.4, 60], [-0.95, 0.1, 0.5, 52], [-0.95, 0.1, -1.4, 46], [1.05, 0.0, -2.7, 62], [1.05, 0.0, 3.6, 50], [1.05, 0.0, -1.8, 44]]) frond(sx0 + fx * sr, sy0 + fy * sr, fa, fl * s, 'rgba(70,140,96,.92)', 'rgba(200,240,170,.45)', 0.55);
+  // the nearest leaves hanging over the top edge, nearly in silhouette (deep teal-green, never black), rims lit by the sky
+  for (const [fx, fa, fl] of [[-0.6, 0.9, 58], [-0.15, 1.3, 48], [0.3, 1.9, 54], [0.75, 2.3, 50]]) frond(sx0 + fx * sr * 1.1, sy0 - sr * 0.62, fa, fl * s, '#246a4c', 'rgba(220,255,200,.7)', 0.7);
+  c.restore();
+  // the sill: the opening's lower lip, its top face lit gold by the sun; the shadowed edge on the upper rim
+  c.save(); collar(); c.clip();
+  const sill = () => { c.beginPath(); for (let q = 0; q <= 20; q++) { const an = 0.25 + q / 20 * (Math.PI - 0.5), p0 = holePts(1, 0), k = an / TWO_PI * 12, i0 = Math.floor(k) % 12, i1 = (i0 + 1) % 12, f = k - Math.floor(k), x = lerp(p0[i0][0], p0[i1][0], f), y = lerp(p0[i0][1], p0[i1][1], f); q ? c.lineTo(x, y) : c.moveTo(x, y); } };
+  sill(); c.strokeStyle = '#d8a850'; c.lineWidth = 7 * s; c.stroke(); sill(); c.strokeStyle = '#f0cc78'; c.lineWidth = 4 * s; c.stroke(); sill(); c.strokeStyle = 'rgba(255,246,200,.9)'; c.lineWidth = 1.4 * s; c.stroke();
+  c.restore();
+  hole(); c.strokeStyle = 'rgba(12,40,46,.7)'; c.lineWidth = 1.2 * s; c.stroke();
+  // moss cushions and ferns along the collar's top, vines hanging from the rim
+  for (let q = 0; q < 9; q++) {
+    const an = 0.12 + q / 8 * (Math.PI - 0.24), vx = sx0 + Math.cos(an) * sr * 1.24, vy = sy0 + Math.sin(an) * sr * 0.7, L = (46 + 80 * hash2(q, 1966)) * s;
+    c.strokeStyle = '#1e5a3e'; c.lineWidth = 2.6 * s; c.beginPath(); c.moveTo(vx, vy); c.quadraticCurveTo(vx + 8 * s, vy + L * 0.5, vx + 3 * s, vy + L); c.stroke();
+    c.strokeStyle = '#3e8a58'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(vx, vy); c.quadraticCurveTo(vx + 8 * s, vy + L * 0.5, vx + 3 * s, vy + L); c.stroke();
+    for (let j = 1; j <= 6; j++) { const u = j / 7, lx = vx + 6 * s * Math.sin(u * 3) + 3 * s * u, ly = vy + L * u, d = j % 2 ? 1 : -1; c.fillStyle = j % 2 ? '#7cc47a' : '#4e9a5a'; c.beginPath(); c.ellipse(lx + d * 3.4 * s, ly, 4 * s, 1.9 * s, d * 0.6, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(30,80,50,.6)'; c.lineWidth = 0.6 * s; c.stroke(); }
+  }
+  // the falls' crevices on the back wall (their water runs live)
+  for (const f of [0.18, 0.82]) { const fx = X(lerp(xl, xr, f)), fy = Y(E + 330); lagoonBlob(c, [[fx - 16 * s, fy], [fx - 6 * s, fy - 12 * s], [fx + 8 * s, fy - 10 * s], [fx + 16 * s, fy + 2 * s], [fx + 4 * s, fy + 8 * s], [fx - 8 * s, fy + 7 * s]]); c.fillStyle = '#123c42'; c.fill(); c.strokeStyle = 'rgba(220,255,240,.5)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(fx - 14 * s, fy - 2 * s); c.quadraticCurveTo(fx, fy - 13 * s, fx + 14 * s, fy - 1 * s); c.stroke(); c.save(); c.scale(s, s); lagoonMossRun(c, fx / s - 18, fx / s + 16, fy / s - 9, 1970 + f * 10, 1); c.restore(); }
+  // the island: a tall mossy stack of smooth water-worn rock rising out of the lagoon (so Old Shellbeard rests up above
+  // the deck, never hidden behind a pilot on it), ferns and coral sprigs on its top
+  const ix = X((xl + xr) / 2 + 12), iy = Y(E + LAGOON_ISLE);
+  const isle = () => lagoonBlob(c, [[ix - 124 * s, iy + 110 * s], [ix - 112 * s, iy + 40 * s], [ix - 104 * s, iy + 6 * s], [ix - 60 * s, iy - 4 * s], [ix, iy - 6 * s], [ix + 60 * s, iy - 4 * s], [ix + 108 * s, iy + 8 * s], [ix + 116 * s, iy + 44 * s], [ix + 128 * s, iy + 110 * s], [ix, iy + 120 * s]]);
+  isle(); c.fillStyle = lagoonLG(ix - 120 * s, iy - 6 * s, ix + 40 * s, iy + 100 * s, ['#8cc8b0', '#4a8a80', '#24585c', '#163e46'], c); c.fill(); c.strokeStyle = '#174a4e'; c.lineWidth = 1.3 * s; c.stroke();
+  c.save(); isle(); c.clip();
+  for (let q = 0; q < 9; q++) { const px = ix + (hash2(q, 1984) - 0.5) * 200 * s, py = iy + (30 + 70 * hash2(q, 1985)) * s, rx = (22 + 16 * hash2(q, 1986)) * s, ry = rx * 0.55;
+    c.fillStyle = lagoonRG(px - rx * 0.3, py - ry * 0.5, rx * 1.2, ['rgba(220,255,240,.22)', 'rgba(220,255,240,0)'], c); c.beginPath(); c.ellipse(px, py, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(16,60,64,.45)'; c.lineWidth = 1.3 * s; c.beginPath(); c.ellipse(px, py + 0.8 * s, rx, ry, 0, 0.35, Math.PI - 0.35); c.stroke();
+    c.strokeStyle = 'rgba(220,255,240,.28)'; c.lineWidth = 0.9 * s; c.beginPath(); c.ellipse(px, py, rx * 0.8, ry * 0.7, 0, 3.6, 4.7); c.stroke(); }
+  c.fillStyle = lagoonLG(ix + 40 * s, 0, ix + 130 * s, 0, ['rgba(10,40,48,0)', 'rgba(10,40,48,.45)'], c); c.fillRect(ix, iy, 140 * s, 130 * s);
+  c.strokeStyle = 'rgba(20,70,74,.45)'; c.lineWidth = 1.3 * s; c.beginPath(); c.moveTo(ix - 100 * s, iy + 14 * s); c.quadraticCurveTo(ix, iy + 6 * s, ix + 104 * s, iy + 16 * s); c.stroke();
+  c.strokeStyle = 'rgba(220,255,240,.3)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(ix - 100 * s, iy + 12.6 * s); c.quadraticCurveTo(ix, iy + 4.6 * s, ix + 104 * s, iy + 14.6 * s); c.stroke();
+  c.restore();
+  c.save(); c.scale(s, s);
+  lagoonMossRun(c, (ix - 104 * s) / s, (ix - 56 * s) / s, (iy + 4 * s) / s, 1981, 0.6); lagoonMossRun(c, (ix + 60 * s) / s, (ix + 106 * s) / s, (iy + 5 * s) / s, 1983, 0.6);
+  lagoonCoral(c, (ix + 96 * s) / s, (iy + 6 * s) / s, 16, LP.coral, 11); lagoonCoral(c, (ix - 98 * s) / s, (iy + 6 * s) / s, 12, LP.peach, 13);
+  // the turtle on it
+  c.translate(ix / s, (iy - 2 * s) / s); lagoonTurtleBody(c);
+  c.restore();
+  c.restore();
+  // fade the bottom into the shaft below
+  c.globalCompositeOperation = 'destination-in'; c.fillStyle = lagoonLG(0, Y(E - 120), 0, Y(A1), ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.4)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, sp.w, sp.h); c.globalCompositeOperation = 'source-over';
+  sp.ix = (ix / s) + xa; sp.xl = xl; sp.xr = xr;
+  LAGOON_CACHE.sprites.set(key, sp);
+  return sp;
+}
+function drawLagoonDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -260 || y - (900 * s) > H + 200) return;
+  lagoonCacheCheck();
+  const ch = lagoonChamberRender(E), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.6) : 0;
+  // the chamber, between the walls
+  ctx.drawImage(ch.cv, ox + ch.xa * s, sy(ch.a1), ch.w, ch.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 120; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 120; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  // sun shafts from the skylight down onto the turtle (brighter on the clear)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const sx0 = sx((ch.xl + ch.xr) / 2 - 20), sy0 = sy(E + 560);
+  for (let q = 0; q < 3; q++) {
+    const w0 = (30 + 18 * q) * s, x0 = sx0 - 70 * s + q * 50 * s + Math.sin(T * 0.3 + q) * 6 * s, xb = sx(ch.ix) - 40 * s + q * 40 * s, yb = sy(E + 30), al = (0.06 + 0.04 * pay) * (0.8 + 0.2 * Math.sin(T * 0.7 + q * 2));
+    const g = ctx.createLinearGradient(0, sy0, 0, yb); g.addColorStop(0, `rgba(255,250,214,${al * 1.4})`); g.addColorStop(1, `rgba(255,240,190,${al * 0.4})`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0, sy0); ctx.lineTo(x0 + w0, sy0); ctx.lineTo(xb + w0 * 1.8, yb); ctx.lineTo(xb - w0 * 0.4, yb); ctx.closePath(); ctx.fill();
+  }
+  // dust motes turning in the sunbeams
+  for (let q = 0; q < 14; q++) { const u = pmod(T * 0.05 + hash2(q, 1991), 1), x = lerp(sx0, sx(ch.ix), u) + Math.sin(T * 0.6 + q) * 30 * s, yy = lerp(sy0, sy(E + 40), u), al = Math.sin(u * Math.PI) * 0.7; ctx.fillStyle = `rgba(255,250,220,${al})`; ctx.beginPath(); ctx.arc(x, yy, (0.8 + hash2(q, 1992)) * s, 0, TWO_PI); ctx.fill(); }
+  ctx.restore();
+  // the two falls pouring from their crevices into the lagoon
+  for (const f of [0.18, 0.82]) {
+    const fx = sx(lerp(ch.xl, ch.xr, f)), yt = sy(E + 326), yb = sy(E + LAGOON_POOL), w = 11 * s;
+    ctx.fillStyle = lagoonLG(0, yt, 0, yb, ['rgba(230,255,250,.85)', 'rgba(150,236,232,.65)', 'rgba(190,250,246,.5)']);
+    ctx.beginPath(); ctx.moveTo(fx - w * 0.8, yt); ctx.quadraticCurveTo(fx - w, yt + 30 * s, fx - w * 1.2, yb); ctx.lineTo(fx + w * 1.2, yb); ctx.quadraticCurveTo(fx + w, yt + 30 * s, fx + w * 0.8, yt); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.2 * s;
+    for (let q = -2; q <= 2; q++) { ctx.setLineDash([10 * s, 14 * s]); ctx.lineDashOffset = -(T * (150 + q * 11) + q * 9) * s; ctx.beginPath(); ctx.moveTo(fx + q * w * 0.3, yt + 2 * s); ctx.lineTo(fx + q * w * 0.42, yb); ctx.stroke(); }
+    ctx.restore();
+    lagoonGlow(fx, yb, 36 * s, [230, 255, 250], 0.4);
+    for (let q = 0; q < 3; q++) { const u = pmod(T * 1.2 + q / 3, 1); ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - u)})`; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.ellipse(fx, yb, (8 + u * 28) * s, (2 + u * 4) * s, 0, 0, TWO_PI); ctx.stroke(); }
+  }
+  // the lagoon: a still glowing pool (bright aqua, lit from within on the clear), ripples and sun glints on it
+  const py = sy(E + LAGOON_POOL), xl = sx(ch.xl - 20), xr = sx(ch.xr + 20);
+  ctx.fillStyle = lagoonLG(0, py, 0, sy(E - 60), [`rgba(150,250,236,.92)`, 'rgba(60,190,196,.9)', 'rgba(20,110,124,.85)', 'rgba(20,110,124,0)']); ctx.fillRect(xl, py, xr - xl, sy(E - 60) - py);
+  lagoonGlow(sx(ch.ix), py + 10 * s, (160 + 80 * pay) * s, LP.aqua, 0.2 + 0.18 * pay);
+  // under the surface: the island's reflection and shadow, smooth rocks on the bed, swaying weed, light rays
+  const pb = sy(E - 50), ixs = sx(ch.ix);
+  ctx.fillStyle = lagoonLG(0, py, 0, py + 26 * s, ['rgba(20,80,90,.5)', 'rgba(20,80,90,0)']); ctx.beginPath(); ctx.ellipse(ixs - 4 * s, py + 2 * s, 122 * s, 26 * s, 0, 0, Math.PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,150,90,.3)'; ctx.lineWidth = 3 * s; for (let q = 0; q < 4; q++) { const yy = py + (5 + 5 * q) * s, w = (60 - 12 * q) * s, dx = Math.sin(T * 1.3 + q) * 3 * s; ctx.beginPath(); ctx.moveTo(ixs - w + dx, yy); ctx.lineTo(ixs + w * 0.6 + dx, yy); ctx.stroke(); }
+  for (let q = 0; q < 7; q++) {
+    const x = lerp(xl, xr, (q + 0.3 * hash2(q, 1996)) / 7), yy = pb - (4 + 10 * hash2(q, 1997)) * s, rx = (14 + 12 * hash2(q, 1998)) * s, ry = rx * 0.55;
+    ctx.fillStyle = lagoonLG(0, yy - ry, 0, yy + ry, ['rgba(110,190,180,.55)', 'rgba(40,120,128,.55)', 'rgba(20,90,104,0)']); ctx.beginPath(); ctx.ellipse(x, yy, rx, ry, 0, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(220,255,246,.35)'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.ellipse(x, yy, rx * 0.8, ry * 0.7, 0, 3.6, 4.8); ctx.stroke();
+  }
+  ctx.save(); ctx.lineCap = 'round';
+  for (let q = 0; q < 9; q++) {
+    const x = lerp(xl, xr, (q + 0.5) / 9 + (hash2(q, 1999) - 0.5) * 0.05), L2 = (24 + 30 * hash2(q, 2001)) * s, sw = Math.sin(T * 1.1 + q * 1.7) * 6 * s;
+    const strand = () => { ctx.beginPath(); ctx.moveTo(x, pb); ctx.quadraticCurveTo(x - sw, pb - L2 * 0.5, x + sw, pb - L2); };
+    strand(); ctx.strokeStyle = 'rgba(30,100,70,.75)'; ctx.lineWidth = 3.2 * s; ctx.stroke();
+    strand(); ctx.strokeStyle = q % 2 ? 'rgba(100,190,110,.8)' : 'rgba(80,170,100,.8)'; ctx.lineWidth = 1.8 * s; ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  for (let q = 0; q < 5; q++) { const x = lerp(xl, xr, (q + 0.5) / 5) + Math.sin(T * 0.4 + q) * 10 * s, w = (8 + 6 * hash2(q, 2003)) * s, al = 0.07 + 0.05 * Math.sin(T * 0.9 + q * 2) + 0.06 * pay; const g = ctx.createLinearGradient(0, py, 0, pb); g.addColorStop(0, `rgba(230,255,240,${al})`); g.addColorStop(1, 'rgba(230,255,240,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - w, py); ctx.lineTo(x + w, py); ctx.lineTo(x + w * 2 + 14 * s, pb); ctx.lineTo(x + 14 * s, pb); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(xl, py); ctx.lineTo(xr, py); ctx.stroke();
+  ctx.save(); ctx.lineCap = 'round';
+  for (let q = 0; q < 10; q++) { const x = lerp(xl, xr, hash2(q, 1993)) + Math.sin(T * 0.6 + q) * 8 * s, yy = py + (4 + 14 * hash2(q, 1994)) * s, w = (8 + 14 * hash2(q, 1995)) * s, al = 0.3 + 0.3 * Math.sin(T * 1.8 + q * 2); ctx.strokeStyle = `rgba(255,255,240,${al})`; ctx.lineWidth = 1.1 * s; ctx.beginPath(); ctx.moveTo(x - w, yy); ctx.quadraticCurveTo(x, yy - 2 * s, x + w, yy); ctx.stroke(); }
+  ctx.restore();
+  // water lilies floating on it (pads with a notch, pink flowers), anchored to the pool's surface
+  for (const [f, fl] of [[0.08, 1], [0.3, 0], [0.7, 1], [0.92, 0]]) {
+    const x = lerp(xl, xr, f) + Math.sin(T * 0.4 + f * 9) * 2 * s, yy = py + 3 * s, R = 13 * s;
+    ctx.fillStyle = lagoonLG(0, yy - 4 * s, 0, yy + 4 * s, ['#9ee08a', '#4e9a56', '#2a6640']); ctx.beginPath(); ctx.ellipse(x, yy, R, R * 0.32, 0, 0.25, TWO_PI - 0.05); ctx.lineTo(x, yy); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1f5236'; ctx.lineWidth = 0.9 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(220,255,200,.5)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.ellipse(x, yy - 0.5 * s, R * 0.8, R * 0.22, 0, 3.4, 4.6); ctx.stroke();
+    if (fl) for (let q = 0; q < 6; q++) { const an = -Math.PI / 2 + (q - 2.5) * 0.42, px = x + Math.cos(an) * 6 * s, pyy = yy - 3 * s + Math.sin(an) * 7 * s; ctx.fillStyle = lagoonLG(0, pyy - 4 * s, 0, pyy + 4 * s, ['#fff0f6', '#ff9ac8', '#d0507e']); ctx.beginPath(); ctx.ellipse(px, pyy, 2.6 * s, 5 * s, an + Math.PI / 2, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#a03a64'; ctx.lineWidth = 0.6 * s; ctx.stroke(); }
+    if (fl) { ctx.fillStyle = '#ffe070'; ctx.beginPath(); ctx.arc(x, yy - 4 * s, 2 * s, 0, TWO_PI); ctx.fill(); }
+  }
+  // the old turtle's head, nodding; he lifts it and smiles on the clear
+  const blink = pmod(T, 4.2) < 0.14 ? 1 : 0;
+  lagoonTurtleHead(sx(ch.ix), sy(E + LAGOON_ISLE + 2), s, T, pay, blink);
+  if (pay > 0) { lagoonGlow(sx(ch.ix - 100), sy(E + LAGOON_ISLE + 40), 60 * s, [255, 240, 180], 0.3 * pay); }
+  ctx.restore();
+  // ---- the deck: two shelves of polished stone growing out of the walls to meet under you, crusted with coral and moss
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 12 : R + 12), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet + side * -1, e)), th = 18 * s;
+    const body = () => { ctx.beginPath(); ctx.moveTo(X0, y - 2 * s); ctx.lineTo(X1 + side * 4 * s, y - 2.5 * s); ctx.quadraticCurveTo(X1 - side * 2 * s, y - 1 * s, X1, y + 4 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + th * 1.1, X0, y + th * 1.8); ctx.closePath(); };
+    body(); ctx.fillStyle = lagoonLG(0, y - 3 * s, 0, y + th * 1.6, LAGOON_STONE); ctx.fill(); ctx.strokeStyle = '#0f3a40'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    ctx.save(); body(); ctx.clip();
+    ctx.strokeStyle = 'rgba(16,52,56,.55)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(X0, y + 5 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + 7 * s, X1, y + 3 * s); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,244,234,.32)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(X0, y + 6.3 * s); ctx.quadraticCurveTo(lerp(X0, X1, 0.5), y + 8.3 * s, X1, y + 4.3 * s); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(214,255,244,.75)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(X0, y - 1.4 * s); ctx.lineTo(X1 + side * 4 * s, y - 1.9 * s); ctx.stroke();
+    // moss and coral along its top as it grows
+    const w = Math.abs(X1 - X0), n = Math.floor(w / (7 * s));
+    for (let q = 0; q <= n; q++) { const x = lerp(X0, X1, q / Math.max(1, n)), r = (2.2 + 1.8 * hash2(q, side + 5)) * s; ctx.fillStyle = lagoonRG(x - r * 0.3, y - 2 * s - r * 0.5, r * 1.3, LP.moss); ctx.beginPath(); ctx.arc(x, y - 2.4 * s - r * 0.3, r, 0, TWO_PI); ctx.fill(); }
+    for (let q = 1; q < n; q += 3) { const x = lerp(X0, X1, q / Math.max(1, n)); ctx.save(); ctx.translate(x, y - 3 * s); ctx.scale(s, s); lagoonCoral(ctx, 0, 0, 7 + 4 * hash2(q, side), hash2(q, side + 1) < 0.5 ? LP.coral : LP.peach, q * 7 + side); ctx.restore(); }
+    // a lantern of glowing algae in a shell cupped on the wall above it (the deck's own light, not a plaque)
+    const wxs = sx(side < 0 ? L + 2 : R - 2), ly = y - 50 * s, gl = 0.85 + 0.15 * Math.sin(T * 2 + side) + 0.4 * pay;
+    lagoonGlow(wxs - side * 8 * s, ly, 48 * s, LP.aqua, 0.32 * gl);
+    ctx.save(); ctx.translate(wxs, ly); ctx.scale(-side * s, s);
+    ctx.fillStyle = lagoonLG(0, -8, 0, 8, ['#fff2e0', '#f0b890', '#a8664a']); ctx.beginPath(); ctx.moveTo(0, -9); ctx.quadraticCurveTo(14, -10, 16, 0); ctx.quadraticCurveTo(14, 9, 0, 9); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#8a4e36'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(138,78,54,.6)'; ctx.lineWidth = 0.8; for (const yy of [-5, 0, 5]) { ctx.beginPath(); ctx.moveTo(1, yy); ctx.quadraticCurveTo(10, yy * 1.2, 15, yy * 0.4); ctx.stroke(); }
+    ctx.fillStyle = lagoonRG(8, -1, 7, ['#ffffff', '#b8fff0', '#40c8c0']); ctx.beginPath(); ctx.ellipse(9, -1, 4.6, 5.6, 0, 0, TWO_PI); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (lagoonOn()) drawLagoonDeck(); else base(); }; }
+// the payoff: on the clear the lagoon glows up, bubbles and golden glints burst out of it, the falls splash
+function lagoonClearBurst() {
+  const a = G.adv, p = G.p;
+  for (let k = 0; k < 40; k++) lagoonDrop(p.x + (Math.random() - 0.5) * 220, a.end + 30 + Math.random() * 40, (Math.random() - 0.5) * 60, 60 + Math.random() * 120, 1.4 + Math.random(), 2 + Math.random() * 4, 'bubble');
+  for (let k = 0; k < 22; k++) { const an = k / 22 * TWO_PI; puff(p.x, a.end + 40, Math.cos(an) * 200, Math.sin(an) * 200 + 60, 0.8, 2.6, 'ember', k % 3 ? [255, 230, 140] : LP.aqua); }
+  lagoonSplash(p.x, a.end + LAGOON_POOL, 26, 1.4, 1.3);
+  G.flashCol = [220, 255, 230];
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (lagoonOn() && !boss) lagoonClearBurst(); }; }
+// ---- golden conchs: three in daring spots (between a piranha's pools, in a cascade's sheet, at a gulper's lips), worth
+// a big coin each, and the stage's conch mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'lagoonConch') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.lagoonConch = (st.lagoonConch || 0) + 1, of = advGoalN('lagoonConch');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Golden conch ${n}/${of}!` : 'Golden conch!', '#ffe9a0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 230, 150];
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(an) * 190, Math.sin(an) * 190, 0.55, 2.4, 'ember', k % 3 ? [255, 214, 110] : LP.aqua); }
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  for (let k = 0; k < 10; k++) lagoonDrop(f.x + (Math.random() - 0.5) * 20, f.alt, (Math.random() - 0.5) * 80, 40 + Math.random() * 80, 1, 2 + Math.random() * 2.5, 'bubble');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe9a0', big: true, sub: 'golden conch' });
+  vibrate([20, 30, 20]); sfx('lconch');
+}; }
+// The golden conch (inside its pickup circle): a spiralled shell of polished gold, knobbed along its shoulders, its
+// whorls as line pairs, a flared pearly-pink lip round its opening, glowing warm with an aqua shimmer, bobbing,
+// a twinkle on its spire and bubbles rising off it.
+function drawLagoonConchArt(t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2, gl = 0.6 + 0.25 * Math.sin(t * 3.1 + ph);
+  lagoonGlow(0, bob, 44, [255, 214, 110], 0.32 * gl + 0.1);
+  lagoonGlow(-3, bob + 2, 22, LP.aqua, 0.16 * gl);
+  ctx.save(); ctx.translate(0, bob); ctx.rotate(-0.35); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the body: a fat spiral cone, spire up-right, the big body whorl down-left
+  const body = () => { ctx.beginPath(); ctx.moveTo(2, -14); ctx.bezierCurveTo(8, -10, 12, -4, 11, 3); ctx.bezierCurveTo(10, 10, 2, 13, -4, 12); ctx.bezierCurveTo(-10, 11, -12, 5, -10, -1); ctx.bezierCurveTo(-8, -6, -3, -10, 2, -14); ctx.closePath(); };
+  body(); ctx.fillStyle = lagoonRG(-3, -5, 17, ['#fff8d0', '#ffd45a', '#e09a2a', '#9a5a12']); ctx.fill();
+  ctx.save(); body(); ctx.clip();
+  // the whorls: curved bands round it (a dark seam under a lit ridge)
+  for (const [y0, k] of [[-8, 0.5], [-3, 0.75], [3, 1]]) {
+    ctx.strokeStyle = 'rgba(140,80,14,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-12, y0 + 6 * k); ctx.quadraticCurveTo(0, y0 - 2, 12, y0 - 6 * k); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,250,220,.55)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-12, y0 + 6 * k - 1.3); ctx.quadraticCurveTo(0, y0 - 3.3, 12, y0 - 6 * k - 1.3); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(150,80,10,.25)'; ctx.beginPath(); ctx.ellipse(6, 7, 9, 6, -0.4, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  body(); ctx.strokeStyle = '#8a5210'; ctx.lineWidth = 1.1; ctx.stroke();
+  // knobs along the shoulder
+  for (const [x, y, r] of [[-7, -5, 2.2], [-2, -8.5, 2], [3, -11, 1.7], [9, -2, 1.9]]) { ctx.fillStyle = lagoonRG(x - r * 0.3, y - r * 0.4, r * 1.3, ['#fffbe0', '#ffd45a', '#b8761a']); ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#8a5210'; ctx.lineWidth = 0.6; ctx.stroke(); }
+  // the flared lip and its pearly pink opening
+  const lip = () => { ctx.beginPath(); ctx.moveTo(-10, -1); ctx.bezierCurveTo(-16, 2, -15, 11, -6, 13.5); ctx.bezierCurveTo(-2, 14.5, 2, 13, 3, 11); ctx.bezierCurveTo(-2, 9, -6, 5, -6, 1); ctx.closePath(); };
+  lip(); ctx.fillStyle = lagoonLG(-14, 0, -2, 12, ['#fff2f6', '#ffb0c8', '#e0668e']); ctx.fill(); ctx.strokeStyle = '#a84466'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.fillStyle = 'rgba(160,40,80,.35)'; ctx.beginPath(); ctx.ellipse(-6, 7, 2.2, 4, 0.3, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-12.5, 3); ctx.quadraticCurveTo(-12.5, 10, -6, 12.5); ctx.stroke();
+  // the sheen and the gleam
+  lagoonSheen(0, -1, 12, 0.6, 3.5, 4.6);
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(-3.5, -6, 2.2, 1.3, -0.6, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  // a twinkle on the spire, bubbles rising off it
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const u = (t * 0.7 + ph) % 1, a = Math.sin(u * Math.PI), x = 8, y = -13 + bob;
+  ctx.fillStyle = `rgba(255,250,220,${0.9 * a})`;
+  ctx.beginPath(); ctx.moveTo(x, y - 5 * a); ctx.lineTo(x + 1.2, y - 1.2); ctx.lineTo(x + 5 * a, y); ctx.lineTo(x + 1.2, y + 1.2); ctx.lineTo(x, y + 5 * a); ctx.lineTo(x - 1.2, y + 1.2); ctx.lineTo(x - 5 * a, y); ctx.lineTo(x - 1.2, y - 1.2); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  const bub = lagoonBubbleSprite();
+  for (let k = 0; k < 2; k++) { const v = (t * 0.5 + k / 2 + ph) % 1, bx = -4 + k * 7 + Math.sin(t * 3 + k) * 1.5, by = -10 - v * 18 + bob, r = 1.6 + 1.2 * v; ctx.globalAlpha = 1 - v; ctx.drawImage(bub.cv, bx - r, by - r, r * 2, r * 2); }
+  ctx.globalAlpha = 1;
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'lagoonConch')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'lagoonConch');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'lagoonConch') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawLagoonConchArt(G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the conch mission and the dry mission (stars), and the conch count on the HUD under the others
+ADV_GOALS.lagoonConch = { text: g => `Find all ${g.n} golden conchs`, done: (r, g) => (r.stats.lagoonConch || 0) >= g.n, any: true, prog: (g, st) => `${st.lagoonConch || 0}/${g.n}` };
+ADV_GOALS.lagoonDry = { text: () => 'Never get swept down a waterfall', done: r => r.clear && !r.stats.lagoonWet, prog: (g, st) => st.lagoonWet ? `swept ${st.lagoonWet}×` : '' };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st), g = goals.find(q => q.k === 'lagoonConch'); if (!g) return;
+  const before = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  const n = G.stats.lagoonConch || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * before, txt = `${n}/${g.n}`;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(txt).width;
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#ffe9a0' : '#ffe7b8'; ctx.fillText(txt, xr, y);
+  ctx.translate(xr - tw - 13, y); ctx.scale(0.55, 0.55); drawLagoonConchArt(G.t, 0);
+  ctx.restore();
+}; }
+// The stage on the island: level 11 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'lagoon' || (G.level && G.level.lagoon)) return;
+  G.level = createLagoonLevel(G.seed, st); G.lgDrops = []; G.lgWetT = 0; G.lgSwimPop = 0;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The hidden lagoon ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the lagoon's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRL = { LAGOON, LAGOON_STAGE, lagoonShapes, lagoonFishState, lagoonFishPos, lagoonJellyState, lagoonFallFlow, lagoonFallSheet, lagoonFallX, lagoonFallW, lagoonGulpState, lagoonGulpPull, lagoonDanger, createLagoonLevel, lagoonSheetOver, lagoonDragAt, cache: LAGOON_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Hidden Lagoon, island level 11)
 // ---------- the Amethyst Geode (island level 16): its look, traps, heart geodes, singeing and sounds ----------
 // The stage's shaft and traps are laid out by createGeodeLevel (LEVELGEN); here they come alive and get drawn. While it
