@@ -15989,6 +15989,377 @@ const ADV_SNAPJAW = { name: 'Snapjaw Swamp', theme: 'snapjaw', seed: 'isl-8-snap
 /* LEVELGEN:END */
 // (LEVELGEN slot: Snapjaw Swamp, island level 8)
 // (LEVELGEN slot: Jelly Drift, island level 12)
+/* LEVELGEN:BEGIN */
+// ---------- Basalt Deep (island level 14): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Anthill Underworks (see createAnthillLevel): a pitch-dark shaft bored through hexagonal
+// basalt columns deep under the island, climbed from the Ember Floor (seams of cooling lava far below) up to the
+// Lantern Vault. Only the pilot's own light, glow-worm threads, lit glow-worm nests and the lava light the dark (see the
+// basalt drawing, G.theme 'basalt'). One trap at a time, each taught alone and slow before it is combined (the Column
+// Rows, the Glow-Worm Gallery, the Cricket Ledges), a breather (the Still Pool), the Magma Seams, the Deep Dark mixing
+// them all, then the Lantern Vault and its landing.
+// The traps (every one leaves a way through on its own clock that the widest pilot fits; nothing ever rises at you):
+// - basaltRipple (Column Ripple): a stack of N hexagonal basalt columns lies end-on in a wall. For `tell` s their cracks
+//   glow and grit trickles, then they punch out across the shaft one after another from the top down (a ripple running
+//   down the wall), each nearly to the far wall for `hold` s, and slide home. The column ends are lethal.
+// - basaltCurtain (Glow-Worm Curtain): a silk line strung wall to wall with a curtain of glow-worm threads hanging from
+//   it, each beaded with sticky glowing drops. A band of glow-worms reels its threads up, and that gap swings slowly to
+//   and fro along the line; elsewhere the threads hang down and are lethal. Fly up through the gap.
+// - basaltCricket (Cricket Leap): a pale blind cave cricket squats on a basalt ledge on one wall. For `tell` s it
+//   crouches, chirps and feels about with its antennae, then leaps across the shaft in an arc to the ledge on the far
+//   wall; next cycle it leaps back. The cricket and both ledges are lethal.
+// - basaltJet (Magma Seam, this stage's own): a seam of lava in a wall. For `tell` s it glows hot and spits, then a
+//   stream of lava gushes out across the shaft (never into the far lane) and its aim sweeps from up high down to low
+//   (`sweep` s) before it gutters out. The stream and the seam's crust lip are lethal.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const BASALT = {
+  tier: { every: [150, 260], D: [0, 12], ramp: 30 },   // wall relief: tiers of column ends stepping in and out
+  ripple: { n: 4, gap: 46, hr: 19, tell: 0.9, out: 0.26, hold: 0.42, back: 0.38, lag: 0.2, shut: 18, ease: 520 },
+  curtain: { sp: 21, len: 84, gw: 90, m: 40, ease: 420 },
+  cricket: { tell: 0.85, J: 0.8, apex: 66, ledge: 36, r: 12, half: 13, hr: 8, ease: 460 },
+  jet: { tell: 1.0, rise: 0.22, sweep: 1.5, die: 0.28, a0: 0.38, a1: -0.62, lane: 132, droop: 22, ease: 500 },
+  nest: { reach: 112, firefly: 1.75 },
+  light: { r: 150, firefly: 1.6 },
+  chiliGap: 470, end: 420,
+};
+const BASALT_TYPES = new Set(['basaltRipple', 'basaltCurtain', 'basaltCricket', 'basaltJet']);
+// The stage, bottom to top (as ANTHILL_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). drop: this beat holds one of the 3 fire opals.
+const BASALT_STAGE = [
+  { name: 'Ember Floor', w: 380, len: 900, calm: true },
+  { name: 'Column Rows', w: 380, beats: [[620, 'basaltRipple', { side: 1, P: 4.8 }], [580, 'basaltRipple', { side: -1, P: 4.7, ph: 0.4 }], [640, 'ripplePair', { P: 4.6 }],
+    [640, 'basaltRipple', { side: 1, P: 4.6, drop: true }], [640, 'ripplePair', { P: 4.5 }], [620, 'ripplePair', { P: 4.4 }]], tail: 560 },
+  { name: 'Glow-Worm Gallery', w: 380, beats: [[620, 'basaltCurtain', { v: 52 }], [520, 'basaltCurtain', { v: 56 }], [560, 'curtainPair', { v: 58 }],
+    [640, 'curtainRipple', { v: 60, P: 4.5 }], [600, 'curtainPair', { v: 62 }], [620, 'curtainRipple', { v: 62, P: 4.4 }]], tail: 600 },
+  { name: 'Cricket Ledges', w: 380, beats: [[620, 'basaltCricket', { P: 5.8 }], [560, 'basaltCricket', { P: 5.6, ph: 0.3 }], [620, 'cricketPair', { P: 5.6 }],
+    [640, 'basaltCricket', { P: 5.4, drop: true }], [660, 'cricketCurtain', { P: 5.4, v: 62 }], [660, 'cricketRipple', { P: 5.4 }], [640, 'basaltCricket', { P: 5.5, ph: 0.6 }]], tail: 600 },
+  { name: 'The Still Pool', w: 384, len: 1200, calm: true },
+  { name: 'Magma Seams', w: 380, beats: [[680, 'basaltJet', { side: 1, P: 5.0 }], [640, 'basaltJet', { side: -1, P: 4.9, ph: 0.3 }], [720, 'jetPair', { P: 4.9 }],
+    [700, 'basaltJet', { side: 1, P: 4.8, drop: true }], [780, 'jetCricket', { P: 4.8 }], [760, 'jetCurtain', { P: 4.8, v: 62 }], [700, 'basaltJet', { side: -1, P: 4.7, ph: 0.6 }]], tail: 640 },
+  { name: 'The Deep Dark', w: 376, beats: [[720, 'jetRipple', { P: 4.7 }], [720, 'cricketCurtain', { P: 5.3, v: 64 }], [700, 'ripplePair', { P: 4.4 }],
+    [780, 'jetPair', { P: 4.7 }], [720, 'cricketRipple', { P: 5.2 }], [640, 'curtainPair', { v: 66 }], [740, 'jetCurtain', { P: 4.6, v: 66 }],
+    [700, 'ripplePair', { P: 4.3 }], [760, 'cricketRipple', { P: 5.1 }], [780, 'jetCricket', { P: 4.7 }]], tail: 720 },
+  { name: 'Lantern Vault', w: 384, len: 900, calm: true, finish: true },
+];
+const basaltLen = sec => sec.calm || !sec.beats ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const basaltEnd = () => { let y = 0; for (const sec of BASALT_STAGE) { if (sec.finish) return y + BASALT.end; y += basaltLen(sec); } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a column ripple's clock: ph, tell 0..1, and each column's extension e[i] 0..1 (i = 0 the lowest)
+function basaltRippleAt(h, t) {
+  const X = BASALT.ripple, u = pmod(t / h.P + h.ph, 1) * h.P, wave = X.out + X.hold + X.back + X.lag * (X.n - 1), I = h.P - X.tell - wave, e = [];
+  let ph = 'rest', tell = 0;
+  if (u >= I && u < I + X.tell) { ph = 'tell'; tell = (u - I) / X.tell; }
+  else if (u >= I + X.tell) ph = 'wave';
+  for (let i = 0; i < X.n; i++) {
+    let k = 0;
+    if (ph === 'wave') {
+      const v = u - I - X.tell - (X.n - 1 - i) * X.lag;   // the top column first
+      if (v <= 0) k = 0;
+      else if (v < X.out) k = 1 - (1 - v / X.out) ** 2.2;
+      else if (v < X.out + X.hold) k = 1;
+      else if (v < X.out + X.hold + X.back) k = 1 - smooth(0, 1, (v - X.out - X.hold) / X.back);
+    }
+    e.push(k);
+  }
+  return { ph, tell, e, u, k: ph === 'rest' ? u / I : 0 };
+}
+// a curtain's gap: its centre gx and each thread's hanging length (q: how far reeled up, 0..1)
+function basaltCurtainGap(h, t) {
+  const X = BASALT.curtain, D = h.R - h.L - 2 * X.m, u = pmod(t * h.v / (2 * D) + h.ph, 1), f = u < 0.5 ? 2 * u : 2 - 2 * u;
+  return h.L + X.m + D * smooth(0, 1, f) * 0.15 + D * f * 0.85;
+}
+function basaltThreadLen(h, x, gx) { const X = BASALT.curtain, q = smooth(X.gw, X.gw - 26, Math.abs(x - gx)); return { len: X.len * (1 - q) + 6 * q, q }; }
+function basaltThreadXs(h) { if (h.xs) return h.xs; const X = BASALT.curtain, n = Math.floor((h.R - h.L - 20) / X.sp), x0 = (h.L + h.R) / 2 - (n - 1) * X.sp / 2, xs = []; for (let i = 0; i < n; i++) xs.push(x0 + i * X.sp); return (h.xs = xs); }
+// a cricket's clock: which ledge it is on (from: +1 the base wall, -1 the far wall), ph, tell, the leap's progress k
+function basaltCricketAt(h, t) {
+  const X = BASALT.cricket, half = h.P / 2, u0 = pmod(t / h.P + h.ph, 1) * h.P, leg = u0 < half ? 0 : 1, u = u0 - leg * half, r = half - X.tell - X.J;
+  const from = leg ? -1 : 1;
+  if (u < r) return { ph: 'rest', from, k: u / r, u: u0 };
+  if (u < r + X.tell) return { ph: 'tell', from, tell: (u - r) / X.tell, u: u0 };
+  return { ph: 'leap', from, k: clamp((u - r - X.tell) / X.J, 0, 1), u: u0 };
+}
+// where the cricket's body is: x, a and its facing (+1 toward +x)
+function basaltCricketPos(h, st) {
+  const X = BASALT.cricket, d = h.side, xa = h.base + d * X.ledge * 0.58, xb = h.far - d * X.ledge * 0.58, a0 = h.alt + X.r + 3;
+  if (st.ph !== 'leap') { const x = st.from > 0 ? xa : xb; return { x, a: a0, face: st.from > 0 ? d : -d }; }
+  const k = st.k, x0 = st.from > 0 ? xa : xb, x1 = st.from > 0 ? xb : xa;
+  return { x: lerp(x0, x1, k), a: a0 + X.apex * 4 * k * (1 - k), face: Math.sign(x1 - x0) };
+}
+// a magma seam's clock: L the stream's length (0..1 of its reach), ang its aim, tell 0..1
+function basaltJetAt(h, t) {
+  const X = BASALT.jet, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.rise - X.sweep - X.die;
+  if (u < I) return { ph: 'rest', L: 0, ang: X.a0, tell: 0, u, k: u / I };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', L: 0, ang: X.a0, tell: v / X.tell, u };
+  v -= X.tell;
+  if (v < X.rise) { const k = v / X.rise; return { ph: 'rise', L: 1 - (1 - k) ** 2, ang: X.a0, k, u }; }
+  v -= X.rise;
+  if (v < X.sweep) { const k = v / X.sweep; return { ph: 'sweep', L: 1, ang: lerp(X.a0, X.a1, smooth(0, 1, k)), k, u }; }
+  v -= X.sweep;
+  const k = clamp(v / X.die, 0, 1);
+  return { ph: 'die', L: 1 - k, ang: X.a1, k, u, cut: k };
+}
+// the stream's centreline: n points [x, a, r] from the seam out to its tip (a little droop under its own weight)
+function basaltJetPts(h, st, n = 7) {
+  const X = BASALT.jet, d = h.side, Lr = h.reach * st.L, ca = Math.cos(st.ang), sa = Math.sin(st.ang), out = [], s0 = st.cut ? st.cut * Lr * 0.6 : 0;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), s = lerp(s0, Lr, u), w = s / Math.max(1, h.reach);
+    out.push([h.base + d * (6 + s * ca), h.alt + s * sa - X.droop * w * w, 10.5 - 4.5 * w]);
+  }
+  return out;
+}
+// Every collision shape of a basalt trap at time t, fitted to its drawing. kind: undefined or 'body' for all of them,
+// 'still' only the parts that never move.
+function basaltShapes(h, t, S = [], kind) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, moving = kind !== 'still';
+  if (h.type === 'basaltRipple') {
+    if (!moving) return S;
+    const X = BASALT.ripple, st = basaltRippleAt(h, t);
+    for (let i = 0; i < X.n; i++) { const ext = st.e[i] * (h.wd - X.shut), ai = A + i * X.gap; if (ext > 4) cap(b - d * 6, ai, b + d * Math.max(0, ext - X.hr * 0.55), ai, X.hr); }
+  } else if (h.type === 'basaltCurtain') {
+    if (!moving) return S;
+    const top = A + BASALT.curtain.len, gx = basaltCurtainGap(h, t);
+    for (const x of basaltThreadXs(h)) { const { len } = basaltThreadLen(h, x, gx); if (len > 14) { cap(x, top - 3, x, top - len + 5, 2.6); c(x, top - len + 3, 5.2); } }
+  } else if (h.type === 'basaltCricket') {
+    const X = BASALT.cricket;
+    cap(h.base - d * 6, A - 4, h.base + d * (X.ledge - 6), A - 4, 7.5); cap(h.far + d * 6, A - 4, h.far - d * (X.ledge - 6), A - 4, 7.5);   // the two ledges
+    if (moving) {
+      const st = basaltCricketAt(h, t), p = basaltCricketPos(h, st), f = p.face, crouch = st.ph === 'tell' ? 3 * st.tell : 0;
+      cap(p.x - f * X.half, p.a - crouch + 1, p.x + f * (X.half - 4), p.a - crouch + 3, X.r);   // the humped body
+      c(p.x + f * (X.half + 6), p.a - crouch + 1, X.hr);   // the head
+      if (st.ph === 'leap') cap(p.x - f * 8, p.a - 2, p.x - f * 24, p.a - 14, 4.5);   // the hind legs kicked back
+      else cap(p.x - f * 6, p.a + 8 - crouch, p.x - f * 14, p.a + 16 - crouch * 2, 4.5);   // the hind leg's knee up over its back
+    }
+  } else if (h.type === 'basaltJet') {
+    c(b + d * 3, A, 13);   // the seam's crust lip
+    if (moving) {
+      const st = basaltJetAt(h, t);
+      if (st.L > 0.02) { const P = basaltJetPts(h, st); for (let i = 1; i < P.length; i++) cap(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1], (P[i - 1][2] + P[i][2]) / 2); }
+    }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): its shapes over a whole cycle.
+function basaltDanger(h) {
+  const S = []; basaltShapes(h, 0, S, 'still');
+  const dt = h.type === 'basaltCurtain' ? 0.1 : 0.04;
+  for (let t = 0; t < h.P; t += dt) basaltShapes(h, t, S);
+  return S;
+}
+
+// Basalt Deep's shaft, laid out in full from BASALT_STAGE (the seed only nudges looks and phases). It answers the same
+// questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createBasaltLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xBA5A17) >>> 0), Q = BASALT;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [], nests = [];
+  let y = 0;
+  for (const sec of BASALT_STAGE) { const len = basaltLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = basaltEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the walls' relief on a side: tiers of column ends, each its own depth, ramped between, eased flat where a trap is
+  // mounted or reaches and over the launch. Never steeper than RULES.maxWallSlope.
+  let fIdx = null, fN = -1; const fNone = [];
+  const flatsNear = a => { if (fN !== flats.length) { fIdx = new Map(); for (const f of flats) for (let q = Math.floor((f.a0 - 70) / 256); q <= Math.floor((f.a1 + 70) / 256); q++) { let B = fIdx.get(q); if (!B) fIdx.set(q, B = []); B.push(f); } fN = flats.length; } return fIdx.get(Math.floor(a / 256)) || fNone; };
+  const flatK = (a, side) => { let k = 0; for (const f of flatsNear(a)) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const TR = Q.tier, tiers = [[], []];
+  for (const side of [0, 1]) { let a = -60, i = 0; while (a < topA + 400) { tiers[side].push({ a, d: lerp(TR.D[0], TR.D[1], hash2(i, (seed & 0xffff) + 1411 + side * 17)) }); a += lerp(TR.every[0], TR.every[1], hash2(i, (seed & 0xffff) + 1413 + side * 17)); i++; } }
+  const tierAt = (a, side) => { const K = tiers[side]; let lo = 0, hi = K.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m].a <= a) lo = m; else hi = m; } return lo; };
+  const panelAt = (a, side) => { const K = tiers[side], i = tierAt(a, side), k0 = K[i], kp = K[i - 1] || k0; return lerp(kp.d, k0.d, smooth(k0.a - TR.ramp / 2, k0.a + TR.ramp / 2, a)); };
+  const reliefAt = (a, side) => { const K = tiers[side], i = tierAt(a, side), k1 = K[i + 1]; let v = panelAt(a, side); if (k1 && a > k1.a - TR.ramp / 2) v = lerp(K[i].d, k1.d, smooth(k1.a - TR.ramp / 2, k1.a + TR.ramp / 2, a)); return Math.max(0, v) * smooth(380, 620, a) * (1 - flatK(a, side)); };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1) => { flats.push({ a0, a1, side: 1 }); flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSide = 0;
+  const one = (type, A, o, ease, ex = {}) => { lastSide = o.side; return [{ type, side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease, ...ex }]; };
+  const RH = (Q.ripple.n - 1) * Q.ripple.gap;
+  const make = {
+    basaltRipple(A, o) { flat(A - 40, A + RH + 40); return one('basaltRipple', A, o, Q.ripple.ease); },
+    ripplePair(A, o) {   // ripples in facing walls one above the other, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.basaltRipple(A, { side: d, P: o.P, ph: p0 }), ...make.basaltRipple(A + RH + 130, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    basaltCurtain(A, o) { flat(A - 30, A + Q.curtain.len + 30); const d = o.side ?? -(lastSide || pick()); lastSide = d; return [{ type: 'basaltCurtain', side: d, alt: A, v: o.v, P: 1, ph: o.ph ?? ph(), drop: !!o.drop, ease: Q.curtain.ease }]; },
+    curtainPair(A, o) {   // two curtains 190 apart, their gaps swinging out of step
+      const p0 = ph();
+      return [...make.basaltCurtain(A, { v: o.v, ph: p0 }), ...make.basaltCurtain(A + 190, { v: o.v * 0.92, ph: p0 + 0.5 })];
+    },
+    curtainRipple(A, o) {   // a curtain, then a ripple above it
+      const d = -(lastSide || pick());
+      return [...make.basaltCurtain(A, { v: o.v }), ...make.basaltRipple(A + Q.curtain.len + 150, { side: d, P: o.P, ph: ph() })];
+    },
+    basaltCricket(A, o) { flat(A - 40, A + 130); return one('basaltCricket', A, { ...o, side: o.side ?? -(lastSide || pick()) }, Q.cricket.ease); },
+    cricketPair(A, o) {   // two crickets 210 apart, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.basaltCricket(A, { side: d, P: o.P, ph: p0 }), ...make.basaltCricket(A + 210, { side: -d, P: o.P, ph: p0 + 0.25 })];
+    },
+    cricketCurtain(A, o) {   // a cricket, then a curtain above it
+      return [...make.basaltCricket(A, { P: o.P, ph: ph() }), ...make.basaltCurtain(A + 200, { v: o.v })];
+    },
+    cricketRipple(A, o) {   // a cricket, then a ripple above it
+      const hs = make.basaltCricket(A, { P: o.P, ph: ph() });
+      return [...hs, ...make.basaltRipple(A + 210, { side: -hs[0].side, P: o.P - 0.7, ph: ph() })];
+    },
+    basaltJet(A, o) { flat(A - 190, A + 130); return one('basaltJet', A, o, Q.jet.ease); },
+    jetPair(A, o) {   // seams in facing walls, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.basaltJet(A, { side: d, P: o.P, ph: p0 }), ...make.basaltJet(A + 340, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    jetCricket(A, o) {   // a seam, then a cricket above it
+      const d = -(lastSide || pick());
+      return [...make.basaltJet(A, { side: d, P: o.P, ph: ph() }), ...make.basaltCricket(A + 170, { side: -d, P: o.P + 0.6, ph: ph() })];
+    },
+    jetCurtain(A, o) {   // a seam, then a curtain above it
+      const d = -(lastSide || pick());
+      return [...make.basaltJet(A, { side: d, P: o.P, ph: ph() }), ...make.basaltCurtain(A + 170, { v: o.v })];
+    },
+    jetRipple(A, o) {   // a seam, then a ripple above it in the far wall
+      const d = -(lastSide || pick());
+      return [...make.basaltJet(A, { side: d, P: o.P, ph: ph() }), ...make.basaltRipple(A + 170, { side: -d, P: o.P, ph: ph() })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, basalt: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (!sc.beats) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const h of beats.flatMap(b => b.hs)) {
+    const d = h.side;
+    if (h.type === 'basaltRipple') {
+      const X = Q.ripple, [L, R] = lOpening(h.alt - 30, h.alt + RH + 30);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      h.lo = h.alt - X.hr - 8; h.hi = h.alt + RH + X.hr + 8;
+    } else if (h.type === 'basaltCurtain') {
+      const X = Q.curtain, [L, R] = lOpening(h.alt - 10, h.alt + X.len + 10);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.L = L; h.R = R; h.x = (L + R) / 2; h.wd = R - L;
+      h.P = 2 * (R - L - 2 * X.m) / h.v; h.lo = h.alt - 6; h.hi = h.alt + X.len + 6;
+    } else if (h.type === 'basaltCricket') {
+      const X = Q.cricket, [L, R] = lOpening(h.alt - 30, h.alt + 120);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      h.lo = h.alt - 14; h.hi = h.alt + X.r + 3 + X.apex + X.r + 12;
+    } else if (h.type === 'basaltJet') {
+      const X = Q.jet, [L, R] = lOpening(h.alt - 180, h.alt + 120);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L; h.reach = h.wd - X.lane - 16;
+      let lo = Infinity, hi = -Infinity; for (let t = 0; t < h.P; t += 0.02) for (const q of basaltShapes(h, t, [])) { const a0 = q.k === 'c' ? q.a : Math.min(q.a0, q.a1), a1 = q.k === 'c' ? q.a : Math.max(q.a0, q.a1); lo = Math.min(lo, a0 - q.r); hi = Math.max(hi, a1 + q.r); }
+      h.lo = lo - 4; h.hi = hi + 4;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+  // the glow-worm nests: dark clumps of silk on the walls in plain wall well clear of any trap, alternating sides
+  {
+    let side = 0;
+    for (let a = 420; a < endAt - 260; a += 210 + 120 * hash2(a | 0, (seed & 0xffff) + 1501)) {
+      if (out.some(h => h.lo - 80 < a && h.hi + 80 > a)) continue;
+      nests.push({ side, alt: a, lit: 0 }); side = 1 - side;
+    }
+  }
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, basaltDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  let opals = 0;
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  for (const sc of secs) {
+    if (!sc.calm) continue;
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.5);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Still Pool: a ring of coconuts round a big coin, then a weave
+      const cA = sc.a0 + 560, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 84, cA + Math.sin(an) * 84, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 720, sc.a1 - 90, 0.6, 3);
+    }
+  }
+  // each trap's coconuts show the way (each fire opal a dare: in a ripple's reach, at a cricket's leap, in a seam's sweep)
+  for (const b of beats) {
+    for (const h of b.hs) {
+      const d = h.side, [l, r] = lWalls(h.alt);
+      if (h.type === 'basaltRipple') {
+        const x = (l + r) / 2;
+        for (let k = 0; k < 3; k++) add(x, h.lo - 150 + k * 44, 'coco', { clear: 22 });
+        if (h.drop && opals < 3) { if (add(h.base + d * h.wd * 0.5, h.alt + Q.ripple.gap * 1.5, 'opal', { opal: true, clear: -Infinity })) opals++; }
+      } else if (h.type === 'basaltCurtain') {
+        add((l + r) / 2 - 36, h.alt - 70, 'coco', { clear: 18 }); add((l + r) / 2 + 36, h.alt - 70, 'coco', { clear: 18 });
+      } else if (h.type === 'basaltCricket') {
+        for (let k = 0; k < 3; k++) add((l + r) / 2, h.alt - 130 + k * 42, 'coco', { clear: 22 });
+        if (h.drop && opals < 3) { if (add((l + r) / 2, h.alt + Q.cricket.r + 3 + Q.cricket.apex - 6, 'opal', { opal: true, clear: -Infinity })) opals++; }
+      } else if (h.type === 'basaltJet') {
+        const far = h.far - d * (Q.jet.lane / 2);
+        for (let k = 0; k < 4; k++) add(far, h.alt - 150 + k * 60, 'coco', { clear: 22 });
+        if (h.drop && opals < 3) { if (add(h.base + d * h.reach * 0.55, h.alt - 165, 'opal', { opal: true, clear: -Infinity })) opals++; }
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(q => q.hi)) + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the anthill's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, basalt: true, sections: secs, beats, nests, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, tiers, tierAt,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 14): its own shaft (createBasaltLevel), the basalt look (G.theme), its missions (the
+// Lantern Vault, 3 fire opals, 12 glow-worm nests lit) and its length in metres.
+const ADV_BASALT = { name: 'Basalt Deep', theme: 'basalt', seed: 'isl-14-basalt', reward: 260, target: 0, len: basaltEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Lantern Vault' }, { k: 'basaltOpals', n: 3 }, { k: 'basaltNests', n: 12 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Basalt Deep, island level 14)
 // (LEVELGEN slot: Geode King, island level 15)
 // (LEVELGEN slot: Magma Core, island level 19)
@@ -44777,7 +45148,7 @@ const ISLAND = {
     { id: 11, name: 'Hidden Lagoon',     region: 'lagoon',  pilot: 'puffer',    perk: 'Rides the waterfalls without being swept down', stage: 'lagoon' },
     { id: 12, name: 'Jelly Drift',       region: 'lagoon',  pilot: 'duck',      perk: 'Stings bounce off the rubber duck' },
     { id: 13, name: 'Old Gold Mine',     region: 'mine',    pilot: 'mole',      perk: 'Rides the rails: runaway carts can\'t hurt him', stage: 'mine' },
-    { id: 14, name: 'Basalt Deep',       region: 'caves',   pilot: 'firefly',   perk: 'Lights up the dark tunnels' },
+    { id: 14, name: 'Basalt Deep',       region: 'caves',   pilot: 'firefly',   perk: 'Lights up the dark tunnels', stage: 'basalt' },
     { id: 15, name: 'Geode King',        region: 'caves',   pilot: 'goat',      perk: 'Firework blasts crack the crystal boss', boss: 'golem' },
     { id: 16, name: 'Amethyst Geode',    region: 'crystal', pilot: 'hamster',   perk: 'Lasers glance off the turbo ball', stage: 'geode' },
     { id: 17, name: 'Frost Hollow',      region: 'frost',   pilot: 'bear',      perk: 'Ice block never freezes up', stage: 'frost' },
@@ -44891,6 +45262,7 @@ ADV_STAGES.hollowpalm = ADV_HOLLOWPALM;   // (island level 41, Hollow Palm: see 
 ADV_STAGES.anthill = ADV_ANTHILL;   // (island level 39, Anthill Underworks: see createAnthillLevel)
 ADV_STAGES.pagoda = ADV_PAGODA;   // (island level 40, Bamboo Pagoda: see createPagodaLevel)
 ADV_STAGES.snapjaw = ADV_SNAPJAW;   // (island level 8, Snapjaw Swamp: see createSnapjawLevel)
+ADV_STAGES.basalt = ADV_BASALT;   // (island level 14, Basalt Deep: see createBasaltLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -100222,6 +100594,1499 @@ function snapjawDrawForeground() {
 { const base = stageClear; stageClear = function (boss) { base(boss); if (snapjawOn() && !boss) snapjawFinishBurst(); }; }
 // (game slot: Snapjaw Swamp, island level 8)
 // (game slot: Jelly Drift, island level 12)
+// ---------- Basalt Deep (island level 14): its look, traps, fire opals, glow-worm nests, the dark and sounds ----------
+// The stage's shaft and traps are laid out by createBasaltLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'basalt': a pitch-dark shaft bored through hexagonal basalt columns deep under the island. Nothing lights
+// it but the pilot's own glow (the firefly's is much bigger: his perk), the cyan glow-worm threads and the nests they
+// hang from (asleep until you fly close; lit, they stay lit), the hot seams of lava and, far below, the cooling lava
+// floor. The dark is a soft mask laid over the backdrop and the walls only: every trap, pickup and the monster stay
+// fully lit and every trap glows its own warning, so the dark sets the mood and the nests' mission without ever hiding
+// a danger. The walls are honeycombs of column ends (each a bevelled hexagon, lit on its upper left, chipped, veined
+// with mineral, a cut lip of prism sides at the shaft's edge); behind the shaft the deep recedes in calm parallax:
+// colonnades of standing columns, lava rivers, glow-worm vaults, an underground lake, the Lantern Vault. Art as the rest
+// of the game: cartoony, 2-3 stop gradients lit from the top left (or the light that falls there), every edge a darker
+// shade of its own colour (never black), detail as line pairs, sheen strokes and soft glows. Performance: everything
+// that never moves is painted once into offscreen canvases at the screen's pixel scale and blitted (see basaltTile,
+// basaltSprite); the dark is one quarter-resolution mask canvas; every glow is a cached sprite; every key quantised.
+const BASALTP = {
+  pal: { bgTop: [22, 30, 40], bgBot: [12, 16, 24], far: [34, 44, 56], far2: [26, 34, 44], wall: [52, 62, 74], wallIn: [14, 18, 26], rim: [120, 220, 240] },
+  stone: ['#7d8d9c', '#55636f', '#38434e', '#232b34'], stoneEdge: '#1f2832',
+  lava: ['#fff6b0', '#ffc23a', '#f2641a', '#a02608'], lavaEdge: '#7a1a06',
+  crust: ['#5a4440', '#3a2a28', '#24191a', '#160f10'], crustEdge: '#2a1614',
+  glow: ['#eaffff', '#9af4ff', '#38c8e0', '#14708a'], glowEdge: '#12647a',
+  pale: ['#fffaf2', '#f6e0d2', '#d8b4a2', '#a07e6e'], paleEdge: '#8a6656',
+  opal: ['#fff2c8', '#ffb048', '#ec5a24', '#a42a12'], opalEdge: '#8a2410',
+  lime: [214, 255, 120], cyan: [110, 236, 255], ember: [255, 130, 50],
+};
+const basaltOn = () => !!(G && G.theme === 'basalt');
+{ const base = pal; pal = function (key, a) { return basaltOn() && BASALTP.pal[key] ? BASALTP.pal[key].slice() : base(key, a); }; }
+const basaltHex = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps and the finish ----
+const BASALTC = { key: '', tiles: new Map(), sprites: new Map(), glows: new Map(), pool: [] };
+function basaltCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== BASALTC.key) { BASALTC.key = key; for (const o of BASALTC.tiles.values()) if (BASALTC.pool.length < 24) BASALTC.pool.push(o.cv); BASALTC.tiles.clear(); BASALTC.sprites.clear(); BASALTC.cells = null; }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function basaltTile(id, x0, x1, a0, a1, paint) {
+  let T = BASALTC.tiles.get(id);
+  if (!T) {
+    // canvases of evicted tiles are pooled and reused (resized, which clears them), so scrolling back makes none new
+    const k = s * dpr, cv = BASALTC.pool.pop() || document.createElement('canvas'), cw = Math.max(1, Math.ceil((x1 - x0) * k)), ch = Math.max(1, Math.ceil((a1 - a0) * k));
+    if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
+    const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, cw, ch); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    BASALTC.tiles.set(id, T);
+    if (BASALTC.tiles.size > 72) { for (const [kk, o] of BASALTC.tiles) { BASALTC.tiles.delete(kk); if (BASALTC.pool.length < 24) BASALTC.pool.push(o.cv); if (BASALTC.tiles.size <= 58) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function basaltSprite(id, w, h, ax, ay, paint) {
+  let S = BASALTC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; BASALTC.sprites.set(id, S);
+    if (BASALTC.sprites.size > 260) { for (const kk of BASALTC.sprites.keys()) { BASALTC.sprites.delete(kk); if (BASALTC.sprites.size <= 210) break; } }
+  }
+  return S;
+}
+function basaltBlit(S, x, alt, alpha = 1, flip = 1) {
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  if (flip < 0) { ctx.save(); ctx.translate(sx(x), sy(alt)); ctx.scale(-1, 1); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore(); }
+  else ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+function basaltBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1, k = 1, ky = k) {
+  if (!ang && flip > 0 && k === 1 && ky === 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, X - S.ax * s, Y - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; return; }
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (k !== 1 || ky !== 1) ctx.scale(k, ky); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+// a soft additive glow: one cached radial sprite per colour (quantised)
+function basaltGlowCv(col) {
+  col = col.map(v => Math.min(255, Math.round(v / 16) * 16));
+  const key = col.join(',');
+  let cv = BASALTC.glows.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 48, 48, 47, [gCol(col, 1), gCol(col, 0.42), gCol(col, 0.12), gCol(col, 0)]); q.fillRect(0, 0, 96, 96);
+    BASALTC.glows.set(key, cv); if (BASALTC.glows.size > 64) BASALTC.glows.delete(BASALTC.glows.keys().next().value);
+  }
+  return cv;
+}
+function basaltGlow(c, x, y, r, col, a, ry = r) {
+  if (a < 0.01 || r < 0.6) return;
+  const cv = basaltGlowCv(col);
+  const op = c.globalCompositeOperation, ga = c.globalAlpha; c.globalCompositeOperation = 'lighter'; c.globalAlpha = ga * Math.min(1, a); c.drawImage(cv, x - r, y - ry, r * 2, ry * 2); c.globalCompositeOperation = op; c.globalAlpha = ga;
+}
+// ---- shared painters (any context, world units, y down) ----
+function basaltBall(c, x, y, r, P, edge, sheen = 0.55) {
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, r * 0.07); c.stroke();
+  if (sheen > 0) { c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, r * 0.13); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.72, 3.5, 4.5); c.stroke(); }
+  c.fillStyle = `rgba(255,255,255,${0.5 + sheen * 0.6})`; c.beginPath(); c.ellipse(x - r * 0.42, y - r * 0.5, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+}
+function basaltPart(c, x, y, rx, ry, a, P, edge, sheen = 0.5) {
+  c.fillStyle = gRG(c, x - rx * 0.35, y - ry * 0.55, Math.max(rx, ry) * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.ellipse(x, y, rx, ry, a, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, Math.min(rx, ry) * 0.12); c.stroke();
+  if (sheen > 0) { c.save(); c.translate(x, y); c.rotate(a); c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, Math.min(rx, ry) * 0.2); c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, rx * 0.7, ry * 0.68, 0, 3.6, 4.6); c.stroke(); c.restore(); }
+}
+// a hexagon path (pointy-top when rot = 0) of radius r
+function basaltHexPath(c, x, y, r, rot = 0, sy2 = 1) { c.beginPath(); for (let i = 0; i < 6; i++) { const a = rot + Math.PI / 6 + i * Math.PI / 3; const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * sy2; i ? c.lineTo(px, py) : c.moveTo(px, py); } c.closePath(); }
+// a hexagonal column end face (any context): a bevelled hexagon, its face lit from the top left (col: [r,g,b] base),
+// the two upper-left bevel edges lit, the lower-right ones shaded, a soft sheen
+function basaltHexFace(c, x, y, r, col, lt = 1, rot = 0) {
+  const hi = gMix(col, [235, 245, 255], 0.28 * lt), lo = gMix(col, [8, 12, 20], 0.42);
+  basaltHexPath(c, x, y, r, rot); c.fillStyle = gCol(gMix(col, [8, 12, 20], 0.55)); c.fill();
+  basaltHexPath(c, x, y, r * 0.84, rot); c.fillStyle = gLG(c, x - r * 0.6, y - r * 0.7, x + r * 0.6, y + r * 0.7, [gCol(hi), gCol(col), gCol(lo)]); c.fill();
+  // the bevel: lit upper-left facets, dark lower-right
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const v = i => { const a = rot + Math.PI / 6 + i * Math.PI / 3; return [x + Math.cos(a) * r * 0.92, y + Math.sin(a) * r * 0.92]; };
+  c.strokeStyle = gCol(gMix(col, [230, 245, 255], 0.5 * lt), 0.75); c.lineWidth = r * 0.12; c.beginPath(); c.moveTo(...v(2)); c.lineTo(...v(3)); c.lineTo(...v(4)); c.lineTo(...v(5)); c.stroke();
+  c.strokeStyle = gCol(gMix(col, [6, 10, 18], 0.7), 0.7); c.beginPath(); c.moveTo(...v(5)); c.lineTo(...v(0)); c.lineTo(...v(1)); c.lineTo(...v(2)); c.stroke();
+}
+
+// ---- sounds ----
+const BASALT_SFX = {
+  // a ripple's columns stirring in the wall: grinding stone and grit trickling
+  bsgrind: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 420, f2: 260, v: 0.1 * v, dur: 0.85, a: 0.12 }); vTone(B, t, 52, { f2: 66, glide: 0.8, type: 'triangle', v: 0.06 * v, dur: 0.85, a: 0.1 }); for (let i = 0; i < 6; i++) vNoise(B, t + 0.1 + i * 0.12 + Math.random() * 0.04, { type: 'bandpass', f: 2400 + Math.random() * 1500, q: 4, v: 0.02 * v, dur: 0.02 }); },
+  // ...each column end punching out: a heavy stone thunk
+  bsthunk: (t, B, v) => { vTone(B, t, 120, { f2: 58, glide: 0.1, type: 'sine', v: 0.16 * v, dur: 0.2 }); vNoise(B, t, { type: 'lowpass', f: 900, v: 0.1 * v, dur: 0.08, a: 0.001 }); vTone(B, t, 380, { type: 'triangle', lp: 1200, v: 0.03 * v, dur: 0.05 }); },
+  // a glow-worm curtain reeling up (ambient as you come near): a glassy shimmer
+  bsreel: (t, B, v) => { [88, 93, 95, 100].forEach((m, i) => vTone(B, t + i * 0.07, mf(m), { type: 'sine', v: 0.018 * v, dur: 0.5, send: 0.4 })); },
+  // a cricket feeling about: a dry chirp
+  bschirp: (t, B, v) => { for (let i = 0; i < 3; i++) for (let k = 0; k < 4; k++) vTone(B, t + i * 0.16 + k * 0.022, 4200 + (i % 2) * 300, { type: 'square', lp: 6000, v: 0.016 * v, dur: 0.012 }); },
+  // ...its leap: a springy twang and a whoosh
+  bsleap: (t, B, v) => { vTone(B, t, 300, { f2: 900, glide: 0.12, type: 'triangle', v: 0.06 * v, dur: 0.16 }); vNoise(B, t + 0.02, { type: 'bandpass', f: 900, f2: 2400, q: 1.2, v: 0.08 * v, dur: 0.4, a: 0.03 }); },
+  // ...landing: a scritch of claws on stone
+  bsland: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 2600, v: 0.06 * v, dur: 0.06, a: 0.001 }); vTone(B, t, 220, { f2: 160, glide: 0.05, type: 'sine', v: 0.06 * v, dur: 0.08 }); },
+  // a magma seam waking: bubbling, a rising hiss
+  bsbubble: (t, B, v) => { for (let i = 0; i < 7; i++) vTone(B, t + i * 0.12 + Math.random() * 0.05, 180 + Math.random() * 140, { f2: 420 + Math.random() * 200, glide: 0.05, type: 'sine', v: 0.05 * v, dur: 0.06 }); vNoise(B, t + 0.2, { type: 'highpass', f: 2200, f2: 5000, v: 0.04 * v, dur: 0.8, a: 0.3 }); },
+  // ...gushing: a roaring hiss that runs its sweep
+  bsgush: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 600, f2: 300, q: 0.8, v: 0.16 * v, dur: 1.7, a: 0.03 }); vNoise(B, t, { type: 'highpass', f: 3000, v: 0.05 * v, dur: 1.6, a: 0.05 }); vTone(B, t, 70, { f2: 50, glide: 1.6, type: 'triangle', v: 0.07 * v, dur: 1.6, a: 0.05 }); },
+  // a glow-worm nest waking: a soft rising glass chime
+  bsnest: (t, B) => { [81, 86, 88, 93].forEach((m, i) => vTone(B, t + i * 0.06, mf(m), { type: i % 2 ? 'triangle' : 'sine', v: 0.04, dur: 0.6, send: 0.45 })); },
+  // a fire opal: a bright crystalline arpeggio over a warm swell
+  bsopal: (t, B) => { [76, 81, 85, 88, 93, 97].forEach((m, i) => vTone(B, t + i * 0.05, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.05, dur: 0.6, send: 0.35 })); vTone(B, t, mf(57), { type: 'triangle', lp: 900, v: 0.05, dur: 0.9, a: 0.08 }); },
+  // the Lantern Vault on the clear: a glassy celesta fanfare over a soft low swell
+  bsfinish: (t, B) => { [[72, 0], [76, 0.12], [79, 0.24], [84, 0.36], [88, 0.5], [91, 0.62], [96, 0.78]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.06, dur: d > 0.7 ? 1.6 : 0.4, send: 0.45 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.012, dur: 0.1 }); }); [48, 55, 60, 64].forEach(m => vTone(B, t + 0.6, mf(m), { type: 'triangle', lp: 1200, v: 0.035, dur: 2, a: 0.2, send: 0.4 })); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = BASALT_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const basaltVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.basaltRipple = 'Rammed by a basalt column';
+CAUSES.basaltCurtain = 'Snared in glow-worm silk';
+CAUSES.basaltCricket = 'Bowled over by a cave cricket';
+CAUSES.basaltJet = 'Splashed by a magma seam';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'basaltRipple' ? [170, 200, 230] : cause === 'basaltCurtain' ? [130, 240, 255] : cause === 'basaltCricket' ? [255, 220, 200] : cause === 'basaltJet' ? [255, 140, 60] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!BASALT_TYPES.has(h.type)) return base(h);
+  return basaltShapes(h, G.t, [], 'body').map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.basalt) basaltUpdate(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.basalt) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && BASALT_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// grit and cinders: world-space particles drawn by the basalt particle wrapper (capped on top of puff's own cap)
+function basaltGrit(x, a, n, v, up = 40, col = 0) {
+  let have = 0; for (const q of G.particles) if (q.kind === 'bsgrit') have++;
+  n = Math.min(n, Math.max(0, 80 - have));
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp * 0.7 + up, 0.6 + Math.random() * 0.6, 1.3 + Math.random() * 1.6, 'bsgrit', { col: col || 1 + Math.floor(Math.random() * 2), rot: Math.random() * 6, spin: (Math.random() - 0.5) * 10 }); }
+}
+// The firefly's perk: his glow is much bigger, so he lights more of the dark and wakes nests from further off
+const basaltFirefly = () => settings.character === 'firefly';
+const basaltLightR = () => BASALT.light.r * (basaltFirefly() ? BASALT.light.firefly : 1);
+const basaltNestR = () => BASALT.nest.reach * (basaltFirefly() ? BASALT.nest.firefly : 1);
+function basaltNestPos(n) { const into = n.side ? -1 : 1; return [basaltWallX(n.alt, n.side) + into * 10, n.alt]; }
+function basaltUpdate(dt) {
+  const top = G.camAlt + viewH, p = G.p, play = G.state === 'play';
+  for (const h of G.hazards) {
+    if (!BASALT_TYPES.has(h.type)) continue;
+    const d = h.side, vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'basaltRipple') {
+      const st = basaltRippleAt(h, G.t), was = h.st || st, X = BASALT.ripple;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('bsgrind', { v: basaltVol(h.alt) });
+      for (let i = 0; i < X.n; i++) if (st.e[i] >= 1 && was.e[i] < 1 && vis) {
+        const ai = h.alt + i * X.gap; sfx('bsthunk', { v: basaltVol(ai) * 0.8 });
+        basaltGrit(h.base + d * (h.wd - X.shut), ai, 4, 70, 20, 1);
+        if (Math.abs(ai - p.alt) < viewH * 0.45) G.shake = Math.max(G.shake, 1.2);
+      }
+      if (st.ph === 'tell' && vis && Math.random() < dt * 14) basaltGrit(h.base + d * 3, h.alt + Math.random() * X.gap * (X.n - 1), 1, 20, -10, 1);
+      h.st = st;
+    } else if (h.type === 'basaltCurtain') {
+      if (vis && play && Math.abs(h.alt - p.alt) < 260 && !(h.reelT > G.t - 2.6)) { h.reelT = G.t; sfx('bsreel', { v: basaltVol(h.alt) }); }
+    } else if (h.type === 'basaltCricket') {
+      const st = basaltCricketAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('bschirp', { v: basaltVol(h.alt) });
+      if (st.ph === 'leap' && was.ph !== 'leap' && vis) { sfx('bsleap', { v: basaltVol(h.alt) }); const q = basaltCricketPos(h, { ...st, k: 0 }); basaltGrit(q.x, h.alt + 2, 5, 60, 30, 1); }
+      if (st.ph !== 'leap' && was.ph === 'leap' && vis) { sfx('bsland', { v: basaltVol(h.alt) }); const q = basaltCricketPos(h, st); basaltGrit(q.x, h.alt + 2, 5, 60, 30, 1); }
+      h.st = st;
+    } else if (h.type === 'basaltJet') {
+      const st = basaltJetAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('bsbubble', { v: basaltVol(h.alt) });
+      if (st.ph === 'rise' && was.ph !== 'rise' && vis) { sfx('bsgush', { v: basaltVol(h.alt) }); if (Math.abs(h.alt - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.4); }
+      // cinders spitting off the stream and drips off its tip
+      if ((st.ph === 'sweep' || st.ph === 'rise') && vis && Math.random() < dt * 22) {
+        const P = basaltJetPts(h, st), q = P[2 + Math.floor(Math.random() * (P.length - 2))];
+        puff(q[0], q[1], (Math.random() - 0.5) * 80 + d * 60, 40 + Math.random() * 90, 0.5 + Math.random() * 0.4, 1.4 + Math.random() * 1.4, 'bscinder', { col: 0, rot: 0, spin: 0 });
+      }
+      if (st.ph === 'tell' && vis && Math.random() < dt * 8) puff(h.base + d * 8, h.alt - 6, d * 20, -10, 0.6, 1.6, 'bscinder', { col: 0, rot: 0, spin: 0 });
+      h.st = st;
+    }
+  }
+  // the glow-worm nests: flying close by one wakes it (it lights up and stays lit; the mission counts them)
+  const L = G.level;
+  if (play && L.nests) {
+    const R = basaltNestR();
+    for (const n of L.nests) {
+      if (n.lit || Math.abs(n.alt - p.alt) > R + 20) continue;
+      const [nx, na] = basaltNestPos(n);
+      if (Math.hypot(p.x - nx, p.alt - na) < R) {
+        n.lit = G.t; const c = G.stats.bsNests = (G.stats.bsNests || 0) + 1, of = advGoalN('basaltNests');
+        sfx('bsnest'); vibrate(8);
+        for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; puff(nx, na, Math.cos(an) * 70, Math.sin(an) * 70, 0.7, 1.8, 'sparkle', [150, 245, 255]); }
+        chainEvent(of && c <= of ? (c >= of ? `Glow-worm nests ${c}/${of}!` : `Nest lit! ${c}/${of}`) : 'Nest lit!', '#a8f4ff', 1.0);
+      }
+    }
+  }
+}
+
+// ---- fire opals: a glowing fire opal set in a basalt nugget in risky spots, worth a big coin each ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'opal') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.bsOpals = (st.bsOpals || 0) + 1, of = advGoalN('basaltOpals');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Fire opal ${n}/${of}!` : 'Fire opal!', '#ffc890', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 170, 100];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 180, Math.sin(a) * 180, 0.6, 2.4, 'sparkle', [[255, 170, 80], [140, 255, 200], [255, 230, 150]][k % 3]); }
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffd0a0', big: true, sub: 'fire opal' });
+  vibrate([20, 30, 20]); sfx('bsopal');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  const all = G.fruit, lo = G.camAlt - 100, hi = G.camAlt + viewH + 100; let any = false;
+  for (let i = 0; i < all.length; i++) { const f = all[i]; if (f.kind === 'opal' && f.alt > lo && f.alt < hi) { any = true; break; } }
+  if (!any) return base();
+  G.fruit = all.filter(f => f.kind !== 'opal');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'opal') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    basaltDrawOpal(sx(f.x), y, G.t, f.alt * 0.05 + f.x * 0.01);
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others
+ADV_GOALS.basaltOpals = { text: g => `Find all ${g.n} fire opals`, done: (r, g) => (r.stats.bsOpals || 0) >= g.n, any: true, prog: (g, st) => `${st.bsOpals || 0}/${g.n}` };
+ADV_GOALS.basaltNests = { text: g => `Light ${g.n} glow-worm nests`, done: (r, g) => (r.stats.bsNests || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.bsNests || 0)}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'basaltOpals' || g.k === 'basaltNests')) return;
+  const st = G.stats, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(14,22,34,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    icon(xr - tw - 13, y);
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'basaltOpals') { const n = st.bsOpals || 0; line(`${n}/${g.n}`, n >= g.n ? '#ffd0a0' : '#f2f6ff', (x, yy) => { const S = basaltOpalSprite(); basaltBlitAt(S, x, yy, 0, 1, 1, 18 / (S.h * s)); }); }
+    else if (g.k === 'basaltNests') { const n = Math.min(g.n, st.bsNests || 0); line(`${n}/${g.n}`, n >= g.n ? '#a8f4ff' : '#f2f6ff', (x, yy) => { const S = basaltNestIcon(); basaltBlitAt(S, x, yy, 0, 1, 1, 20 / (S.h * s)); }); }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 14 plays it (its own shaft replaces the one advStart lays out, as the anthill's)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'basalt' || (G.level && G.level.basalt)) return;
+  G.level = createBasaltLevel(G.seed, st);
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Lantern Vault ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the basalt traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRBASALT = { BASALT, BASALT_STAGE, basaltShapes, basaltRippleAt, basaltCurtainGap, basaltCricketAt, basaltCricketPos, basaltJetAt, basaltDanger, createBasaltLevel, BASALTC, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the traps' art (each anchored at its wall at the trap's height, drawn for the left wall: x into the shaft, y
+// down; mirrored on the right wall). Static bodies are cached sprites; what moves is drawn live. ----
+
+// ---- the Column Ripple ----
+// a basalt column lying end-on (anchored at its end face, the body running back along -x): a long hexagonal prism seen
+// from the side, three facets showing (a lit top facet, the broad front facet, a shaded underside), cross joints every
+// so often as line pairs, mineral flecks and a hairline crack, a sheen along its top edge; its end a bevelled hexagon
+// face foreshortened toward you. v: one of two looks.
+function basaltPrismPaint(c, L, hr, v, col = [86, 100, 114]) {
+  const top = -hr, bot = hr, t1 = -hr * 0.5, b1 = hr * 0.5, ew = hr * 0.75, fc = -ew * 0.62, dk = [10, 14, 24], lt = [226, 240, 255];
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // three crisp facets of a six-sided column seen from the side: a cool lit top, the broad front, a deep underside
+  const facet = (y0, y1, cols) => { c.fillStyle = gLG(c, 0, y0, 0, y1, cols.map(q => gCol(q))); c.beginPath(); c.moveTo(-L, y0); c.lineTo(fc, y0); c.lineTo(fc, y1); c.lineTo(-L, y1); c.closePath(); c.fill(); };
+  facet(top, t1, [gMix(col, lt, 0.5), gMix(col, lt, 0.3)]);
+  facet(t1, b1, [gMix(col, lt, 0.1), col, gMix(col, dk, 0.2)]);
+  facet(b1, bot, [gMix(col, dk, 0.5), gMix(col, dk, 0.72)]);
+  // a faint warm bounce on the underside (the lava glow from far below)
+  c.fillStyle = 'rgba(255,140,70,.1)'; c.fillRect(-L, b1 + (bot - b1) * 0.5, L + fc, (bot - b1) * 0.5);
+  // weathering: soft dark and pale blotches over the facets, darker toward the wall end
+  c.save(); c.beginPath(); c.rect(-L, top, L + fc, bot - top); c.clip();
+  for (let i = 0; i < L / 22; i++) { const x = -10 - hash2(i, 51 + v) * (L - 14), y = lerp(top, bot, hash2(i, 53 + v)), r = 6 + 10 * hash2(i, 57 + v), d2 = hash2(i, 59 + v) < 0.6;
+    c.fillStyle = gRG(c, x, y, r, [gCol(d2 ? gMix(col, dk, 0.5) : gMix(col, lt, 0.3), 0.3), gCol(col, 0)]); c.beginPath(); c.ellipse(x, y, r * 1.6, r * 0.7, 0, 0, TWO_PI); c.fill(); }
+  c.fillStyle = gLG(c, -L, 0, -L + 90, 0, ['rgba(8,12,20,.45)', 'rgba(8,12,20,0)']); c.fillRect(-L, top, 90, bot - top);
+  c.restore();
+  // arrises: a bright ridge on the upper one, a dark furrow on the lower, a sheen on the top facet
+  c.strokeStyle = gCol(gMix(col, lt, 0.75), 0.95); c.lineWidth = 1.3; c.beginPath(); c.moveTo(-L, t1); c.lineTo(fc, t1); c.stroke();
+  c.strokeStyle = gCol(gMix(col, dk, 0.7), 0.9); c.lineWidth = 1.1; c.beginPath(); c.moveTo(-L, b1); c.lineTo(fc, b1); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-L, top + 2.4); c.lineTo(fc - 2, top + 2.4); c.stroke();
+  // cross joints round all three facets (the column's natural breaks)
+  for (let x = -40 - v * 11; x > -L; x -= 44 + ((x * 7) & 15)) { const w = 1.6 * Math.sin(x * 0.3); gPair(c, [[x + w, top + 0.5], [x + w * 0.5, t1], [x - w * 0.3, b1], [x - w, bot - 0.5]], gCol(gMix(col, dk, 0.7), 0.8), gCol(gMix(col, lt, 0.5), 0.5), 1.3, -0.9); }
+  // chips knocked out of the arrises: little notches, shaded inside, lit on their far lip
+  for (let i = 0; i < L / 26; i++) { const x = -12 - hash2(i, 81 + v) * (L - 30), on = hash2(i, 83 + v) < 0.5 ? t1 : top, w = 3 + 4 * hash2(i, 85 + v), dp = 1.6 + 1.6 * hash2(i, 87 + v);
+    c.fillStyle = gCol(gMix(col, dk, 0.55)); c.beginPath(); c.moveTo(x - w, on); c.lineTo(x - w * 0.2, on + dp); c.lineTo(x + w, on); c.closePath(); c.fill();
+    c.strokeStyle = gCol(gMix(col, lt, 0.6), 0.7); c.lineWidth = 0.6; c.beginPath(); c.moveTo(x - w * 0.2, on + dp); c.lineTo(x + w, on); c.stroke(); }
+  // a hairline crack and mineral flecks (pale feldspar, a glint of olivine green)
+  gPair(c, [[-20 - v * 30, t1 + 2], [-26 - v * 30, -1], [-22 - v * 30, 4], [-30 - v * 30, b1 - 1]], gCol(gMix(col, dk, 0.7), 0.6), gCol(gMix(col, lt, 0.4), 0.35), 0.7, -0.6);
+  for (let i = 0; i < L / 9; i++) { const x = -6 - hash2(i, 31 + v) * (L - 10), y = lerp(t1 + 2, b1 - 2, hash2(i, 37 + v)), g = hash2(i, 41 + v); c.fillStyle = g < 0.15 ? 'rgba(170,230,150,.55)' : g < 0.55 ? 'rgba(220,232,244,.4)' : 'rgba(10,16,26,.35)'; c.beginPath(); c.ellipse(x, y, 0.9 + g, 0.6 + g * 0.5, g * 3, 0, TWO_PI); c.fill(); }
+  // pale cave lichen crusting the top facet in patches
+  for (let i = 0; i < L / 30; i++) { const x0 = -18 - hash2(i, 61 + v) * (L - 34), n = 3 + Math.floor(4 * hash2(i, 63 + v));
+    for (let q = 0; q < n; q++) { const x = x0 + (q - n / 2) * 2.6, y = top + 1.5 + 3.5 * hash2(q, i + 67), r = 1.1 + 1.2 * hash2(q, i + 71); c.fillStyle = gRG(c, x - r * 0.3, y - r * 0.3, r * 1.3, ['#f2ffd8', '#b8dc8a', '#6e9a5a']); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); } }
+  // edges in the column's own darker hue
+  c.strokeStyle = gCol(gMix(col, dk, 0.75)); c.lineWidth = 1; c.beginPath(); c.moveTo(-L, top); c.lineTo(fc, top); c.moveTo(-L, bot); c.lineTo(fc, bot); c.stroke();
+  // the end cap facing you: a big bevelled hexagon, its upper-left rim lit bright, a cracked face, a chip off a corner
+  const hx = (i, k = 1) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [fc + Math.cos(a) * ew * k * 0.9, Math.sin(a) * hr * k]; };
+  const hex = k => { c.beginPath(); for (let i = 0; i < 6; i++) { const [x, y] = hx(i, k); i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); };
+  hex(1); c.fillStyle = gCol(gMix(col, dk, 0.45)); c.fill();
+  hex(0.8); c.fillStyle = gLG(c, fc - ew, -hr, fc + ew * 0.6, hr, [gCol(gMix(col, lt, 0.42)), gCol(gMix(col, lt, 0.16)), gCol(gMix(col, dk, 0.3))]); c.fill();
+  // the bevel: upper-left faces lit, lower-right shaded
+  for (let i = 0; i < 6; i++) { const [x0, y0] = hx(i), [x1, y1] = hx((i + 1) % 6), [x2, y2] = hx((i + 1) % 6, 0.8), [x3, y3] = hx(i, 0.8), litF = i >= 3;
+    c.fillStyle = litF ? gCol(gMix(col, lt, 0.55), 0.85) : gCol(gMix(col, dk, 0.55), 0.8); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineTo(x2, y2); c.lineTo(x3, y3); c.closePath(); c.fill(); }
+  c.strokeStyle = gCol(gMix(col, lt, 0.85)); c.lineWidth = 1.2; c.beginPath(); { const P = [3, 4, 5, 0].map(i => hx(i)); c.moveTo(...P[0]); for (const q of P.slice(1)) c.lineTo(...q); } c.stroke();
+  hex(1); c.strokeStyle = gCol(gMix(col, dk, 0.72)); c.lineWidth = 1; c.stroke();
+  gPair(c, [[fc - ew * 0.3, -hr * 0.45], [fc + ew * 0.05, -hr * 0.05], [fc - ew * 0.15, hr * 0.4]], gCol(gMix(col, dk, 0.6), 0.55), gCol(gMix(col, lt, 0.5), 0.35), 0.8, -0.5);
+  { const [x, y] = hx(1); c.fillStyle = gCol(gMix(col, dk, 0.5)); c.beginPath(); c.moveTo(x, y); c.lineTo(x - 3, y - 4); c.lineTo(x - 4.5, y + 1); c.closePath(); c.fill(); }
+  c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.ellipse(fc - ew * 0.3, -hr * 0.42, 2.4, 1.2, -0.5, 0, TWO_PI); c.fill();
+}
+function basaltPrismSprite(v) {
+  const L = 300, hr = BASALT.ripple.hr;
+  return basaltSprite(`prism${v}`, L + 12, hr * 2 + 6, L + 2, hr + 3, c => basaltPrismPaint(c, L, hr, v, v ? [84, 96, 116] : [94, 104, 120]));
+}
+// the socket a column slides out of (anchored at the wall line): a dark hexagonal recess with a lit rim
+function basaltSocketSprite() {
+  const hr = BASALT.ripple.hr;
+  return basaltSprite('socket', 20, hr * 2 + 12, 14, hr + 6, c => {
+    c.fillStyle = gLG(c, -12, 0, 2, 0, ['#0c1018', '#161c26', '#222a36']); c.beginPath(); c.moveTo(-12, -hr - 2); c.lineTo(2, -hr - 2); c.lineTo(4, 0); c.lineTo(2, hr + 2); c.lineTo(-12, hr + 2); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(190,214,236,.55)'; c.lineWidth = 1.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(-10, -hr - 3); c.lineTo(2.5, -hr - 3); c.lineTo(4.6, 0); c.stroke();
+    c.strokeStyle = 'rgba(10,14,22,.8)'; c.beginPath(); c.moveTo(4.6, 0); c.lineTo(2.5, hr + 3); c.lineTo(-10, hr + 3); c.stroke();
+  });
+}
+function basaltDrawRipple(h) {
+  const X = BASALT.ripple, d = h.side, T = G.t, st = h.st || basaltRippleAt(h, T), b = h.base, full = h.wd - X.shut;
+  const tk = st.ph === 'tell' ? st.tell : 0;
+  for (let i = 0; i < X.n; i++) basaltBlit(basaltSocketSprite(), b, h.alt + i * X.gap, 1, d);
+  // the tell: each socket's seam glows ember-hot, the column ends shudder in their sockets
+  if (tk > 0 || st.ph === 'wave') {
+    const gw = basaltGlowCv([255, 140, 60]); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < X.n; i++) { const k = st.ph === 'wave' ? 0.5 * (1 - st.e[i]) : tk * (0.6 + 0.4 * Math.sin(T * 30 + i * 2)), r = (22 + 10 * k) * s; ctx.globalAlpha = 0.5 * k; ctx.drawImage(gw, sx(b) - r, sy(h.alt + i * X.gap) - r, r * 2, r * 2); }
+    ctx.restore();
+    // the lane it will shut glows a faint warning across
+    if (tk > 0.2) for (let i = 0; i < X.n; i++) basaltGlow(ctx, sx(b + d * full * 0.5), sy(h.alt + i * X.gap), full * 0.55 * s, [255, 120, 70], 0.08 * tk, X.hr * 1.4 * s);
+  }
+  // the columns, clipped to the shaft so their backs stay in the wall
+  ctx.save(); ctx.beginPath(); const xL = d > 0 ? sx(b) : sx(h.far) - 4, xR = d > 0 ? sx(h.far) + 4 : sx(b); ctx.rect(xL, sy(h.hi + 4), xR - xL, (h.hi - h.lo + 8) * s); ctx.clip();
+  for (let i = 0; i < X.n; i++) {
+    const ext = st.e[i] * full, sh = tk > 0.3 ? Math.sin(T * 40 + i * 1.7) * 1.2 * tk : 0, x = b + d * (ext + 5 + sh);
+    basaltBlit(basaltPrismSprite((i + Math.floor(h.alt / 50)) & 1), x, h.alt + i * X.gap, 1, d);
+    if (st.e[i] > 0.05 && st.e[i] < 0.98 && st.ph === 'wave') basaltGlow(ctx, sx(x), sy(h.alt + i * X.gap), 18 * s, [210, 230, 255], 0.12);
+  }
+  ctx.restore();
+}
+
+// ---- the Glow-Worm Curtain ----
+// a glow-worm on its silk line (anchored where its thread hangs from): a plump translucent grub, lit from inside, a
+// little head with two dot eyes, its tail lantern glowing; lit 0 calm, 1 bright (reeling)
+function basaltWormSprite(lit) {
+  return basaltSprite(`worm${lit}`, 22, 14, 11, 9, c => {
+    const P = lit ? ['#f4ffff', '#b8f8ff', '#58d8ec', '#1c8aa2'] : ['#e8fbff', '#9ae8f4', '#46b4cc', '#1a6e84'];
+    for (let k = 3; k >= 0; k--) basaltPart(c, -6 + k * 3.6, -1.6 - Math.sin(k * 0.9) * 0.6, 3.4 - k * 0.15, 2.8, 0, P, BASALTP.glowEdge, 0.4);
+    basaltPart(c, 7.2, -1.2, 2.6, 2.3, 0, ['#fff2e8', '#e8c8b8', '#a88070'], '#7a5848', 0.45);
+    c.fillStyle = '#2a3a48'; c.beginPath(); c.arc(8.3, -1.8, 0.55, 0, TWO_PI); c.arc(6.9, -1.9, 0.5, 0, TWO_PI); c.fill();
+    // the lantern tail: a bright bead
+    c.fillStyle = gRG(c, -8.5, -1.5, 3, ['#ffffff', lit ? '#c8ffff' : '#a0f0ff', 'rgba(80,220,240,0)']); c.beginPath(); c.arc(-8.5, -1.5, 3, 0, TWO_PI); c.fill();
+    // its two silk anchor strands down to the line
+    c.strokeStyle = 'rgba(220,250,255,.6)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(-4, 0.8); c.lineTo(-2, 4); c.moveTo(3, 0.8); c.lineTo(1, 4); c.stroke();
+  });
+}
+// one hanging thread of length len (quantised; anchored at its top): a fine silk strand beaded with glossy sticky
+// drops, the drops growing toward the bottom, the last one fat and bright
+function basaltThreadSprite(len) {
+  const L = Math.max(6, Math.round(len / 6) * 6);
+  return basaltSprite(`thr${L}`, 16, L + 12, 8, 2, c => {
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(200,246,255,.75)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(0.8, L * 0.5, 0, L - 3); c.stroke();
+    const n = Math.max(1, Math.floor(L / 9));
+    for (let i = 1; i <= n; i++) {
+      const y = Math.min(L - 3, i * 9 - 2), last = i === n, r = last ? 3.4 : 1.1 + 1.1 * (i / n);
+      c.fillStyle = gRG(c, -r * 0.35, y - r * 0.4, r * 1.5, last ? ['#ffffff', '#b8faff', '#40c8e0', '#147890'] : ['#f4ffff', '#90eefc', '#2ea8c4']); c.beginPath(); c.ellipse(0, y, r * 0.88, r, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(20,110,140,.75)'; c.lineWidth = 0.4; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.arc(-r * 0.32, y - r * 0.38, r * 0.28, 0, TWO_PI); c.fill();
+    }
+  });
+}
+function basaltDrawCurtain(h) {
+  const X = BASALT.curtain, T = G.t, L = h.L, R = h.R, top = h.alt + X.len, p = G.p, gx = basaltCurtainGap(h, T);
+  // the silk line from wall to wall, sagging a little, twanging when you break through it
+  const near = Math.abs(p.alt - top) < 50 && p.x > L && p.x < R && G.state === 'play';
+  if (near && !(h.twT > T - 0.4)) { h.twT = T; h.twX = p.x; }
+  const tw = h.twT != null ? Math.exp(-(T - h.twT) * 5) * Math.sin((T - h.twT) * 34) * 6 : 0;
+  const mxp = h.twX != null && tw ? h.twX : (L + R) / 2, Y0 = sy(top);
+  const path = o => { ctx.beginPath(); ctx.moveTo(sx(L - 4), Y0 + o * s); ctx.quadraticCurveTo(sx(mxp), Y0 + (o + 5 + tw) * s, sx(R + 4), Y0 + o * s); };
+  ctx.lineCap = 'round';
+  for (const [lw, col, o] of [[2.6, 'rgba(40,120,150,.7)', 0.5], [1.4, 'rgba(170,240,255,.85)', 0], [0.6, 'rgba(255,255,255,.9)', -0.5]]) { ctx.strokeStyle = col; ctx.lineWidth = lw * s; path(o); ctx.stroke(); }
+  const sagAt = x => { const u = (x - L) / (R - L); return (5 + tw) * 4 * u * (1 - u); };
+  // the threads, their glow, the worms on the line
+  const gl = basaltGlowCv(BASALTP.cyan); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const x of basaltThreadXs(h)) { const { len, q } = basaltThreadLen(h, x, gx), Y = Y0 + sagAt(x) * s; ctx.globalAlpha = 0.22 + 0.25 * q; const rw = 9 * s, rh = (len * 0.6 + 8) * s; ctx.drawImage(gl, sx(x) - rw, Y + len * 0.5 * s - rh, rw * 2, rh * 2); }
+  ctx.restore();
+  for (const x of basaltThreadXs(h)) {
+    const { len, q } = basaltThreadLen(h, x, gx), Y = Y0 + sagAt(x) * s, sw = Math.sin(T * 1.6 + x * 0.13) * 0.05 * (1 - q);
+    basaltBlitAt(basaltThreadSprite(len), sx(x), Y + 2 * s, sw);
+    basaltBlitAt(basaltWormSprite(q > 0.5 ? 1 : 0), sx(x), Y, 0, (x * 7 | 0) % 2 ? 1 : -1);
+  }
+  // the anchors: a knot of silk pinned to each wall by a little hex boss
+  for (const [x, f] of [[L, 1], [R, -1]]) basaltBlit(basaltAnchorSprite(), x, top, 1, f);
+}
+function basaltAnchorSprite() {
+  return basaltSprite('anchor', 18, 18, 4, 9, c => {
+    basaltHexFace(c, 2, 0, 6, [96, 110, 124], 1, 0);
+    c.strokeStyle = 'rgba(200,246,255,.8)'; c.lineWidth = 0.8; c.lineCap = 'round'; for (const a of [-0.5, 0, 0.45]) { c.beginPath(); c.moveTo(4, 0); c.lineTo(4 + Math.cos(a) * 10, Math.sin(a) * 5); c.stroke(); }
+    c.fillStyle = 'rgba(220,250,255,.9)'; c.beginPath(); c.arc(5, 0, 1.6, 0, TWO_PI); c.fill();
+  });
+}
+
+// ---- the Cricket Leap ----
+// a pale blind cave cricket (anchored at its body's centre, facing +x): a tall humped back in translucent ivory plates
+// (each lit on top with a seam under it), a little round head low in front with milky blind eyes, palps, little front
+// legs, and the huge hind legs: a drumstick thigh with a lit sheen and banding, a long spined shin. pose 0 sitting (the
+// knee folded high over its back), 1 crouched to spring, 2 leaping (hind legs kicked out back, front legs tucked)
+function basaltCricketPaint(c, pose) {
+  const P = BASALTP.pale, E = BASALTP.paleEdge, cr = pose === 1 ? 3 : 0;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const legC = '#c89e8c', legD = '#9a7464', legL = 'rgba(255,246,236,.75)';
+  const leg = (pts, w, col = legC) => { c.strokeStyle = gCol(gMix(basaltHex(col.length === 7 ? col : legC), [60, 30, 20], 0.35)); c.lineWidth = w + 1; gPoly(c, pts, false); c.stroke(); c.strokeStyle = col; c.lineWidth = w; gPoly(c, pts, false); c.stroke(); c.strokeStyle = legL; c.lineWidth = w * 0.3; gPoly(c, pts.map(([x, y]) => [x - 0.3, y - w * 0.3]), false); c.stroke(); };
+  // far legs (behind the body, darker)
+  if (pose === 2) { leg([[-8, 2], [-26, 10], [-40, 20]], 2.4, legD); leg([[4, 6], [10, 12]], 1.4, legD); }
+  else { leg([[-8, 2 + cr], [-16, -16 - cr], [-26, 9]], 2.6, legD); leg([[4, 7 + cr], [8, 12], [12, 12]], 1.4, legD); }
+  // the humped body: abdomen plates and the thorax hump, lit from the top left
+  const body = () => { c.beginPath(); c.moveTo(-21, 6 + cr); c.bezierCurveTo(-24, -6 + cr, -14, -15 + cr * 0.6, -2, -14 + cr * 0.4); c.bezierCurveTo(8, -13 + cr * 0.4, 14, -8 + cr * 0.5, 14, 0 + cr * 0.6); c.bezierCurveTo(14, 7, 6, 11, -4, 11); c.bezierCurveTo(-13, 11, -19, 10, -21, 6 + cr); c.closePath(); };
+  body(); c.fillStyle = gRG(c, -8, -10 + cr, 26, [P[0], P[1], P[2], P[3]]); c.fill();
+  c.save(); body(); c.clip();
+  // the plates: banded seams arching over the back (dark under, lit over)
+  for (let k = 0; k < 6; k++) { const x = -18 + k * 5.2; gPair(c, [[x - 1, 12], [x - 2.4, 0 + cr], [x + 0.6, -14 + cr * 0.5]], 'rgba(130,80,64,.45)', 'rgba(255,250,244,.6)', 1.1, -0.8); }
+  // a translucent belly glow
+  c.fillStyle = 'rgba(255,214,190,.35)'; c.beginPath(); c.ellipse(-4, 9, 16, 4, 0, 0, TWO_PI); c.fill();
+  c.restore();
+  body(); c.strokeStyle = E; c.lineWidth = 0.9; c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-17, -6 + cr); c.quadraticCurveTo(-10, -13 + cr * 0.6, -2, -12 + cr * 0.4); c.stroke();
+  // the cerci at its tail
+  c.strokeStyle = E; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-21, 4 + cr); c.lineTo(-27, 0 + cr); c.moveTo(-21, 6 + cr); c.lineTo(-27, 7 + cr); c.stroke();
+  // the head: round, low in front; blind milky eyes; palps
+  basaltPart(c, 19, 2 + cr * 0.4, 7.4, 7, 0, ['#fffcf6', '#f2dcce', '#cfae9c'], E, 0.55);
+  c.fillStyle = gRG(c, 21, -0.6, 2.6, ['#ffffff', '#e8eef4', '#b8c4d0']); c.beginPath(); c.ellipse(21.5, -0.4 + cr * 0.4, 2.2, 2.6, 0.2, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(120,140,160,.7)'; c.lineWidth = 0.5; c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.arc(20.9, -1.3 + cr * 0.4, 0.7, 0, TWO_PI); c.fill();
+  c.fillStyle = 'rgba(240,160,150,.45)'; c.beginPath(); c.ellipse(22, 4.4 + cr * 0.4, 2, 1.2, 0, 0, TWO_PI); c.fill();   // a blush
+  c.strokeStyle = E; c.lineWidth = 0.7; c.beginPath(); c.arc(23.5, 5 + cr * 0.4, 1.6, 0.3, 1.9); c.stroke();   // a little smile
+  leg([[24, 7 + cr * 0.4], [26.5, 11], [25, 13]], 0.9);
+  // near legs: front and middle; the big hind leg
+  if (pose === 2) { leg([[10, 7], [15, 9], [19, 7]], 1.5); leg([[2, 8], [0, 13], [-4, 14]], 1.6); }
+  else { leg([[10, 8 + cr * 0.5], [14, 13], [18, 12 + cr * 0.2]], 1.6); leg([[2, 9 + cr * 0.5], [-1, 13], [-5, 12 + cr * 0.2]], 1.7); }
+  const thigh = (x0, y0, x1, y1) => {
+    const ang = Math.atan2(y1 - y0, x1 - x0), len = Math.hypot(x1 - x0, y1 - y0);
+    c.save(); c.translate(x0, y0); c.rotate(ang);
+    c.beginPath(); c.moveTo(0, -4.2); c.bezierCurveTo(len * 0.35, -6.4, len * 0.75, -3.2, len, -1.4); c.lineTo(len, 1.4); c.bezierCurveTo(len * 0.7, 3, len * 0.3, 4.6, 0, 4.2); c.closePath();
+    c.fillStyle = gLG(c, 0, -6, 0, 5, [P[0], P[1], P[2]]); c.fill(); c.strokeStyle = E; c.lineWidth = 0.8; c.stroke();
+    for (let k = 1; k <= 4; k++) gPair(c, [[len * k / 5.4, -4.6 + k * 0.5], [len * k / 5.4 - 1.2, 3.6 - k * 0.3]], 'rgba(150,96,78,.4)', 'rgba(255,250,244,.5)', 0.7, -0.5);
+    c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(len * 0.12, -3.6); c.quadraticCurveTo(len * 0.45, -5.2, len * 0.8, -2.4); c.stroke();
+    c.restore();
+  };
+  const shin = (pts) => { leg(pts, 1.8); c.strokeStyle = legD; c.lineWidth = 0.6; for (let k = 1; k < 5; k++) { const u = k / 5, x = lerp(pts[0][0], pts[1][0], u), y = lerp(pts[0][1], pts[1][1], u); c.beginPath(); c.moveTo(x, y); c.lineTo(x + 1.6, y - 2.2); c.stroke(); } };
+  if (pose === 2) { thigh(-6, 3, -24, 8); shin([[-24, 8], [-44, 16], [-48, 15]]); }
+  else { const ky = -19 - cr * 1.6; thigh(-5, 4 + cr, -15, ky); shin([[-15, ky], [-23, 9 + cr * 0.3], [-29, 10 + cr * 0.3]]); }
+}
+function basaltCricketSprite(pose) { return basaltSprite(`cricket${pose}`, 82, 54, 52, 28, c => basaltCricketPaint(c, pose)); }
+// a basalt ledge (anchored at the wall line, top at y = -7.5 + 4 = the ledge's top): a short column stub with its hex end
+// face, silk wisps and a drip of cave water
+function basaltLedgeSprite() {
+  const X = BASALT.cricket, L = X.ledge;
+  return basaltSprite('ledge', L + 20, 34, 10, 14, c => {
+    c.save(); c.translate(L - 2, 4); basaltPrismPaint(c, L + 8, 7.8, 1, [92, 104, 118]); c.restore();
+    c.fillStyle = 'rgba(12,16,24,.35)'; c.beginPath(); c.ellipse(L * 0.5, 15, L * 0.5, 2.6, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(200,240,255,.45)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(4, 11); c.quadraticCurveTo(8, 18, 6, 22); c.moveTo(12, 11.6); c.quadraticCurveTo(15, 16, 14, 19); c.stroke();
+    c.fillStyle = gRG(c, 13.6, 19.6, 2, ['#ffffff', '#9aeafc', '#2aa0c0']); c.beginPath(); c.ellipse(14, 20, 1.3, 1.7, 0, 0, TWO_PI); c.fill();
+  });
+}
+function basaltDrawCricket(h) {
+  const X = BASALT.cricket, d = h.side, T = G.t, st = h.st || basaltCricketAt(h, T), p = basaltCricketPos(h, st), f = p.face;
+  basaltBlit(basaltLedgeSprite(), h.base, h.alt - 4, 1, d);
+  basaltBlit(basaltLedgeSprite(), h.far, h.alt - 4, 1, -d);
+  // the leap's arc, faintly dotted in the dust as it crouches (where it will go)
+  if (st.ph === 'tell' || st.ph === 'leap') {
+    const k = st.ph === 'tell' ? st.tell : 1 - st.k, from = st.from;
+    ctx.save(); ctx.setLineDash([3 * s, 7 * s]); ctx.lineCap = 'round'; ctx.strokeStyle = `rgba(255,214,190,${0.32 * k})`; ctx.lineWidth = 2 * s; ctx.beginPath();
+    for (let i = 0; i <= 16; i++) { const q = basaltCricketPos(h, { ph: 'leap', from, k: i / 16 }); i ? ctx.lineTo(sx(q.x), sy(q.a)) : ctx.moveTo(sx(q.x), sy(q.a)); }
+    ctx.stroke(); ctx.restore();
+  }
+  const crouch = st.ph === 'tell' ? 3 * st.tell : 0, pose = st.ph === 'leap' ? 2 : st.ph === 'tell' && st.tell > 0.25 ? 1 : 0;
+  const ang = st.ph === 'leap' ? -Math.atan2(X.apex * 4 * (1 - 2 * st.k), Math.abs(h.far - h.base)) * 1.6 * f : 0;
+  const shake = st.ph === 'tell' ? Math.sin(T * 50) * 0.6 * st.tell : 0;
+  // a soft glow under it while it leaps (pale, lit by its own sheen) and as it crouches (the warning)
+  if (st.ph === 'tell') basaltGlow(ctx, sx(p.x), sy(p.a), 34 * s, [255, 200, 170], 0.25 * st.tell);
+  if (st.ph === 'leap') basaltGlow(ctx, sx(p.x), sy(p.a), 34 * s, [255, 210, 180], 0.18);
+  const X0 = sx(p.x + shake), Y0 = sy(p.a - crouch);
+  // antennae: two long feelers swept forward and up, waving (faster while it crouches)
+  {
+    const sp = st.ph === 'tell' ? 9 : st.ph === 'leap' ? 3 : 1.4, back = st.ph === 'leap' ? -1 : 1;
+    for (const e of [0, 1]) {
+      const hx = X0 + f * 24 * s, hy = Y0 - 3 * s, w1 = Math.sin(T * sp + e * 1.7 + h.alt) * 6, w2 = Math.sin(T * sp * 1.3 + e * 2.3 + h.alt) * 10;
+      const mx = hx + f * (18 + e * 6) * back * s, my = hy - (26 + w1 + e * 4) * s, tx = hx + f * (52 + e * 10) * back * s, ty = hy - (30 + w2 - e * 8) * s;
+      ctx.strokeStyle = e ? '#b08a78' : '#d8b4a2'; ctx.lineWidth = (e ? 0.9 : 1.1) * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.quadraticCurveTo(mx, my, tx, ty); ctx.stroke();
+    }
+  }
+  basaltBlitAt(basaltCricketSprite(pose), X0, Y0, ang, f);
+}
+
+// ---- the Magma Seam ----
+// the seam in the wall (anchored at the wall line at its mouth): a jagged fissure glowing down the wall's face, a raised
+// lip of cooled crust round the mouth (lit on top, cracked, glowing in its cracks), a dark throat with a bead of lava
+function basaltSeamSprite() {
+  return basaltSprite('seam', 40, 210, 16, 130, c => {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    // the fissure: a glowing crack zig-zagging up and down the wall's lip
+    const crack = [[-4, -120], [-1, -100], [-6, -82], [-2, -60], [-7, -40], [-2, -20], [-4, 0], [-1, 22], [-6, 44], [-2, 62], [-5, 76]];
+    c.strokeStyle = 'rgba(120,30,10,.8)'; c.lineWidth = 5; gPoly(c, crack, false); c.stroke();
+    c.strokeStyle = '#f2641a'; c.lineWidth = 2.6; gPoly(c, crack, false); c.stroke();
+    c.strokeStyle = '#ffd860'; c.lineWidth = 1; gPoly(c, crack, false); c.stroke();
+    for (const [i, dx, dy] of [[2, -8, 6], [5, -10, -4], [8, -9, 5]]) { const [x, y] = crack[i]; c.strokeStyle = '#e8541a'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(x, y); c.lineTo(x + dx, y + dy); c.stroke(); }
+    // the crust lip round the mouth
+    const C = BASALTP.crust;
+    c.fillStyle = gRG(c, -2, -6, 18, C); c.beginPath(); c.moveTo(-10, -15); c.quadraticCurveTo(10, -18, 15, -4); c.quadraticCurveTo(17, 8, 8, 14); c.quadraticCurveTo(-4, 17, -10, 13); c.closePath(); c.fill();
+    c.strokeStyle = BASALTP.crustEdge; c.lineWidth = 0.9; c.stroke();
+    // its cracks glow
+    for (const P of [[[2, -14], [5, -8], [3, -3]], [[12, -6], [8, -2], [10, 4]], [[6, 12], [5, 7], [8, 5]]]) { c.strokeStyle = 'rgba(255,120,40,.85)'; c.lineWidth = 1.1; gPoly(c, P, false); c.stroke(); c.strokeStyle = 'rgba(255,230,140,.8)'; c.lineWidth = 0.4; gPoly(c, P, false); c.stroke(); }
+    c.strokeStyle = 'rgba(255,200,170,.45)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-8, -14); c.quadraticCurveTo(6, -17, 12, -8); c.stroke();
+    // the throat: a dark mouth with a bead of glowing lava at its lip
+    c.fillStyle = gRG(c, 6, 0, 8, ['#ffcc50', '#e05014', '#5a1408', '#2a0a06']); c.beginPath(); c.ellipse(6, 0, 5, 6.4, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(40,10,6,.8)'; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = 'rgba(255,250,200,.9)'; c.beginPath(); c.ellipse(4.6, -2.6, 1.4, 1, -0.5, 0, TWO_PI); c.fill();
+  });
+}
+function basaltDrawJet(h) {
+  const X = BASALT.jet, d = h.side, T = G.t, st = h.st || basaltJetAt(h, T), b = h.base, A = h.alt;
+  const hot = st.ph === 'tell' ? st.tell : st.ph === 'rest' ? 0 : 1;
+  basaltGlow(ctx, sx(b + d * 4), sy(A), (30 + 26 * hot) * s, BASALTP.ember, 0.22 + 0.4 * hot * (0.75 + 0.25 * Math.sin(T * 24)));
+  basaltBlit(basaltSeamSprite(), b, A, 1, d);
+  if (st.ph === 'tell') {
+    // bubbles swelling and popping at the mouth, the lane it will sweep warmed with a faint warning glow
+    for (let k = 0; k < 4; k++) { const u = pmod(T * 2.2 + k * 0.27, 1), r = (1.5 + 3 * u) * s; ctx.fillStyle = `rgba(255,${150 + 80 * (1 - u) | 0},60,${0.9 * (1 - u * 0.6)})`; ctx.beginPath(); ctx.arc(sx(b + d * (8 + k * 2.5)), sy(A + (k - 1.5) * 3 + u * 4), r, 0, TWO_PI); ctx.fill(); }
+    basaltGlow(ctx, sx(b + d * h.reach * 0.5), sy(A - 20), h.reach * 0.6 * s, [255, 110, 50], 0.12 * st.tell, 90 * s);
+  }
+  if (st.L > 0.02) {
+    const P = basaltJetPts(h, st, 9), Y = q => sy(q[1]), Xx = q => sx(q[0]);
+    // the glow round the stream
+    for (let i = 1; i < P.length; i += 2) basaltGlow(ctx, Xx(P[i]), Y(P[i]), 40 * s, [255, 120, 40], 0.3);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // a rope of molten rock: a dark crusted underside, lumps rolling along it, the hot core riding high (lit from above)
+    const band = (k, col, up) => { ctx.strokeStyle = col; for (let i = 1; i < P.length; i++) { const r = (P[i - 1][2] + P[i][2]) * 0.5; ctx.lineWidth = Math.max(0.8, r * k) * s; ctx.beginPath(); ctx.moveTo(Xx(P[i - 1]), Y(P[i - 1]) - up * P[i - 1][2] * s); ctx.lineTo(Xx(P[i]), Y(P[i]) - up * P[i][2] * s); ctx.stroke(); } };
+    band(2.1, '#8a1e06', 0); band(1.7, '#c03a0e', -0.08);
+    for (let k = 0; k < 7; k++) {
+      const u = pmod(T * 1.3 + k / 7, 1) * (P.length - 1), i = Math.floor(u), v = u - i, q0 = P[i], q1 = P[Math.min(P.length - 1, i + 1)];
+      const x = lerp(q0[0], q1[0], v), a = lerp(q0[1], q1[1], v), r = lerp(q0[2], q1[2], v) * (0.95 + 0.12 * hash2(k, 0x9a1));
+      ctx.fillStyle = '#8a1e06'; ctx.beginPath(); ctx.arc(sx(x), sy(a), r * s, 0, TWO_PI); ctx.fill();
+      ctx.fillStyle = '#d84812'; ctx.beginPath(); ctx.arc(sx(x), sy(a) - r * 0.12 * s, r * 0.84 * s, 0, TWO_PI); ctx.fill();
+    }
+    band(1.15, '#ff9a2a', 0.22); band(0.55, '#ffe070', 0.32); band(0.2, '#fffbe0', 0.38);
+    // a skin of cooling crust flecks riding the stream, and bright ripples
+    for (let k = 0; k < 6; k++) {
+      const u = pmod(T * 1.8 + k / 6, 1) * (P.length - 1), i = Math.floor(u), v = u - i, q0 = P[i], q1 = P[Math.min(P.length - 1, i + 1)];
+      const x = lerp(q0[0], q1[0], v), a = lerp(q0[1], q1[1], v), r = lerp(q0[2], q1[2], v);
+      ctx.fillStyle = k % 2 ? 'rgba(90,24,10,.75)' : 'rgba(255,250,210,.8)'; ctx.beginPath(); ctx.ellipse(sx(x), sy(a + (k % 3 - 1) * r * 0.35), (k % 2 ? 2.2 : 1.6) * s, 1.1 * s, 0, 0, TWO_PI); ctx.fill();
+    }
+    // the tip: a fat blob splaying into droplets
+    const tip = P[P.length - 1]; ctx.fillStyle = '#ff9a2a'; ctx.beginPath(); ctx.arc(Xx(tip), Y(tip), tip[2] * 1.05 * s, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#ffe070'; ctx.beginPath(); ctx.arc(Xx(tip) - d * 1 * s, Y(tip) - 1 * s, tip[2] * 0.55 * s, 0, TWO_PI); ctx.fill();
+    for (let k = 0; k < 4; k++) { const r = hash2(k, A | 0), u = pmod(T * 3 + r, 1); ctx.fillStyle = `rgba(255,${130 + 90 * (1 - u) | 0},40,${1 - u})`; ctx.beginPath(); ctx.arc(Xx(tip) + d * (4 + 14 * u) * s, Y(tip) + (r - 0.3) * 18 * u * s + 26 * u * u * s, (2.2 - u) * s, 0, TWO_PI); ctx.fill(); }
+  }
+}
+
+// ---- the fire opal: an oval fire opal glowing orange-red with flecks of green, blue and violet fire, set in a little
+// cradle of basalt ----
+function basaltOpalSprite() {
+  return basaltSprite('opal', 34, 36, 17, 18, c => {
+    // the basalt cradle: three hex column stubs holding it from below
+    for (const [x, y, r] of [[-8, 9, 5.2], [8, 9, 5.2], [0, 11, 5.6]]) basaltHexFace(c, x, y, r, [84, 98, 112], 1, 0);
+    const rx = 9.5, ry = 11.5, P = BASALTP.opal;
+    c.fillStyle = gRG(c, -rx * 0.3, -ry * 0.35, ry * 1.4, [P[0], P[1], P[2], P[3]]); c.beginPath(); c.ellipse(0, -2, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = BASALTP.opalEdge; c.lineWidth = 0.8; c.stroke();
+    // the play of colour: flecks of fire
+    c.save(); c.beginPath(); c.ellipse(0, -2, rx * 0.92, ry * 0.92, 0, 0, TWO_PI); c.clip();
+    const fl = [['#7cffb8', -3, 2, 0.4], ['#5ce0ff', 3.5, -4, -0.3], ['#c890ff', -4.5, -6, 0.8], ['#fff08a', 4, 4, 0.2], ['#7cffb8', 1, -9, -0.6], ['#5ce0ff', -1, 6.5, 1.1]];
+    for (const [col, x, y, a] of fl) { c.fillStyle = col; c.globalAlpha = 0.75; c.save(); c.translate(x, y); c.rotate(a); c.beginPath(); c.moveTo(-2.6, 0); c.lineTo(0, -1.4); c.lineTo(2.6, 0); c.lineTo(0, 1.4); c.closePath(); c.fill(); c.restore(); }
+    c.globalAlpha = 1; c.restore();
+    c.strokeStyle = 'rgba(255,240,200,.7)'; c.lineWidth = 1.1; c.beginPath(); c.ellipse(0, -2, rx * 0.84, ry * 0.86, 0, 0.3, Math.PI - 0.3); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.ellipse(-rx * 0.38, -ry * 0.55, rx * 0.25, ry * 0.2, -0.5, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(rx * 0.3, -ry * 0.75, 0.8, 0, TWO_PI); c.fill();
+  });
+}
+function basaltDrawOpal(X, Y, t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2.2 * s, pulse = 0.8 + 0.2 * Math.sin(t * 3.1 + ph);
+  basaltGlow(ctx, X, Y + bob, 36 * s, [255, 130, 60], 0.45 * pulse);
+  basaltGlow(ctx, X, Y + bob - 2 * s, 15 * s, [255, 220, 150], 0.4 * pulse);
+  basaltBlitAt(basaltOpalSprite(), X, Y + bob, Math.sin(t * 1.7 + ph) * 0.06);
+  // the tell seen from afar: every so often a big four-pointed glint flashes off her, rays long and thin
+  { const u = pmod(t / 1.5 + ph * 0.1, 1), f = u < 0.35 ? Math.sin(u / 0.35 * Math.PI) : 0;
+    if (f > 0.02) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(X + 4 * s, Y + bob - 6 * s); ctx.rotate(u * 0.6);
+      basaltGlow(ctx, 0, 0, 30 * s * f, [255, 200, 140], 0.6 * f);
+      for (const [ang, len, wd] of [[0, 46, 2.6], [Math.PI / 2, 46, 2.6], [Math.PI / 4, 20, 1.8], [-Math.PI / 4, 20, 1.8]]) { ctx.save(); ctx.rotate(ang); const L2 = len * f * s, W2 = wd * s;
+        ctx.fillStyle = `rgba(255,236,200,${0.85 * f})`; ctx.beginPath(); ctx.moveTo(-L2, 0); ctx.lineTo(0, -W2); ctx.lineTo(L2, 0); ctx.lineTo(0, W2); ctx.closePath(); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle = `rgba(255,255,255,${f})`; ctx.beginPath(); ctx.arc(0, 0, 3 * s * f, 0, TWO_PI); ctx.fill(); ctx.restore(); } }
+  for (let k = 0; k < 3; k++) { const a = t * 1.8 + ph + k * 2.1, x = X + Math.cos(a) * 17 * s, y = Y + bob + Math.sin(a) * 19 * s, tw = 0.5 + 0.5 * Math.sin(t * 6 + k * 2), col = ['255,210,150', '160,255,210', '170,230,255'][k]; ctx.fillStyle = `rgba(${col},${0.5 + 0.4 * tw})`; ctx.beginPath(); ctx.moveTo(x, y - 3 * s * tw); ctx.lineTo(x + 0.9 * s, y); ctx.lineTo(x, y + 3 * s * tw); ctx.lineTo(x - 0.9 * s, y); ctx.closePath(); ctx.fill(); }
+}
+DRAW.basaltRipple = basaltDrawRipple; DRAW.basaltCurtain = basaltDrawCurtain; DRAW.basaltCricket = basaltDrawCricket; DRAW.basaltJet = basaltDrawJet;
+
+// ---- the stage's particles: grit of basalt and cinders of lava ----
+{ const base = updateParticles; updateParticles = function (dt) {
+  base(dt);
+  if (!basaltOn()) return;
+  for (const q of G.particles) {
+    if (q.kind === 'bsgrit') { q.vy -= 420 * dt; q.ex.rot += q.ex.spin * dt; }
+    else if (q.kind === 'bscinder') { q.vy -= 300 * dt; }
+  }
+}; }
+const basaltPartCv = new Map();
+function basaltGritSprite(col) {
+  let cv = basaltPartCv.get(col); if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = 20; const c = cv.getContext('2d'); c.translate(10, 10); c.scale(2, 2);
+  const q = col === 2 ? [120, 136, 152] : [84, 96, 110];
+  c.fillStyle = gRG(c, -1, -1, 4, [gCol(gMix(q, [235, 245, 255], 0.4)), gCol(q), gCol(gMix(q, [10, 14, 22], 0.45))]); basaltHexPath(c, 0, 0, 3, 0.3); c.fill();
+  basaltPartCv.set(col, cv); return cv;
+}
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles;
+  if (!ps.some(q => q.kind === 'bsgrit' || q.kind === 'bscinder')) return base(additive);
+  G.particles = ps.filter(q => q.kind !== 'bsgrit' && q.kind !== 'bscinder'); try { base(additive); } finally { G.particles = ps; }
+  const gl = additive ? basaltGlowCv([255, 140, 50]) : null;
+  for (const q of ps) {
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
+    if (y < -20 || y > H + 20) continue;
+    if (q.kind === 'bsgrit' && !additive) {
+      const r = q.size * s, cv = basaltGritSprite(q.ex.col || 1);
+      ctx.globalAlpha = Math.min(1, t * 3); ctx.save(); ctx.translate(x, y); ctx.rotate(q.ex.rot); ctx.drawImage(cv, -r, -r, r * 2, r * 2); ctx.restore();
+    } else if (q.kind === 'bscinder') {
+      const r = q.size * s * (0.5 + 0.5 * t);
+      if (additive) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6 * t; ctx.drawImage(gl, x - r * 4, y - r * 4, r * 8, r * 8); ctx.globalCompositeOperation = 'source-over'; }
+      else { ctx.globalAlpha = Math.min(1, t * 2); ctx.fillStyle = t > 0.5 ? '#ffd860' : '#f06a1e'; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); }
+    }
+  }
+  ctx.globalAlpha = 1;
+}; }
+
+// ---- the shaft's walls: honeycombs of basalt column ends ----
+// Each wall is cut through a mass of hexagonal basalt columns lying end-on: a honeycomb of column ends, each its own
+// bevelled hexagon (lit on its upper left, shaded lower right), standing a little proud or sunk back so the faces step,
+// some chipped, cracked or flecked with pale feldspar and green olivine, silk wisps and tiny cyan glow-fungus in the
+// joints. Each section is cut through its own rock (warm ember-lit near the lava, cold slate, teal where glow-worms
+// live, violet-grey on the cricket ledges, blue by the pool, rust-veined by the magma seams, near-black in the deep), and
+// near lava the joints glow with veins of heat. The edge is a real lip: the cut sides of the columns, each a little slab
+// lit on its top and shaded under, chipped, with a cool light catching the arris.
+const BASALT_WB = 160;   // wall tile height
+const BASALT_ROCK = {
+  'Ember Floor': { c: [[92, 82, 84], [76, 68, 72], [104, 92, 90]], deep: [26, 18, 20], rim: [196, 160, 150], vein: 1, under: [255, 110, 40] },
+  'Column Rows': { c: [[88, 100, 114], [72, 84, 98], [100, 112, 126]], deep: [18, 22, 30], rim: [190, 208, 226] },
+  'Glow-Worm Gallery': { c: [[70, 98, 108], [58, 82, 92], [84, 112, 120]], deep: [12, 24, 30], rim: [170, 230, 240], fungus: 1 },
+  'Cricket Ledges': { c: [[96, 90, 112], [80, 74, 96], [108, 102, 124]], deep: [22, 18, 30], rim: [214, 200, 230] },
+  'The Still Pool': { c: [[72, 92, 120], [60, 76, 104], [86, 106, 132]], deep: [12, 18, 32], rim: [170, 210, 250], fungus: 1 },
+  'Magma Seams': { c: [[96, 80, 76], [80, 64, 62], [110, 92, 86]], deep: [28, 14, 12], rim: [220, 170, 150], vein: 1, under: [255, 120, 50] },
+  'The Deep Dark': { c: [[62, 70, 84], [50, 58, 72], [74, 82, 96]], deep: [10, 12, 20], rim: [180, 200, 220] },
+  'Lantern Vault': { c: [[104, 100, 96], [88, 84, 82], [118, 112, 104]], deep: [26, 22, 18], rim: [240, 220, 180], fungus: 1 },
+};
+function basaltSecIdx(a) { const ss = (G.level && G.level.sections) || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++; return i; }
+const basaltRock = a => { const ss = (G.level && G.level.sections) || [], i = basaltSecIdx(a); return BASALT_ROCK[ss[i] && ss[i].name] || BASALT_ROCK['Column Rows']; };
+function basaltWallPaint(c, side, a0, a1, x0, x1) {
+  const WXM = new Map(), wx = a => { const q = Math.round(a); let v = WXM.get(q); if (v === undefined) { v = walls(q)[side]; WXM.set(q, v); } return v; };
+  const into = side ? 1 : -1, A0 = a0 - 14, A1 = a1 + 14, outer = side ? x1 + 4 : x0 - 4, X0 = Math.min(x0, x1) - 6, X1 = Math.max(x0, x1) + 6;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the wall's soft shadow into the shaft
+  for (const [lw, al] of [[24, 0.06], [12, 0.1], [5, 0.14]]) { c.strokeStyle = `rgba(4,8,14,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  const K0 = basaltRock((a0 + a1) / 2);
+  c.fillStyle = gCol(gMix(K0.c[1], K0.deep, 0.6)); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  // the honeycomb: pointy-top hexagons on a world grid (tiles join seamlessly); each column end its own shade and step
+  const R = 12.5, DX = R * Math.sqrt(3), DY = R * 1.5;
+  for (let gy = Math.floor((A0 - R) / DY); gy <= Math.ceil((A1 + R) / DY); gy++) {
+    const ay = gy * DY, Kr = basaltRock(ay);
+    for (let gx = Math.floor((X0 - R) / DX) - 1; gx <= Math.ceil((X1 + R) / DX); gx++) {
+      const hx = gx * DX + (gy & 1 ? DX / 2 : 0), hh = hash2(gx * 97 + gy, 0x6a1), h2 = hash2(gy * 31 + gx, 0x6a2), dd = (hx - wx(ay)) * into;
+      if (dd < -R - 2 || dd > 150) continue;
+      const step = (hh - 0.5) * 2, col = gMix(Kr.c[Math.floor(h2 * 3)], step > 0 ? [200, 214, 230] : Kr.deep, Math.abs(step) * 0.14);
+      const dim = clamp((dd - 20) / 120, 0, 1), base = gMix(col, Kr.deep, dim * 0.55);
+      const r = R * (0.98 - (step < -0.6 ? 0.06 : 0));
+      basaltHexFace(c, hx, -ay, r, base, 1 - dim * 0.5, 0);
+      // details: a chipped corner, a crack, mineral flecks, glow-fungus or silk in the joint
+      if (hh > 0.86) { c.fillStyle = gCol(gMix(base, Kr.deep, 0.6)); c.beginPath(); c.moveTo(hx + r * 0.2, -ay - r * 0.9); c.lineTo(hx + r * 0.86, -ay - r * 0.48); c.lineTo(hx + r * 0.45, -ay - r * 0.2); c.closePath(); c.fill(); c.strokeStyle = gCol(gMix(base, [235, 245, 255], 0.45), 0.6); c.lineWidth = 0.6; c.beginPath(); c.moveTo(hx + r * 0.2, -ay - r * 0.85); c.lineTo(hx + r * 0.45, -ay - r * 0.24); c.stroke(); }
+      else if (hh < 0.12) gPair(c, [[hx - r * 0.5, -ay - r * 0.3], [hx - r * 0.1, -ay + r * 0.05], [hx + r * 0.1, -ay + r * 0.55]], gCol(gMix(base, [6, 10, 18], 0.7), 0.7), gCol(gMix(base, [235, 245, 255], 0.45), 0.4), 0.8, -0.6);
+      if (h2 > 0.7) for (let q = 0; q < 3; q++) { const fx = hx + (hash2(q, gx + gy * 13) - 0.5) * r, fy = -ay + (hash2(q + 5, gx + gy * 13) - 0.5) * r; c.fillStyle = q === 2 && h2 > 0.9 ? 'rgba(160,230,140,.6)' : 'rgba(230,238,248,.45)'; c.beginPath(); c.arc(fx, fy, 0.7, 0, TWO_PI); c.fill(); }
+      if (Kr.vein && h2 < 0.22) { const a2 = Math.PI / 6 + Math.floor(hh * 6) * Math.PI / 3, b2 = a2 + Math.PI / 3; c.strokeStyle = 'rgba(255,120,40,.85)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(hx + Math.cos(a2) * r, -ay + Math.sin(a2) * r); c.lineTo(hx + Math.cos(b2) * r, -ay + Math.sin(b2) * r); c.stroke(); c.strokeStyle = 'rgba(255,236,150,.85)'; c.lineWidth = 0.5; c.stroke(); }
+      if (Kr.fungus && h2 > 0.84 && dd > 4) { for (let q = 0; q < 4; q++) { const fx = hx + Math.cos(Math.PI / 2 + q * 0.4) * r * 0.95, fy = -ay + Math.sin(Math.PI / 2 + q * 0.4) * r * 0.95; c.fillStyle = gRG(c, fx, fy, 2.4, ['#f0ffff', '#80ecff', 'rgba(60,200,230,0)']); c.beginPath(); c.arc(fx, fy, 2.4, 0, TWO_PI); c.fill(); } }
+    }
+  }
+  // the light: brighter by the lip (the shaft's light catching the faces), deeper in sinking into blue dark; near the
+  // lava a warm underlight
+  const ex = wx((a0 + a1) / 2);
+  c.fillStyle = gLG(c, ex, 0, ex + into * 120, 0, ['rgba(200,230,255,.08)', 'rgba(200,230,255,0)', gCol(K0.deep, 0.25), gCol(K0.deep, 0.6)]); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  if (K0.under) { c.fillStyle = gLG(c, 0, -A0, 0, -A1, [gCol(K0.under, 0.14), gCol(K0.under, 0.02)]); c.fillRect(X0, -A1, X1 - X0, A1 - A0); }
+  // silk wisps draped across the joints here and there
+  for (let j = Math.floor(A0 / 90); j <= Math.floor(A1 / 90); j++) {
+    if (hash2(j, 0x6b1 + side) > 0.45) continue;
+    const a = j * 90 + 50 * hash2(j, 0x6b2 + side), x = wx(a) + into * (10 + 30 * hash2(j, 0x6b3 + side)), w = 10 + 10 * hash2(j, 0x6b4);
+    c.strokeStyle = 'rgba(210,240,250,.35)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(x - w, -a); c.quadraticCurveTo(x, -a + 6, x + w, -a - 2); c.moveTo(x - w * 0.6, -a + 1); c.quadraticCurveTo(x - 2, -a + 9, x + w * 0.7, -a + 3); c.stroke();
+  }
+  c.restore();
+  // the lip: the cut sides of the columns, a slab per honeycomb row (lit top, shaded under), chips, a cool arris light
+  const rim = K0.rim;
+  c.save(); body(); c.clip();
+  for (let gy = Math.floor(A0 / DY) - 1; gy <= Math.ceil(A1 / DY) + 1; gy++) {
+    const ya = gy * DY + (hash2(gy, 0x6c1 + side) - 0.5) * 3, yb = ya + DY, w = 6 + 3 * hash2(gy, 0x6c2 + side), Kr = basaltRock(ya), C = Kr.c[gy & 1 ? 0 : 2];
+    const P = []; for (let a = ya; a <= yb + 0.1; a += 3) P.push([wx(a), -a]);
+    c.beginPath(); P.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); for (let i = P.length - 1; i >= 0; i--) c.lineTo(P[i][0] + into * w, P[i][1]); c.closePath();
+    c.fillStyle = gLG(c, 0, -yb, 0, -ya, [gCol(gMix(C, [230, 242, 255], 0.3)), gCol(C), gCol(gMix(C, Kr.deep, 0.5))]); c.fill();
+    c.strokeStyle = gCol(gMix(C, [235, 245, 255], 0.55), 0.7); c.lineWidth = 0.9; c.beginPath(); c.moveTo(wx(yb), -yb + 0.6); c.lineTo(wx(yb) + into * w, -yb + 0.6); c.stroke();
+    c.strokeStyle = gCol(gMix(C, Kr.deep, 0.8), 0.8); c.lineWidth = 1; c.beginPath(); c.moveTo(wx(ya), -ya - 0.4); c.lineTo(wx(ya) + into * w, -ya - 0.4); c.stroke();
+    c.strokeStyle = gCol(gMix(C, Kr.deep, 0.6), 0.7); c.lineWidth = 0.7; c.beginPath(); P.forEach(([x, y], i) => i ? c.lineTo(x + into * w, y) : c.moveTo(x + into * w, y)); c.stroke();
+  }
+  c.restore();
+  for (let a = Math.floor(A0 / 11) * 11; a <= A1; a += 11) {
+    const hh = hash2(a / 11 | 0, 0x6d1 + side); if (hh > 0.35) continue;
+    const x = wx(a), y = -a, r = 1.4 + 2 * hh;
+    c.fillStyle = gCol(gMix(basaltRock(a).c[1], basaltRock(a).deep, 0.7)); c.beginPath(); c.moveTo(x - into * 0.5, y - r); c.lineTo(x + into * r * 1.2, y); c.lineTo(x - into * 0.5, y + r); c.closePath(); c.fill();
+  }
+  c.strokeStyle = gCol(rim, side ? 0.6 : 0.4); c.lineWidth = 1; gPoly(c, pts.map(([x, y]) => [x - into * 0.6, y - 1]), false); c.stroke();
+}
+// the wall's x at a height, memoised per level (the live glows ask for the same heights every frame)
+function basaltWallX(a, side) {
+  const L = G.level, M = L._bsw || (L._bsw = new Map()), key = Math.round(a) * 2 + side;
+  let x = M.get(key); if (x === undefined) { x = walls(Math.round(a))[side]; M.set(key, x); if (M.size > 6000) M.clear(); }
+  return x;
+}
+let basaltMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+function basaltTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+// a glow-worm nest on the wall (anchored at the wall line, hanging into the shaft +x): a hammock of grey silk slung in
+// a joint of the honeycomb with grubs curled in it; asleep it's dim and grey, lit its grubs glow cyan and a fringe of
+// beaded threads hangs from it
+function basaltNestSprite(lit) {
+  return basaltSprite(`nest${lit}`, 42, 78, 8, 16, c => {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    // the knob it hangs from: a stub of column jutting from the wall, its end face turned a little to us, its top lit
+    c.fillStyle = gLG(c, 0, -14, 0, -3, ['#8c96a6', '#5c6676', '#3e4654']); c.beginPath(); c.moveTo(-8, -14); c.lineTo(10, -13); c.lineTo(12, -8); c.lineTo(10, -3); c.lineTo(-8, -3); c.closePath(); c.fill();
+    c.strokeStyle = '#323a46'; c.lineWidth = 0.7; c.stroke();
+    basaltHexPath(c, 10.5, -8, 4.8, Math.PI / 6, 1); c.fillStyle = gLG(c, 7, -12, 14, -4, ['#a8b2c2', '#6c7686', '#4a5262']); c.fill(); c.strokeStyle = '#3a4250'; c.lineWidth = 0.6; c.stroke();
+    c.strokeStyle = 'rgba(220,232,246,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-7, -13.4); c.lineTo(8, -12.6); c.stroke();
+    // silk guys from the knob's underside to the pod
+    c.strokeStyle = lit ? 'rgba(210,248,255,.8)' : 'rgba(196,206,216,.7)'; c.lineWidth = 0.6;
+    for (const [x0, x1] of [[2, 10], [7, 13], [11, 16]]) { c.beginPath(); c.moveTo(x0, -3.5); c.quadraticCurveTo((x0 + x1) / 2 + 1, -1, x1, 3); c.stroke(); }
+    // the pod: a teardrop of woven silk, pointed below
+    const pod = () => { c.beginPath(); c.moveTo(13, 1); c.bezierCurveTo(23, 2, 23, 16, 14, 29); c.bezierCurveTo(5, 16, 4, 2, 13, 1); c.closePath(); };
+    pod(); c.fillStyle = gRG(c, 10, 8, 18, lit ? ['#ffffff', '#c8f8ff', '#62d6ee', '#2a9ab8'] : ['#f2f4f6', '#ccd4dc', '#98a4b0', '#76828e']); c.fill();
+    c.save(); pod(); c.clip();
+    // the grubs inside, seen through the silk
+    for (const [x, y, r] of [[11, 9, 3.2], [16, 13, 2.8], [12, 18, 2.6]]) basaltPart(c, x, y, r * 1.25, r, 0.5, lit ? ['#ffffff', '#e4feff', '#7ae8fa', '#30b8d8'] : ['#c4ccd4', '#a2acb6', '#8a94a0'], lit ? 'rgba(40,150,180,.6)' : 'rgba(110,122,134,.5)', lit ? 0.6 : 0.2);
+    // the weave: two sets of fine crossing strands
+    c.lineWidth = 0.45; c.strokeStyle = lit ? 'rgba(255,255,255,.55)' : 'rgba(250,252,255,.5)';
+    for (let k = -4; k < 8; k++) { c.beginPath(); c.moveTo(4, k * 4); c.lineTo(24, k * 4 + 10); c.stroke(); c.beginPath(); c.moveTo(4, k * 4 + 10); c.lineTo(24, k * 4); c.stroke(); }
+    c.fillStyle = lit ? 'rgba(42,154,184,.28)' : 'rgba(70,80,94,.3)'; c.fillRect(15.5, 0, 10, 30);
+    c.restore();
+    pod(); c.strokeStyle = lit ? '#2a8eac' : '#6c7884'; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1; c.beginPath(); c.moveTo(9.5, 6); c.quadraticCurveTo(8, 12, 10, 18); c.stroke();
+    if (lit) for (let k = 0; k < 6; k++) {
+      // lit: a fringe of beaded threads off the pod's foot
+      const x = 9 + k * 2, len = 12 + 20 * hash2(k, 0x6e1), y0 = 22 + 6 * (1 - Math.abs(k - 2.5) / 2.5);
+      c.strokeStyle = 'rgba(200,246,255,.7)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(x, y0); c.lineTo(x + 0.4, y0 + len); c.stroke();
+      for (let y = 4; y < len + 3; y += 6) { const r = y > len - 2 ? 1.9 : 1; c.fillStyle = gRG(c, x - 0.3, y0 + y - 0.4, r * 1.4, ['#ffffff', '#9af4ff', '#30b8d8']); c.beginPath(); c.arc(x + 0.3, y0 + y, r, 0, TWO_PI); c.fill(); }
+    } else { c.strokeStyle = 'rgba(196,206,216,.65)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(14, 29); c.quadraticCurveTo(15, 34, 13.5, 38); c.stroke(); }
+  });
+}
+function basaltNestIcon() {
+  return basaltSprite('nestIcon', 22, 24, 11, 12, c => {
+    c.strokeStyle = 'rgba(200,246,255,.8)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(0, -11); c.lineTo(0, 6); c.stroke();
+    basaltPart(c, 0, -4, 6.4, 4.8, 0, ['#f4ffff', '#a8f4ff', '#40c8e0', '#16809a'], BASALTP.glowEdge, 0.55);
+    for (const y of [5, 9]) { c.fillStyle = gRG(c, -0.3, y - 0.4, 2.6, ['#ffffff', '#9af4ff', '#30b8d8']); c.beginPath(); c.arc(0, y, y > 6 ? 2.2 : 1.4, 0, TWO_PI); c.fill(); }
+  });
+}
+function basaltDrawWalls() {
+  basaltCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, Pd = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / BASALT_WB), j1 = Math.floor(top / BASALT_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const wide = drawPad > 0 ? 1 : 0, id = `w${side}_${j}_${wide}`, need = j <= j1;
+      if (!need && (basaltMade || BASALTC.tiles.has(id))) continue;
+      if (!BASALTC.tiles.has(id)) basaltMade++;
+      const a0 = j * BASALT_WB, a1 = a0 + BASALT_WB;
+      let Tl = BASALTC.tiles.get(id);
+      if (!Tl) {
+        let lo = Infinity, hi = -Infinity; for (let a = a0 - 14; a <= a1 + 14; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+        const vis = ox / s + 30, x0 = side ? lo - 20 : wide ? lo - 210 : Math.max(lo - 210, -vis), x1 = side ? (wide ? hi + 210 : Math.min(hi + 210, WORLD_W + vis)) : hi + 20;
+        Tl = basaltTile(id, x0, x1, a0, a1, c => basaltWallPaint(c, side, a0, a1, x0, x1));
+      }
+      if (!need) continue;
+      basaltTileBlit(Tl);
+      const y0 = sy(a1) - 1, hh = BASALT_WB * s + 2;
+      ctx.fillStyle = Tl.deep || (Tl.deep = gCol(gMix(basaltRock(a0 + 80).deep, [4, 6, 10], 0.3)));
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + Pd) ctx.fillRect(xe, y0, cssW + 30 + Pd - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - Pd) ctx.fillRect(-30 - Pd, y0, xe + 30 + Pd, hh); }
+    }
+  }
+  basaltMade = 0;
+  // the dark falls over the backdrop and the walls (see basaltDrawDark); the nests and everything after stay lit
+  basaltDrawDark();
+  const L = G.level, T = G.t;
+  if (L && L.nests) {
+    const gl = basaltGlowCv(BASALTP.cyan);
+    for (const n of L.nests) {
+      if (n.alt < G.camAlt - 60 || n.alt > G.camAlt + viewH + 60) continue;
+      const into = n.side ? -1 : 1, x = basaltWallX(n.alt, n.side) - into * 2, k = n.lit ? Math.min(1, (T - n.lit) * 2) : 0;
+      if (k > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.42 + 0.1 * Math.sin(T * 2 + n.alt)) * k; const r = 44 * s; ctx.drawImage(gl, sx(x + into * 12) - r, sy(n.alt - 8) - r, r * 2, r * 2); ctx.restore(); }
+      basaltBlit(basaltNestSprite(n.lit ? 1 : 0), x, n.alt, 1, into);
+      // asleep: a faint cyan wink now and then, so you can find it in the dark
+      if (!n.lit) { const w = pmod(T * 0.5 + n.alt * 0.013, 1); if (w < 0.12) basaltGlow(ctx, sx(x + into * 10), sy(n.alt), 18 * s, BASALTP.cyan, 0.5 * Math.sin(w / 0.12 * Math.PI)); }
+    }
+  }
+}
+
+// ---- the backdrop: the deep receding behind the shaft ----
+// far (0.07): the great dark beyond the shaft, different in every section: colonnades of standing hexagonal columns
+// stepping like stairs with cooling lava pooled at their feet (Ember Floor), ranks of tall columns in two depths
+// (Column Rows), a vaulted roof hung with a sky of glow-worm threads over column stumps (Glow-Worm Gallery), broken
+// stacks forming ledges where pale crickets perch and cave fungus grows (Cricket Ledges), a still black lake mirroring
+// the glow-worms with column islands (the Still Pool), columns split by glowing seams with steam rising and a lava fall
+// far off (Magma Seams), giant columns lost in the dark with fireflies drifting (the Deep Dark), warm columns hung with
+// glow-worm lanterns (Lantern Vault). near (0.2): great column flanks and hanging thread clusters close by, soft and
+// dim. Depth is shown by easing colour toward each section's haze. Every light painted into the backdrop also opens a
+// soft hole in the dark mask, so the dark always has lights in it.
+const BASALT_FAR = 0.07, BASALT_NEAR = 0.2, BASALT_BB = 440, BASALT_NB = 320;
+const BASALT_LIGHT = {
+  'Ember Floor': { top: [40, 26, 30], bot: [70, 26, 16], haze: [60, 34, 34], stone: [78, 66, 70], glow: [255, 120, 50], dark: [14, 6, 8], da: 0.38, set: 'ember' },
+  'Column Rows': { top: [26, 34, 46], bot: [16, 20, 30], haze: [34, 44, 58], stone: [70, 82, 98], glow: [160, 220, 255], dark: [6, 10, 18], da: 0.36, set: 'rows' },
+  'Glow-Worm Gallery': { top: [16, 34, 44], bot: [10, 22, 30], haze: [24, 50, 60], stone: [56, 80, 92], glow: [110, 236, 255], dark: [4, 12, 18], da: 0.4, set: 'gallery' },
+  'Cricket Ledges': { top: [30, 28, 44], bot: [18, 16, 28], haze: [42, 38, 58], stone: [80, 76, 98], glow: [255, 214, 196], dark: [10, 8, 18], da: 0.36, set: 'ledges' },
+  'The Still Pool': { top: [18, 30, 52], bot: [10, 18, 34], haze: [26, 44, 72], stone: [58, 76, 104], glow: [130, 220, 255], dark: [4, 10, 22], da: 0.34, set: 'pool' },
+  'Magma Seams': { top: [36, 24, 26], bot: [58, 24, 14], haze: [56, 34, 32], stone: [82, 66, 64], glow: [255, 130, 50], dark: [14, 6, 6], da: 0.36, set: 'seams' },
+  'The Deep Dark': { top: [12, 16, 24], bot: [8, 10, 16], haze: [20, 26, 36], stone: [50, 58, 72], glow: [214, 255, 120], dark: [2, 4, 10], da: 0.48, set: 'dark' },
+  'Lantern Vault': { top: [40, 36, 34], bot: [22, 22, 26], haze: [56, 52, 48], stone: [96, 90, 86], glow: [255, 214, 140], dark: [10, 8, 8], da: 0.3, set: 'vault' },
+};
+function basaltLightAt(a) {
+  const ss = (G.level && G.level.sections) || [], i = basaltSecIdx(a), me = BASALT_LIGHT[ss[i] && ss[i].name] || BASALT_LIGHT['Column Rows'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 320) { k = 0.5 * smooth(ss[i + 1].a0 - 320, ss[i + 1].a0, a); o = BASALT_LIGHT[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 320) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 320, a)); o = BASALT_LIGHT[ss[i - 1].name]; }
+  if (!o) return me;
+  const m = (p, q) => gMix(p, q, k);
+  return { top: m(me.top, o.top), bot: m(me.bot, o.bot), haze: m(me.haze, o.haze), stone: m(me.stone, o.stone), glow: m(me.glow, o.glow), dark: m(me.dark, o.dark), da: lerp(me.da, o.da, k), set: k < 0.25 ? me.set : o.set };
+}
+function basaltXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+const basaltC = (col, L, k, a = 1) => gCol(gMix(col, L.haze, k), a);
+// ---- painters (any context, world units, y down; k eases into the haze) ----
+// a standing hexagonal column seen from the front (x its centre, from yTop down to yBot, w wide): three facets (the
+// left one lit, the middle, the right in shade), cross joints as line pairs, its top a foreshortened hexagon cap (cap
+// false: the column runs on above the top); under true: its foot is a broken end seen from below (it hangs on from above)
+function basaltStand(c, x, yTop, yBot, w, col, L, k, sd = 0, cap = true, under = false) {
+  const h = w * 0.22, xl = x - w / 2, xm0 = x - w * 0.22, xm1 = x + w * 0.22, xr = x + w / 2;
+  const F = (x0, x1, a, b) => { c.fillStyle = gLG(c, x0, 0, x1, 0, [basaltC(a, L, k), basaltC(b, L, k)]); c.fillRect(x0, yTop, x1 - x0 + 0.4, yBot - yTop); };
+  F(xl, xm0, gMix(col, [220, 236, 255], 0.22), gMix(col, [200, 220, 240], 0.1));
+  F(xm0, xm1, col, gMix(col, [8, 12, 20], 0.15));
+  F(xm1, xr, gMix(col, [8, 12, 20], 0.35), gMix(col, [8, 12, 20], 0.55));
+  c.strokeStyle = basaltC(gMix(col, [230, 242, 255], 0.4), L, k, 0.55); c.lineWidth = Math.max(0.6, w * 0.03); c.beginPath(); c.moveTo(xm0, yTop); c.lineTo(xm0, yBot); c.stroke();
+  c.strokeStyle = basaltC(gMix(col, [8, 12, 20], 0.6), L, k, 0.6); c.beginPath(); c.moveTo(xm1, yTop); c.lineTo(xm1, yBot); c.moveTo(xr, yTop); c.lineTo(xr, yBot); c.stroke();
+  // cross joints, placed on a world grid so a column running through two tiles keeps its rhythm
+  const step = 52, g0 = Math.ceil((yTop + 12) / step);
+  for (let gy = g0; gy * step < yBot - 8; gy++) { if (hash2(gy, (x | 0) + sd) < 0.3) continue; const y = gy * step + 14 * hash2(gy, x | 0), tl = (hash2(gy, (x | 0) + 7) - 0.5) * 4; gPair(c, [[xl, y + tl], [xm0, y + tl * 0.3 - 1.5], [xm1, y - tl * 0.3 - 1.5], [xr, y - tl]], basaltC(gMix(col, [6, 10, 18], 0.6), L, k, 0.6), basaltC(gMix(col, [230, 242, 255], 0.35), L, k, 0.4), Math.max(0.8, w * 0.04), -1); }
+  if (cap) {
+    // the top: a foreshortened hexagon cap, lit
+    c.beginPath(); c.moveTo(xl, yTop); c.lineTo(xm0, yTop - h); c.lineTo(xm1, yTop - h); c.lineTo(xr, yTop); c.lineTo(xm1, yTop + h * 0.5); c.lineTo(xm0, yTop + h * 0.5); c.closePath();
+    c.fillStyle = gLG(c, xl, yTop - h, xr, yTop + h, [basaltC(gMix(col, [235, 245, 255], 0.42), L, k), basaltC(gMix(col, [210, 226, 244], 0.2), L, k)]); c.fill();
+    c.strokeStyle = basaltC(gMix(col, [8, 12, 20], 0.5), L, k, 0.7); c.lineWidth = Math.max(0.5, w * 0.025); c.stroke();
+  }
+  if (under) {
+    // a broken foot seen from below: a shaded hexagon underside with a chipped edge
+    c.beginPath(); c.moveTo(xl, yBot); c.lineTo(xm0, yBot + h * 0.7); c.lineTo(x, yBot + h * 0.45); c.lineTo(xm1, yBot + h * 0.85); c.lineTo(xr, yBot); c.lineTo(xm1, yBot - h * 0.3); c.lineTo(xm0, yBot - h * 0.3); c.closePath();
+    c.fillStyle = gLG(c, 0, yBot - h, 0, yBot + h, [basaltC(gMix(col, [8, 12, 20], 0.45), L, k), basaltC(gMix(col, [8, 12, 20], 0.7), L, k)]); c.fill();
+    c.strokeStyle = basaltC(gMix(col, [8, 12, 20], 0.75), L, k, 0.7); c.lineWidth = Math.max(0.5, w * 0.025); c.stroke();
+  }
+}
+// a run of columns standing side by side, their tops stepping (n columns of width w from x0)
+function basaltColonnade(c, x0, n, w, yBot, hs, col, L, k, sd) {
+  // back to front: the lower ones in front so each cap reads
+  const order = [...Array(n).keys()].sort((p, q) => hs[q] - hs[p]);
+  for (const i of order) basaltStand(c, x0 + (i + 0.5) * w, yBot - hs[i], yBot + 4, w + 0.6, gMix(col, [8, 12, 20], hash2(i, sd) * 0.18), L, k, sd + i);
+}
+// a rock shelf jutting from the edge at x0 out to x1 (or spanning, taper 0): its top a pavement of column ends with a lit
+// lip, its underside the stepped broken ends of the columns it is made of, shading darker with depth
+function basaltShelf(c, x0, x1, y, th, L, k, sd, taper = 1) {
+  const st = L.stone, dir = Math.sign(x1 - x0) || 1, w = 15, n = Math.ceil(Math.abs(x1 - x0) / w), dk = [8, 12, 20];
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n, xa = x0 + dir * i * w, xl = Math.min(xa, xa + dir * w), xr = xl + w, len = th * (0.5 + 0.5 * hash2(i, sd)) * (1 - 0.65 * taper * u * u), sh = hash2(i, sd + 1) * 0.15;
+    c.fillStyle = gLG(c, xl, y, xr, y + len, [basaltC(gMix(st, dk, 0.2 + sh), L, k), basaltC(gMix(st, dk, 0.62 + sh), L, k + 0.1)]);
+    c.beginPath(); c.moveTo(xl, y); c.lineTo(xr + 0.5, y); c.lineTo(xr + 0.5, y + len - 3); c.lineTo(xl + w * 0.55, y + len); c.lineTo(xl, y + len - 2); c.closePath(); c.fill();
+    c.strokeStyle = basaltC(gMix(st, dk, 0.72), L, k, 0.7); c.lineWidth = 0.7; c.beginPath(); c.moveTo(xr, y + 1); c.lineTo(xr, y + len - 3); c.lineTo(xl + w * 0.55, y + len); c.stroke();
+    c.strokeStyle = basaltC(gMix(st, [220, 236, 255], 0.2), L, k, 0.35); c.beginPath(); c.moveTo(xl + 1, y + 2); c.lineTo(xl + 1, y + len - 3); c.stroke();
+  }
+  const xa = Math.min(x0, x1), xb = Math.max(x0, x1), lip = 7;
+  c.fillStyle = gLG(c, 0, y - lip, 0, y + 1, [basaltC(gMix(st, [235, 245, 255], 0.36), L, k), basaltC(gMix(st, [200, 220, 240], 0.08), L, k)]); c.fillRect(xa, y - lip, xb - xa, lip + 1);
+  c.strokeStyle = basaltC(gMix(st, dk, 0.5), L, k, 0.55); c.lineWidth = 0.6;
+  for (let x = xa + 6 + 6 * hash2(sd, 3), q = 0; x < xb - 4; x += 11, q++) { basaltHexPath(c, x, y - lip * 0.5 + (q & 1 ? 0.6 : -0.6), 5.4, 0, 0.42); c.stroke(); }
+  c.strokeStyle = basaltC(gMix(st, [240, 248, 255], 0.5), L, k, 0.6); c.lineWidth = 0.9; c.beginPath(); c.moveTo(xa, y - lip + 0.4); c.lineTo(xb, y - lip + 0.4); c.stroke();
+  c.strokeStyle = basaltC(gMix(st, dk, 0.6), L, k, 0.8); c.beginPath(); c.moveTo(xa, y + 0.5); c.lineTo(xb, y + 0.5); c.stroke();
+}
+// a glowing seam in the far rock face: a zigzag crack, bright core, molten rim
+function basaltVein(c, x, y, len, sd, a = 1, jit = 14) {
+  const P = []; for (let i = 0; i <= 6; i++) P.push([x + (hash2(i, sd) - 0.5) * jit + i * len * 0.01 * jit / 6, y + i * len / 6]);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const [w, col] of [[6, `rgba(255,90,30,${0.22 * a})`], [2.4, `rgba(255,140,50,${0.85 * a})`], [0.9, `rgba(255,240,170,${0.9 * a})`]]) { c.strokeStyle = col; c.lineWidth = w; gPoly(c, P, false); c.stroke(); }
+}
+// a sky of glow-worm threads hanging from a roof edge: fine lines beaded with glowing drops
+function basaltThreadSky(c, x0, x1, yTop, n, len, L, k, sd, col = [130, 240, 255]) {
+  c.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const x = lerp(x0, x1, hash2(i, sd)), ll = len * (0.35 + 0.65 * hash2(i, sd + 1)), yt = yTop + 6 * Math.sin(x * 0.05 + sd);
+    c.strokeStyle = gCol(gMix(col, L.haze, k * 0.6), 0.28); c.lineWidth = 0.5; c.beginPath(); c.moveTo(x, yt); c.lineTo(x + 0.6, yt + ll); c.stroke();
+    for (let y = 6; y < ll; y += 7 + 3 * hash2(i, y | 0)) { c.fillStyle = gCol(gMix(col, [255, 255, 255], y > ll - 8 ? 0.5 : 0), y > ll - 8 ? 0.85 : 0.45); c.beginPath(); c.arc(x + 0.5 * y / ll, yt + y, y > ll - 8 ? 1.5 : 0.8, 0, TWO_PI); c.fill(); }
+    c.fillStyle = gRG(c, x, yt + ll, 7, [gCol(col, 0.28), gCol(col, 0)]); c.beginPath(); c.arc(x, yt + ll, 7, 0, TWO_PI); c.fill();
+  }
+}
+// a pool of cooling lava: a glowing molten pool with dark crust plates floating on it, their cracks bright
+function basaltLava(c, x, y, rx, ry, L, k, sd) {
+  c.fillStyle = gRG(c, x, y - ry * 2, rx * 1.6, ['rgba(255,140,60,.35)', 'rgba(255,90,30,.1)', 'rgba(255,90,30,0)']); c.beginPath(); c.ellipse(x, y - ry, rx * 1.5, ry * 5, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, x - rx * 0.2, y - ry * 0.3, rx, ['#fff2a0', '#ffb030', '#e4501a', '#8a2008']); c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TWO_PI); c.fill();
+  for (let i = 0; i < 6; i++) {
+    const u = (i + 0.5) / 6, px = x - rx + 2 * rx * u + (hash2(i, sd) - 0.5) * rx * 0.2, pw = rx * (0.12 + 0.1 * hash2(i, sd + 1)), py = y + (hash2(i, sd + 2) - 0.5) * ry * 0.6;
+    if (Math.abs(px - x) > rx * 0.85) continue;
+    c.fillStyle = gLG(c, 0, py - pw * 0.3, 0, py + pw * 0.3, ['#5a4440', '#2a1a18']); c.beginPath(); c.ellipse(px, py, pw, pw * ry / rx * 0.8, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,200,120,.5)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(px, py, pw, pw * ry / rx * 0.8, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+  }
+  c.strokeStyle = 'rgba(255,240,170,.7)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y, rx * 0.96, ry * 0.9, 0, Math.PI * 1.1, Math.PI * 1.6); c.stroke();
+}
+// a plume of steam: soft stacked puffs, lit warm from below
+function basaltSteam(c, x, y, h, L, k) {
+  for (let i = 0; i < 7; i++) { const u = i / 6, r = 8 + 18 * u, px = x + Math.sin(u * 4 + x) * 10 * u, py = y - h * u; c.fillStyle = gRG(c, px, py, r, [gCol(gMix([255, 210, 180], L.haze, 0.3 + u * 0.4), 0.22 * (1 - u * 0.7)), gCol(L.haze, 0)]); c.beginPath(); c.arc(px, py, r, 0, TWO_PI); c.fill(); }
+}
+// a clump of pale cave fungus: slender stalks, little caps lit on top, a faint glow
+function basaltFungus(c, x, y, n, L, k, sd) {
+  for (let i = 0; i < n; i++) {
+    const fx = x + (i - (n - 1) / 2) * 5 + (hash2(i, sd) - 0.5) * 3, h = 8 + 10 * hash2(i, sd + 1), cw = 3 + 2.5 * hash2(i, sd + 2);
+    c.strokeStyle = basaltC([230, 220, 210], L, k); c.lineWidth = 1.1; c.beginPath(); c.moveTo(fx, y); c.quadraticCurveTo(fx + 1, y - h * 0.5, fx + (hash2(i, sd + 3) - 0.5) * 3, y - h); c.stroke();
+    const tx = fx + (hash2(i, sd + 3) - 0.5) * 3, ty = y - h;
+    c.fillStyle = gRG(c, tx - cw * 0.3, ty - cw * 0.4, cw * 1.3, [basaltC([255, 250, 240], L, k * 0.6), basaltC([220, 190, 200], L, k * 0.6), basaltC([150, 120, 140], L, k * 0.6)]); c.beginPath(); c.ellipse(tx, ty, cw, cw * 0.55, 0, Math.PI, 0); c.closePath(); c.fill();
+    c.strokeStyle = basaltC([120, 96, 116], L, k, 0.7); c.lineWidth = 0.5; c.stroke();
+  }
+}
+// a vaulted roof band spanning the far chamber, its edge wavy and rim lit (threads hang from it)
+function basaltRoof(c, u0, u1, ry, L, j, stone) {
+  const yy = x => ry + 8 * Math.sin(x * 0.06 + j) + 6 * Math.sin(x * 0.17);
+  c.fillStyle = gLG(c, 0, ry - 80, 0, ry + 10, [basaltC(gMix(stone, [4, 8, 14], 0.3), L, 0.45), basaltC(stone, L, 0.4)]); c.beginPath(); c.moveTo(u0 - 10, ry - 90); c.lineTo(u1 + 10, ry - 90); for (let x = u1 + 10; x >= u0 - 10; x -= 20) c.lineTo(x, yy(x)); c.closePath(); c.fill();
+  // the roof's underside: column ends in a shallow honeycomb
+  c.strokeStyle = basaltC(gMix(stone, [4, 8, 14], 0.45), L, 0.4, 0.5); c.lineWidth = 0.7;
+  for (let x = u0 + 4, q = 0; x < u1; x += 15, q++) { basaltHexPath(c, x, yy(x) - 7 - (q & 1) * 6, 7, 0, 0.5); c.stroke(); }
+  c.strokeStyle = basaltC(gMix(stone, [200, 240, 250], 0.4), L, 0.4, 0.5); c.lineWidth = 1.2; c.beginPath(); for (let x = u0 - 10; x <= u1 + 10; x += 20) x > u0 - 10 ? c.lineTo(x, yy(x)) : c.moveTo(x, yy(x)); c.stroke();
+}
+// a tall far column running through the tiles at a fixed x for the section: in one tile of every `per` its top stands
+// here (the column above ends in a broken foot well clear of the cap); elsewhere it runs the tile's full height, so the
+// tiles join without a seam. rim: { l, r } coloured light along its left edge (cool glow-worm light from above) and its
+// right edge (warm lava light from below); the cap catches the cool light too
+function basaltRunCol(c, Ly, i, x, w, col, L, kk, rim = null, per = 3) {
+  const { j, y0, y1 } = Ly, m = pmod(j + Math.floor(hash2(i, 0x5c1) * per), per);
+  const segs = []; let top = null;
+  if (m) { basaltStand(c, x, y0 - 12, y1 + 12, w, col, L, kk, i * 13, false); segs.push([y0 - 12, y1 + 12]); }
+  else {
+    top = y0 + 150 + 200 * hash2(i, j * 7 + 3); const foot = top - 110 - 60 * hash2(i, j * 7 + 4);
+    basaltStand(c, x, y0 - 12, foot, w, col, L, kk, i * 13, false, true); basaltStand(c, x, top, y1 + 12, w, col, L, kk, i * 13);
+    segs.push([y0 - 12, foot], [top, y1 + 12]);
+  }
+  if (!rim) return;
+  for (const [e, rc] of [[-1, rim.l], [1, rim.r]]) if (rc) for (const [a, b] of segs) {
+    const ex = x + e * (w / 2 - 0.8);
+    c.strokeStyle = gCol(rc, 0.38); c.lineWidth = Math.max(1, w * 0.05); c.beginPath(); c.moveTo(ex, a + 2); c.lineTo(ex, b - 2); c.stroke();
+    c.strokeStyle = gCol(rc, 0.12); c.lineWidth = w * 0.2; c.beginPath(); c.moveTo(ex - e * w * 0.1, a + 2); c.lineTo(ex - e * w * 0.1, b - 2); c.stroke();
+  }
+  if (top !== null && (rim.l || rim.r)) { const rc = rim.l || rim.r, h = w * 0.22; c.strokeStyle = gCol(rc, 0.55); c.lineWidth = 1.1; c.beginPath(); c.moveTo(x - w / 2, top); c.lineTo(x - w * 0.22, top - h); c.lineTo(x + w * 0.22, top - h); c.lineTo(x + w / 2, top); c.stroke();
+    c.fillStyle = gRG(c, x, top - h * 0.3, w * 0.7, [gCol(rc, 0.16), gCol(rc, 0)]); c.beginPath(); c.arc(x, top - h * 0.3, w * 0.7, 0, TWO_PI); c.fill(); }
+}
+// the section's light on the columns: which side catches cool glow-worm light, which the lava's warmth
+const BASALT_RIM = { ember: { r: [255, 130, 60] }, seams: { l: [255, 190, 120], r: [255, 120, 50] }, rows: { l: [150, 210, 255], r: [255, 140, 70] }, gallery: { l: [120, 236, 255] },
+  pool: { l: [130, 220, 255], r: [90, 170, 230] }, ledges: { l: [210, 220, 255], r: [255, 200, 170] }, dark: { l: [214, 255, 120] }, vault: { l: [255, 214, 140], r: [120, 236, 255] } };
+// the forest: a giant's causeway of hexagonal columns behind everything, crowded, of every width, their tops stepping
+// at different heights (one tile in two), lit by the section's rims
+function basaltForest(c, Ly, L, set, n = 9, kk = 0.5, salt = 0) {
+  const { u0, W } = Ly, rim = BASALT_RIM[set];
+  for (let i = 0; i < n; i++) { const x = u0 + W * (i + 0.5) / n + (hash2(i, 0x7d1 + salt) - 0.5) * W / n * 0.6, w = 22 + 16 * hash2(i, 0x7d3 + salt);
+    basaltRunCol(c, Ly, i + 40 + salt, x, w, gMix(L.stone, [8, 12, 20], 0.12 + 0.2 * hash2(i, 0x7d5 + salt)), L, kk, rim, 2); }
+}
+// a far tile's layout (shared by the painter and the mask's lights): what stands where, and where its lights are
+function basaltFarLayout(j, u0, u1, set) {
+  const W = u1 - u0, y0 = -(j + 1) * BASALT_BB - 4, y1 = -j * BASALT_BB + 4, sd = j * 17 + 5, rnd = q => hash2(j, sd + q), lights = [];
+  const L = { j, W, y0, y1, sd, rnd, lights, u0, u1, shelves: [] };
+  if (set === 'ember' || set === 'seams') {
+    const em = set === 'ember';
+    L.shelves = [[-1, y0 + (em ? 190 : 150) + 30 * rnd(1)], [1, y0 + (em ? 360 : 330) + 20 * rnd(2)]].map(([side, y], q) => {
+      const len = W * (em ? 0.4 : 0.3) + 30 * rnd(q + 4), x0 = side < 0 ? u0 - 10 : u1 + 10, x1 = side < 0 ? u0 + len : u1 - len, px = x1 + side * 42;
+      lights.push({ x: px, y: y - 10, r: 120, col: [255, 120, 50] });
+      return { side, y, x0, x1, px };
+    });
+  }
+  else if (set === 'gallery' || set === 'pool') { for (let q = 0; q < 3; q++) lights.push({ x: u0 + W * (0.15 + 0.35 * q), y: y0 + (set === 'pool' ? 330 : 130) + 40 * rnd(q + 5), r: 110, col: [110, 236, 255] }); }
+  else if (set === 'vault') { for (let q = 0; q < 2; q++) lights.push({ x: u0 + W * (0.25 + 0.5 * q), y: y0 + 150 + 120 * q, r: 120, col: [255, 214, 140] }); }
+  else if (set === 'ledges') lights.push({ x: u0 + W * (0.35 + 0.3 * rnd(7)), y: y0 + 200, r: 100, col: [200, 220, 255] });
+  else if (set === 'rows') lights.push({ x: u0 + W * (0.3 + 0.4 * rnd(8)), y: y0 + 160 + 120 * rnd(9), r: 90, col: [255, 140, 60] });
+  else if (set === 'dark') for (let q = 0; q < 3; q++) lights.push({ x: u0 + W * (0.12 + 0.76 * rnd(q + 40)), y: y0 + 70 + 300 * rnd(q + 43), r: 80, col: [214, 255, 120] });
+  return L;
+}
+function basaltFarPaint(c, sec, a0, a1, u0, u1) {
+  const L = BASALT_LIGHT[sec] || BASALT_LIGHT['Column Rows'], set = L.set, j = Math.floor(a0 / BASALT_BB), Ly = basaltFarLayout(j, u0, u1, set), { W, y0, y1, sd, rnd } = Ly;
+  // the far rock face: flat haze with a soft blotchy wash of light and dark
+  c.fillStyle = basaltC(gMix(L.stone, L.haze, 0.5), L, 0.55); c.fillRect(u0 - 10, y0, W + 20, y1 - y0);
+  for (let q = 0; q < 8; q++) { const bx = u0 + W * hash2(q, sd + 40), by = y0 + 60 + (y1 - y0 - 120) * hash2(q, sd + 41), br = 60 + 50 * hash2(q, sd + 42), lt = q % 2 ? [200, 220, 240] : [4, 8, 14];
+    c.fillStyle = gRG(c, bx, by, br, [basaltC(gMix(L.stone, lt, 0.12), L, 0.55, 0.7), basaltC(gMix(L.stone, lt, 0.12), L, 0.55, 0)]); c.beginPath(); c.arc(bx, by, br, 0, TWO_PI); c.fill(); }
+  // a faint honeycomb of column ends in the far face
+  c.strokeStyle = basaltC(gMix(L.stone, [4, 8, 14], 0.4), L, 0.5, 0.35); c.lineWidth = 0.8;
+  for (let gy = 0; gy < 14; gy++) for (let gx = 0; gx < 22; gx++) { if (hash2(gx + gy * 22, sd) > 0.35) continue; const x = u0 + gx * 22 + (gy & 1) * 11, y = y0 + 16 + gy * 32; basaltHexPath(c, x, y, 11, 0); c.stroke(); }
+  if (set !== 'rows' && set !== 'dark') basaltForest(c, Ly, L, set, set === 'pool' || set === 'gallery' ? 7 : 9, 0.5);
+  const K = 0.38, stone = L.stone, colX = (i, n) => u0 + W * (i + 0.5) / n + (hash2(i, 0x7a1 + n) - 0.5) * W / n * 0.5;
+  if (set === 'ember' || set === 'seams') {
+    const em = set === 'ember', fx = u0 + W * 0.55;
+    if (!em) {
+      // a lava fall far off, the same line all the way down the section: a soft orange glow with a warm core
+      c.fillStyle = gLG(c, fx - 14, 0, fx + 14, 0, ['rgba(255,110,40,0)', 'rgba(255,150,60,.42)', 'rgba(255,110,40,0)']); c.fillRect(fx - 14, y0, 28, y1 - y0);
+      c.fillStyle = gLG(c, fx - 3, 0, fx + 3, 0, ['rgba(255,170,80,.3)', 'rgba(255,226,150,.6)', 'rgba(255,170,80,.3)']); c.fillRect(fx - 3, y0, 6, y1 - y0);
+      for (let q = 0; q < 10; q++) { const y = y0 + (y1 - y0) * hash2(q, sd + 70); c.fillStyle = 'rgba(255,236,170,.35)'; c.fillRect(fx - 2.5, y, 5, 6 + 10 * hash2(q, sd + 71)); }
+    }
+    // far columns behind the ledges, hazier
+    const n = em ? 4 : 6;
+    for (let i = 0; i < n; i++) { const x = colX(i, n), w = 30 + 10 * hash2(i, 0x7b3); if (!em && Math.abs(x - fx) < 34) continue; basaltRunCol(c, Ly, i, x, w, gMix(stone, [8, 12, 20], 0.2), L, em ? 0.5 : 0.4, BASALT_RIM[set]);
+      if (!em && hash2(i, sd + 34) < 0.6) basaltVein(c, x - w * 0.18, y0 + 60 + 260 * hash2(i, sd + 35), 54, sd + i, 0.55, 3); }
+    // ledges jutting from the sides: a colonnade standing on each (Ember Floor), a lava pool cooling at its tip
+    for (const sh of Ly.shelves) {
+      if (em) { const n = 3 + Math.floor(rnd(sh.side + 12) * 2), w = 22, x0 = sh.side < 0 ? u0 + 40 : u1 - 40 - n * w;
+        basaltColonnade(c, x0, n, w, sh.y - 6, [...Array(n)].map((_, i) => 34 + (sh.side < 0 ? n - 1 - i : i) * 22 + 14 * hash2(i, sd + sh.side)), stone, L, K, sd + sh.side * 9); }
+      else basaltSteam(c, sh.px, sh.y - 10, 130, L, K);
+      basaltShelf(c, sh.x0, sh.x1, sh.y, 34, L, K, sd + sh.side * 5);
+      basaltLava(c, sh.px, sh.y - 5, em ? 36 : 30, 4.5, L, K, sd + sh.side);
+      // a molten drip off the tip
+      const tx = sh.x1 + sh.side * 4; c.strokeStyle = 'rgba(255,140,50,.7)'; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); c.moveTo(tx, sh.y - 2); c.quadraticCurveTo(tx + sh.side * 2, sh.y + 10, tx + sh.side, sh.y + 22); c.stroke(); c.fillStyle = 'rgba(255,230,150,.85)'; c.beginPath(); c.arc(tx + sh.side, sh.y + 23, 1.8, 0, TWO_PI); c.fill();
+    }
+  } else if (set === 'rows' || set === 'dark') {
+    // two ranks of tall columns running the whole section, the far one hazier; glowing seams in the face between them
+    const dk = set === 'dark', big = dk ? 1.5 : 1;
+    for (const [rank, kk, w, n] of [[0, 0.62, 30 * big, dk ? 4 : 6], [1, 0.42, 40 * big, dk ? 3 : 4]]) {
+      for (let i = 0; i < n; i++) basaltRunCol(c, Ly, i + rank * 10, colX(i + rank * 0.5, n) , w * (0.9 + 0.2 * hash2(i, 0x7c1 + rank)), gMix(stone, [8, 12, 20], rank ? 0.1 : 0.3), L, kk * 0.85, BASALT_RIM[set], rank ? 3 : 2);
+      if (!rank && !dk) for (const l of Ly.lights) basaltVein(c, l.x, l.y - 40, 80, sd + 3, 0.9);
+    }
+    if (dk) for (const l of Ly.lights) {
+      // a swarm of fireflies drifting between the giant columns
+      c.fillStyle = gRG(c, l.x, l.y, 40, ['rgba(214,255,120,.16)', 'rgba(214,255,120,0)']); c.beginPath(); c.arc(l.x, l.y, 40, 0, TWO_PI); c.fill();
+      for (let q = 0; q < 16; q++) { const a = hash2(q, l.x | 0) * TWO_PI, r = 34 * Math.sqrt(hash2(q, (l.x | 0) + 1)), x = l.x + Math.cos(a) * r * 1.3, y = l.y + Math.sin(a) * r, rr = 1 + 1.2 * hash2(q, 9);
+        c.fillStyle = gRG(c, x, y, rr * 3, ['rgba(236,255,170,.9)', 'rgba(214,255,120,.35)', 'rgba(214,255,120,0)']); c.beginPath(); c.arc(x, y, rr * 3, 0, TWO_PI); c.fill(); c.fillStyle = '#f6ffd8'; c.beginPath(); c.arc(x, y, rr * 0.6, 0, TWO_PI); c.fill(); }
+    }
+  } else if (set === 'gallery') {
+    // a vaulted roof band with a sky of glow-worm threads, column stumps standing on a shelf under it
+    const ry = y0 + 70 + 30 * rnd(14);
+    basaltRoof(c, u0, u1, ry, L, j, stone);
+    basaltThreadSky(c, u0, u1, ry + 4, 64, 190, L, K, sd);
+    const sy = y1 - 40, n = 6;
+    for (let i = 0; i < n; i++) { const x = u0 + W * (i + 0.5) / n + (hash2(i, sd + 15) - 0.5) * 30, top = sy - 50 - 90 * hash2(i, sd + 16); basaltStand(c, x, top, sy + 2, 26 + 10 * hash2(i, sd + 17), stone, L, 0.45, sd + i); }
+    basaltShelf(c, u0 - 10, u1 + 10, sy, 28, L, 0.42, sd, 0);
+  } else if (set === 'ledges') {
+    // ledges jutting from the sides, broken stacks on them; pale crickets perched on the caps; fungus at the tips
+    for (let q = 0; q < 3; q++) {
+      const side = q % 2 ? 1 : -1, x = side < 0 ? u0 + W * (0.14 + 0.08 * rnd(q)) : u1 - W * (0.14 + 0.08 * rnd(q)), base = y0 + 70 + q * 115, n = 3, w = 26, sy = base + 70, hs = [70, 50 + 20 * rnd(q + 20), 30];
+      basaltColonnade(c, x - n * w / 2, n, w, sy - 6, hs, stone, L, K, sd + q);
+      const tip = x - side * (n * w / 2 + 34);
+      basaltShelf(c, side < 0 ? u0 - 10 : u1 + 10, tip, sy, 26, L, K, sd + q * 3);
+      basaltFungus(c, tip + side * 14, sy - 7, 4, L, K, sd + q * 3);
+      if (q !== 1) { const ci = side < 0 ? 0 : 2, cx = x - n * w / 2 + (ci + 0.5) * w, ct = sy - 6 - hs[ci]; c.save(); c.globalAlpha = 0.7; c.translate(cx, ct - 6); c.scale(-side * 0.6, 0.6); basaltCricketPaint(c, 0); c.restore(); }
+    }
+  } else if (set === 'pool') {
+    // a still black lake held in a basin: a roof above hung with glow-worms, column islands, the lights mirrored
+    const wy = y0 + 270 + 30 * rnd(18), bot = wy + 64;
+    basaltRoof(c, u0, u1, y0 + 34, L, j, stone);
+    basaltThreadSky(c, u0, u1, y0 + 38, 50, 140, L, K, sd);
+    c.fillStyle = gLG(c, 0, wy, 0, bot, [basaltC([20, 40, 66], L, 0.3), basaltC([8, 16, 30], L, 0.3)]); c.fillRect(u0 - 10, wy, W + 20, bot - wy);
+    for (let i = 0; i < 40; i++) { const x = u0 + W * hash2(i, sd + 60), y = wy + 6 + (bot - wy - 10) * hash2(i, sd + 61), w = 3 + 10 * hash2(i, sd + 62); c.strokeStyle = `rgba(150,236,255,${0.25 + 0.3 * hash2(i, sd + 63)})`; c.lineWidth = 0.9; c.beginPath(); c.moveTo(x - w, y); c.lineTo(x + w, y); c.stroke(); }
+    c.strokeStyle = 'rgba(190,240,255,.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(u0 - 10, wy); c.lineTo(u1 + 10, wy); c.stroke();
+    for (let q = 0; q < 3; q++) { const x = u0 + W * (0.2 + 0.3 * q) + (rnd(q + 22) - 0.5) * 40, n = 2 + (q % 2), w = 24; basaltColonnade(c, x - n * w / 2, n, w, wy + 2, [40 + 30 * rnd(q + 25), 60 + 30 * rnd(q + 26), 30].slice(0, n), stone, L, K, sd + q);
+      c.fillStyle = basaltC(gMix(stone, [10, 20, 40], 0.5), L, 0.4, 0.45); c.fillRect(x - n * w / 2, wy + 3, n * w, 30); }
+    basaltShelf(c, u0 - 10, u1 + 10, bot, 30, L, K, sd + 4, 0);
+  } else if (set === 'vault') {
+    // warm columns stepping up both sides on ledges, glow-worm lanterns hung from the roof
+    const ry = y0 + 40;
+    basaltRoof(c, u0, u1, ry, L, j, stone);
+    for (let q = 0; q < 2; q++) { const n = 5, w = 30, x0 = q ? u1 - 30 - n * w : u0 + 30, sy = y1 - 40; basaltColonnade(c, x0, n, w, sy - 6, [...Array(n)].map((_, i) => 140 + 50 * Math.sin((i + q) * 0.9) + 30 * hash2(i, sd + q)), stone, L, K, sd + q * 5);
+      basaltShelf(c, q ? u1 + 10 : u0 - 10, q ? x0 - 24 : x0 + n * w + 24, sy, 30, L, K, sd + q); }
+    for (const l of Ly.lights) { c.strokeStyle = basaltC([220, 200, 170], L, K, 0.5); c.lineWidth = 0.7; c.beginPath(); c.moveTo(l.x, ry); c.lineTo(l.x, l.y - 12); c.stroke(); c.fillStyle = gRG(c, l.x, l.y, 16, ['#fffbe8', '#ffd890', 'rgba(255,190,90,0)']); c.beginPath(); c.arc(l.x, l.y, 16, 0, TWO_PI); c.fill(); basaltThreadSky(c, l.x - 20, l.x + 20, l.y + 4, 8, 40, L, 0.2, sd + l.x | 0, [255, 220, 150]); }
+  }
+  // a calm veil of haze over it all, so the shaft reads first
+  c.fillStyle = basaltC(L.haze, L, 0, 0.14); c.fillRect(u0 - 10, y0, W + 20, y1 - y0);
+}
+// near: great column flanks rising close by at the sides in runs of four tiles (a cap in the top tile, the foot lost in
+// the dark below), soft and dim; between runs, open space
+function basaltNearPaint(c, a0, a1, u0, u1, sec) {
+  const L = BASALT_LIGHT[sec] || BASALT_LIGHT['Column Rows'], j = Math.floor(a0 / BASALT_NB), k = 0.6, y0 = -a1 - 6, y1 = -a0 + 6;
+  for (const side of [0, 1]) {
+    const jj = j + side * 2, b = Math.floor(jj / 4), m = pmod(jj, 4);
+    if (hash2(b, 0xf30 + side) < 0.5) continue;
+    const w = 56 + 20 * hash2(b, 0xf24 + side), x = side ? u1 - w * 0.2 : u0 + w * 0.2, top = m === 3 ? y0 + 40 + 140 * hash2(b, 0xf25) : y0 - 12;
+    basaltStand(c, x, top, y1 + 12, w, gMix(L.stone, [6, 10, 16], 0.35), L, k, b * 5 + side, m === 3);
+    if (m === 0) { c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = gLG(c, 0, y0 + 60, 0, y1 - 20, ['rgba(0,0,0,0)', 'rgba(0,0,0,1)']); c.fillRect(x - w, y0 - 20, w * 2, y1 - y0 + 40); c.restore(); }
+  }
+}
+function basaltRooms() {
+  const ss = (G.level && G.level.sections) || [], m = G.camAlt + viewH / 2, i = basaltSecIdx(m), W = 300, nm = q => (ss[q] && ss[q].name) || 'Column Rows';
+  if (ss[i + 1] && m > ss[i + 1].a0 - W) return { a: nm(i), b: nm(i + 1), k: smooth(ss[i + 1].a0 - W, ss[i + 1].a0 + W, m), nx: null };
+  if (i > 0 && m < ss[i].a0 + W) return { a: nm(i - 1), b: nm(i), k: smooth(ss[i].a0 - W, ss[i].a0 + W, m), nx: null };
+  return { a: nm(i), b: null, k: 0, nx: ss[i + 1] && m > ss[i + 1].a0 - W - 900 ? nm(i + 1) : null };
+}
+function basaltDrawBackground() {
+  basaltCacheCheck(); basaltMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, [u0, u1] = basaltXSpan();
+  const L = basaltLightAt(G.camAlt + viewH / 2), R = basaltRooms();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, [gCol(L.top), gCol(gMix(L.top, L.bot, 0.55)), gCol(L.bot)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  const layer = (f, tag, paint, B, sec, al) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${sec}|${j}`, need = al > 0.01 && j <= Math.floor(pa1 / B);
+      if (!need && (basaltMade || BASALTC.tiles.has(id))) continue;
+      if (!BASALTC.tiles.has(id)) basaltMade++;
+      const Tl = basaltTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1, sec));
+      if (need) { ctx.globalAlpha = al; basaltTileBlit(Tl, f); ctx.globalAlpha = 1; }
+    }
+  };
+  const rooms = R.b ? [[R.a, 1 - R.k], [R.b, R.k]] : [[R.a, 1]];
+  if (R.nx) rooms.push([R.nx, 0]);
+  for (const [sec, al] of rooms) layer(BASALT_FAR, 'f', (c, a0, a1, x0, x1, sc) => basaltFarPaint(c, sc, a0, a1, x0, x1), BASALT_BB, sec, al);
+  // live: the far lights breathe (lava pools flicker, glow-worm skies twinkle)
+  {
+    const T = G.t, f = BASALT_FAR, pa0 = G.camAlt * f - 20, pa1 = G.camAlt * f + viewH + 20, sec = R.b && R.k > 0.5 ? R.b : R.a, set = (BASALT_LIGHT[sec] || {}).set;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let j = Math.floor(pa0 / BASALT_BB); j <= Math.floor(pa1 / BASALT_BB); j++) for (const l of basaltFarLayout(j, u0, u1, set).lights) {
+      const X = ox + l.x * s, Y = H - (-l.y - G.camAlt * f) * s, r = l.r * 0.8 * s; ctx.globalAlpha = 0.16 + 0.06 * Math.sin(T * (set === 'ember' || set === 'seams' ? 3.1 : 1.3) + l.x); ctx.drawImage(basaltGlowCv(l.col), X - r, Y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+  }
+  for (const [sec, al] of rooms) layer(BASALT_NEAR, 'n', basaltNearPaint, BASALT_NB, sec, al);
+  basaltDrawMotes();
+  basaltMade = 0;
+}
+// glow-worm drift and specks of dust; embers near the lava; fireflies in the deep dark (motes)
+MOTE_DRIFT.bsmote = [-4, 10];
+{ const base = moteKind; moteKind = function (m, a) { return basaltOn() ? 'bsmote' : base(m, a); }; }
+function basaltDrawMotes() {
+  const T = G.t, L = basaltLightAt(G.camAlt + viewH / 2), warm = L.set === 'ember' || L.set === 'seams', ff = L.set === 'dark' || L.set === 'vault';
+  const col = warm ? [255, 150, 70] : ff ? [214, 255, 120] : [130, 236, 255], gl = basaltGlowCv(col), dot = gCol(gMix(col, [255, 255, 255], 0.5));
+  for (const m of motes) {
+    const mx = ox + m.x * playW + Math.sin(T * 0.5 + m.ph) * 9 * s, y = m.y, r = (0.9 + m.sz * 0.5) * s * (0.6 + m.depth * 0.6);
+    if (m.r < 0.35) {
+      const tw = ff ? Math.max(0, Math.sin(T * 1.3 + m.ph * 5)) : 0.5 + 0.5 * Math.sin(T * 2 + m.ph * 3);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.25 + 0.35 * m.depth) * tw; ctx.drawImage(gl, mx - r * 6, y - r * 6, r * 12, r * 12); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.4 + 0.5 * tw; ctx.fillStyle = dot; ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill();
+    } else { ctx.globalAlpha = 0.1 + 0.18 * m.depth; ctx.fillStyle = '#b8c8d8'; ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- the dark ----
+// A quarter-resolution mask: the section's dark at its strength, with soft holes punched by every light: the pilot's
+// glow (the firefly's much bigger), the backdrop's lights, the lit nests, the curtains' threads, the magma seams and
+// their streams, the lava glow from below on the Ember Floor, and the Lantern Vault. Laid over the backdrop and walls.
+const BASALT_DARK = { cv: null, c: null, hole: null, q: 0.25 };
+function basaltHoleCv() {
+  if (BASALT_DARK.hole) return BASALT_DARK.hole;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const q = cv.getContext('2d');
+  q.fillStyle = gRG(q, 32, 32, 32, ['rgba(255,255,255,1)', 'rgba(255,255,255,.85)', 'rgba(255,255,255,.4)', 'rgba(255,255,255,0)']); q.fillRect(0, 0, 64, 64);
+  return (BASALT_DARK.hole = cv);
+}
+function basaltDrawDark() {
+  const D = BASALT_DARK, Q = D.q, P = drawPad * s + 30, W = Math.ceil((cssW + 2 * P) * Q), Hh = Math.ceil((H + 2 * P) * Q);
+  if (!D.cv) { D.cv = document.createElement('canvas'); D.c = D.cv.getContext('2d'); }
+  if (D.cv.width !== W || D.cv.height !== Hh) { D.cv.width = W; D.cv.height = Hh; }
+  const c = D.c, L = basaltLightAt(G.camAlt + viewH / 2), T = G.t, hole = basaltHoleCv(), [u0, u1] = basaltXSpan();
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.clearRect(0, 0, W, Hh);
+  c.fillStyle = gCol(L.dark, L.da); c.fillRect(0, 0, W, Hh);
+  c.globalCompositeOperation = 'destination-out';
+  const punch = (X, Y, r, a, ry = r) => { if (a < 0.02) return; X = (X + P) * Q; Y = (Y + P) * Q; r *= Q; ry *= Q; if (X + r < 0 || X - r > W || Y + ry < 0 || Y - ry > Hh) return; c.globalAlpha = Math.min(1, a); c.drawImage(hole, X - r, Y - ry, r * 2, ry * 2); };
+  // the pilot's own glow (and the flame's), breathing a little
+  if (G.p) { const r = basaltLightR() * s * (1 + 0.03 * Math.sin(T * 3)); punch(sx(G.p.x), sy(G.p.alt + 8), r, 0.95); punch(sx(G.p.x), sy(G.p.alt - 30), r * 0.5, 0.5); }
+  // the backdrop's lights
+  { const f = BASALT_FAR, pa0 = G.camAlt * f - 60, pa1 = G.camAlt * f + viewH + 60, R = basaltRooms(), sec = R.b && R.k > 0.5 ? R.b : R.a, set = (BASALT_LIGHT[sec] || {}).set;
+    for (let j = Math.floor(pa0 / BASALT_BB); j <= Math.floor(pa1 / BASALT_BB); j++) for (const l of basaltFarLayout(j, u0, u1, set).lights) punch(ox + l.x * s, H - (-l.y - G.camAlt * f) * s, l.r * 1.2 * s, 0.55); }
+  // the lava far below: a glow from the bottom of the screen on the Ember Floor
+  if (L.set === 'ember') punch(cssW / 2, H + 40, cssW * 0.9, 0.6, 220);
+  // the lit nests
+  const Lv = G.level;
+  if (Lv && Lv.nests) for (const n of Lv.nests) if (n.lit && n.alt > G.camAlt - 100 && n.alt < G.camAlt + viewH + 100) { const [x, a] = basaltNestPos(n); punch(sx(x), sy(a - 10), 70 * s, 0.8); }
+  // the fire opals light their own patch of the dark
+  for (const f of G.fruit || []) if (f.opal && f.alt > G.camAlt - 100 && f.alt < G.camAlt + viewH + 100) punch(sx(f.x), sy(f.alt), 60 * s, 0.7);
+  // the traps' lights
+  for (const h of G.hazards) {
+    if (h.hi < G.camAlt - 120 || h.lo > G.camAlt + viewH + 120) continue;
+    if (h.type === 'basaltCurtain') { const X = sx((h.L + h.R) / 2), Y = sy(h.alt + BASALT.curtain.len * 0.5); punch(X, Y, (h.R - h.L) * 0.62 * s, 0.75, 80 * s); }
+    else if (h.type === 'basaltJet') { const st = h.st || basaltJetAt(h, T); punch(sx(h.base), sy(h.alt), 70 * s, 0.6 + 0.3 * (st.ph !== 'rest')); if (st.L > 0.05) for (const q of basaltJetPts(h, st, 4)) punch(sx(q[0]), sy(q[1]), 70 * s, 0.7); }
+    else if (h.type === 'basaltRipple') { const st = h.st || basaltRippleAt(h, T); if (st.ph === 'tell') punch(sx(h.base), sy(h.alt + 70), 70 * s, 0.5 * st.tell, 110 * s); }
+  }
+  // the Lantern Vault's glow
+  const a = G.adv; if (a && a.end && a.st && a.st.theme === 'basalt') { const y = sy(a.end + 240); if (y > -400 && y < H + 300) punch(cssW / 2, y, 300 * s, 0.9, 340 * s); }
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+  ctx.drawImage(D.cv, -P, -P, W / Q, Hh / Q);
+}
+
+// ---- light, speed and the foreground ----
+// the deep's light: a cool blue-black vignette at the edges (never pure black), the pilot's own glow tinting what it
+// lights (lime for the firefly, the flame's warm gold for anyone else), lava warmth from below near the lava, the
+// Lantern Vault's warm glow as you near the finish
+function basaltDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P, L = basaltLightAt(G.camAlt + viewH / 2);
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.8);
+  vg.addColorStop(0, gCol(L.dark, 0)); vg.addColorStop(1, gCol(gMix(L.dark, [20, 30, 50], 0.5), 0.4)); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  if (G.p && G.state !== 'dead') { const ff = basaltFirefly(), r = basaltLightR() * 0.9 * s; basaltGlow(ctx, sx(G.p.x), sy(G.p.alt + 6), r, ff ? BASALTP.lime : [255, 200, 130], ff ? 0.16 : 0.1); }
+  if (L.set === 'ember' || L.set === 'seams') { const g = ctx.createLinearGradient(0, H, 0, H * 0.4); g.addColorStop(0, gCol([255, 110, 40], L.set === 'ember' ? 0.14 : 0.07)); g.addColorStop(1, gCol([255, 110, 40], 0)); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'basalt') {
+    const ha = a.end + 220, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(160,240,255,${(0.08 + 0.14 * pay) * k})`); g.addColorStop(0.5, `rgba(255,214,140,${0.05 * k})`); g.addColorStop(1, 'rgba(255,214,140,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: pale grit streaks down the walls and flecks of glow-worm silk whipping past
+function basaltDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(5 * k); i++) {
+    const j = hash2(i + side * 31, 0xe31), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xe32) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(basaltWallX(a, side)) + (side ? -1 : 1) * (10 + 14 * j) * s, len = (24 + 100 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol([180, 220, 250], (0.05 + 0.14 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.4 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(10 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xe33)), len = (6 + 16 * hash2(i, 0xe34)) * (0.5 + 1.2 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xe35)) + hash2(i, 0xe36) * H * 2) % (H + 200)) - 100;
+    ctx.globalAlpha = 0.12 + 0.25 * k * hash2(i, 0xe37); ctx.strokeStyle = i % 3 ? '#5aa8c0' : '#b8eaf8'; ctx.lineWidth = (1.4 + hash2(i, 0xe38)) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: a column's dark flank or a hank of beaded glow-worm threads close to the camera at the screen's edges,
+// fading back when a trap or you are near
+function basaltFgSprite(side, v) {
+  return basaltSprite(`fg${side}_${v}`, 80, 220, side ? 70 : 10, 110, c => {
+    const d = side ? -1 : 1;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (v === 0) {
+      // a broken column end jutting in from the edge, its hex face toward us, a drip of silk off it
+      c.save(); c.translate(26 * d, -30); c.scale(d, 1); basaltPrismPaint(c, 60, 13, 0, [52, 60, 72]); c.restore();
+      c.strokeStyle = 'rgba(170,230,245,.5)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(18 * d, -18); c.quadraticCurveTo(20 * d, 10, 17 * d, 40); c.stroke();
+      for (let y = -8; y < 40; y += 8) { c.fillStyle = 'rgba(170,240,255,.75)'; c.beginPath(); c.arc(17.5 * d + (y + 18) * 0.02 * d, y, y > 32 ? 2.2 : 1.1, 0, TWO_PI); c.fill(); }
+    } else {
+      // a hank of hanging threads, beaded with glowing drops
+      for (let q = 0; q < 6; q++) {
+        const x = (4 + q * 6) * d, len = 100 + 80 * hash2(q, 0xe41);
+        c.strokeStyle = 'rgba(150,220,240,.45)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x, -110); c.quadraticCurveTo(x + 3, -110 + len * 0.5, x + d, -110 + len); c.stroke();
+        for (let y = 12; y < len; y += 10) { const r = y > len - 10 ? 2.6 : 1.2; c.fillStyle = gRG(c, x, -110 + y, r * 1.5, ['#ffffff', '#9af4ff', 'rgba(48,184,216,.6)']); c.beginPath(); c.arc(x + d * y * 0.01, -110 + y, r, 0, TWO_PI); c.fill(); }
+      }
+    }
+    c.fillStyle = 'rgba(6,12,22,.3)'; c.fillRect(-60, -110, 160, 220);
+  });
+}
+function basaltDrawForeground() {
+  const f = 1.35, slot = 380, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xe51) < 0.55) continue;
+    const side = hash2(i, 0xe52) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xe53) - b0) * s;
+    if (y < -120 * s || y > H + 120 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.15 + 0.7 * smooth(40, 220, dist);
+    const S = basaltFgSprite(side, Math.floor(hash2(i, 0xe54) * 2));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+
+// ---- The Lantern Vault: the finish ----
+// At the top of the deep the shaft opens into a tall domed vault where the columns radiate from a rosette in its roof
+// like the spokes of a great stone flower. From the rosette hangs a chandelier of glow-worm threads, hundreds of beads
+// of cyan light, and in their midst, cradled in a hammock of silk on a rope from the roof, the Glow-Worm Matriarch: a big
+// plump curled glow-worm, translucent and glowing from inside, her lantern tail blazing, a dewdrop tiara, smiling down.
+// Standing columns flank the vault, a dais of column tops steps up under her, fireflies drift. On the clear the
+// chandelier lights up in a wave from the middle out, she wriggles and waves, her lantern flares and a swarm of
+// fireflies and sparks bursts through the vault.
+const BASALT_FIN = { half: 178, wall: 300, dome: 200, rope: 345 };
+const BASALT_MP = ['#f6ffff', '#b8f6ff', '#5ad2e8', '#1c8aa2'], BASALT_ME = '#167890';
+function basaltApse(c) { const F = BASALT_FIN; c.beginPath(); c.moveTo(-F.half, 0); c.lineTo(-F.half, -F.wall); c.ellipse(0, -F.wall, F.half, F.dome, 0, Math.PI, TWO_PI); c.lineTo(F.half, 0); c.closePath(); }
+// the chandelier's threads (apse units): [x top, y top, length, phase]
+function basaltChandelier() {
+  const out = [], F = BASALT_FIN, cy = -F.wall - F.dome * 0.62;
+  for (const [R, n, l0] of [[40, 8, 70], [80, 12, 110], [124, 16, 150]]) for (let i = 0; i < n; i++) {
+    const ang = Math.PI + (i + 0.5) / n * Math.PI, h = hash2(i, R);
+    out.push([Math.cos(ang) * R * 1.1, cy + Math.sin(ang) * R * 0.5 + 20, l0 * (0.6 + 0.6 * h), h]);
+  }
+  return out;
+}
+function basaltChandCached() { return BASALTC.chand || (BASALTC.chand = basaltChandelier()); }
+function basaltVaultSprite() {
+  const F = BASALT_FIN, L = { haze: [40, 40, 44] };
+  return basaltSprite('vault', 440, 620, 220, 590, c => {
+    c.save(); basaltApse(c); c.clip();
+    // the back wall: a honeycomb of column ends sinking into the dark, a pool of cyan-gold light at its heart
+    c.fillStyle = gLG(c, 0, -F.wall - F.dome, 0, 0, ['#141c26', '#1e2a36', '#2a3440']); c.fillRect(-200, -560, 400, 580);
+    const R = 15, DX = R * Math.sqrt(3), DY = R * 1.5;
+    for (let gy = 0; gy < 34; gy++) for (let gx = -8; gx <= 8; gx++) { const x = gx * DX + (gy & 1 ? DX / 2 : 0), y = -gy * DY - 8, dc = Math.hypot(x, (y + 240) * 0.8); basaltHexFace(c, x, y, R * 0.97, gMix([92, 100, 110], [20, 26, 36], clamp(dc / 260, 0, 0.8)), 1 - clamp(dc / 300, 0, 0.6), 0); }
+    c.fillStyle = gRG(c, 0, -240, 260, ['rgba(160,240,255,.34)', 'rgba(255,214,140,.12)', 'rgba(255,214,140,0)']); c.fillRect(-200, -560, 400, 580);
+    // the rosette: rings of column ends radiating from the roof's centre, smaller toward it, prism sides as spokes
+    const cx = 0, cy = -F.wall - F.dome * 0.62;
+    for (let k = 0; k < 24; k++) { const a = Math.PI + k / 24 * Math.PI * 2; gPair(c, [[cx + Math.cos(a) * 22, cy + Math.sin(a) * 14], [cx + Math.cos(a) * 200, cy + Math.sin(a) * 120]], 'rgba(8,12,20,.6)', 'rgba(200,226,246,.35)', 1.6, -1); }
+    for (const [rr, n, hr] of [[150, 26, 13], [110, 20, 11], [74, 14, 9], [42, 9, 7]]) for (let i = 0; i < n; i++) { const a = i / n * TWO_PI, x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.6; basaltHexFace(c, x, y, hr, gMix([110, 118, 126], [40, 48, 60], rr / 200), 1, a); }
+    basaltHexFace(c, cx, cy, 16, [130, 136, 140], 1, 0);
+    // flanking standing columns
+    for (const e of [-1, 1]) for (const [dx, w, top] of [[156, 40, -360], [118, 32, -290], [86, 24, -200]]) basaltStand(c, e * dx, top, 4, w, [78 + dx * 0.1, 86 + dx * 0.1, 98 + dx * 0.1], L, 0, dx);
+    // pillar rims catching her light, and glow-worm nests hung on the pillars
+    for (const e of [-1, 1]) for (const [dx, w, top] of [[156, 40, -360], [118, 32, -290], [86, 24, -200]]) { c.strokeStyle = 'rgba(150,240,255,.4)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(e * dx - e * w / 2 + e * 1, top + 4); c.lineTo(e * dx - e * w / 2 + e * 1, 0); c.stroke(); }
+    { const N = basaltNestSprite(1); for (const [x, y, f] of [[-136, -250, 1], [136, -210, -1], [-102, -150, 1], [102, -120, -1], [-136, -90, 1], [136, -300, -1]]) { c.save(); c.translate(x, y); c.scale(f, 1); c.drawImage(N.cv, -N.ax, -N.ay, N.w, N.h); c.restore(); } }
+    // a dais of column tops stepping up in the middle
+    for (const [x, y, w] of [[-90, -10, 34], [-56, -22, 34], [-22, -32, 34], [12, -36, 34], [46, -28, 34], [80, -16, 34], [112, -6, 32], [-122, -4, 32]]) basaltStand(c, x, y, 4, w, [96, 102, 110], L, 0, x | 0);
+    c.restore();
+    // the vault's rim: the dome's edge in lit stone
+    c.strokeStyle = 'rgba(200,226,246,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-F.half, 0); c.lineTo(-F.half, -F.wall); c.ellipse(0, -F.wall, F.half, F.dome, 0, Math.PI, TWO_PI); c.lineTo(F.half, 0); c.stroke();
+    // the chandelier's threads (their beads are lit live) and the Matriarch's rope
+    c.lineCap = 'round';
+    for (const [x, y, len] of basaltChandCached()) { c.strokeStyle = 'rgba(170,230,245,.55)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 1.5, y + len * 0.5, x, y + len); c.stroke(); for (let q = 8; q < len; q += 9) { c.fillStyle = 'rgba(190,246,255,.8)'; c.beginPath(); c.arc(x + 0.5, y + q, q > len - 9 ? 2 : 1, 0, TWO_PI); c.fill(); } }
+    c.strokeStyle = 'rgba(80,140,160,.9)'; c.lineWidth = 4; c.beginPath(); c.moveTo(0, cy + 12); c.lineTo(0, -F.rope + 20); c.stroke();
+    c.strokeStyle = 'rgba(220,250,255,.85)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-1, cy + 12); c.lineTo(-1, -F.rope + 20); c.stroke();
+    for (let q = 0; q < 6; q++) { const y = cy + 24 + q * ((-F.rope + 20 - cy - 24) / 6); c.strokeStyle = 'rgba(150,210,230,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-2.5, y); c.lineTo(2.5, y + 4); c.stroke(); }
+  });
+}
+// the Matriarch's body (anchored at her rope's end, y down): a silk hammock, her plump curled body of glossy
+// translucent segments lit from inside (each with a lit ridge over a soft seam), and her lantern tail
+const BASALT_MK = 2.25;
+function basaltMatriarchBody() {
+  const K = BASALT_MK;
+  return basaltSprite('matBody', 130 * K, 130 * K, 65 * K, 10 * K, c => {
+    c.scale(K, K); c.lineCap = 'round'; c.lineJoin = 'round';
+    // the hammock: a sling of silk from the rope, beaded, holding her
+    c.fillStyle = gLG(c, 0, 10, 0, 72, ['rgba(236,252,255,.7)', 'rgba(190,236,248,.62)', 'rgba(120,200,224,.7)']); c.beginPath(); c.moveTo(-34, 30); c.quadraticCurveTo(0, -4, 34, 30); c.quadraticCurveTo(30, 66, 0, 72); c.quadraticCurveTo(-30, 66, -34, 30); c.fill();
+    c.strokeStyle = '#6cbcd4'; c.lineWidth = 0.9; c.stroke();
+    c.strokeStyle = 'rgba(230,252,255,.7)'; c.lineWidth = 0.6; for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(-32 + k * 2, 30 + k * 6); c.quadraticCurveTo(0, 40 + k * 6, 32 - k * 2, 30 + k * 6); c.stroke(); }
+    for (const [w, col] of [[2, '#4a9ab4'], [1, 'rgba(236,252,255,.95)']]) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-20, 10, -34, 30); c.moveTo(0, 0); c.quadraticCurveTo(20, 10, 34, 30); c.moveTo(0, 0); c.lineTo(-14, 28); c.moveTo(0, 0); c.lineTo(14, 28); c.stroke(); }
+    for (const e of [-1, 1]) for (let q = 1; q < 5; q++) { const u = q / 5, x = e * (34 * u - 6 * u * (1 - u)), y = 30 * u - 8 * u * (1 - u); c.fillStyle = gRG(c, x - 0.3, y - 0.3, 1.8, ['#ffffff', '#9af4ff', '#30b8d8']); c.beginPath(); c.arc(x, y, 1.2, 0, TWO_PI); c.fill(); }
+    c.fillStyle = gRG(c, 0, 0, 3, ['#ffffff', '#b8f8ff', '#3ab8d8']); c.beginPath(); c.arc(0, 0, 2.4, 0, TWO_PI); c.fill(); c.strokeStyle = '#2a8eac'; c.lineWidth = 0.6; c.stroke();
+    // the curled body: segments from the tail (low left) round to the neck (up right)
+    const segs = []; for (let i = 0; i < 9; i++) { const u = i / 8, a = (150 - 210 * u) * Math.PI / 180; segs.push([Math.cos(a) * 26, 50 + Math.sin(a) * 22, 15 - 4 * Math.abs(u - 0.45)]); }
+    for (let i = 0; i < segs.length; i++) { const [x, y, r] = segs[i]; basaltPart(c, x, y, r, r * 0.9, 0, BASALT_MP, BASALT_ME, 0.45); }
+    for (let i = 1; i < segs.length; i++) { const [x, y, r] = segs[i]; gPair(c, [[x - r * 0.5, y - r * 0.75], [x - r * 0.8, y], [x - r * 0.5, y + r * 0.75]], 'rgba(30,120,150,.35)', 'rgba(255,255,255,.55)', 1.1, -0.8); }
+    // the sling's front lip, wrapped over her belly, beaded along its hem
+    c.fillStyle = gLG(c, 0, 56, 0, 76, ['rgba(240,253,255,.38)', 'rgba(150,216,236,.6)']); c.beginPath(); c.moveTo(-31, 54); c.quadraticCurveTo(0, 68, 31, 54); c.quadraticCurveTo(26, 70, 0, 76); c.quadraticCurveTo(-26, 70, -31, 54); c.fill();
+    c.strokeStyle = '#5ab0cc'; c.lineWidth = 0.9; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 0.5; for (let k = 1; k < 3; k++) { c.beginPath(); c.moveTo(-30 + k * 2, 55 + k * 5); c.quadraticCurveTo(0, 68 + k * 3, 30 - k * 2, 55 + k * 5); c.stroke(); }
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-31, 54); c.quadraticCurveTo(0, 68, 31, 54); c.stroke();
+    for (let k = 0; k < 7; k++) { const u = k / 6, x = lerp(-28, 28, u), y = 68 + 6 * Math.sin(u * Math.PI); c.fillStyle = gRG(c, x - 0.4, y - 0.4, 2.4, ['#ffffff', '#9af4ff', '#30b8d8']); c.beginPath(); c.arc(x, y, 1.6, 0, TWO_PI); c.fill(); }
+    // the inner glow: a soft cyan heart down her middle
+    c.fillStyle = gRG(c, 0, 52, 30, ['rgba(255,255,255,.35)', 'rgba(170,250,255,.12)', 'rgba(170,250,255,0)']); c.beginPath(); c.arc(0, 52, 30, 0, TWO_PI); c.fill();
+    // the lantern tail: a big round bulb (lit live as well)
+    const [tx, ty] = segs[0];
+    c.fillStyle = gRG(c, tx - 2, ty + 6, 14, ['#ffffff', '#d8ffff', '#7ae8f8', '#2aa8c8']); c.beginPath(); c.arc(tx - 6, ty + 8, 12, 0, TWO_PI); c.fill();
+    c.strokeStyle = BASALT_ME; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.ellipse(tx - 10, ty + 3, 3.4, 2, -0.6, 0, TWO_PI); c.fill();
+  });
+}
+// her head (anchored at its centre): a round glossy face, big shining dark eyes (pose 0 open, 1 blinking, 2 happy
+// closed curves), rosy cheeks, a little smile, two stubby antennae with dewdrops and a tiara of dew
+function basaltMatriarchHead(pose) {
+  const K = BASALT_MK;
+  return basaltSprite(`matHead${pose}`, 60 * K, 64 * K, 30 * K, 34 * K, c => {
+    c.scale(K, K); c.lineCap = 'round';
+    for (const e of [-1, 1]) { c.strokeStyle = '#3aa0b8'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(e * 6, -14); c.quadraticCurveTo(e * 10, -24, e * 14, -26); c.stroke(); c.fillStyle = gRG(c, e * 14 - 0.5, -27, 3.4, ['#ffffff', '#c8ffff', '#5ad2e8']); c.beginPath(); c.arc(e * 14, -26.5, 3, 0, TWO_PI); c.fill(); }
+    basaltPart(c, 0, 0, 17, 15.5, 0, ['#fffefc', '#f4e8e4', '#d4c0bc'], '#a08a86', 0.55);
+    // the dew tiara
+    for (let k = -2; k <= 2; k++) { const x = k * 5, y = -13.5 + Math.abs(k) * 1.6, r = k === 0 ? 2.6 : 1.7; c.fillStyle = gRG(c, x - 0.6, y - 0.8, r * 1.5, ['#ffffff', '#b8f8ff', '#36b8d8']); c.beginPath(); c.arc(x, y - r * 0.5, r, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.arc(x - r * 0.35, y - r * 0.9, r * 0.3, 0, TWO_PI); c.fill(); }
+    if (pose === 0) for (const e of [-1, 1]) { const ex = e * 7, ey = 0;
+      c.fillStyle = gRG(c, ex - 1, ey - 2, 7, ['#ffffff', '#f2f6fa', '#c8d4de']); c.beginPath(); c.ellipse(ex, ey, 5.6, 6.6, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#7a8a98'; c.lineWidth = 0.6; c.stroke();
+      c.fillStyle = gRG(c, ex + e * 0.6, ey + 0.8, 4.6, ['#4a7aa0', '#1e3456', '#0e1a30']); c.beginPath(); c.ellipse(ex + e * 0.6, ey + 0.8, 4, 4.8, 0, 0, TWO_PI); c.fill();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex - 1, ey - 1.4, 1.7, 0, TWO_PI); c.fill(); c.beginPath(); c.arc(ex + 1.6, ey + 2.8, 0.8, 0, TWO_PI); c.fill();
+      c.fillStyle = 'rgba(140,236,255,.7)'; c.beginPath(); c.ellipse(ex + e * 0.6, ey + 4, 2.4, 0.9, 0, 0, TWO_PI); c.fill(); }
+    else { c.strokeStyle = '#2a3c54'; c.lineWidth = 1.4; for (const e of [-1, 1]) { c.beginPath(); if (pose === 1) { c.moveTo(e * 6.4 - 3.4, 1); c.lineTo(e * 6.4 + 3.4, 1); } else c.arc(e * 6.4, 2.4, 3.4, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); } }
+    c.fillStyle = 'rgba(255,150,160,.5)'; for (const e of [-1, 1]) { c.beginPath(); c.ellipse(e * 12.4, 7, 3, 1.9, 0, 0, TWO_PI); c.fill(); }
+    c.strokeStyle = '#8a5a5a'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 8.2, pose === 2 ? 4.4 : 3.2, 0.25, Math.PI - 0.25); c.stroke();
+  });
+}
+function basaltDrawVault() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'basalt')) return;
+  const E = a.end; if (sy(E + 620) > H + 40 || sy(E - 60) < -40) return;
+  const T = G.t, F = BASALT_FIN, won = a.clearT >= 0, pay = won ? smooth(0, 1, a.clearT) : 0, cx = sx(WORLD_W / 2);
+  basaltGlow(ctx, cx, sy(E + 260), (240 + 80 * pay) * s, [140, 230, 255], 0.2 + 0.2 * pay);
+  basaltBlit(basaltVaultSprite(), WORLD_W / 2, E);
+  // the chandelier: every thread's last bead glows, breathing; on the clear a wave runs out from the middle
+  {
+    const gl = basaltGlowCv(BASALTP.cyan); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, len, h] of basaltChandCached()) { const wave = won ? Math.max(0, 1 - Math.abs(Math.abs(x) / 50 - a.clearT * 3)) : 0, al = 0.3 + 0.12 * Math.sin(T * 1.8 + h * 9) + 0.6 * wave, r = (9 + 9 * wave) * s; ctx.globalAlpha = Math.min(1, al); ctx.drawImage(gl, cx + x * s - r, sy(E) + (y + len) * s - r, r * 2, r * 2); }
+    ctx.restore();
+  }
+  // the Matriarch: swaying gently on her rope (wriggling on the clear)
+  const K = BASALT_MK, sway = Math.sin(T * 0.9) * 0.05 + (won ? Math.sin(T * 7) * 0.08 * (1 - smooth(3, 6, a.clearT)) : 0);
+  const rx = sx(WORLD_W / 2), ry = sy(E + F.rope - 20);
+  ctx.save(); ctx.translate(rx, ry); ctx.rotate(sway);
+  const B = basaltMatriarchBody(); ctx.drawImage(B.cv, -B.ax * s, -B.ay * s, B.w * s, B.h * s);
+  // her lantern tail glows (flaring on the clear)
+  const tl = [-28.5 * K * s, 69 * K * s];
+  basaltGlow(ctx, tl[0], tl[1], (58 + 40 * pay) * s, [170, 250, 255], 0.38 + 0.12 * Math.sin(T * 2.4) + 0.2 * pay);
+  basaltGlow(ctx, 0, 52 * K * s, 92 * s, [140, 240, 255], 0.1 + 0.08 * pay);
+  // her head rides on the curl's end; she nods, and on the clear bobs happily; her tiny arms wave
+  const hx = 15 * K * s, hy = 40 * K * s, hb = won ? Math.abs(Math.sin(T * 6)) * 3 * s : Math.sin(T * 1.2) * 1 * s;
+  for (const e of [-1, 1]) {
+    const w = won ? Math.sin(T * 9 + e) * 0.7 : (e > 0 ? Math.sin(T * 2.2) * 0.45 : 0.1 * Math.sin(T * 1.3)), ax0 = hx + e * 14 * K * s, ay0 = hy - 6 * K * s, ang = -Math.PI / 2 + e * (0.9 - (won || e > 0 ? 0.5 : -0.3)) + w * e, ln = 12 * K * s;
+    const ex = ax0 + Math.cos(ang) * ln, ey = ay0 + Math.sin(ang) * ln;
+    ctx.lineCap = 'round'; ctx.strokeStyle = BASALT_ME; ctx.lineWidth = 5.6 * K * s; ctx.beginPath(); ctx.moveTo(ax0, ay0); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#7ae2f4'; ctx.lineWidth = 4.2 * K * s; ctx.stroke(); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.2 * K * s; ctx.beginPath(); ctx.moveTo(ax0 - 1 * s, ay0 - 1.2 * K * s); ctx.lineTo(ex - 1 * s, ey - 1.2 * K * s); ctx.stroke();
+    ctx.fillStyle = '#c8f8ff'; ctx.strokeStyle = BASALT_ME; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.arc(ex, ey, 3.2 * K * s, 0, TWO_PI); ctx.fill(); ctx.stroke();
+  }
+  const blink = !won && pmod(T, 3.7) < 0.13;
+  basaltBlitAt(basaltMatriarchHead(won ? 2 : blink ? 1 : 0), hx, hy - 30 * K * s - hb, Math.sin(T * 0.8) * 0.06);
+  ctx.restore();
+  // fireflies drifting round the vault (a swarm on the clear)
+  const nF = won ? 16 : 7, gl = basaltGlowCv(BASALTP.lime);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < nF; k++) { const ph = k * 2.39, rr = 60 + 90 * hash2(k, 7) + 30 * pay, X = cx + Math.cos(T * (0.4 + 0.2 * hash2(k, 8)) + ph) * rr * s, Y = sy(E + 220 + 120 * Math.sin(T * 0.5 + ph * 1.7)), tw = 0.4 + 0.6 * Math.max(0, Math.sin(T * 3 + ph)); ctx.globalAlpha = tw; ctx.drawImage(gl, X - 9 * s, Y - 9 * s, 18 * s, 18 * s); ctx.fillStyle = '#f4ffc8'; ctx.beginPath(); ctx.arc(X, Y, 1.4 * s, 0, TWO_PI); ctx.fill(); }
+  ctx.restore();
+}
+function basaltDrawMidground() { basaltDrawVault(); }
+
+// ---- the landing: column tops rise out of the walls to meet under you, glow-worm lamps on silk either side ----
+function basaltDeckSeg() {
+  return basaltSprite('deckseg', 24, 20, 0, 7, c => {
+    // a hex column's top, seen from the side and a little above: the cap lit, the prism side below shaded
+    c.fillStyle = gLG(c, 0, -2, 0, 12, ['#7a8898', '#4e5a68', '#323c48']); c.fillRect(0, -2, 24, 13);
+    c.fillStyle = gLG(c, 0, -7, 0, -1, ['#c8d4e0', '#98a6b6']); c.beginPath(); c.moveTo(0, -2); c.lineTo(5, -7); c.lineTo(19, -7); c.lineTo(24, -2); c.lineTo(19, 0); c.lineTo(5, 0); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(36,46,58,.8)'; c.lineWidth = 0.7; c.stroke();
+    c.strokeStyle = 'rgba(240,248,255,.7)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(1, -2.4); c.lineTo(5.4, -6.6); c.lineTo(18.6, -6.6); c.stroke();
+    gPair(c, [[8, 0], [8, 11]], 'rgba(20,28,38,.6)', 'rgba(200,220,240,.4)', 0.9, 0.6); gPair(c, [[16, 0], [16, 11]], 'rgba(20,28,38,.6)', 'rgba(200,220,240,.3)', 0.9, 0.6);
+    c.fillStyle = '#2a3440'; for (let x = 2; x < 24; x += 6) { c.beginPath(); c.moveTo(x, 11); c.lineTo(x + 3, 11); c.lineTo(x + 1.5, 13.5); c.closePath(); c.fill(); }
+  });
+}
+function basaltDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, seg = basaltDeckSeg();
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, tip = lerp(w - side * 4, meet - side * 0.5, e), x0 = Math.min(w, tip), x1 = Math.max(w, tip);
+    if (e > 0.04 && x1 - x0 > 2) {
+      ctx.save(); ctx.beginPath(); ctx.rect(sx(x0), y - 12 * s, (x1 - x0) * s, 30 * s); ctx.clip();
+      for (let x = side < 0 ? tip - 24 * Math.ceil((tip - w) / 24) : tip; x < x1; x += 24) basaltBlitAt(seg, sx(x), y);
+      ctx.restore();
+    }
+    // a glow-worm lamp hanging on silk by each wall, flaring on the clear
+    const lx = w - side * 12, la = E + 34;
+    ctx.strokeStyle = 'rgba(190,240,255,.75)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(sx(w - side * 2), sy(E + 70)); ctx.quadraticCurveTo(sx(lx), sy(E + 60), sx(lx), sy(la + 4)); ctx.stroke();
+    basaltGlow(ctx, sx(lx), sy(la), (18 + 14 * pay) * s, BASALTP.cyan, 0.5 + 0.12 * Math.sin(T * 3 + side) + 0.3 * pay);
+    basaltBlitAt(basaltWormSprite(1), sx(lx), sy(la), Math.PI / 2 * side * 0.4);
+  }
+}
+function basaltVaultBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  for (let k = 0; k < 28; k++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, v = 120 + Math.random() * 240; puff(WORLD_W / 2 + (Math.random() - 0.5) * 120, a.end + 160, Math.cos(an) * v, -Math.sin(an) * v, 0.9 + Math.random() * 0.9, 1.6 + Math.random() * 1.8, 'sparkle', [[160, 245, 255], [214, 255, 120], [255, 230, 160]][k % 3]); }
+  sfx('bsfinish');
+}
+{ const base = drawBackground; drawBackground = function () { if (basaltOn()) basaltDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (basaltOn()) basaltDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (basaltOn()) basaltDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (basaltOn()) basaltDrawLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (basaltOn()) basaltDrawDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (basaltOn()) basaltDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (basaltOn()) basaltDrawForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (basaltOn() && !boss) basaltVaultBurst(); }; }
 // (game slot: Basalt Deep, island level 14)
 // (game slot: Geode King, island level 15)
 // (game slot: Magma Core, island level 19)
