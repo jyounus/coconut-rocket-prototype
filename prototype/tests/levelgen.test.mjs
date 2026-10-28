@@ -6972,6 +6972,173 @@ const geodekingStats = { seeds: 0, traps: 0, searches: 0, worst: 0, jewels: 0, p
 }
 const geodekingSummary = () => `PASS: Geode King: ${geodekingStats.seeds} layouts, a ${geodekingStats.gate} m approach to the Throne Doors then the Throne Hall, only its own traps (${Object.entries(geodekingStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')} before the gate), each taught alone first; shaft ${geodekingStats.minW.toFixed(0)}+ wide, wall slope ${geodekingStats.slope.toFixed(2)} (max ${GK.RULES.maxWallSlope}); resting guards leave ${geodekingStats.open.toFixed(0)}+ open and crossed halberds ${geodekingStats.shut.toFixed(0)} at most; chandelier gaps ${geodekingStats.chandGap.toFixed(0)}+ beyond the widest pilot, plugged ${geodekingStats.chandPlug.toFixed(0)} at most, ${geodekingStats.chandSide.toFixed(0)}+ round the far side; mirror gaps ${geodekingStats.mirGap.toFixed(0)}+ drifting ${geodekingStats.mirV.toFixed(0)} u/s at most; gongs never move (their rings only shove); beats ${geodekingStats.beatGap.toFixed(0)}+ apart; pickups ${geodekingStats.pick.toFixed(1)}+ from any reach; ${geodekingStats.traps} beats (${geodekingStats.arena} in the Throne Hall) × 6 phases and ${geodekingStats.jewels} crown jewels flown by the widest pilot (${geodekingStats.searches} searches, slowest ${geodekingStats.worst.toFixed(1)} s)`;
 // (test slot: Geode King, island level 15)
+// ---------- Adventure: Magma Core (island level 19), an authored stage with its own traps ----------
+// As the Anthill Underworks' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which
+// only move phases and looks), then every beat and every phoenix feather flown by a time-space search for the widest
+// pilot on the traps' own clocks from 6 start phases. Lethal: the lava falls' spouts and sheets, the tide bridges and
+// their gushes, the sprites, the blisters and their splashes (the searches fly a pilot who is NOT fireproof: Ember's
+// perk only ever makes the stage easier).
+const MC = new Function(regions.join('\n') + '\nreturn { createMagmacoreLevel, magmacoreShapes, magmacoreDanger, magmacoreEnd, magmacoreFallAt, magmacoreFallPts, magmacoreTideQ, magmacoreSpill, magmacoreGushPts, magmacoreRingPos, magmacoreBurstAt, magmacoreGlobAt, MAGMACORE, MAGMACORE_STAGE, MAGMACORE_TYPES, ADV_MAGMACORE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const magmacoreStats = { seeds: 0, traps: 0, searches: 0, worst: 0, feathers: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, fallLane: Infinity, tideLane: Infinity, ringGap: Infinity, ringSide: 0, splashFar: 0 };
+{
+  const R = MC.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = MC.ADV_MAGMACORE, X = MC.MAGMACORE;
+  const mfail = (rule, d) => fail('magmacore: ' + rule, d);
+  if (st0.theme !== 'magmacore' || !(st0.reward > 0)) mfail('Magma Core is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'magmacoreFeathers' && g.n === 3) || !st0.goals.some(g => g.k === 'magmacoreSkim' && g.n > 0)) mfail('three missions: the Molten Heart, 3 phoenix feathers and lava falls skimmed mid-surge', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * MC.UNITS_PER_M - MC.magmacoreEnd()) > 1e-6) mfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: lava falls, then tide bridges, then blisters, then sprite rings, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { fallPair: 'magmacoreFall', tidePair: 'magmacoreTide', tideFall: 'magmacoreTide', burstPair: 'magmacoreBurst', burstTide: 'magmacoreBurst', burstFall: 'magmacoreBurst', ringPair: 'magmacoreRing', ringFall: 'magmacoreRing', ringBurst: 'magmacoreRing' };
+    const S = MC.MAGMACORE_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) mfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) mfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+      else if (kind === b && o.w && firsts[b].w && Math.abs(o.w) < Math.abs(firsts[b].w) - 1e-9) mfail('a ring never turns slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'magmacoreFall,magmacoreTide,magmacoreBurst,magmacoreRing') mfail('the core teaches lava falls, then tides, then blisters, then sprite rings', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) mfail('the core has a breather', '');
+    if (!S[S.length - 1].finish) mfail('the stage ends at the Molten Heart', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (MC.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) MC.magmacoreShapes(h, t, S); return S; };
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.magmacoreDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = MC.createMagmacoreLevel(MC.advSeed(st), st), hz = [], fr = [];
+    magmacoreStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) mfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) mfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    magmacoreStats.len = level.end / 10;
+    for (const h of hz) if (!MC.MAGMACORE_TYPES.has(h.type)) mfail('the core only has its own traps', h.type);
+    for (const h of hz) magmacoreStats.kinds[h.type] = (magmacoreStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); magmacoreStats.beatGap = Math.min(magmacoreStats.beatGap, g); if (g < 0) mfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) mfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) mfail('the Molten Heart below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      magmacoreStats.minW = Math.min(magmacoreStats.minW, r - l); magmacoreStats.slope = Math.max(magmacoreStats.slope, l2 - l, r - r2);
+    }
+    if (magmacoreStats.minW < R.minWidth) mfail('the shaft is never narrower than minWidth', magmacoreStats.minW.toFixed(1));
+    if (magmacoreStats.slope > R.maxWallSlope) mfail('the walls never step in faster than maxWallSlope', magmacoreStats.slope.toFixed(2));
+    const straight = (h, lo, hi, L0, R0) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs(l - L0) > 0.5 || Math.abs(r - R0) > 0.5) return false; } return true; };
+    for (const h of hz) {
+      const [l0, r0] = level.walls(h.alt);
+      if (h.type === 'magmacoreFall') {
+        // at its full surge the sheet still leaves the far lane open
+        const S = []; for (let t = 0; t < h.P; t += 0.02) MC.magmacoreShapes(h, t, S);
+        const ln = h.side > 0 ? r0 - reachOf(S, 1) : -reachOf(S, -1) - l0; magmacoreStats.fallLane = Math.min(magmacoreStats.fallLane, ln);
+        if (ln < W + 40) mfail('a lava fall\'s full surge leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+        if (!straight(h, h.lo, h.hi, l0, r0)) mfail('the walls are straight where a lava fall pours', `${h.alt}`);
+      }
+      if (h.type === 'magmacoreTide') {
+        // the bridge meets both walls; while one side spills the other half of the hole stays open
+        if (Math.abs(h.L - l0) > 0.5 || Math.abs(h.R - r0) > 0.5 || !straight(h, h.alt - 30, h.alt + 30, l0, r0)) mfail('a tide bridge is built into straight walls', `${h.alt}`);
+        for (let t = 0; t < h.P; t += 0.02) {
+          const S = MC.magmacoreShapes(h, t, []).filter(q => q.k === 's' && Math.abs(q.a0 - q.a1) > 1);   // (the gushes)
+          if (!S.length) continue;
+          const reachL = S.filter(q => q.x0 < h.cx).length ? reachOf(S.filter(q => q.x0 < h.cx), 1) : h.cx - X.tide.hole / 2, reachR = S.filter(q => q.x0 > h.cx).length ? -reachOf(S.filter(q => q.x0 > h.cx), -1) : h.cx + X.tide.hole / 2;
+          const ln = reachR - reachL; magmacoreStats.tideLane = Math.min(magmacoreStats.tideLane, ln);
+          if (ln < W + 30) { mfail('a tide bridge always leaves part of its hole open', `${h.alt} t ${t.toFixed(2)} ${ln.toFixed(0)}`); break; }
+        }
+      }
+      if (h.type === 'magmacoreRing') {
+        // too wide to fly round (you thread it), its gaps wide enough for the widest pilot, its walls straight
+        const side = Math.max(h.cx - h.rr - X.ring.rs - l0, r0 - (h.cx + h.rr + X.ring.rs)); magmacoreStats.ringSide = Math.max(magmacoreStats.ringSide, side);
+        if (side > W - 4) mfail('a sprite ring is too wide to fly round', `${h.alt} ${side.toFixed(0)}`);
+        const sp = 2 * Math.PI * h.rr / X.ring.n, gap = sp * (h.gaps.length === 4 ? 3 : 2) - 2 * X.ring.rs; magmacoreStats.ringGap = Math.min(magmacoreStats.ringGap, gap);
+        if (gap < W + 30) mfail('a sprite ring\'s gaps fit the widest pilot', `${h.alt} ${gap.toFixed(0)}`);
+        if (!straight(h, h.lo - 20, h.hi + 20, l0, r0)) mfail('the walls are straight round a sprite ring', `${h.alt}`);
+      }
+      if (h.type === 'magmacoreBurst') {
+        // every splash only ever falls and stays between the walls; a fireproof pilot is never hit by one
+        for (let i = 0; i < X.burst.n; i++) { let pa = Infinity; for (let tau = 0; tau <= X.burst.fly; tau += 0.01) { const P = MC.magmacoreGlobAt(h, i, tau); if (!P) continue; if (P[1] > pa + 1e-9) mfail('a lava splash only ever falls', `${h.alt} ${i}`); pa = P[1]; const [l, r] = level.walls(P[1]); if (P[0] - X.burst.gr < l - 0.5 || P[0] + X.burst.gr > r + 0.5) mfail('a lava splash stays between the walls', `${h.alt}`); magmacoreStats.splashFar = Math.max(magmacoreStats.splashFar, h.side * (P[0] - h.base)); } }
+        for (let t = 0; t < h.P; t += 0.05) if (MC.magmacoreShapes(h, t, [], 'body', true).length !== 1) mfail('the splashes do nothing to a fireproof pilot', `${h.alt}`);
+        if (!straight(h, h.lo, h.hi, l0, r0)) mfail('the walls are straight where a blister bursts', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = MC.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) mfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the phoenix feathers, the Grotto's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(MC.laneSize().w / 2 + 6 + MC.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of MC.magmacoreDanger(h)) dd = Math.min(dd, MC.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) magmacoreStats.pick = Math.min(magmacoreStats.pick, dd);
+      if (dd < need - 0.5) mfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < MC.pickR(fr[i]) + MC.pickR(fr[j]) + MC.PICK_GAP - 0.01) mfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'feather').length !== 3) mfail('the core holds exactly 3 phoenix feathers', `${fr.filter(f => f.kind === 'feather').length}`);
+    if (hz.filter(h => h.type === 'magmacoreFall').length < st0.goals.find(g => g.k === 'magmacoreSkim').n + 4) mfail('there are plenty of lava falls for the skim mission', '');
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) mfail('the core keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      magmacoreStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        magmacoreStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) mfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.magmacoreDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else magmacoreStats.worst = Math.max(magmacoreStats.worst, tm);
+      }
+    }
+    // every phoenix feather can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'feather')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        magmacoreStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < MC.COCO_R + W / 2 - 4);
+        if (tm < 0) mfail('every phoenix feather can be grabbed and escaped by the widest pilot', `feather at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      magmacoreStats.feathers++;
+    }
+  }
+}
+const magmacoreSummary = () => `PASS: Magma Core: ${magmacoreStats.seeds} layouts × ${magmacoreStats.len} m, only its own traps (${Object.entries(magmacoreStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${magmacoreStats.minW.toFixed(0)}+ wide, wall slope ${magmacoreStats.slope.toFixed(2)} (max ${MC.RULES.maxWallSlope}); lava falls' full surges leave ${magmacoreStats.fallLane.toFixed(0)}+ lanes, tide bridges always ${magmacoreStats.tideLane.toFixed(0)}+ of their holes open, sprite rings' gaps ${magmacoreStats.ringGap.toFixed(0)}+ (${magmacoreStats.ringSide.toFixed(0)} at most beside a ring, too tight to fly round), blister splashes only fall (reaching ${magmacoreStats.splashFar.toFixed(0)} out) and never touch a fireproof pilot; beats ${magmacoreStats.beatGap.toFixed(0)}+ apart; pickups ${magmacoreStats.pick.toFixed(1)}+ from any reach; ${magmacoreStats.traps} beats × 6 phases and ${magmacoreStats.feathers} phoenix feathers flown by the widest pilot (${magmacoreStats.searches} searches, slowest ${magmacoreStats.worst.toFixed(1)} s)`;
 // (test slot: Magma Core, island level 19)
 // ---------- Adventure: Bellows Drake (island level 20), an authored stage with its own traps and the dragon boss ----------
 // As the Anthill's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -7183,4 +7350,5 @@ console.log(idolsSummary());
 console.log(geodekingSummary());
 console.log(drakeSummary());
 console.log(jellySummary());
+console.log(magmacoreSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
