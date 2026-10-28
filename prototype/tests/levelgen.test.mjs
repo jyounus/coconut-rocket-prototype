@@ -4612,6 +4612,176 @@ const toyboxStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick:
 }
 const toyboxSummary = () => `PASS: Toybox Tower: ${toyboxStats.seeds} layouts × ${toyboxStats.len} m, only its own traps (${Object.entries(toyboxStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${toyboxStats.minW.toFixed(0)}+ wide, toy-stack wall slope ${toyboxStats.slope.toFixed(2)} (max ${TB.RULES.maxWallSlope}); open lanes at every moment past jacks ${toyboxStats.lane.toyboxJack.toFixed(0)}+, marches ${toyboxStats.lane.toyboxMarch.toFixed(0)}+, tops ${toyboxStats.lane.toyboxTop.toFixed(0)}+ (both sides of it), yo-yos ${toyboxStats.lane.toyboxYoyo.toFixed(0)}+ (minLane ${TB.RULES.minLane}), beats ${toyboxStats.beatGap.toFixed(0)}+ apart; pickups ${toyboxStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${toyboxStats.rolls} tops to dodge; ${toyboxStats.traps} beats and ${toyboxStats.stars} golden teddies (reach and escape) flown by the widest pilot in ${toyboxStats.searches} searches, the slowest pass ${toyboxStats.worst.toFixed(1)} s`;
 // (test slot: Toybox Tower, island level 32)
+// ---------- Adventure: Monkey Carnival (island level 33), an authored stage with its own traps ----------
+// As the Candy Caverns' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases, aims and looks), then every beat and every golden ticket flown by a time-space search for the widest
+// pilot on the traps' own clocks from 6 start phases. Every carnival shape is lethal (cannons and their monkeys, wheels
+// and their spokes, jugglers and their pins, hoops' burning rims, poles and podiums, balloon stands).
+const CV = new Function(regions.join('\n') + '\nreturn { createCarnivalLevel, carnivalShapes, carnivalDanger, carnivalEnd, carnivalCanAt, carnivalCanGeo, carnivalWheelAt, carnivalJugAt, carnivalJugGeo, carnivalPinPos, carnivalHoopAt, carnivalHoopX, CARNIVAL, CARNIVAL_STAGE, CARNIVAL_TYPES, ADV_CARNIVAL, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const carnivalStats = { seeds: 0, traps: 0, searches: 0, worst: 0, tix: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, wheelLane: Infinity, hoopGap: Infinity, hoopFar: Infinity, standLane: Infinity, canLane: Infinity, pinDrop: 0, rise: 0 };
+{
+  const R = CV.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CV.ADV_CARNIVAL, X = CV.CARNIVAL;
+  const cfail = (rule, d) => fail('carnival: ' + rule, d);
+  if (st0.theme !== 'carnival' || !(st0.reward > 0)) cfail('Monkey Carnival is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'carnivalTickets' && g.n === 3) || !st0.goals.some(g => g.k === 'carnivalHoops' && g.n > 0)) cfail('three missions: the Big Top, 3 golden tickets and the hoops', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CV.UNITS_PER_M - CV.carnivalEnd()) > 1e-6) cfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: cannons, then wheels, then jugglers, then hoops, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { canPair: 'carnivalCannon', canStack: 'carnivalCannon', wheelPair: 'carnivalWheel', wheelCan: 'carnivalWheel', jugPair: 'carnivalJuggler', jugWheel: 'carnivalJuggler', jugCan: 'carnivalJuggler', hoopPair: 'carnivalHoop', hoopCan: 'carnivalHoop', hoopWheel: 'carnivalHoop', hoopJug: 'carnivalHoop' };
+    const S = CV.CARNIVAL_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) cfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) cfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'carnivalCannon,carnivalWheel,carnivalJuggler,carnivalHoop') cfail('the carnival teaches cannons, then wheels, then jugglers, then hoops', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) cfail('the carnival has a breather', '');
+    if (!S[S.length - 1].finish) cfail('the stage ends at the Big Top', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CV.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) CV.carnivalShapes(h, t, S); return S; };
+  // how far a set of shapes reaches out from the wall on side d (the furthest point into the shaft)
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.carnivalDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CV.createCarnivalLevel(CV.advSeed(st), st), hz = [], fr = [];
+    carnivalStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) cfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) cfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    carnivalStats.len = level.end / 10;
+    for (const h of hz) if (!CV.CARNIVAL_TYPES.has(h.type)) cfail('the carnival only has its own traps', h.type);
+    for (const h of hz) carnivalStats.kinds[h.type] = (carnivalStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one act to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); carnivalStats.beatGap = Math.min(carnivalStats.beatGap, g); if (g < 0) cfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.alt !== q.alt && p.hi > q.lo && q.hi > p.lo) cfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    for (const h of level.stands) if (hz.some(q => q !== h && q.hi > h.lo - 20 && q.lo < h.hi + 20)) cfail('a balloon stand never crowds a trap', `${h.alt}`);
+    if (hz.some(h => h.hi > level.end - 320)) cfail('the Big Top below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      carnivalStats.minW = Math.min(carnivalStats.minW, r - l); carnivalStats.slope = Math.max(carnivalStats.slope, l2 - l, r - r2);
+    }
+    if (carnivalStats.minW < R.minWidth) cfail('the shaft is never narrower than minWidth', carnivalStats.minW.toFixed(1));
+    if (carnivalStats.slope > R.maxWallSlope) cfail('the walls never step in faster than maxWallSlope', carnivalStats.slope.toFixed(2));
+    for (const h of hz) {
+      const lane = (S, d) => { const [l, r] = level.walls(h.alt); return d > 0 ? r - reachOf(S, d) : -reachOf(S, d) - l; };
+      // nothing on the stage ever rises at you: a flying monkey moves level or down, pins only ever fall
+      if (h.type === 'carnivalCannon') {
+        const g = CV.carnivalCanGeo(h);
+        if (g.Ea > g.Sa + 1e-9) cfail('a cannon never fires upward', `${h.alt}`);
+        for (let a = h.lo; a <= h.hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs((h.side > 0 ? r : l) - h.far) > 0.5) { cfail('the far wall is straight where a cannon\'s net hangs', `${h.alt}`); break; } }
+        if (Math.abs(g.Ex - (h.far - h.side * (X.can.net + X.can.mr - 4))) > 0.5) cfail('the monkey lands in the net', `${h.alt}`);
+        let worst = Infinity; for (let t = 0; t < h.P; t += 0.05) { const S = CV.carnivalShapes(h, t, []).filter(q => (q.k === 'c' ? Math.abs(q.x - h.base) : Math.min(Math.abs(q.x0 - h.base), Math.abs(q.x1 - h.base))) < 120); worst = Math.min(worst, lane(S, h.side)); }
+        carnivalStats.canLane = Math.min(carnivalStats.canLane, worst); if (worst < W + 60) cfail('a cannon leaves a wide lane', `${h.alt}`);
+        if (h.P < X.can.tell + g.tF + X.can.land + X.can.out + 1) cfail('one monkey at a time per cannon', `${h.alt}`);
+      }
+      if (h.type === 'carnivalJuggler') {
+        const g = CV.carnivalJugGeo(h);
+        X.jug.v.forEach((v, i) => { let pa = Infinity; for (let tau = 0; tau <= g.tE[i]; tau += 0.02) { const p = CV.carnivalPinPos(h, i, tau); if (p.a > pa + 1e-9) cfail('a pin only ever falls', `${h.alt}`); pa = p.a; } carnivalStats.pinDrop = Math.max(carnivalStats.pinDrop, h.alt - CV.carnivalPinPos(h, i, g.tE[i]).a); const pe = CV.carnivalPinPos(h, i, g.tE[i]); if (Math.abs(pe.x - (h.far - h.side * X.jug.hl)) > 0.5) cfail('every pin reaches the far wall', `${h.alt}`); });
+        for (let a = h.lo; a <= h.hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs((h.side > 0 ? r : l) - h.far) > 0.5) { cfail('the far wall is straight where pins clatter', `${h.alt}`); break; } }
+        if (h.P < X.jug.tell + g.vol + 1) cfail('one volley at a time per juggler', `${h.alt}`);
+      }
+      if (h.type === 'carnivalWheel') {
+        // spokes right out, the far lane stays open for the widest pilot
+        const S = []; CV.carnivalShapes(h, 0, S, 'still'); S.push({ k: 'c', x: h.base + h.side * X.wheel.cx, a: h.alt, r: X.wheel.reach + X.wheel.tip });
+        const ln = lane(S, h.side); carnivalStats.wheelLane = Math.min(carnivalStats.wheelLane, ln); if (ln < W + 40) cfail('a wheel\'s full sweep leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+      }
+      if (h.type === 'carnivalHoop') {
+        // the ring's middle fits the widest pilot; slid right out, its far rim leaves no way round; the far wall is straight
+        const gap = 2 * X.hoop.R - 2 * X.hoop.tube; carnivalStats.hoopGap = Math.min(carnivalStats.hoopGap, gap);
+        if (gap < W + 2 * M + 30) cfail('a hoop\'s ring fits the widest pilot with room', `${gap}`);
+        const xF = CV.carnivalHoopX(h, h.eMax) + h.side * 2 * X.hoop.R, far = Math.abs(h.far - xF) - X.hoop.tube; carnivalStats.hoopFar = Math.min(carnivalStats.hoopFar, far);
+        if (Math.abs(far - X.hoop.gap) > 0.5) cfail('a hoop slides out to its gap off the far wall', `${h.alt} ${far.toFixed(1)}`);
+        const S = []; CV.carnivalShapes(h, (10 + (1 - (((h.ph % 1) + 1) % 1))) * h.P + 0.01, S); const ln = lane(S, h.side); if (ln < W + 60) cfail('a drawn-back hoop leaves a wide lane', `${h.alt} ${ln.toFixed(0)}`);
+        for (let a = h.lo; a <= h.hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs((h.side > 0 ? r : l) - h.far) > 0.5) { cfail('the far wall is straight where a hoop slides', `${h.alt}`); break; } }
+      }
+      if (h.type === 'carnivalStand') {
+        const S = CV.carnivalShapes(h, 0, [], 'still'), ln = lane(S, h.side); carnivalStats.standLane = Math.min(carnivalStats.standLane, ln);
+        if (ln < W + 120) cfail('a balloon stand leaves a wide lane', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CV.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) cfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the golden tickets, the Midway's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CV.laneSize().w / 2 + 6 + CV.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CV.carnivalDanger(h)) dd = Math.min(dd, CV.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) carnivalStats.pick = Math.min(carnivalStats.pick, dd);
+      if (dd < need - 0.5) cfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CV.pickR(fr[i]) + CV.pickR(fr[j]) + CV.PICK_GAP - 0.01) cfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'ticket').length !== 3) cfail('the carnival holds exactly 3 golden tickets', `${fr.filter(f => f.kind === 'ticket').length}`);
+    if (level.beats.filter(b => b.hs.some(h => h.type === 'carnivalHoop')).length < st0.goals.find(g => g.k === 'carnivalHoops').n + 3) cfail('there are plenty of hoops for the hoop mission', '');
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) cfail('the carnival keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      // (it starts 150 under the beat, or just over the last beat's reach where that is closer)
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      carnivalStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        carnivalStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) cfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.carnivalDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else carnivalStats.worst = Math.max(carnivalStats.worst, tm);
+      }
+    }
+    // every golden ticket can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'ticket')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        carnivalStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < CV.COCO_R + W / 2 - 4);
+        if (tm < 0) cfail('every golden ticket can be grabbed and escaped by the widest pilot', `ticket at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      carnivalStats.tix++;
+    }
+  }
+}
+const carnivalSummary = () => `PASS: Monkey Carnival: ${carnivalStats.seeds} layouts × ${carnivalStats.len} m, only its own traps (${Object.entries(carnivalStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each act taught alone first; shaft ${carnivalStats.minW.toFixed(0)}+ wide, wall slope ${carnivalStats.slope.toFixed(2)} (max ${CV.RULES.maxWallSlope}); cannons leave ${carnivalStats.canLane.toFixed(0)}+ lanes and never fire upward, pins only fall (${carnivalStats.pinDrop.toFixed(0)} at most), wheels' full sweeps leave ${carnivalStats.wheelLane.toFixed(0)}+, hoops' rings ${carnivalStats.hoopGap}+ across (slid out ${carnivalStats.hoopFar.toFixed(0)} off the far wall), balloon stands ${carnivalStats.standLane.toFixed(0)}+; beats ${carnivalStats.beatGap.toFixed(0)}+ apart; pickups ${carnivalStats.pick.toFixed(1)}+ from any reach; ${carnivalStats.traps} beats × 6 phases and ${carnivalStats.tix} golden tickets flown by the widest pilot (${carnivalStats.searches} searches, slowest ${carnivalStats.worst.toFixed(1)} s)`;
 // (test slot: Monkey Carnival, island level 33)
 // ---------- Adventure: Haunted Lighthouse (island level 34), an authored stage with its own traps ----------
 // As the caverns' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -5154,4 +5324,5 @@ console.log(toyboxSummary());
 console.log(lighthouseSummary());
 console.log(wizardSummary());
 console.log(starfallSummary());
+console.log(carnivalSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
