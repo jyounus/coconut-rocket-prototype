@@ -4252,6 +4252,197 @@ const candyStats = { seeds: 0, traps: 0, searches: 0, worst: 0, bons: 0, pick: I
 }
 const candySummary = () => `PASS: Candy Caverns: ${candyStats.seeds} layouts × ${candyStats.len} m, only its own traps (${Object.entries(candyStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each trap taught alone first; shaft ${candyStats.minW.toFixed(0)}+ wide, wall slope ${candyStats.slope.toFixed(2)} (max ${CK.RULES.maxWallSlope}); full bubbles leave ${candyStats.bubLane.toFixed(0)}+ lanes, lollipops ${candyStats.lollyLane.toFixed(0)}+, jawbreakers fall ${candyStats.jawDrop.toFixed(0)} at most, gumdrops push ${candyStats.push} at most; beats ${candyStats.beatGap.toFixed(0)}+ apart; pickups ${candyStats.pick.toFixed(1)}+ from any reach; ${candyStats.traps} beats × 6 phases and ${candyStats.bons} golden bonbons flown by the widest pilot never boinged or coated (${candyStats.searches} searches, slowest ${candyStats.worst.toFixed(1)} s)`;
 // (test slot: Candy Caverns, island level 30)
+// ---------- Adventure: Cheddar Caverns (island level 31), an authored stage with its own traps ----------
+// As the organ's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move sides
+// and looks), then every beat and every lost mouseling flown by a time-space search for the widest pilot on the traps'
+// own clocks from several start phases. A mousetrap is proximity-sprung, so the searches count its whole snap (every
+// angle of its bar) as solid all the time; a mouseling over a mousetrap is flown with that trap already sprung (shut), and
+// a safe spot to spring it from (outside its snap, inside its trigger) must exist.
+const CH = new Function(regions.join('\n') + '\nreturn { createCheeseLevel, cheeseShapes, cheeseDanger, cheeseEnd, cheeseTrapState, cheeseWheelState, cheesePawState, cheeseGraterState, cheeseBait, CHEESE, CHEESE_STAGE, CHEESE_TYPES, ADV_CHEESE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const cheeseStats = { seeds: 0, traps: 0, searches: 0, worst: 0, mice: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { cheeseTrap: Infinity, cheeseWheel: Infinity, cheesePaw: Infinity, cheeseGrater: Infinity }, len: 0, kinds: {}, beatGap: Infinity, tunnels: 0, exitClear: Infinity, baitSpots: 0 };
+{
+  const R = CH.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CH.ADV_CHEESE, X = CH.CHEESE;
+  const cfail = (rule, d) => fail('cheese: ' + rule, d);
+  if (st0.theme !== 'cheese' || !(st0.reward > 0)) cfail('the caverns are a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'cheeseMouse' && g.n === 3) || !st0.goals.some(g => g.k === 'cheeseTunnel' && g.n > 0)) cfail('three missions: the hall, 3 mouselings and the tunnels', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CH.UNITS_PER_M - CH.cheeseEnd()) > 1e-6) cfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: mousetraps, then wheels, then paws, then graters, each taught alone; never faster than taught
+  {
+    const fam = { trap: 'trap', trapPair: 'trap', wheel: 'wheel', wheelPair: 'wheel', wheelTrap: 'wheel', paw: 'paw', pawPair: 'paw', pawTrap: 'paw', pawWheel: 'paw', grater: 'grater', graterPaw: 'grater', graterWheel: 'grater', graterTrap: 'grater' };
+    const firsts = {}, seen = [];
+    for (const sec of CH.CHEESE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { cfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) cfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) cfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'trap,wheel,paw,grater') cfail('the caverns teach mousetraps, wheels, paws, then graters', seen.join());
+    if (!CH.CHEESE_STAGE.some(sec => sec.calm && !sec.finish && sec !== CH.CHEESE_STAGE[0])) cfail('the caverns have a breather', '');
+    if (!CH.CHEESE_STAGE[CH.CHEESE_STAGE.length - 1].finish) cfail('the stage ends at the Mouse King\'s hall', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CH.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const capDist = (px, pa, x, a) => { const half = Math.max(0, Hh / 2 - W / 2); return Math.min(...[-half, 0, half].map(da => Math.hypot(px - x, pa - a - da))) - W / 2; };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  const span = q => { const r = q.r || 0; return q.k === 'c' ? [q.a - r, q.a + r] : [Math.min(q.a0, q.a1) - r, Math.max(q.a0, q.a1) + r]; };
+  // the searches' solid shapes: every trap at time t, a mousetrap's whole snap (unless sprung: then shut)
+  const solid = (h, t, S) => CH.cheeseShapes(h, t, S, h.type === 'cheeseTrap' && h.trigT == null ? 'sweep' : undefined);
+  // the search (as the organ's): solid = every lethal shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) solid(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CH.createCheeseLevel(CH.advSeed(st), st), hz = [], fr = [];
+    cheeseStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) cfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) cfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    cheeseStats.len = level.end / 10;
+    for (const h of hz) if (!CH.CHEESE_TYPES.has(h.type)) cfail('the caverns only have their own traps', h.type);
+    for (const h of hz) cheeseStats.kinds[h.type.slice(6)] = (cheeseStats.kinds[h.type.slice(6)] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); cheeseStats.beatGap = Math.min(cheeseStats.beatGap, g); if (g < 0) cfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) cfail('the hall below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      cheeseStats.minW = Math.min(cheeseStats.minW, r - l); cheeseStats.slope = Math.max(cheeseStats.slope, l2 - l, r - r2);
+    }
+    if (cheeseStats.minW < R.minWidth) cfail('the shaft is never narrower than minWidth', cheeseStats.minW.toFixed(1));
+    if (cheeseStats.slope > R.maxWallSlope) cfail('the walls never step in faster than maxWallSlope', cheeseStats.slope.toFixed(2));
+    // static lanes: a mousetrap's shelf and its whole snap, a wheel's shelf (with its wheel at rest), a paw's whole swipe
+    // leave an open lane of minLane to the far wall at every height they reach; a parked grater leaves minLane past it
+    for (const h of hz) {
+      if (h.type === 'cheeseGrater') {
+        for (const at of [0, h.P / 2]) { const g = CH.cheeseGraterState(h, (h.ph || 0) + at + 0.01), m = at ? g.x - X.grater.gw - h.L : h.R - g.x - X.grater.gw; cheeseStats.lane.cheeseGrater = Math.min(cheeseStats.lane.cheeseGrater, m); if (m < R.minLane) cfail('a parked grater leaves minLane past it', `${m.toFixed(1)} at ${h.alt | 0}`); }
+        continue;
+      }
+      const S = h.type === 'cheeseWheel' ? CH.cheeseShapes(h, h.ph || 0, [], undefined) : CH.cheeseDanger(h);
+      for (const q of S) {
+        const [a0, a1] = span(q);
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l;
+          cheeseStats.lane[h.type] = Math.min(cheeseStats.lane[h.type], m);
+          if (m < R.minLane) { cfail('every mousetrap, wheel shelf and paw leaves a lane of minLane to the far wall', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    // a falling wheel never passes through another trap's solid parts, and never through a wall
+    for (const h of hz.filter(h => h.type === 'cheeseWheel')) {
+      const others = hz.filter(g => g !== h && g.hi > h.lo - 40 && g.lo < h.hi + 40);
+      let bad = null;
+      for (let t = 0; t < h.P && !bad; t += 0.02) {
+        const w = CH.cheeseWheelState(h, (h.ph || 0) + t); if (w.fly == null) continue;
+        const [l, r] = level.walls(w.a); if (w.x - X.wheel.R < l - 3 || w.x + X.wheel.R > r + 3) bad = `wall at ${w.a | 0}`;
+        for (const g of others) for (const q of CH.cheeseShapes(g, (h.ph || 0) + t, [], g.type === 'cheeseGrater' ? undefined : 'body')) if (CH.shapeDist(q, w.x, w.a) < X.wheel.R - 2) bad = `${g.type} at ${g.alt | 0}`;
+      }
+      if (bad) cfail('a falling wheel never passes through another trap or a wall', `wheel at ${h.alt | 0}: ${bad}`);
+    }
+    // the tunnels: their holes sit on a flat wall clear of any trap mounted on that wall; their exits open into clear
+    // shaft (nothing for `clear` below and above); there are more of them than the mission asks for
+    if (level.tunnels.length < st0.goals.find(g => g.k === 'cheeseTunnel').n + 1) cfail('the caverns have more tunnels than the tunnel mission needs', `${level.tunnels.length}`);
+    for (const tn of level.tunnels) {
+      if (!k) cheeseStats.tunnels++;
+      for (const [a, x] of [[tn.a0, tn.x0], [tn.a1, tn.x1]]) {
+        const [l, r] = level.walls(a), wx = tn.side > 0 ? l : r;
+        if (Math.abs(wx - x) > 0.5 || Math.abs(level.walls(a - 25)[tn.side > 0 ? 0 : 1] - wx) > 1.5 || Math.abs(level.walls(a + 25)[tn.side > 0 ? 0 : 1] - wx) > 1.5) cfail('a tunnel\'s holes sit on a flat face of the wall', `${a | 0}`);
+        for (const h of hz) if (h.side === tn.side && h.lo - 60 < a && h.hi + 60 > a) cfail('a tunnel\'s holes are clear of the traps on their wall', `${h.type} at ${h.alt | 0}, hole at ${a | 0}`);
+      }
+      for (const h of hz) {
+        const d = Math.min(Math.abs(h.lo - tn.a1), Math.abs(h.hi - tn.a1), h.lo < tn.a1 && h.hi > tn.a1 ? 0 : Infinity), below = h.hi <= tn.a1 ? tn.a1 - h.hi : Infinity, above = h.lo >= tn.a1 ? h.lo - tn.a1 : Infinity;
+        cheeseStats.exitClear = Math.min(cheeseStats.exitClear, Math.min(below, above, d));
+        if (below < X.tunnel.clear[0] || above < X.tunnel.clear[1] || d === 0) cfail('a tunnel\'s exit opens into clear shaft', `${h.type} at ${h.alt | 0}, exit at ${tn.a1 | 0}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CH.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) cfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: mouselings and Mouse Village's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CH.laneSize().w / 2 + 6 + CH.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CH.cheeseDanger(h)) dd = Math.min(dd, CH.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) cheeseStats.pick = Math.min(cheeseStats.pick, dd);
+      if (dd < need - 0.5) cfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a mouseling is a dare, but never inside a solid part (a shelf, a trap's base or bait)
+    for (const f of fr.filter(f => f.kind === 'cheeseMouse')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of CH.cheeseShapes(h, 0, [], 'body')) if (CH.shapeDist(q, f.x, f.alt) < CH.COCO_R + 4) { cfail('a mouseling never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CH.pickR(fr[i]) + CH.pickR(fr[j]) + CH.PICK_GAP - 0.01) cfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'cheeseMouse').length !== 3) cfail('the caverns hold exactly 3 lost mouselings', `${fr.filter(f => f.kind === 'cheeseMouse').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) cfail('the caverns keep a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      cheeseStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        cheeseStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) cfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else cheeseStats.worst = Math.max(cheeseStats.worst, tm);
+      }
+    }
+    // every mouseling can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases (one
+    // over a mousetrap with that trap sprung, once a safe spot to spring it from is shown to exist)
+    const dare = (f, x, a, touch, n, label) => {
+      const own = hz.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60).map(h => h.type === 'cheeseTrap' && own.includes(h) && CH.shapeDist({ k: 'c', x: h.base + h.side * X.trap.ax, a: h.alt + X.trap.ay, r: X.trap.bar + 30 }, x, a) < 0 ? { ...h, trigT: -1e4 } : h);
+      for (const h of traps) if (h.trigT != null) {
+        const [bx, ba] = CH.cheeseBait(h), S = CH.cheeseShapes({ ...h, trigT: null }, 0, [], 'sweep');
+        let ok = false;
+        for (let sx2 = h.L + W / 2 + 4; sx2 < h.R - W / 2 - 4 && !ok; sx2 += 6) for (let sa = h.alt - 220; sa < h.alt + 40 && !ok; sa += 6) if (!capHit(S, sx2, sa, M + 4) && capDist(bx, ba, sx2, sa) < X.trap.trig - 12) ok = true;
+        if (!ok) cfail('a mouseling over a mousetrap has a safe spot to spring the trap from', `trap at ${h.alt | 0}`); else if (!k) cheeseStats.baitSpots++;
+      }
+      const [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        cheeseStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { cfail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'cheeseMouse')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < CH.COCO_R + W / 2 - 4, 6, 'lost mouseling')) cheeseStats.mice++;
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const cheeseSummary = () => `PASS: Cheddar Caverns: ${cheeseStats.seeds} layouts × ${cheeseStats.len} m, only its own traps (${Object.entries(cheeseStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${cheeseStats.minW.toFixed(0)}+ wide, wall slope ${cheeseStats.slope.toFixed(2)} (max ${CH.RULES.maxWallSlope}); open lanes past mousetraps ${cheeseStats.lane.cheeseTrap.toFixed(0)}+, wheel shelves ${cheeseStats.lane.cheeseWheel.toFixed(0)}+, paws ${cheeseStats.lane.cheesePaw.toFixed(0)}+, parked graters ${cheeseStats.lane.cheeseGrater.toFixed(0)}+ (minLane ${CH.RULES.minLane}); wheels never fall through anything; ${cheeseStats.tunnels} tunnels, exits ${cheeseStats.exitClear.toFixed(0)}+ clear; beats ${cheeseStats.beatGap.toFixed(0)}+ apart; pickups ${cheeseStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${cheeseStats.traps} beats and ${cheeseStats.mice} mouselings (reach and escape, ${cheeseStats.baitSpots} with a safe spot to spring the trap) flown by the widest pilot in ${cheeseStats.searches} searches, the slowest pass ${cheeseStats.worst.toFixed(1)} s`;
 // (test slot: Cheddar Caverns, island level 31)
 // (test slot: Toybox Tower, island level 32)
 // (test slot: Monkey Carnival, island level 33)
@@ -4284,4 +4475,5 @@ console.log(labSummary());
 console.log(organSummary());
 console.log(pinballSummary());
 console.log(candySummary());
+console.log(cheeseSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
