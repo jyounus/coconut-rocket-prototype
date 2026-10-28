@@ -16362,6 +16362,376 @@ const ADV_SNAPJAW = { name: 'Snapjaw Swamp', theme: 'snapjaw', seed: 'isl-8-snap
   goals: [{ k: 'finish', text: 'Reach the swamp hut' }, { k: 'snapjawPearls', n: 3 }, { k: 'snapjawDodge', n: 8 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Snapjaw Swamp, island level 8)
+/* LEVELGEN:BEGIN */
+// ---------- Jelly Drift (island level 12): the stage, its traps' shapes and its layout ----------
+// An authored stage like Anthill Underworks (see createAnthillLevel): a bioluminescent reef column in open water at
+// night, climbed from the Moonlit Shelf up to the Moon Pool. One trap at a time, each taught alone and slow before it
+// is combined (Drifting Swarms, Anemone Gardens, the Manta Run), a breather (the Glow Grotto), the Lion's Mane Deep,
+// the Bloom Gauntlet mixing them all, then the Moon Pool and its landing. Its own shaft (living coral reef bulging
+// between brain-coral heads), its own traps and its own look (G.theme 'jelly', see the jelly drawing).
+// The traps (every one leaves a way through on its own clock that the widest pilot fits; nothing ever rises at you):
+// - jellySwarm (Current Swarm): a current runs across the shaft, carrying a ribbon of `n` glowing moon jellies from a
+//   coral grotto in one wall to a grotto in the other, round and round. The bells are lethal, their trailing tentacles
+//   sting (lethal, but the rubber duck bounces off them). The current also carries you along with it while you are
+//   in its band. Fly up through the gaps between the jellies.
+// - jellyAnem (Anemone Bloom): a giant anemone on a coral shelf in a wall. For `tell` s its crown glows and swells,
+//   then it blooms: a fan of long stinging tentacles shoots out across most of the shaft (`bloom` s), waves there
+//   (`hold` s) and curls back (`close` s). Its oral disc and shelf are lethal; the far lane stays open.
+// - jellyManta (Manta Pass): a great glowing manta lives in a coral cave in a wall. For `tell` s its eyes and gill
+//   lights glow in the cave mouth and bubbles stream out, then it glides right across the shaft (`V` units/s) into the
+//   cave in the far wall: a full-width gate you time from below. Lethal all over (no sting: the duck can't bounce it).
+// - jellyMane (Lion's Mane, this stage's own): a giant lion's mane jelly hovers in the middle of the shaft, its curtain
+//   of long tentacles swaying slowly from side to side in the current, so the lane beside its bell opens on one side,
+//   then the other. The bell is lethal, the curtain stings.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const JELLY = {
+  step: { every: [150, 260], D: [0, 13] },   // wall relief: the reef bulging between brain-coral heads
+  swarm: { n: 3, extra: 80, bob: 7, rise: 52, push: 46, ease: 300 },
+  anem: { tell: 1.1, bloom: 0.34, hold: 0.75, close: 0.75, lane: 136, n: 7, spread: 0.6, rest: 26, ease: 440 },
+  manta: { V: 280, len: 138, span: 93, k: 1.5, tell: 1.3, ease: 480 },
+  mane: { n: 8, root: 34, tent: 172, A: 118, rx: 44, ease: 520 },
+  chiliGap: 470, end: 420,
+};
+const JELLY_TYPES = new Set(['jellySwarm', 'jellyAnem', 'jellyManta', 'jellyMane']);
+// The stage, bottom to top (as ANTHILL_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). drop: this beat holds one of the 3 moon pearls.
+const JELLY_STAGE = [
+  { name: 'Moonlit Shelf', w: 380, len: 900, calm: true },
+  { name: 'Drifting Swarms', w: 376, beats: [[620, 'jellySwarm', { dir: 1, v: 50 }], [440, 'jellySwarm', { dir: -1, v: 54 }], [460, 'swarmPair', { v: 56 }],
+    [520, 'jellySwarm', { dir: 1, v: 58, drop: true }], [500, 'swarmPair', { v: 60 }], [500, 'swarmPair', { v: 62 }], [540, 'jellySwarm', { dir: -1, v: 64 }]], tail: 560 },
+  { name: 'Anemone Gardens', w: 380, beats: [[660, 'jellyAnem', { side: -1, P: 5.0 }], [600, 'jellyAnem', { side: 1, P: 4.9, ph: 0.3 }], [640, 'anemPair', { P: 4.8 }],
+    [660, 'jellyAnem', { side: -1, P: 4.7, drop: true }], [700, 'anemSwarm', { P: 4.7, v: 60 }], [640, 'anemPair', { P: 4.6 }], [700, 'anemSwarm', { P: 4.6, v: 62 }], [660, 'jellyAnem', { side: 1, P: 4.5 }]], tail: 580 },
+  { name: 'Manta Run', w: 380, beats: [[660, 'jellyManta', { dir: 1, P: 6.2 }], [560, 'jellyManta', { dir: -1, P: 6.0, ph: 0.4 }], [600, 'jellyManta', { dir: 1, P: 5.9, drop: true }],
+    [640, 'mantaSwarm', { P: 5.9, v: 60 }], [700, 'mantaAnem', { P: 5.8 }], [660, 'jellyManta', { dir: -1, P: 5.7 }], [640, 'mantaAnem', { P: 5.7 }], [700, 'mantaSwarm', { P: 5.6, v: 62 }]], tail: 600 },
+  { name: 'Glow Grotto', w: 384, len: 1100, calm: true },
+  { name: "Lion's Mane Deep", w: 380, beats: [[760, 'jellyMane', { P: 5.4 }], [700, 'jellyMane', { P: 5.3, ph: 0.5 }], [720, 'maneSwarm', { P: 5.2, v: 60 }],
+    [760, 'maneManta', { P: 5.2 }], [760, 'maneAnem', { P: 5.1 }], [700, 'jellyMane', { P: 5.0 }], [760, 'maneSwarm', { P: 5.0, v: 62 }], [760, 'maneManta', { P: 5.0 }]], tail: 640 },
+  { name: 'Bloom Gauntlet', w: 378, beats: [[700, 'anemSwarm', { P: 4.6, v: 62 }], [700, 'mantaSwarm', { P: 5.6, v: 62 }], [760, 'maneAnem', { P: 5.0 }],
+    [700, 'swarmPair', { v: 62 }], [760, 'mantaAnem', { P: 5.6 }], [800, 'maneManta', { P: 5.0 }], [700, 'anemPair', { P: 4.6 }], [760, 'maneAnem', { P: 4.9 }], [700, 'mantaSwarm', { P: 5.6, v: 64 }], [640, 'jellyManta', { dir: 1, P: 5.6 }]], tail: 720 },
+  { name: 'The Moon Pool', w: 384, len: 900, calm: true, finish: true },
+];
+const jellyLen = sec => sec.calm || !sec.beats ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const jellyEnd = () => { let y = 0; for (const sec of JELLY_STAGE) { if (sec.finish) return y + JELLY.end; y += jellyLen(sec); } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a swarm's jellies: each one's q (along its way from its source grotto), x, bell centre a and its stroke (0..1)
+function jellySwarmPos(h, t, out = []) {
+  const X = JELLY.swarm, sp = h.span / X.n;
+  for (let i = 0; i < X.n; i++) {
+    const q = pmod(h.v * t + (i + h.ph) * sp, h.span) - 36, ph = t * 2.1 + i * 2.3 + h.alt * 0.01;
+    out.push({ i, q, x: h.dir > 0 ? h.L + q : h.R - q, a: h.alt + X.rise + X.bob * Math.sin(ph), pulse: 0.5 + 0.5 * Math.sin(ph * 1.3) });
+  }
+  return out;
+}
+// an anemone's clock: e how far its tentacles are out (0..1), tell 0..1 (its crown swelling and glowing)
+function jellyAnemAt(h, t) {
+  const X = JELLY.anem, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.bloom - X.hold - X.close;
+  if (u < I) return { ph: 'rest', e: 0, tell: 0, k: u / I, u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', e: 0, tell: v / X.tell, u };
+  v -= X.tell;
+  if (v < X.bloom) { const k = v / X.bloom; return { ph: 'bloom', e: 1 - (1 - k) ** 2.2, tell: 1, k, u }; }
+  v -= X.bloom;
+  if (v < X.hold) return { ph: 'hold', e: 1, tell: 1, k: v / X.hold, u };
+  v -= X.hold;
+  const k = clamp(v / X.close, 0, 1);
+  return { ph: 'close', e: 1 - smooth(0, 1, k), tell: 1 - k, k, u };
+}
+// tentacle i of an anemone in state st at time t: n world points [x, a, half-thickness] from its disc to its tip
+function jellyAnemTent(h, st, i, t, n = 6) {
+  const X = JELLY.anem, d = h.side, N = X.n, f = i / (N - 1) - 0.5, ox = h.base + d * 20, oa = h.alt + 2;
+  const full = h.reach * (1 - 0.22 * Math.abs(f * 2) ** 1.6), rest = X.rest * (1 + 0.35 * st.tell) * (1 - 0.15 * Math.abs(f * 2));
+  const L = lerp(rest, full, st.e), ang0 = f * 2 * X.spread * lerp(0.55 + 0.25 * st.tell, 1, st.e) + 0.25;   // (a little upward: the crown faces up the shaft)
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const u = k / (n - 1), wav = (0.24 + 0.12 * (1 - st.e)) * Math.sin(t * 2.6 + i * 1.7 - u * 3.2) * u, curl = (f >= 0 ? 1 : -1) * (0.55 - 0.3 * st.e) * u * u, ang = ang0 + wav + curl;
+    // (each tentacle bends along its length: a point is the sum of its segments)
+    out.push([u, ang]);
+  }
+  const P = []; let x = ox, a = oa;
+  for (let k = 0; k < n; k++) {
+    const [u, ang] = out[k];
+    if (k) { const seg = L / (n - 1); x += d * seg * Math.cos(ang); a += seg * Math.sin(ang); }
+    P.push([x, a, lerp(8.4, 2.6, u ** 0.8) * (0.8 + 0.2 * st.e)]);
+  }
+  return P;
+}
+// a manta's clock: tell 0..1 (glowing in its cave mouth), then swimming: hx its head's x; then resting in the far cave
+function jellyMantaAt(h, t) {
+  const X = JELLY.manta, u = pmod(t / h.P + h.ph, 1) * h.P, T = h.tSwim, I = h.P - X.tell - T;
+  const flap = Math.sin(t * 5.2 + h.alt * 0.013);
+  if (u < I) return { ph: 'rest', tell: 0, u, flap };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', tell: v / X.tell, u, flap };
+  v -= X.tell;
+  const k = v / T;
+  return { ph: 'swim', k, hx: h.src + h.dir * (lerp(0, h.wd + X.len + 40, k) - 6), u, flap };
+}
+// a manta's wing tips (sg +1 upper, -1 lower) at its flap: [x, a] world
+function jellyMantaTip(h, st, sg) {
+  const X = JELLY.manta, f = st.flap;
+  return [st.hx - h.dir * (44 + 8 * f) * X.k, h.alt + sg * X.span * (0.82 + 0.18 * f)];
+}
+// a lion's mane: its sway (-A..A, + toward the right wall), and tentacle i's points [x, a, r] from rim to tip
+function jellyManeSway(h, t) { return JELLY.mane.A * Math.sin(Math.PI * 2 * (t / h.P + h.ph)); }
+function jellyManeTent(h, t, i, n = 5) {
+  const X = JELLY.mane, S = jellyManeSway(h, t), f = i / (X.n - 1), x0 = h.cx + lerp(-X.root, X.root, f), a0 = h.alt - 12, L = X.tent * (0.9 + 0.1 * ((i * 5) % 3) / 2), P = [];
+  for (let k = 0; k < n; k++) {
+    const u = k / (n - 1), w = 7 * Math.sin(t * 1.9 + i * 1.3 + u * 4.5) * u;
+    P.push([x0 + S * u ** 1.5 + w, a0 - L * u * (1 - 0.1 * (S / X.A) ** 2 * u), lerp(4.6, 3.4, u)]);
+  }
+  return P;
+}
+// Every collision shape of a jelly trap at time t, fitted to its drawing. kind: undefined for all of them, 'still'
+// only the parts that never move. Stinging parts carry sting: true (the rubber duck bounces off those).
+function jellyShapes(h, t, S = [], kind) {
+  const c = (x, a, r, sting) => S.push(sting ? { k: 'c', x, a, r, sting: true } : { k: 'c', x, a, r });
+  const cap = (x0, a0, x1, a1, r, sting) => S.push(sting ? { k: 's', x0, a0, x1, a1, r, sting: true } : { k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, moving = kind !== 'still';
+  if (h.type === 'jellySwarm') {
+    if (!moving) return S;
+    for (const J of jellySwarmPos(h, t)) {
+      if (J.q < -34 || J.q > h.wd + 34) continue;
+      const sq = 1 - 0.1 * J.pulse;
+      cap(J.x - 6 * sq, J.a + 4, J.x + 6 * sq, J.a + 4, 12.5);   // the bell
+      cap(J.x, J.a - 8, J.x - h.dir * 8, J.a - 44, 8.5, true);   // its trailing tentacles
+    }
+  } else if (h.type === 'jellyAnem') {
+    c(b + d * 8, A - 16, 13);   // the coral shelf it sits on
+    c(b + d * 14, A, 15);   // its column and oral disc
+    if (moving) {
+      const st = jellyAnemAt(h, t);
+      for (let i = 0; i < JELLY.anem.n; i++) { const P = jellyAnemTent(h, st, i, t); for (let k = 1; k < P.length; k++) cap(P[k - 1][0], P[k - 1][1], P[k][0], P[k][1], (P[k - 1][2] + P[k][2]) / 2, true); }
+    }
+  } else if (h.type === 'jellyManta') {
+    if (!moving) return S;
+    const st = jellyMantaAt(h, t);
+    if (st.ph !== 'swim') return S;
+    const D = h.dir * JELLY.manta.k, hx = st.hx, K = JELLY.manta.k;
+    cap(hx - D * 8, A, hx - D * 62, A, 17 * K);   // its body, head to tail root
+    for (const sg of [1, -1]) {
+      const [tx, ta] = jellyMantaTip(h, st, sg);
+      cap(hx - D * 22, A + sg * 12 * K, tx, ta, 9 * K);   // the wing's leading edge to its tip
+      cap(hx - D * 40, A + sg * 14 * K, lerp(hx - D * 40, tx, 0.7), lerp(A + sg * 14 * K, ta, 0.7) - sg * 8 * K, 11 * K);   // the wing's trailing web
+    }
+    cap(hx - D * 62, A, hx - D * 96, A + 2, 3.5 * K);   // the whip of its tail
+  } else if (h.type === 'jellyMane') {
+    const X = JELLY.mane;
+    cap(h.cx - 20, A + 6, h.cx + 20, A + 6, 23);   // the bell
+    if (moving) {
+      for (let i = 0; i < X.n; i++) { const P = jellyManeTent(h, t, i); for (let k = 1; k < P.length; k++) cap(P[k - 1][0], P[k - 1][1], P[k][0], P[k][1], (P[k - 1][2] + P[k][2]) / 2, true); }
+      const S0 = jellyManeSway(h, t) * 0.25;
+      cap(h.cx, A - 10, h.cx + S0, A - 66, 11, true);   // its frilly oral arms
+    }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): its shapes over a whole cycle.
+function jellyDanger(h) {
+  const S = []; jellyShapes(h, 0, S, 'still');
+  if (h.type === 'jellySwarm') { S.push({ k: 's', x0: h.L - 10, a0: h.alt + 36, x1: h.R + 10, a1: h.alt + 36, r: 46 }); return S; }
+  for (let t = 0; t < h.P; t += 0.04) jellyShapes(h, t, S);
+  return S;
+}
+
+// Jelly Drift's shaft, laid out in full from JELLY_STAGE (the seed only nudges looks and phases). It answers the same
+// questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createJellyLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x7E11A5) >>> 0), Q = JELLY;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of JELLY_STAGE) { const len = jellyLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = jellyEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the walls' relief on a side: reef bulging out between coral heads (each bulge its own depth), eased flat where a
+  // trap is mounted or reaches and over the launch. Never steeper than RULES.maxWallSlope.
+  let fIdx = null, fN = -1; const fNone = [];
+  const flatsNear = a => { if (fN !== flats.length) { fIdx = new Map(); for (const f of flats) for (let q = Math.floor((f.a0 - 70) / 256); q <= Math.floor((f.a1 + 70) / 256); q++) { let B = fIdx.get(q); if (!B) fIdx.set(q, B = []); B.push(f); } fN = flats.length; } return fIdx.get(Math.floor(a / 256)) || fNone; };
+  const SP = Q.step, flatK = (a, side) => { let k = 0; for (const f of flatsNear(a)) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knots = [[], []];
+  for (const side of [0, 1]) { let a = -60, i = 0; while (a < topA + 400) { knots[side].push({ a, d: lerp(SP.D[0], SP.D[1], hash2(i, (seed & 0xffff) + 811 + side * 17)), t: Math.floor(hash2(i, (seed & 0xffff) + 819 + side * 17) * 4) }); a += lerp(SP.every[0], SP.every[1], hash2(i, (seed & 0xffff) + 813 + side * 17)); i++; } }
+  const knotAt = (a, side) => { const K = knots[side]; let lo = 0, hi = K.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m].a <= a) lo = m; else hi = m; } return lo; };
+  const panelAt = (a, side) => { const K = knots[side], i = knotAt(a, side), k0 = K[i], k1 = K[i + 1] || k0, u = clamp((a - k0.a) / Math.max(1, k1.a - k0.a), 0, 1); return k0.d * Math.sin(Math.PI * u) ** 1.3; };
+  const reliefAt = (a, side) => Math.max(0, panelAt(a, side)) * smooth(380, 620, a) * (1 - flatK(a, side));
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1) => { flats.push({ a0, a1, side: 1 }); flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSide = 0;
+  const one = (type, A, o, ease, ex = {}) => { lastSide = o.side; return [{ type, side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease, ...ex }]; };
+  const make = {
+    jellySwarm(A, o) { flat(A - 30, A + 100); lastSide = o.dir; return [{ type: 'jellySwarm', side: o.dir, dir: o.dir, alt: A, v: o.v, P: 1, ph: o.ph ?? ph(), drop: !!o.drop, ease: Q.swarm.ease }]; },
+    swarmPair(A, o) {   // two currents 210 apart, running opposite ways
+      const d = -(lastSide || pick());
+      return [...make.jellySwarm(A, { dir: d, v: o.v }), ...make.jellySwarm(A + 210, { dir: -d, v: o.v * 0.92 })];
+    },
+    jellyAnem(A, o) { flat(A - 150, A + 150); return one('jellyAnem', A, o, Q.anem.ease); },
+    anemPair(A, o) {   // anemones in facing walls 300 apart, out of step (a zig-zag through their lanes)
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.jellyAnem(A, { side: d, P: o.P, ph: p0 }), ...make.jellyAnem(A + 300, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    anemSwarm(A, o) {   // a current, then an anemone above it in the wall the jellies swim toward
+      const d = -(lastSide || pick());
+      return [...make.jellySwarm(A, { dir: d, v: o.v }), ...make.jellyAnem(A + 290, { side: d, P: o.P, ph: ph() })];
+    },
+    jellyManta(A, o) { flat(A - 130, A + 130); lastSide = o.dir; return [{ type: 'jellyManta', side: o.dir, dir: o.dir, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease: Q.manta.ease }]; },
+    mantaSwarm(A, o) {   // a current, then a manta pass above it
+      const d = -(lastSide || pick());
+      return [...make.jellySwarm(A, { dir: d, v: o.v }), ...make.jellyManta(A + 310, { dir: -d, P: o.P })];
+    },
+    mantaAnem(A, o) {   // a manta pass, then an anemone above it in the wall the manta swims from
+      const d = -(lastSide || pick());
+      return [...make.jellyManta(A, { dir: d, P: o.P }), ...make.jellyAnem(A + 340, { side: -d, P: o.P - 0.6, ph: ph() })];
+    },
+    jellyMane(A, o) { flat(A - 230, A + 80); return one('jellyMane', A, { ...o, side: 1 }, Q.mane.ease); },
+    maneSwarm(A, o) {   // a current, then a lion's mane above it
+      const d = -(lastSide || pick());
+      return [...make.jellySwarm(A, { dir: d, v: o.v }), ...make.jellyMane(A + 340, { P: o.P })];
+    },
+    maneManta(A, o) {   // a lion's mane, then a manta pass above its bell
+      const d = -(lastSide || pick());
+      return [...make.jellyMane(A, { P: o.P }), ...make.jellyManta(A + 260, { dir: d, P: o.P })];
+    },
+    maneAnem(A, o) {   // a lion's mane, then an anemone above it
+      const d = -(lastSide || pick());
+      return [...make.jellyMane(A, { P: o.P }), ...make.jellyAnem(A + 250, { side: d, P: o.P - 0.5, ph: ph() })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, jelly: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (!sc.beats) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const h of beats.flatMap(b => b.hs)) {
+    const d = h.side;
+    if (h.type === 'jellySwarm') {
+      const X = Q.swarm, [L, R] = lOpening(h.alt - 20, h.alt + 90);
+      h.base = d > 0 ? L : R; h.L = L; h.R = R; h.x = (L + R) / 2; h.wd = R - L; h.span = h.wd + 72 + X.extra;
+      h.P = h.span / h.v; h.lo = h.alt - 12; h.hi = h.alt + X.rise + X.bob + 24;
+    } else if (h.type === 'jellyAnem') {
+      const X = Q.anem, [L, R] = lOpening(h.alt - 140, h.alt + 140);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L; h.reach = h.wd - X.lane - 26;
+      let lo = Infinity, hi = -Infinity; for (let t = 0; t < h.P; t += 0.02) for (const q of jellyShapes(h, t, [])) { const a0 = q.k === 'c' ? q.a : Math.min(q.a0, q.a1), a1 = q.k === 'c' ? q.a : Math.max(q.a0, q.a1); lo = Math.min(lo, a0 - q.r); hi = Math.max(hi, a1 + q.r); }
+      h.lo = lo - 4; h.hi = hi + 4;
+    } else if (h.type === 'jellyManta') {
+      const X = Q.manta, [L, R] = lOpening(h.alt - 80, h.alt + 80);
+      h.base = d > 0 ? L : R; h.src = h.base; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      h.tSwim = (h.wd + X.len + 40) / X.V; h.P = Math.max(h.P, X.tell + h.tSwim + 2.2);
+      h.lo = h.alt - X.span - 14; h.hi = h.alt + X.span + 14;
+    } else if (h.type === 'jellyMane') {
+      const X = Q.mane, [L, R] = lOpening(h.alt - 220, h.alt + 70);
+      h.base = L; h.L = L; h.R = R; h.cx = (L + R) / 2; h.x = h.cx; h.wd = R - L;
+      h.lo = h.alt - 12 - X.tent - 10; h.hi = h.alt + 6 + 23 + 6;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, jellyDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  let pearls = 0;
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  for (const sc of secs) {
+    if (!sc.calm) continue;
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.5);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Glow Grotto: a ring of coconuts round a big coin (a glowing plankton bloom), then a weave
+      const cA = sc.a0 + 560, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 84, cA + Math.sin(an) * 84, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 720, sc.a1 - 90, 0.6, 3);
+    }
+  }
+  // each trap's coconuts show the way: a pair below and above a current's band, a column up an anemone's far lane, a
+  // column up the middle after a manta's pass, a line up the side of a lion's mane (each moon pearl a dare: in the middle
+  // of a current's band, inside an anemone's bloom, in a manta's path)
+  for (const b of beats) {
+    for (const h of b.hs) {
+      const d = h.side, [l, r] = lWalls(h.alt);
+      if (h.type === 'jellySwarm') {
+        add((l + r) / 2 - 36, h.alt - 70, 'coco', { clear: 18 }); add((l + r) / 2 + 36, h.alt - 70, 'coco', { clear: 18 });
+        if (h.drop && pearls < 3) { if (add(h.x, h.alt + Q.swarm.rise, 'jellyPearl', { pearl: true, clear: -Infinity })) pearls++; }
+      } else if (h.type === 'jellyAnem') {
+        const far = h.far - d * 60;
+        for (let k = 0; k < 4; k++) add(far, h.alt - 110 + k * 62, 'coco', { clear: 22 });
+        if (h.drop && pearls < 3) { if (add(h.base + d * (h.reach * 0.5), h.alt + 10, 'jellyPearl', { pearl: true, clear: -Infinity })) pearls++; }
+      } else if (h.type === 'jellyManta') {
+        for (let k = 0; k < 3; k++) add((l + r) / 2 + (k - 1) * 8, h.hi + 70 + k * 44, 'coco', { clear: 22 });
+        if (h.drop && pearls < 3) { if (add(h.x, h.alt, 'jellyPearl', { pearl: true, clear: -Infinity })) pearls++; }
+      } else if (h.type === 'jellyMane') {
+        for (const e of [-1, 1]) add(h.cx + e * 112, h.alt + 4, 'coco', { clear: 20 });
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(q => q.hi)) + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the anthill's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, jelly: true, sections: secs, beats, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, knots, panelAt,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 12): its own shaft (createJellyLevel), the jelly look (G.theme), its missions (the Moon
+// Pool, 3 moon pearls, 5 mantas slipped past close behind) and its length in metres.
+const ADV_JELLY = { name: 'Jelly Drift', theme: 'jelly', seed: 'isl-12-jelly', reward: 200, target: 0, len: jellyEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Moon Pool' }, { k: 'jellyPearls', n: 3 }, { k: 'jellyTail', n: 5 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Jelly Drift, island level 12)
 /* LEVELGEN:BEGIN */
 // ---------- Basalt Deep (island level 14): the stage, its traps' shapes and its layout ----------
@@ -46265,7 +46635,7 @@ const ISLAND = {
     { id: 9,  name: 'Gobblebloom',       region: 'jungle',  pilot: 'chameleon', perk: 'Hot-chili shots burn the plant boss', boss: 'flytrap', stage: 4 },
     { id: 10, name: 'Glowshroom Grotto', region: 'grotto',  pilot: 'mushroom',  perk: 'Immune to spore clouds', stage: 'grotto' },
     { id: 11, name: 'Hidden Lagoon',     region: 'lagoon',  pilot: 'puffer',    perk: 'Rides the waterfalls without being swept down', stage: 'lagoon' },
-    { id: 12, name: 'Jelly Drift',       region: 'lagoon',  pilot: 'duck',      perk: 'Stings bounce off the rubber duck' },
+    { id: 12, name: 'Jelly Drift',       region: 'lagoon',  pilot: 'duck',      perk: 'Stings bounce off the rubber duck', stage: 'jelly' },
     { id: 13, name: 'Old Gold Mine',     region: 'mine',    pilot: 'mole',      perk: 'Rides the rails: runaway carts can\'t hurt him', stage: 'mine' },
     { id: 14, name: 'Basalt Deep',       region: 'caves',   pilot: 'firefly',   perk: 'Lights up the dark tunnels', stage: 'basalt' },
     { id: 15, name: 'Geode King',        region: 'caves',   pilot: 'goat',      perk: 'Firework blasts crack the crystal boss', boss: 'golem', stage: 'geodeking' },
@@ -46385,6 +46755,7 @@ ADV_STAGES.basalt = ADV_BASALT;   // (island level 14, Basalt Deep: see createBa
 ADV_STAGES.idols = ADV_IDOLS;   // (island level 6, Idol's Climb: see createIdolsLevel)
 ADV_STAGES.geodeking = ADV_GEODEKING;   // (island level 15, Geode King: see createGeodekingLevel)
 ADV_STAGES.drake = ADV_DRAKE;   // (island level 20, Bellows Drake: see createDrakeLevel)
+ADV_STAGES.jelly = ADV_JELLY;   // (island level 12, Jelly Drift: see createJellyLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -103326,6 +103697,1539 @@ function snapjawDrawForeground() {
 { const base = drawForeground; drawForeground = function () { if (snapjawOn()) snapjawDrawForeground(); else base(); }; }
 { const base = stageClear; stageClear = function (boss) { base(boss); if (snapjawOn() && !boss) snapjawFinishBurst(); }; }
 // (game slot: Snapjaw Swamp, island level 8)
+// ---------- Jelly Drift (island level 12): its look, traps, moon pearls, the duck's perk and sounds ----------
+// The stage's shaft and traps are laid out by createJellyLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'jelly': a bioluminescent reef column in open water at night, deep indigo water lit by the moon far
+// above and by everything that glows down here: neon pink and cyan polyps in the coral, plankton sparkling in the
+// currents, the jellies themselves. The walls are living reef (brain-coral heads, plate coral, tube sponges with
+// glowing rims, sea fans, polyps), with a real lip of coral rock (moonlit lumpy top, shaded underside, chipped); behind
+// the shaft the reef recedes in calm parallax layers different in every section (moonlit coral towers, drifting
+// swarms far off, anemone meadows, the open blue of the manta run, the plankton grotto, the amber lion's mane deep, the
+// gauntlet's bloom, the Moon Pool). Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left
+// (or the glow), every edge a darker shade of its own colour (never black), detail as line pairs, sheen strokes, soft
+// glows; the backdrop stays calm and pushed back so the traps and pickups read first. Performance: everything that
+// never moves (walls, backdrop layers, bells, mantas' flap frames, the finish) is painted once into offscreen canvases at
+// the screen's pixel scale and blitted each frame (see jellyTile, jellySprite); only what moves is drawn live, every
+// glow one cached sprite, every sprite key quantised.
+const JELLYP = {
+  pal: { bgTop: [30, 24, 84], bgBot: [8, 6, 30], far: [34, 30, 92], far2: [24, 20, 70], wall: [58, 40, 104], wallIn: [16, 10, 40], rim: [190, 170, 255] },
+  coral: ['#c8b0ff', '#7a5ad0', '#4a3290', '#2a1a5a'], coralEdge: '#2e1c62',
+  pink: ['#ffe0f6', '#ff7ad6', '#d03aa8', '#7a1462'], pinkEdge: '#8a1a6e',
+  cyan: ['#e8ffff', '#7af0ff', '#24b4d8', '#0e5a86'], cyanEdge: '#14608a',
+  amber: ['#fff0c8', '#ffb050', '#e0602a', '#8a2a14'], amberEdge: '#8a2c16',
+  navy: ['#9ab4ff', '#4a5ab8', '#28307a', '#141848'], navyEdge: '#1a1e58',
+  pearl: ['#ffffff', '#ffe8f6', '#e8b8e0', '#a87aaa'], pearlEdge: '#9a6a9e',
+  shell: ['#ffe6f4', '#e8a0d4', '#a8549a', '#5e2258'], shellEdge: '#6a2462',
+};
+const jellyOn = () => !!(G && G.theme === 'jelly');
+{ const base = pal; pal = function (key, a) { return jellyOn() && JELLYP.pal[key] ? JELLYP.pal[key].slice() : base(key, a); }; }
+const jellyHex = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const JELLYC = { key: '', tiles: new Map(), sprites: new Map(), glows: new Map() };
+function jellyCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== JELLYC.key) { JELLYC.key = key; JELLYC.tiles.clear(); JELLYC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function jellyTile(id, x0, x1, a0, a1, paint) {
+  let T = JELLYC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    JELLYC.tiles.set(id, T);
+    if (JELLYC.tiles.size > 72) { for (const kk of JELLYC.tiles.keys()) { JELLYC.tiles.delete(kk); if (JELLYC.tiles.size <= 58) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function jellySprite(id, w, h, ax, ay, paint) {
+  let S = JELLYC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; JELLYC.sprites.set(id, S);
+    if (JELLYC.sprites.size > 260) { for (const kk of JELLYC.sprites.keys()) { JELLYC.sprites.delete(kk); if (JELLYC.sprites.size <= 210) break; } }
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt), mirrored when flip < 0
+function jellyBlit(S, x, alt, alpha = 1, flip = 1) {
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  if (flip < 0) { ctx.save(); ctx.translate(sx(x), sy(alt)); ctx.scale(-1, 1); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore(); }
+  else ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+// blit a sprite with its anchor at screen (X, Y), turned by ang, mirrored when flip < 0, scaled by k (kx, ky)
+function jellyBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1, k = 1, ky = k) {
+  if (!ang && flip > 0 && k === 1 && ky === 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, X - S.ax * s, Y - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; return; }
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (k !== 1 || ky !== 1) ctx.scale(k, ky); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+// a soft additive glow: one cached radial sprite per colour (no gradient built per frame)
+function jellyGlowCv(col) {
+  col = col.map(v => Math.min(255, Math.round(v / 16) * 16));   // quantised, so blended colours share a few sprites
+  const key = col.join(',');
+  let cv = JELLYC.glows.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 48, 48, 47, [gCol(col, 1), gCol(col, 0.42), gCol(col, 0.12), gCol(col, 0)]); q.fillRect(0, 0, 96, 96);
+    JELLYC.glows.set(key, cv); if (JELLYC.glows.size > 160) JELLYC.glows.delete(JELLYC.glows.keys().next().value);
+  }
+  return cv;
+}
+function jellyGlow(c, x, y, r, col, a) {
+  if (a < 0.01 || r < 0.6) return;
+  const cv = jellyGlowCv(col);
+  const op = c.globalCompositeOperation, ga = c.globalAlpha; c.globalCompositeOperation = 'lighter'; c.globalAlpha = ga * Math.min(1, a); c.drawImage(cv, x - r, y - r, r * 2, r * 2); c.globalCompositeOperation = op; c.globalAlpha = ga;
+}
+// ---- shared painters (any context, world units, y down) ----
+// a glossy ball lit from the top left: 3-stop body, an edge of its own darker colour, a sheen and a glint
+function jellyBall(c, x, y, r, P, edge, sheen = 0.55) {
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, r * 0.07); c.stroke();
+  c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, r * 0.13); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.72, 3.5, 4.5); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(x - r * 0.42, y - r * 0.5, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+}
+// a glossy ellipse body part (any context): rx × ry at angle a, the palette P lit from the top left, its own edge
+function jellyPart(c, x, y, rx, ry, a, P, edge, sheen = 0.5) {
+  c.fillStyle = gRG(c, x - rx * 0.35, y - ry * 0.55, Math.max(rx, ry) * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.ellipse(x, y, rx, ry, a, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, Math.min(rx, ry) * 0.12); c.stroke();
+  if (sheen > 0) { c.save(); c.translate(x, y); c.rotate(a); c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, Math.min(rx, ry) * 0.2); c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, rx * 0.7, ry * 0.68, 0, 3.6, 4.6); c.stroke(); c.restore(); }
+}
+// cartoon eyes (any context) at x, y, radius r; look -1..1 sideways; lid 0..1 a sleepy (or grumpy, grump) lid
+function jellyEyes(c, x, y, r, look = 0, lid = 0, iris = '#3a2a8a', gap = 1.15, lidCol = '#c050a8', grump = 0) {
+  for (const e of [-1, 1]) {
+    const ex = x + e * r * gap, hy = r * 1.1;
+    c.fillStyle = gRG(c, ex - r * 0.3, y - r * 0.3, r * 1.3, ['#ffffff', '#f2eefe', '#cfc4ea']); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(70,40,130,.7)'; c.lineWidth = Math.max(0.4, r * 0.13); c.stroke();
+    c.save(); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.clip();
+    c.fillStyle = iris; c.beginPath(); c.arc(ex + look * r * 0.36, y + r * 0.1, r * 0.66, 0, TWO_PI); c.fill();
+    c.fillStyle = '#140c34'; c.beginPath(); c.arc(ex + look * r * 0.42, y + r * 0.12, r * 0.34, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + look * r * 0.36 - r * 0.22, y - r * 0.2, r * 0.22, 0, TWO_PI); c.fill();
+    if (lid > 0) {
+      const tilt = grump * (e > 0 ? 1 : -1);
+      c.fillStyle = lidCol; c.beginPath(); c.moveTo(ex - r * 1.2, y - hy * 1.2); c.lineTo(ex + r * 1.2, y - hy * 1.2);
+      c.lineTo(ex + r * 1.2, y - hy + hy * 2 * lid * (1 - 0.6 * tilt)); c.lineTo(ex - r * 1.2, y - hy + hy * 2 * lid * (1 + 0.6 * tilt)); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = Math.max(0.4, r * 0.12); c.beginPath(); c.moveTo(ex - r * 1.1, y - hy + hy * 2 * lid * (1 + 0.6 * tilt)); c.lineTo(ex + r * 1.1, y - hy + hy * 2 * lid * (1 - 0.6 * tilt)); c.stroke();
+    }
+    c.restore();
+  }
+}
+// a tapered tube along points P ([x, y, half-width], any context): filled with fill, its edge, a lit line along its top
+function jellyTube(c, P, fill, edge, lit, ew = 0.7, dk = null) {
+  const L = [], R = [];
+  for (let i = 0; i < P.length; i++) {
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy) || 1, nx = -dy / n, ny = dx / n, w = P[i][2];
+    L.push([P[i][0] + nx * w, P[i][1] + ny * w]); R.push([P[i][0] - nx * w, P[i][1] - ny * w]);
+  }
+  const tip = P[P.length - 1];
+  c.beginPath(); L.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.lineTo(tip[0] + (tip[0] - P[P.length - 2][0]) * 0.15, tip[1] + (tip[1] - P[P.length - 2][1]) * 0.15); for (let i = R.length - 1; i >= 0; i--) c.lineTo(R[i][0], R[i][1]); c.closePath();
+  c.fillStyle = fill; c.fill();
+  if (edge) { c.strokeStyle = edge; c.lineWidth = ew; c.stroke(); }
+  if (dk) { const lo = L[0][1] < R[0][1] ? R : L; c.strokeStyle = dk; c.lineWidth = ew * 2.2; c.lineCap = 'round'; c.beginPath(); lo.slice(0, -1).forEach(([x, y], i) => { const q = P[i], xx = lerp(q[0], x, 0.6), yy = lerp(q[1], y, 0.6); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke(); }
+  if (lit) { const up = L[0][1] < R[0][1] ? L : R; c.strokeStyle = lit; c.lineWidth = ew * 1.1; c.lineCap = 'round'; c.beginPath(); up.slice(0, -1).forEach(([x, y], i) => { const q = P[i], xx = lerp(q[0], x, 0.55), yy = lerp(q[1], y, 0.55); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke(); }
+}
+
+// ---- sounds ----
+const JELLY_SFX = {
+  // an anemone's crown swelling: a shimmering glassy rise
+  jlswell: (t, B, v) => { for (let i = 0; i < 6; i++) vTone(B, t + i * 0.13, mf(76 + i * 2 + (i % 2) * 3), { type: 'sine', v: 0.03 * v, dur: 0.35, a: 0.04, send: 0.4 }); vNoise(B, t, { type: 'bandpass', f: 4200, f2: 6400, q: 3, v: 0.02 * v, dur: 0.9, a: 0.3 }); },
+  // ...its bloom: a watery whoosh and a sparkle
+  jlbloom: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 500, f2: 1600, q: 1.2, v: 0.12 * v, dur: 0.32, a: 0.02 }); vTone(B, t, 220, { f2: 440, glide: 0.25, type: 'sine', v: 0.06 * v, dur: 0.35 }); [88, 91, 95].forEach((m, i) => vTone(B, t + 0.1 + i * 0.04, mf(m), { type: 'triangle', v: 0.02 * v, dur: 0.25, send: 0.4 })); },
+  // a manta stirring in its cave: a deep breathy hum and a stream of bubbles
+  jlmanta: (t, B, v) => { vTone(B, t, 62, { f2: 74, glide: 1, type: 'triangle', lp: 400, v: 0.1 * v, dur: 1.2, a: 0.3 }); vTone(B, t + 0.1, 124, { type: 'sine', v: 0.03 * v, dur: 1, a: 0.3, vib: [4, 3], vibAt: 0 }); for (let i = 0; i < 8; i++) vTone(B, t + 0.2 + i * 0.1 + Math.random() * 0.04, 600 + Math.random() * 500, { f2: 1400, glide: 0.05, type: 'sine', v: 0.025 * v, dur: 0.05 }); },
+  // ...gliding across: a long soft whoosh of water past its wings
+  jlglide: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 380, f2: 900, q: 0.9, v: 0.16 * v, dur: 1.3, a: 0.35 }); vTone(B, t, 90, { f2: 70, glide: 1.2, type: 'sine', v: 0.06 * v, dur: 1.3, a: 0.3 }); },
+  // a lion's mane turning at the end of its sway: a soft, low "bloop"
+  jlbloop: (t, B, v) => { vTone(B, t, 180, { f2: 120, glide: 0.18, type: 'sine', v: 0.09 * v, dur: 0.24 }); vTone(B, t + 0.02, 540, { f2: 360, glide: 0.12, type: 'sine', v: 0.025 * v, dur: 0.14 }); },
+  // a sting bouncing off the rubber duck: a squeaky "boing"
+  jlboing: (t, B) => { vTone(B, t, 380, { f2: 900, glide: 0.09, type: 'triangle', v: 0.1, dur: 0.22, vib: [40, 22], vibAt: 0.04 }); vTone(B, t + 0.02, 1500, { f2: 2400, glide: 0.06, type: 'sine', v: 0.03, dur: 0.1 }); },
+  // slipping close behind a manta: a bright two-note chime and bubbles
+  jltail: (t, B) => { [[79, 0], [86, 0.07]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.06, dur: 0.4, send: 0.35 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.012, dur: 0.1 }); }); for (let i = 0; i < 5; i++) vTone(B, t + 0.1 + i * 0.05, 900 + i * 180, { f2: 1700, glide: 0.04, type: 'sine', v: 0.02, dur: 0.04 }); },
+  // a moon pearl: a harp-like glassy arpeggio and a bell
+  jlpearl: (t, B) => { [74, 78, 81, 86, 90, 93].forEach((m, i) => vTone(B, t + i * 0.05, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.05, dur: 0.7, send: 0.45 })); vTone(B, t + 0.32, mf(98), { type: 'sine', v: 0.03, dur: 1, send: 0.5 }); },
+  // the Moon Pool on the clear: a glassy harp fanfare over a soft pad and a rush of bubbles
+  jlfinish: (t, B) => { for (let i = 0; i < 10; i++) vTone(B, t + i * 0.05 + Math.random() * 0.03, 500 + Math.random() * 900, { f2: 1600, glide: 0.05, type: 'sine', v: 0.03, dur: 0.06 }); [[69, 0.4], [73, 0.52], [76, 0.64], [81, 0.76], [85, 0.9]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.07, dur: d > 0.8 ? 1.6 : 0.3, send: 0.45 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.015, dur: 0.12 }); }); [57, 64, 69, 73].forEach(m => vTone(B, t + 0.9, mf(m), { type: 'triangle', lp: 1500, v: 0.035, dur: 1.8, a: 0.1, send: 0.5 })); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = JELLY_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const jellyVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.jellySwarm = 'Stung by a drifting jelly';
+CAUSES.jellyAnem = 'Stung by an anemone';
+CAUSES.jellyManta = 'Bowled over by a manta';
+CAUSES.jellyMane = "Tangled in a lion's mane";
+{ const base = causeColour; causeColour = function (cause) { return cause === 'jellySwarm' ? [120, 240, 255] : cause === 'jellyAnem' ? [255, 120, 220] : cause === 'jellyManta' ? [150, 170, 255] : cause === 'jellyMane' ? [255, 170, 90] : base(cause); }; }
+// The rubber duck's perk: stings bounce off it (see the steer wrapper), so for Pip the stinging parts aren't lethal
+const jellyDuck = () => settings.character === 'duck';
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!JELLY_TYPES.has(h.type)) return base(h);
+  const S = jellyShapes(h, G.t, []);
+  return (jellyDuck() ? S.filter(q => !q.sting) : S).map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.jelly) jellyUpdateTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.jelly) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && JELLY_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// bubbles: world-space particles drawn by the jelly particle wrapper (capped on top of puff's own cap)
+function jellyBubbles(x, a, n, v, up = 60, big = 0) {
+  let have = 0; for (const q of G.particles) if (q.kind === 'jlbub') have++;
+  n = Math.min(n, Math.max(0, 80 - have));
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x + (Math.random() - 0.5) * 8, a + (Math.random() - 0.5) * 8, Math.cos(an) * sp, Math.sin(an) * sp * 0.6 + up, 0.9 + Math.random() * 0.9, (1.4 + Math.random() * 2.2) * (big ? 1.6 : 1), 'jlbub', { ph: Math.random() * 6 }); }
+}
+function jellyUpdateTraps(dt) {
+  const top = G.camAlt + viewH, p = G.p, play = G.state === 'play';
+  const pLo = play ? pilotLow() : 0, pHi = play ? pilotHigh() : 0;
+  for (const h of G.hazards) {
+    if (!JELLY_TYPES.has(h.type)) continue;
+    const d = h.side, vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'jellyAnem') {
+      const st = jellyAnemAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('jlswell', { v: jellyVol(h.alt) });
+      if (st.ph === 'bloom' && was.ph !== 'bloom' && vis) { sfx('jlbloom', { v: jellyVol(h.alt) }); jellyBubbles(h.base + d * 24, h.alt + 4, 8, 90, 40); }
+      h.st = st;
+    } else if (h.type === 'jellyManta') {
+      const st = jellyMantaAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('jlmanta', { v: jellyVol(h.alt) });
+      if (st.ph === 'tell' && vis && Math.random() < dt * 14) jellyBubbles(h.src + d * 6, h.alt + (Math.random() - 0.5) * 30, 1, 40, 50);
+      if (st.ph === 'swim' && was.ph !== 'swim' && vis) { sfx('jlglide', { v: jellyVol(h.alt) }); jellyBubbles(h.src + d * 8, h.alt, 10, 120, 40); if (Math.abs(h.alt - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.2); }
+      if (st.ph === 'swim' && vis && Math.random() < dt * 20) jellyBubbles(st.hx - d * 90, h.alt + (Math.random() - 0.5) * 50, 1, 30, 30);
+      // the tailing mission: a manta glides over the column you are in, and you go up through its band right after
+      if (play) {
+        if (st.ph === 'swim') { const x0 = st.hx - d * 240, x1 = st.hx; if (p.x > Math.min(x0, x1) - 10 && p.x < Math.max(x0, x1) + 10) h.overT = G.t; }
+        if (pHi < h.lo - 4) h.inB = false;
+        else if (!h.inB && pHi >= h.lo && pLo < h.lo + 30) h.inB = true;
+        if (h.inB && !h.tailed && pLo > h.hi - 30 && pLo < h.hi + 60) {
+          h.inB = false;
+          if (h.overT != null && G.t - h.overT < 1.8 && G.state === 'play') {
+            h.tailed = true;
+            const n = G.stats.jlTail = (G.stats.jlTail || 0) + 1, of = advGoalN('jellyTail');
+            sfx('jltail');
+            for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; puff(p.x + Math.cos(an) * 30, h.alt + Math.sin(an) * 14, Math.cos(an) * 70, 30 + Math.random() * 50, 0.5, 1.8, 'sparkle', [140, 220, 255]); }
+            chainEvent(of && n <= of ? (n >= of ? `Manta tails ${n}/${of}!` : `Right on its tail! ${n}/${of}`) : 'Right on its tail!', '#9ae8ff', 1.0);
+          }
+        }
+      }
+      h.st = st;
+    } else if (h.type === 'jellyMane') {
+      const sw = jellyManeSway(h, G.t), dir = Math.sign(sw - (h.sw ?? sw));
+      if (h.swDir && dir && dir !== h.swDir && vis) sfx('jlbloop', { v: jellyVol(h.alt) * 0.8 });
+      if (dir) h.swDir = dir; h.sw = sw;
+    }
+  }
+}
+// The current's carry and the duck's bounce. While you are in a swarm's band its current carries you along with its
+// jellies: a steady shove against the steering spring (about JELLY.swarm.push), never through a wall. A sting that
+// touches Pip bounces him off it: a short hard shove away from the tentacle and a squeaky boing.
+{ const base = steer; steer = function (dt) {
+  base(dt);
+  if (!jellyOn() || !G.level || !G.level.jelly || G.state !== 'play') return;
+  const p = G.p, lo = pilotLow(), hi = pilotHigh(), kSp = lerp(80, 5, cfg.lag), [l, r] = steerRange();
+  let cur = 0;
+  for (const h of G.hazards) if (h.type === 'jellySwarm' && hi > h.lo + 10 && lo < h.hi - 10) cur = h.dir;
+  G.jlCur = lerp(G.jlCur || 0, cur, Math.min(1, dt * 3));
+  if (Math.abs(G.jlCur) > 0.01) p.vx += G.jlCur * JELLY.swarm.push * kSp * dt;
+  if (jellyDuck()) {
+    G.jlBounceCd = Math.max(0, (G.jlBounceCd || 0) - dt);
+    if (!(G.jlBounceCd > 0)) {
+      let hit = null;
+      for (const h of G.hazards) {
+        if (!JELLY_TYPES.has(h.type) || h.type === 'jellyManta' || hi < h.lo || lo > h.hi) continue;
+        for (const q of jellyShapes(h, G.t, [])) if (q.sting && shapeHits(shrinkShape(q))) { hit = q; break; }
+        if (hit) break;
+      }
+      if (hit) {
+        const qx = hit.k === 'c' ? hit.x : ptSegT(p.x, p.alt, hit), dir = p.x >= qx ? 1 : -1;
+        G.jlBounce = { dir, k: 1 }; G.jlBounceCd = 0.32; p.vy = Math.min(p.vy, 60);
+        sfx('jlboing'); vibrate(12); p.squash = 1;
+        for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; puff(p.x - dir * 18 + Math.cos(an) * 8, p.alt + Math.sin(an) * 8, Math.cos(an) * 90 + dir * 40, Math.sin(an) * 90, 0.45, 1.8, 'sparkle', k % 2 ? [255, 140, 220] : [140, 240, 255]); }
+        addPop('Boing!', p.x - dir * 10, p.alt + 50, { col: '#ffd0f0', sub: 'stings bounce off the rubber duck' });
+      }
+    }
+    const B = G.jlBounce;
+    if (B && B.k > 0) { p.vx += B.dir * 260 * kSp * B.k * dt; B.k = Math.max(0, B.k - dt * 3.2); p.tilt = lerp(p.tilt, clamp(B.dir * 0.4 * B.k, -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 8)); }
+  }
+  if (p.x < l || p.x > r) { p.x = clamp(p.x, l, r); p.vx *= 0.2; }
+}; }
+// the x of the closest point on capsule q to (x, a)
+function ptSegT(x, a, q) { const dx = q.x1 - q.x0, da = q.a1 - q.a0, L = dx * dx + da * da, u = L ? clamp(((x - q.x0) * dx + (a - q.a0) * da) / L, 0, 1) : 0; return q.x0 + dx * u; }
+
+// ---- moon pearls: a glowing pearl in a bubble in risky spots, worth a big coin each, and the stage's pearl mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'jellyPearl') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.jlPearls = (st.jlPearls || 0) + 1, of = advGoalN('jellyPearls');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Moon pearl ${n}/${of}!` : 'Moon pearl!', '#ffe0f6', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 200, 240];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 180, Math.sin(a) * 180, 0.6, 2.4, 'sparkle', k % 2 ? [255, 190, 240] : [170, 240, 255]); }
+  jellyBubbles(f.x, f.alt, 10, 120, 60, 1);
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe0f6', big: true, sub: 'moon pearl' });
+  vibrate([20, 30, 20]); sfx('jlpearl');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  // (only when a pearl is on screen is the list split; most frames just draw the base pickups)
+  const all = G.fruit, lo = G.camAlt - 100, hi = G.camAlt + viewH + 100; let any = false;
+  for (let i = 0; i < all.length; i++) { const f = all[i]; if (f.kind === 'jellyPearl' && f.alt > lo && f.alt < hi) { any = true; break; } }
+  if (!any) return base();
+  G.fruit = all.filter(f => f.kind !== 'jellyPearl');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'jellyPearl') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    jellyDrawPearl(sx(f.x), y, G.t, f.alt * 0.05 + f.x * 0.01);
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the pearls found, the mantas tailed
+ADV_GOALS.jellyPearls = { text: g => `Find all ${g.n} moon pearls`, done: (r, g) => (r.stats.jlPearls || 0) >= g.n, any: true, prog: (g, st) => `${st.jlPearls || 0}/${g.n}` };
+ADV_GOALS.jellyTail = { text: g => `Slip close behind ${g.n} passing mantas`, done: (r, g) => (r.stats.jlTail || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.jlTail || 0)}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'jellyPearls' || g.k === 'jellyTail')) return;
+  const st = G.stats, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(24,14,60,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    icon(xr - tw - 13, y);
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'jellyPearls') { const n = st.jlPearls || 0; line(`${n}/${g.n}`, n >= g.n ? '#ffe0f6' : '#f2eeff', (x, yy) => { const S = jellyPearlSprite(); jellyBlitAt(S, x, yy, 0, 1, 1, 17 / (S.h * s)); }); }
+    else if (g.k === 'jellyTail') { const n = Math.min(g.n, st.jlTail || 0); line(`${n}/${g.n}`, n >= g.n ? '#9ae8ff' : '#f2eeff', (x, yy) => { const S = jellyMantaSprite(2); jellyBlitAt(S, x - 2, yy, 0, 1, 1, 22 / (S.w * s)); }); }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 12 plays it (its own shaft replaces the one advStart lays out, as the anthill's)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'jelly' || (G.level && G.level.jelly)) return;
+  G.level = createJellyLevel(G.seed, st);
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Moon Pool ahead!', zone: 0 });
+  G.jlCur = 0; G.jlBounce = null; G.jlBounceCd = 0;
+}; }
+// play-testing hook (only with ?debug in the URL): the jelly traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRJELLY = { JELLY, JELLY_STAGE, jellyShapes, jellySwarmPos, jellyAnemAt, jellyAnemTent, jellyMantaAt, jellyManeSway, jellyManeTent, jellyDanger, createJellyLevel, JELLYC, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the traps' art (each anchored at its wall or its centre at the trap's height, drawn for the left wall / facing +x;
+// mirrored for the right wall). Static bodies and every animation frame are cached sprites; only what moves is live. ----
+
+// a coral cave in the wall (anchored on the wall line at its middle, opening +x; ry its half height): a deep indigo
+// hollow, a lumpy rim of coral rock lit by the moon on top, glowing polyps round its lip
+function jellyCaveSprite(ry) {
+  ry = Math.round(ry);
+  return jellySprite(`cave${ry}`, 70, ry * 2 + 44, 26, ry + 22, c => {
+    const rx = 17, sd = ry * 3;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // the mound of coral rock the cave is in: an irregular heap, lit on top, sinking into indigo below
+    jellyBlob(c, -6, 0, rx + 12, ry + 13, 0, sd, 13, 0.22);
+    c.fillStyle = gLG(c, 0, -ry - 14, 0, ry + 14, ['#7a72c8', '#46409a', '#241e5e']); c.fill();
+    c.strokeStyle = '#2a1a5e'; c.lineWidth = 0.8; c.stroke();
+    // the hollow: an irregular mouth, deepest at the back, plankton glimmering far inside
+    jellyBlob(c, -1, 1, rx, ry, 0, sd + 5, 11, 0.16);
+    c.fillStyle = gRG(c, 8, 0, ry, ['#04021a', '#0c0830', '#241860']); c.fill();
+    c.strokeStyle = 'rgba(14,6,44,.8)'; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = 'rgba(120,220,255,.07)'; c.beginPath(); c.ellipse(-6, ry * 0.2, rx * 0.45, ry * 0.55, 0, 0, TWO_PI); c.fill();
+    for (let i = 0; i < 7; i++) { c.fillStyle = `rgba(${i % 2 ? '255,150,230' : '140,240,255'},.55)`; c.beginPath(); c.arc(-8 + 6 * hash2(i, sd), (hash2(i, sd + 1) - 0.5) * ry * 1.3, 0.7 + 0.5 * hash2(i, sd + 2), 0, TWO_PI); c.fill(); }
+    // its lip: lumps of coral rock, each its own shape and size, unevenly spaced, some missing
+    let an = -Math.PI * 0.9;
+    while (an < Math.PI * 0.9) {
+      const h1 = hash2(Math.round(an * 100), sd), r1 = 3.2 + 4.2 * h1, x = Math.cos(an) * (rx + 3) - 1, y = Math.sin(an) * (ry + 3);
+      if (hash2(Math.round(an * 100), sd + 7) > 0.18) {
+        jellyBlob(c, x, y, r1, r1 * (0.65 + 0.4 * hash2(Math.round(an * 100), sd + 3)), an, sd + Math.round(an * 50), 7, 0.18);
+        const lit = y < 0 ? 1 : 0.55;
+        c.fillStyle = gRG(c, x - r1 * 0.4, y - r1 * 0.5, r1 * 1.6, [lit > 0.9 ? '#beb6ee' : '#9088d0', '#5a52aa', '#2e2872']); c.fill();
+        c.strokeStyle = 'rgba(40,24,100,.6)'; c.lineWidth = 0.5; c.stroke();
+      }
+      an += (r1 * 1.25 + 1.5) / (ry + 3) * (0.8 + 0.5 * hash2(Math.round(an * 100), sd + 9));
+    }
+    // the reef growing on its lip: a brain-coral head, sponge tubes with glowing rims, a sea fan, polyps, a sea star
+    jellyBrain(c, 4, -ry - 4, 6.5, [176, 150, 230], sd);
+    jellyTubes(c, 12, -ry * 0.62, 2, 1, [150, 120, 210], [120, 236, 255], sd + 1);
+    jellyFan(c, -6, ry + 10, 12, Math.PI * 0.85, [255, 130, 210]);
+    jellyPolyps(c, 13, ry * 0.45, 4, [255, 120, 220], sd + 2);
+    jellyPolyps(c, 14, -ry * 0.15, 3, [120, 236, 255], sd + 3);
+    jellyStar(c, 9, ry * 0.85, 4.6, 0.4, ['#ffd0a0', '#ff8a5a', '#c0442e'], sd);
+    jellyUrchin(c, -2, -ry * 0.98, 3.2, sd);
+  });
+}
+// the polyps' breathing light round a cave (live, cheap: two glows)
+function jellyCaveGlow(x, alt, ry, d, k = 1) {
+  const T = G.t;
+  jellyGlow(ctx, sx(x + d * 8), sy(alt + ry * 0.6), 16 * s, [255, 110, 220], (0.28 + 0.1 * Math.sin(T * 2 + alt)) * k);
+  jellyGlow(ctx, sx(x + d * 8), sy(alt - ry * 0.6), 16 * s, [110, 230, 255], (0.28 + 0.1 * Math.sin(T * 2.3 + alt * 1.3)) * k);
+}
+
+// ---- the Current Swarm: a moon jelly ----
+// The bell: a translucent dome (pale cyan glowing through to a violet rim), four pink horseshoe gonads inside, a
+// scalloped margin dotted with glowing buds, a sleepy little face; four fine tentacles and two frilly oral arms
+// trailing behind it (dir), waving. Frames: pulse 0..3 (the stroke's squeeze), wave 0..7. Anchored at its bell centre.
+function jellyMoonPaint(c, pulse, wave, hue) {
+  const sq = 1 - 0.1 * pulse / 3, w = 18.5 * sq, top = -17 * (2 - sq), rim = 5, ph = wave / 8 * TWO_PI;
+  const P = hue ? ['rgba(255,236,250,.95)', 'rgba(255,150,226,.82)', 'rgba(170,70,190,.78)'] : ['rgba(236,255,255,.95)', 'rgba(130,236,255,.8)', 'rgba(90,90,210,.78)'];
+  const inner = hue ? '#ffd0f0' : '#ff8ad6', edge = hue ? '#8a2a8a' : '#2a4ca0';
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  // tentacles (behind the bell): four fine ones trailing back and down, each a soft wave
+  for (let i = 0; i < 4; i++) {
+    const x0 = -12 + i * 8, L = 38 + (i % 2) * 5, P2 = [];
+    for (let k = 0; k <= 8; k++) { const u = k / 8; P2.push([x0 * (1 - 0.3 * u) - 8 * u + Math.sin(ph + i * 1.7 + u * 5) * 3.2 * u, rim + L * u]); }
+    c.strokeStyle = hue ? 'rgba(255,160,230,.55)' : 'rgba(150,236,255,.5)'; c.lineWidth = 2.2; gPoly(c, P2, false); c.stroke();
+    c.strokeStyle = hue ? 'rgba(255,230,250,.9)' : 'rgba(230,255,255,.85)'; c.lineWidth = 0.8; gPoly(c, P2, false); c.stroke();
+  }
+  // oral arms: two frilly ribbons down the middle
+  for (const e of [-1, 1]) {
+    const P2 = []; for (let k = 0; k <= 6; k++) { const u = k / 6; P2.push([e * 3 - 6 * u + Math.sin(ph * 1.3 + e + u * 4) * 2.5 * u, rim - 1 + 28 * u, 2.6 - 1.2 * u + 0.8 * Math.sin(u * 12 + ph)]); }
+    jellyTube(c, P2, hue ? 'rgba(255,170,226,.8)' : 'rgba(255,150,214,.75)', hue ? 'rgba(160,50,140,.6)' : 'rgba(160,50,140,.55)', 'rgba(255,240,250,.7)', 0.5);
+  }
+  // the bell
+  const dome = () => { c.beginPath(); c.moveTo(-w, rim); c.bezierCurveTo(-w * 1.05, top * 0.4, -w * 0.62, top, 0, top); c.bezierCurveTo(w * 0.62, top, w * 1.05, top * 0.4, w, rim);
+    for (let k = 7; k >= 0; k--) { const xa = -w + 2 * w * (k + 1) / 8, xb = -w + 2 * w * k / 8; c.quadraticCurveTo((xa + xb) / 2, rim + 3.2, xb, rim); } c.closePath(); };
+  c.fillStyle = gRG(c, -w * 0.35, top * 0.7, w * 1.6, P); dome(); c.fill();
+  // the gonads: pink horseshoes seen through the bell (line pairs)
+  for (const [gx, gy, gr, ga] of [[0, -6, 5, 0], [-9, -3, 3.6, -0.5], [9, -3, 3.6, 0.5]]) {
+    c.strokeStyle = gCol(jellyHex(inner), 0.85); c.lineWidth = 2.1; c.beginPath(); c.arc(gx, gy, gr, Math.PI * 0.85 + ga, Math.PI * 2.15 + ga); c.stroke();
+    c.strokeStyle = 'rgba(255,245,252,.7)'; c.lineWidth = 0.7; c.beginPath(); c.arc(gx - 0.3, gy - 0.6, gr, Math.PI * 1.05 + ga, Math.PI * 1.8 + ga); c.stroke();
+  }
+  // radial canals as faint line pairs
+  for (let k = -2; k <= 2; k++) gPair(c, [[k * 4, top * 0.82], [k * 7.5, rim - 1]], 'rgba(60,60,170,.22)', 'rgba(240,255,255,.25)', 0.7, 0.6);
+  c.strokeStyle = edge; c.lineWidth = 0.9; dome(); c.stroke();
+  // the margin's glowing buds
+  for (let k = 0; k <= 8; k++) { const x = -w + 2 * w * k / 8; c.fillStyle = hue ? '#fff0fa' : '#e8ffff'; c.beginPath(); c.arc(x, rim + 0.8, 0.9, 0, TWO_PI); c.fill(); }
+  // sheen: a broad arc top left and a glint
+  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.8; c.beginPath(); c.ellipse(0, rim, w * 0.78, (rim - top) * 0.85, 0, Math.PI * 1.12, Math.PI * 1.42); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-w * 0.42, top * 0.62, 2.2, 1.2, -0.6, 0, TWO_PI); c.fill();
+  // the face: sleepy eyes, a tiny smile, blush
+  const ey = -3.5 + 0.6 * pulse;
+  for (const e of [-1, 1]) {
+    c.strokeStyle = '#2a1a6a'; c.lineWidth = 1.1; c.beginPath(); c.arc(e * 5.4, ey, 1.9, Math.PI * 1.1, Math.PI * 1.9, false); c.stroke();
+    c.fillStyle = 'rgba(255,120,200,.45)'; c.beginPath(); c.ellipse(e * 8.6, ey + 2.6, 2.2, 1.2, 0, 0, TWO_PI); c.fill();
+  }
+  c.strokeStyle = '#2a1a6a'; c.lineWidth = 0.9; c.beginPath(); c.arc(0, ey + 1.6, 1.8, 0.2, Math.PI - 0.2); c.stroke();
+}
+function jellyMoonSprite(pulse, wave, hue) { return jellySprite(`moon${pulse}_${wave}_${hue}`, 52, 82, 26, 24, c => jellyMoonPaint(c, pulse, wave, hue)); }
+function jellyDrawSwarm(h) {
+  const T = G.t, L = h.L, R = h.R, dir = h.dir, ya = sy(h.alt + JELLY.swarm.rise);
+  // the grottos the swarm swims between
+  for (const side of [-1, 1]) { const x = side < 0 ? L : R; jellyBlit(jellyCaveSprite(40), x, h.alt + 40, 1, side < 0 ? 1 : -1); jellyCaveGlow(x, h.alt + 40, 40, side < 0 ? 1 : -1, glowK); }
+  ctx.save(); ctx.beginPath(); ctx.rect(sx(L) + 2 * s, sy(h.hi + 30), (R - L - 4) * s, (h.hi - h.lo + 60) * s); ctx.clip();
+  // the current: soft glowing streaks running along it, carrying plankton specks
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const u = pmod(T * h.v * 1.7 / (R - L + 120) + i / 6 + h.ph, 1), x = dir > 0 ? L - 60 + u * (R - L + 120) : R + 60 - u * (R - L + 120), y = ya + (-34 + 13 * i + 4 * Math.sin(T + i)) * s, len = (40 + 20 * (i % 3)) * s;
+    ctx.strokeStyle = `rgba(130,230,255,${0.1 + 0.05 * (i % 2)})`; ctx.lineWidth = (1.2 + (i % 2)) * s; ctx.beginPath(); ctx.moveTo(sx(x), y); ctx.quadraticCurveTo(sx(x) - dir * len * 0.5, y - 2 * s, sx(x) - dir * len, y); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(200,255,255,.55)';
+  for (let i = 0; i < 9; i++) { const u = pmod(T * h.v * 1.4 / (R - L) + hash2(i, h.alt) , 1), x = dir > 0 ? L + u * (R - L) : R - u * (R - L), y = ya + (-40 + 80 * hash2(i, h.alt + 1) + 5 * Math.sin(T * 2 + i)) * s; ctx.fillRect(sx(x) - 0.7 * s, y - 0.7 * s, 1.4 * s, 1.4 * s); }
+  ctx.globalCompositeOperation = 'source-over';
+  const gl = jellyGlowCv([120, 230, 255]), gp = jellyGlowCv([255, 120, 220]);
+  for (const J of jellySwarmPos(h, T)) {
+    if (J.q < -40 || J.q > h.wd + 40) continue;
+    const X = sx(J.x), Y = sy(J.a), hue = (J.i + Math.round(h.alt / 7)) % 3 === 1 ? 1 : 0;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.32 + 0.12 * J.pulse) * (0.4 + 0.6 * glowK); const r = 38 * s; ctx.drawImage(hue ? gp : gl, X - r, Y - r * 0.9, r * 2, r * 2); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    jellyBlitAt(jellyMoonSprite(Math.min(3, Math.floor(J.pulse * 4)), Math.floor(pmod(T * 5 + J.i * 3, 8)), hue), X, Y, 0, dir);
+  }
+  ctx.restore();
+}
+
+// ---- the Anemone Bloom ----
+// its coral shelf (a plate coral bracket out of the wall) and its column, drawn for the left wall
+function jellyAnemBaseSprite() {
+  return jellySprite('anembase', 52, 52, 6, 26, c => {
+    // the plate coral shelf: two stacked bracket plates, each lit along its top rim, ridged underneath
+    for (const [y, w, hh] of [[20, 34, 7], [12, 26, 6]]) {
+      c.fillStyle = gLG(c, 0, y - hh, 0, y + hh, ['#e8c8ff', '#8a64d8', '#3e2a86']); c.beginPath(); c.moveTo(-6, y - hh * 0.6); c.quadraticCurveTo(w * 0.6, y - hh * 1.3, w, y); c.quadraticCurveTo(w * 0.5, y + hh, -6, y + hh * 0.6); c.closePath(); c.fill();
+      c.strokeStyle = JELLYP.coralEdge; c.lineWidth = 0.7; c.stroke();
+      c.strokeStyle = 'rgba(240,230,255,.8)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-4, y - hh * 0.62); c.quadraticCurveTo(w * 0.6, y - hh * 1.22, w - 1, y - 0.6); c.stroke();
+      for (let k = 1; k < 4; k++) gPair(c, [[-4, y + hh * 0.1 * k], [w * (0.3 + 0.18 * k), y + hh * 0.2]], 'rgba(40,20,100,.4)', 'rgba(220,200,255,.35)', 0.7, -0.6);
+    }
+    // the column: a striped stalk from the shelf up to the disc
+    c.fillStyle = gLG(c, 4, 0, 24, 0, ['#ffc8ea', '#ff70c4', '#a02a86']); c.beginPath(); c.moveTo(4, 12); c.bezierCurveTo(3, 4, 6, -2, 8, -6); c.lineTo(22, -6); c.bezierCurveTo(23, 0, 22, 6, 20, 12); c.closePath(); c.fill();
+    c.strokeStyle = JELLYP.pinkEdge; c.lineWidth = 0.7; c.stroke();
+    for (let k = 0; k < 4; k++) gPair(c, [[7 + k * 4, -5], [6 + k * 4.4, 11]], 'rgba(140,20,110,.45)', 'rgba(255,230,245,.5)', 0.8, -0.6);
+  });
+}
+// the oral disc (live: it puckers in the tell): an ellipse facing up into the shaft, radial ribs, a mouth
+function jellyAnemDisc(X, Y, d, tell, e) {
+  const k = s, rx = 15 * k, ry = 6 * k;
+  ctx.save(); ctx.translate(X, Y); ctx.scale(d, 1); ctx.rotate(-0.25);
+  ctx.fillStyle = gRG(ctx, -rx * 0.3, -ry * 0.6, rx * 1.3, ['#fff0fa', '#ff9ad8', '#c03a9a']); ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = JELLYP.pinkEdge; ctx.lineWidth = 0.7 * k; ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,30,120,.5)'; ctx.lineWidth = 0.6 * k; for (let i = 0; i < 10; i++) { const a = i / 10 * TWO_PI; ctx.beginPath(); ctx.moveTo(Math.cos(a) * rx * 0.3, Math.sin(a) * ry * 0.3); ctx.lineTo(Math.cos(a) * rx * 0.9, Math.sin(a) * ry * 0.9); ctx.stroke(); }
+  ctx.fillStyle = '#6a0e58'; ctx.beginPath(); ctx.ellipse(0, 0, rx * (0.22 - 0.1 * tell + 0.1 * e), ry * 0.3, 0, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+}
+const JELLY_ANEM_COL = [['#ff6ac8', '#c02a9a', 'rgba(255,220,245,.75)', '#7a0e62'], ['#ff8ad4', '#d040aa', 'rgba(255,230,250,.8)', '#8a1a6e']];
+function jellyDrawAnem(h) {
+  const T = G.t, d = h.side, st = jellyAnemAt(h, T), b = h.base, A = h.alt, glow = st.tell;
+  // the anemone's glow pool on the wall (breathing, swelling in the tell, flaring in the bloom)
+  jellyGlow(ctx, sx(b + d * 30), sy(A + 6), (60 + 50 * st.e) * s, [255, 100, 210], (0.22 + 0.1 * Math.sin(T * 1.8 + A) + 0.35 * glow) * (0.4 + 0.6 * glowK));
+  jellyBlit(jellyAnemBaseSprite(), b, A - 8, 1, d);
+  // the tentacles, back ones first
+  const order = [0, 6, 1, 5, 2, 4, 3];
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const tipGl = jellyGlowCv([140, 240, 255]);
+  for (const i of order) {
+    const P = jellyAnemTent(h, st, i, T).map(([x, a, w]) => [sx(x), sy(a), w * s]), C = JELLY_ANEM_COL[i % 2];
+    const hot = clamp(glow * 1.2, 0, 1);
+    jellyTube(ctx, P, hot > 0.05 ? gCol(gMix(jellyHex(C[0]), [255, 200, 240], 0.45 * hot)) : C[0], C[3], C[2], 0.8 * s, 'rgba(120,10,96,.5)');
+    // banded rings along the tentacle (line pairs), and the glowing cyan tip
+    for (let k = 1; k < P.length - 1; k++) { const [x, y, w] = P[k], [x2, y2] = P[k + 1], dx = x2 - x, dy = y2 - y, n = Math.hypot(dx, dy) || 1; ctx.strokeStyle = 'rgba(130,10,100,.45)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(x - dy / n * w, y + dx / n * w); ctx.lineTo(x + dy / n * w, y - dx / n * w); ctx.stroke(); }
+    const [tx, ty] = P[P.length - 1];
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.5 + 0.4 * hot) * (0.5 + 0.5 * glowK); const r = (9 + 6 * hot) * s; ctx.drawImage(tipGl, tx - r, ty - r, r * 2, r * 2); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#e8ffff'; ctx.beginPath(); ctx.arc(tx, ty, 2.4 * s, 0, TWO_PI); ctx.fill();
+    // the tell: a ripple of light running out along each tentacle
+    if (st.ph === 'tell') { const u = pmod(st.tell * 2.2 + i * 0.07, 1), q = Math.min(P.length - 1, Math.floor(u * (P.length - 1))), [gx, gy] = P[q]; jellyGlow(ctx, gx, gy, 10 * s, [255, 200, 250], 0.7); }
+  }
+  jellyAnemDisc(sx(b + d * 16), sy(A + 1), d, st.tell, st.e);
+}
+
+// ---- the Manta Pass ----
+// a manta seen from above gliding along +x (anchored at the tip of its head), flap frame f (0..7): broad wings of
+// midnight blue lit from the top left, pale shoulder chevrons, a row of glowing cyan spots along each leading edge,
+// curled cephalic fins, friendly eyes on the sides of its head, a long whip of a tail
+function jellyMantaPaint(c, fr) {
+  const f = Math.sin(fr / 8 * TWO_PI), SP = JELLY.manta.span / JELLY.manta.k;
+  const tipX = -(44 + 8 * f), tipY = SP * (0.82 + 0.18 * f);
+  const B = ['#e2e8ff', '#8c9cf0', '#4a56b8', '#283078'], ED = '#232a6e';
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the tail: a long whip, lit along its top
+  c.strokeStyle = ED; c.lineWidth = 4.2; c.beginPath(); c.moveTo(-58, 0); c.bezierCurveTo(-74, 3, -86, -3, -100, -1); c.stroke();
+  c.strokeStyle = '#5a66c4'; c.lineWidth = 2.6; c.stroke();
+  c.strokeStyle = 'rgba(200,215,255,.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-58, -0.9); c.bezierCurveTo(-74, 2, -86, -4, -99, -1.8); c.stroke();
+  // the wings: one smooth path, tips swept back and curling
+  const wing = sg => {
+    c.moveTo(-4, sg * 8);
+    c.bezierCurveTo(-8, sg * tipY * 0.5, tipX + 26, sg * tipY * 0.98, tipX - 2, sg * tipY);   // leading edge out to the tip
+    c.quadraticCurveTo(tipX - 9, sg * tipY * 0.97, tipX - 7, sg * tipY * 0.88);   // the curled tip
+    c.bezierCurveTo(tipX - 6, sg * tipY * 0.55, -40, sg * tipY * 0.42, -60, sg * 7);   // trailing edge back to the tail root
+  };
+  c.beginPath(); wing(-1); c.lineTo(-62, 0); wing(1); c.lineTo(-2, 0); c.closePath();
+  c.fillStyle = gLG(c, -20, -tipY, -32, tipY, [B[0], B[1], B[2], B[3]]); c.fill();
+  c.strokeStyle = ED; c.lineWidth = 1.1; c.stroke();
+  // the trailing web shaded a step darker, and the wing tips' line pairs (the fin rays)
+  for (const sg of [-1, 1]) {
+    c.fillStyle = sg < 0 ? 'rgba(40,46,130,.28)' : 'rgba(20,24,80,.35)';
+    c.beginPath(); c.moveTo(tipX - 7, sg * tipY * 0.88); c.bezierCurveTo(tipX - 6, sg * tipY * 0.55, -40, sg * tipY * 0.42, -60, sg * 7); c.bezierCurveTo(-44, sg * tipY * 0.3, tipX + 8, sg * tipY * 0.5, tipX - 7, sg * tipY * 0.88); c.fill();
+    for (let k = 0; k < 5; k++) { const u = 0.3 + 0.15 * k, x0 = lerp(-16, -46, k / 4), y0 = sg * (10 + k), x1 = lerp(-12, tipX + 2, u + 0.05), y1 = sg * tipY * lerp(0.42, 0.9, u); gPair(c, [[x0, y0], [lerp(x0, x1, 0.55) + 3, lerp(y0, y1, 0.55)], [x1, y1]], 'rgba(18,22,74,.42)', 'rgba(200,214,255,.32)', 1.1, -0.7 * sg); }
+    // the leading edge lit (upper wing brightest: the moon is up and to the left)
+    c.strokeStyle = sg < 0 ? 'rgba(236,242,255,.9)' : 'rgba(170,190,255,.5)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-6, sg * 10); c.bezierCurveTo(-10, sg * tipY * 0.5, tipX + 26, sg * tipY * 0.94, tipX + 1, sg * tipY * 0.97); c.stroke();
+  }
+  // the lit back: a glossy diamond over the body with the moon's sheen on it
+  c.fillStyle = gLG(c, 0, -18, 0, 16, ['#c8d4ff', '#7484e0', '#3a44a0']); c.beginPath(); c.moveTo(-2, 0); c.bezierCurveTo(-8, -16, -30, -20, -44, -10); c.quadraticCurveTo(-58, -2, -60, 0); c.quadraticCurveTo(-58, 2, -44, 10); c.bezierCurveTo(-30, 20, -8, 16, -2, 0); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(30,36,110,.6)'; c.lineWidth = 0.8; c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.5)'; c.beginPath(); c.ellipse(-24, -9, 13, 3.4, -0.12, 0, TWO_PI); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(-18, -10, 4, 1.4, -0.12, 0, TWO_PI); c.fill();
+  // the spine ridge as a line pair
+  gPair(c, [[-10, 0], [-34, 0.5], [-58, 0]], 'rgba(22,26,84,.55)', 'rgba(210,222,255,.5)', 1.2, -0.8);
+  // glowing spots: two rows down the back, a scatter on each wing (cyan and pink)
+  const spot = (x, y, r, col) => { c.fillStyle = `rgba(${col},.32)`; c.beginPath(); c.arc(x, y, r * 2.3, 0, TWO_PI); c.fill(); c.fillStyle = `rgba(${col},.95)`; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.arc(x - r * 0.25, y - r * 0.3, r * 0.42, 0, TWO_PI); c.fill(); };
+  for (const sg of [-1, 1]) {
+    for (let k = 0; k < 5; k++) spot(-16 - k * 8.5, sg * (6.5 - k * 0.5), 1.5 - k * 0.12, '130,240,255');
+    for (let k = 0; k < 4; k++) { const u = 0.3 + 0.17 * k; spot(lerp(-20, tipX + 6, u), sg * tipY * lerp(0.3, 0.72, u), 1.6, k % 2 ? '255,140,220' : '130,240,255'); }
+  }
+  // the head and its curled cephalic fins (horn lobes reaching forward)
+  jellyPart(c, -6, 0, 12, 12.5, 0, ['#c0ccff', '#6676d4', '#323c96'], ED, 0.45);
+  for (const sg of [-1, 1]) {
+    c.fillStyle = gLG(c, 0, sg * 4, 16, sg * 13, ['#d4ddff', '#6676d4', '#323c96']); c.beginPath(); c.moveTo(-2, sg * 6); c.quadraticCurveTo(11, sg * 4, 16, sg * 9); c.quadraticCurveTo(17, sg * 15, 10, sg * 14.5); c.quadraticCurveTo(7, sg * 10, -3, sg * 11.5); c.closePath(); c.fill();
+    c.strokeStyle = ED; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(236,242,255,.7)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(0, sg * 6.4); c.quadraticCurveTo(10, sg * 5, 14.6, sg * 9); c.stroke();
+    c.strokeStyle = 'rgba(30,36,110,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(4, sg * 11.6); c.quadraticCurveTo(10, sg * 11, 13, sg * 13.4); c.stroke();
+  }
+  // the game's eyes: big glossy whites, deep blue irises looking ahead, a coolly half-lidded look
+  for (const sg of [-1, 1]) {
+    const ex = -5, ey = sg * 5.6, r = 4.4;
+    c.fillStyle = gRG(c, ex - r * 0.3, ey - r * 0.3, r * 1.3, ['#ffffff', '#f2eefe', '#cfc4ea']); c.beginPath(); c.ellipse(ex, ey, r * 1.05, r, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(30,34,110,.75)'; c.lineWidth = 0.6; c.stroke();
+    c.save(); c.beginPath(); c.ellipse(ex, ey, r * 1.05, r, 0, 0, TWO_PI); c.clip();
+    c.fillStyle = gRG(c, ex + 1.4, ey - 0.6, r * 0.7, ['#6ec8ff', '#2a6ae0', '#16307a']); c.beginPath(); c.arc(ex + 1.6, ey + sg * 0.4, r * 0.66, 0, TWO_PI); c.fill();
+    c.fillStyle = '#0c0c34'; c.beginPath(); c.arc(ex + 2, ey + sg * 0.4, r * 0.34, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + 0.9, ey - 1.1, r * 0.24, 0, TWO_PI); c.fill();
+    c.fillStyle = '#5462c6'; c.beginPath(); c.ellipse(ex, ey - r * 1.35, r * 1.3, r * 0.95, 0, 0, TWO_PI); c.fill();   // the lid
+    c.restore();
+    c.strokeStyle = ED; c.lineWidth = 0.8; c.beginPath(); c.ellipse(ex, ey - r * 1.35, r * 1.3, r * 0.95, 0, 0.35, Math.PI - 0.35); c.stroke();
+  }
+  // a wide friendly grin across the front of the head
+  c.strokeStyle = 'rgba(18,20,70,.85)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(4, -5.5); c.quadraticCurveTo(8.5, 0, 4, 5.5); c.stroke();
+  c.strokeStyle = 'rgba(255,170,220,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(4.6, -3.5); c.quadraticCurveTo(7.4, 0, 4.6, 3.5); c.stroke();
+}
+function jellyMantaSprite(fr) { const K = JELLY.manta.k; return jellySprite(`manta${fr}`, Math.ceil(124 * K), Math.ceil(160 * K), Math.round(106 * K), Math.round(80 * K), c => { c.scale(K, K); jellyMantaPaint(c, fr); }); }
+function jellyDrawManta(h) {
+  const T = G.t, d = h.dir, st = jellyMantaAt(h, T), L = Math.min(h.src, h.far), R = Math.max(h.src, h.far), A = h.alt;
+  // the caves it glides between
+  for (const side of [-1, 1]) { const x = side < 0 ? L : R; jellyBlit(jellyCaveSprite(82), x, A, 1, side < 0 ? 1 : -1); jellyCaveGlow(x, A, 82, side < 0 ? 1 : -1, glowK); }
+  if (st.ph === 'tell') {
+    // its eyes and gill lights glowing in the cave mouth, swelling as it comes
+    const k = smooth(0, 1, st.tell), X = sx(h.src + d * 4);
+    jellyGlow(ctx, X, sy(A), (40 + 50 * k) * s, [110, 200, 255], 0.35 + 0.55 * k);
+    for (const sg of [-1, 1]) { const Y = sy(A + sg * 9); ctx.fillStyle = `rgba(200,240,255,${0.4 + 0.6 * k})`; ctx.beginPath(); ctx.arc(X + d * 3 * s * k, Y, (1.6 + 1.2 * k) * s, 0, TWO_PI); ctx.fill(); jellyGlow(ctx, X + d * 3 * s * k, Y, 9 * s, [160, 230, 255], 0.6 * k); }
+    for (let k2 = 0; k2 < 5; k2++) { const Y = sy(A + (k2 - 2) * 9); ctx.fillStyle = `rgba(120,240,255,${(0.3 + 0.5 * k) * (0.5 + 0.5 * Math.sin(T * 12 + k2))})`; ctx.fillRect(X - d * 4 * s - 1, Y - 1.2 * s, 2.4 * s, 2.4 * s); }
+  }
+  if (st.ph !== 'swim') return;
+  ctx.save(); ctx.beginPath(); ctx.rect(sx(L) + 1, sy(A + 130), (R - L) * s - 2, 260 * s); ctx.clip();
+  const X = sx(st.hx), Y = sy(A);
+  jellyGlow(ctx, X - d * 60 * s, Y, 130 * s, [110, 190, 255], 0.5 * (0.4 + 0.6 * glowK));
+  // its wake: a few streaks behind it
+  ctx.strokeStyle = 'rgba(160,210,255,.18)'; ctx.lineWidth = 1.4 * s; ctx.lineCap = 'round';
+  for (let k = -2; k <= 2; k++) { const y = Y + k * 24 * s; ctx.beginPath(); ctx.moveTo(X - d * 105 * s, y); ctx.lineTo(X - d * (190 + 30 * Math.abs(k)) * s, y + k * 4 * s); ctx.stroke(); }
+  jellyBlitAt(jellyMantaSprite(Math.floor(pmod(T * 5.2 / TWO_PI * 8 + h.alt * 0.013 / TWO_PI * 8, 8))), X, Y, 0, d);
+  ctx.restore();
+}
+
+// ---- the Lion's Mane ----
+// the bell (anchored at the trap's height, centre): a great amber dome with a scalloped, lobed margin, radial grooves
+// as line pairs, a sheen, a grumpy old face with heavy lids and a bushy fringe of short tentacles round its rim (its mane)
+function jellyManeBell(blink) {
+  return jellySprite(`manebell${blink}`, 110, 70, 55, 38, c => {
+    const P = JELLYP.amber, rx = 44, top = -31, rim = 13;
+    // the mane: a fringe of short curly tentacles hanging round the rim, behind the bell
+    for (let k = 0; k < 22; k++) { const x = -rx + 2 * rx * k / 21, len = 9 + 5 * hash2(k, 3), cv = (hash2(k, 4) - 0.5) * 6; c.strokeStyle = k % 2 ? '#e8742c' : '#ffb24e'; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, rim - 2); c.quadraticCurveTo(x + cv, rim + len * 0.6, x + cv * 0.4, rim + len); c.stroke(); c.strokeStyle = 'rgba(255,230,190,.55)'; c.lineWidth = 0.9; c.stroke(); }
+    const dome = () => { c.beginPath(); c.moveTo(-rx, rim); c.bezierCurveTo(-rx * 1.06, top * 0.5, -rx * 0.6, top, 0, top); c.bezierCurveTo(rx * 0.6, top, rx * 1.06, top * 0.5, rx, rim);
+      for (let k = 7; k >= 0; k--) { const xa = -rx + 2 * rx * (k + 1) / 8, xb = -rx + 2 * rx * k / 8; c.quadraticCurveTo((xa + xb) / 2, rim + 6, xb, rim); } c.closePath(); };
+    c.fillStyle = gRG(c, -rx * 0.35, top * 0.7, rx * 1.7, [P[0], P[1], P[2], P[3]]); dome(); c.fill();
+    // the inner glow: a warm heart seen through the bell
+    c.fillStyle = gRG(c, 0, 0, 26, ['rgba(255,240,180,.55)', 'rgba(255,190,90,.2)', 'rgba(255,160,60,0)']); c.beginPath(); c.ellipse(0, 0, 30, 18, 0, 0, TWO_PI); c.fill();
+    // radial grooves and the lobes' seams
+    for (let k = -3; k <= 3; k++) gPair(c, [[k * 5, top * 0.86], [k * 9.5, rim + 3]], 'rgba(130,40,14,.4)', 'rgba(255,230,180,.45)', 1.1, -0.9);
+    c.strokeStyle = JELLYP.amberEdge; c.lineWidth = 1.1; dome(); c.stroke();
+    c.strokeStyle = 'rgba(255,255,240,.75)'; c.lineWidth = 2.4; c.lineCap = 'round'; c.beginPath(); c.ellipse(0, rim, rx * 0.8, (rim - top) * 0.86, 0, Math.PI * 1.12, Math.PI * 1.4); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-rx * 0.4, top * 0.66, 3.4, 1.8, -0.5, 0, TWO_PI); c.fill();
+    // spots of glow round the bell
+    for (let k = 0; k < 7; k++) { const an = Math.PI * (1.15 + 0.7 * k / 6), x = Math.cos(an) * rx * 0.86, y = rim + Math.sin(an) * (rim - top) * 0.86; c.fillStyle = 'rgba(255,250,210,.8)'; c.beginPath(); c.arc(x, y + 2, 1.2, 0, TWO_PI); c.fill(); }
+    // the face: grumpy old eyes under heavy lids, bushy brows, a frown
+    jellyEyes(c, 0, -6, 5.2, 0, blink ? 1 : 0.42, '#3a5ad0', 1.3, '#d8682a', 0.6);
+    for (const e of [-1, 1]) { c.strokeStyle = '#a03a16'; c.lineWidth = 2.6; c.lineCap = 'round'; c.beginPath(); c.moveTo(e * 3, -14); c.quadraticCurveTo(e * 8, -15.5 + 1, e * 13, -12.5); c.stroke(); c.strokeStyle = 'rgba(255,220,170,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(e * 3.4, -14.6); c.quadraticCurveTo(e * 8, -16, e * 12.4, -13.2); c.stroke(); }
+    c.strokeStyle = '#8a2c10'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(-5, 5.5); c.quadraticCurveTo(0, 2.5, 5, 5.5); c.stroke();
+    c.fillStyle = 'rgba(255,110,80,.35)'; for (const e of [-1, 1]) { c.beginPath(); c.ellipse(e * 13, 1, 3.4, 1.8, 0, 0, TWO_PI); c.fill(); }
+  });
+}
+const JELLY_MANE_STR = ['#ffb04a', '#ff8a3a', '#ffd88a', '#f06a3a'];
+function jellyDrawMane(h) {
+  const T = G.t, X = JELLY.mane, A = h.alt, S = jellyManeSway(h, T);
+  jellyGlow(ctx, sx(h.cx), sy(A), 90 * s, [255, 160, 70], (0.3 + 0.08 * Math.sin(T * 1.5)) * (0.4 + 0.6 * glowK));
+  // the curtain: each hit tentacle a bundle of three fine strands, a single finer strand between neighbours
+  const tents = []; for (let i = 0; i < X.n; i++) tents.push(jellyManeTent(h, T, i, 7).map(([x, a]) => [sx(x), sy(a)]));
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const curve = (P, dx, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(P[0][0] + dx, P[0][1]); for (let k = 1; k < P.length - 1; k++) ctx.quadraticCurveTo(P[k][0] + dx, P[k][1], (P[k][0] + P[k + 1][0]) / 2 + dx, (P[k][1] + P[k + 1][1]) / 2); ctx.lineTo(P[P.length - 1][0] + dx, P[P.length - 1][1]); ctx.stroke(); };
+  for (let i = 0; i < X.n - 1; i++) { const Pm = tents[i].map((p, k) => [(p[0] + tents[i + 1][k][0]) / 2, (p[1] + tents[i + 1][k][1]) / 2 + 6 * s * Math.sin(k)]); curve(Pm, 0, 1.4 * s, 'rgba(255,170,110,.55)'); }
+  for (let i = 0; i < X.n; i++) {
+    const P = tents[i], col = JELLY_MANE_STR[i % 4];
+    curve(P, -2.6 * s, 1.8 * s, col); curve(P, 2.6 * s, 1.8 * s, JELLY_MANE_STR[(i + 1) % 4]);
+    curve(P, 0, 2.6 * s, col); curve(P, -0.6 * s, 0.9 * s, 'rgba(255,240,210,.8)');
+  }
+  // glowing beads down the leading strands (the way the curtain is swinging glows brighter)
+  ctx.globalCompositeOperation = 'lighter';
+  const gl = jellyGlowCv([255, 190, 110]), lead = S >= 0 ? X.n - 1 : 0;
+  for (const i of [lead, lead + (S >= 0 ? -1 : 1)]) { const P = tents[i]; for (let k = 2; k < P.length; k += 2) { const r = 9 * s; ctx.globalAlpha = 0.45 * (0.5 + 0.5 * glowK); ctx.drawImage(gl, P[k][0] - r, P[k][1] - r, r * 2, r * 2); } }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  // the frilly oral arms
+  const S0 = S * 0.25, OA = []; for (let k = 0; k <= 6; k++) { const u = k / 6; OA.push([sx(h.cx + S0 * u * u + 4 * Math.sin(T * 2 + u * 5) * u), sy(A - 10 - 56 * u), (8 - 3 * u + 2.4 * Math.sin(u * 14 + T * 3)) * s]); }
+  jellyTube(ctx, OA, '#ffc890', '#b0461c', 'rgba(255,245,220,.8)', 0.8 * s);
+  for (let k = 1; k < OA.length; k++) { const [x, y, w] = OA[k]; ctx.strokeStyle = 'rgba(200,80,30,.5)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(x - w * 0.8, y); ctx.lineTo(x + w * 0.8, y + 2 * s); ctx.stroke(); }
+  const blink = pmod(T + h.alt * 0.01, 5.3) < 0.14 ? 1 : 0;
+  jellyBlitAt(jellyManeBell(blink), sx(h.cx), sy(A + 1.5 * Math.sin(T * 1.2)), S / X.A * 0.06);
+}
+
+// ---- the moon pearl: a luminous pearl floating in a bubble ----
+function jellyPearlSprite() {
+  return jellySprite('pearl', 36, 36, 18, 18, c => {
+    // the bubble: a clear sphere with a cyan rim, a soft inner tint, sheen arcs
+    c.fillStyle = gRG(c, -4, -4, 17, ['rgba(220,250,255,.08)', 'rgba(170,230,255,.14)', 'rgba(120,200,255,.32)']); c.beginPath(); c.arc(0, 0, 15, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(190,240,255,.8)'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.6; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, 11.5, 3.5, 4.5); c.stroke();
+    c.strokeStyle = 'rgba(255,190,240,.5)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, 12.5, 0.3, 1.1); c.stroke();
+    // the pearl: iridescent pink-white, a soft band of lilac, a bright glint
+    c.fillStyle = gRG(c, -3, -3.5, 10, ['#ffffff', '#fff0fa', '#f0c0e8', '#b080c8']); c.beginPath(); c.arc(0, 1, 8, 0, TWO_PI); c.fill();
+    c.strokeStyle = JELLYP.pearlEdge; c.lineWidth = 0.6; c.stroke();
+    c.strokeStyle = 'rgba(160,220,255,.45)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 1, 5.6, 0.2, 2.2); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-3, -2.4, 2.4, 1.4, -0.6, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-7, -8.5, 2.6, 1.3, -0.7, 0, TWO_PI); c.fill();
+  });
+}
+function jellyDrawPearl(X, Y, t, ph) {
+  const bob = Math.sin(t * 2 + ph) * 2.5 * s, w = 1 + 0.04 * Math.sin(t * 3.1 + ph);
+  jellyGlow(ctx, X, Y + bob, 40 * s, [255, 170, 240], 0.45 + 0.15 * Math.sin(t * 3 + ph));
+  jellyGlow(ctx, X, Y + bob, 22 * s, [200, 240, 255], 0.4);
+  jellyBlitAt(jellyPearlSprite(), X, Y + bob, 0, 1, 1, w, 2 - w);
+  for (let k = 0; k < 3; k++) { const a = t * 1.6 + ph + k * 2.1, x = X + Math.cos(a) * 19 * s, y = Y + bob + Math.sin(a) * 19 * s, tw = 0.5 + 0.5 * Math.sin(t * 6 + k * 2); ctx.fillStyle = `rgba(255,236,252,${0.5 + 0.4 * tw})`; ctx.beginPath(); ctx.moveTo(x, y - 3 * s * tw); ctx.lineTo(x + 0.9 * s, y); ctx.lineTo(x, y + 3 * s * tw); ctx.lineTo(x - 0.9 * s, y); ctx.closePath(); ctx.fill(); }
+}
+DRAW.jellySwarm = jellyDrawSwarm; DRAW.jellyAnem = jellyDrawAnem; DRAW.jellyManta = jellyDrawManta; DRAW.jellyMane = jellyDrawMane;
+
+// ---- the stage's particles: bubbles ----
+{ const base = updateParticles; updateParticles = function (dt) {
+  base(dt);
+  if (!jellyOn()) return;
+  for (const q of G.particles) if (q.kind === 'jlbub') { q.vy = lerp(q.vy, 70, Math.min(1, dt * 1.5)); q.vx *= 1 - Math.min(1, dt * 2); q.x += Math.sin(G.t * 4 + q.ex.ph) * 12 * dt; }
+}; }
+function jellyBubbleSprite() {
+  return jellySprite('bub', 12, 12, 6, 6, c => {
+    c.fillStyle = 'rgba(160,220,255,.16)'; c.beginPath(); c.arc(0, 0, 5, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(200,240,255,.85)'; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-1.8, -1.9, 1.4, 0.8, -0.7, 0, TWO_PI); c.fill();
+  });
+}
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles;
+  if (additive || !ps.some(q => q.kind === 'jlbub')) return base(additive);
+  G.particles = ps.filter(q => q.kind !== 'jlbub'); try { base(additive); } finally { G.particles = ps; }
+  const S = jellyBubbleSprite();
+  for (const q of ps) {
+    if (q.kind !== 'jlbub') continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
+    if (y < -20 || y > H + 20) continue;
+    const r = q.size * s;
+    ctx.globalAlpha = Math.min(1, t * 3); ctx.drawImage(S.cv, x - r, y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+}; }
+
+// ---- the shaft's walls: living reef ----
+// Each wall is a reef face: heaped boulders of coral rock (each lit from the moon above, shaded under), grown over with
+// brain-coral heads (meandering grooves as line pairs), clumps of tube sponges whose rims glow, branching staghorn
+// sprigs, sea fans, and clusters of luminous polyps; every so often a glow nest (a big colony of glowing tube sponges
+// and polyps) lights the shaft. Each section's reef has its own tint (moonlit lilac, the swarms' teal-blue, the
+// anemones' magenta, the manta run's deep blue, the grotto's green, the lion's mane's warm plum...), so the walls
+// change as you climb. The edge is a real lip of coral rock: rounded lumps lit on top, shaded under, with a few short
+// sprigs and buds poking out (never into a pilot's lane).
+const JELLY_WB = 160;   // wall tile height
+const JELLY_REEF = {
+  'Moonlit Shelf': { rock: [92, 76, 156], deep: [20, 14, 50], rim: [206, 192, 255], acc: [130, 236, 255], acc2: [255, 140, 220], brain: [176, 150, 230] },
+  'Drifting Swarms': { rock: [64, 78, 156], deep: [12, 16, 50], rim: [180, 212, 255], acc: [110, 240, 255], acc2: [160, 255, 230], brain: [130, 170, 236] },
+  'Anemone Gardens': { rock: [100, 58, 144], deep: [26, 10, 46], rim: [236, 180, 255], acc: [255, 120, 220], acc2: [255, 200, 120], brain: [214, 140, 220] },
+  'Manta Run': { rock: [52, 64, 140], deep: [10, 12, 44], rim: [170, 196, 255], acc: [120, 200, 255], acc2: [200, 160, 255], brain: [120, 150, 230] },
+  'Glow Grotto': { rock: [46, 92, 128], deep: [8, 24, 40], rim: [170, 240, 230], acc: [150, 255, 200], acc2: [110, 230, 255], brain: [110, 196, 190] },
+  "Lion's Mane Deep": { rock: [98, 62, 116], deep: [28, 12, 34], rim: [255, 200, 190], acc: [255, 180, 100], acc2: [255, 120, 200], brain: [210, 140, 150] },
+  'Bloom Gauntlet': { rock: [84, 52, 136], deep: [22, 10, 44], rim: [226, 190, 255], acc: [255, 110, 220], acc2: [110, 240, 255], brain: [190, 140, 230] },
+  'The Moon Pool': { rock: [104, 96, 176], deep: [24, 20, 58], rim: [230, 226, 255], acc: [200, 240, 255], acc2: [255, 200, 240], brain: [196, 186, 246] },
+};
+function jellySecIdx(a) { const ss = (G.level && G.level.sections) || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++; return i; }
+const jellyReef = a => { const ss = (G.level && G.level.sections) || [], i = jellySecIdx(a); return JELLY_REEF[ss[i] && ss[i].name] || JELLY_REEF['Moonlit Shelf']; };
+// where each glow nest is on a side (deterministic: the walls and the live glows agree)
+function jellyNests(side, a0, a1) {
+  const out = [], SL = 280;
+  for (let j = Math.floor((a0 - 60) / SL); j <= Math.floor((a1 + 60) / SL); j++) {
+    const a = j * SL + 50 + 170 * hash2(j, 0x9a1 + side * 9);
+    if (a < 260 || hash2(j, 0x9a2 + side * 9) > 0.6) continue;
+    if (G.level && G.level.all.hazards.some(h => h.lo - 50 < a && h.hi + 50 > a)) continue;   // (never behind a trap's mount)
+    out.push({ a, n: 3 + Math.floor(hash2(j, 0x9a3 + side * 9) * 3), sd: j * 7 + side, pink: hash2(j, 0x9a4 + side) < 0.5 });
+  }
+  return out;
+}
+// an irregular rounded blob path (any context): a lumpy ellipse whose radius wobbles by hashed harmonics
+function jellyBlob(c, x, y, rx, ry, rot, sd, n = 8, j = 0.18) {
+  const P = [];
+  for (let i = 0; i < n; i++) { const a = i / n * TWO_PI, k = 1 + j * (hash2(i, sd) - 0.5) * 2; P.push([Math.cos(a) * rx * k, Math.sin(a) * ry * k]); }
+  const cr = Math.cos(rot), sr = Math.sin(rot), T = ([u, v]) => [x + u * cr - v * sr, y + u * sr + v * cr];
+  c.beginPath();
+  for (let i = 0; i <= n; i++) { const p0 = T(P[i % n]), p1 = T(P[(i + 1) % n]), mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2; i ? c.quadraticCurveTo(p0[0], p0[1], mx, my) : c.moveTo(mx, my); }
+  c.closePath();
+}
+// a little sea star (any context): five plump tapering arms, lit on top, a row of pale bumps down each arm
+function jellyStar(c, x, y, r, rot, P, sd) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.beginPath();
+  for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TWO_PI / 5, b = a + Math.PI / 5, ri = r * 0.42, ro = r * (0.9 + 0.2 * hash2(i, sd));
+    const tx = Math.cos(a) * ro, ty = Math.sin(a) * ro; i ? null : c.moveTo(Math.cos(a - Math.PI / 5) * ri, Math.sin(a - Math.PI / 5) * ri);
+    c.quadraticCurveTo(Math.cos(a - 0.22) * ro * 0.7, Math.sin(a - 0.22) * ro * 0.7, tx, ty); c.quadraticCurveTo(Math.cos(a + 0.22) * ro * 0.7, Math.sin(a + 0.22) * ro * 0.7, Math.cos(b) * ri, Math.sin(b) * ri); }
+  c.closePath();
+  c.fillStyle = gRG(c, -r * 0.3, -r * 0.35, r * 1.2, P); c.fill();
+  c.strokeStyle = gCol(gMix(jellyHex(P[2]), [40, 10, 40], 0.45)); c.lineWidth = 0.5; c.stroke();
+  c.fillStyle = 'rgba(255,240,220,.75)';
+  for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TWO_PI / 5; for (let k = 1; k <= 2; k++) { c.beginPath(); c.arc(Math.cos(a) * r * 0.3 * k, Math.sin(a) * r * 0.3 * k, r * 0.08, 0, TWO_PI); c.fill(); } }
+  c.restore();
+}
+// a sea urchin (any context): a dark plum ball bristling with spines, their tips glowing
+function jellyUrchin(c, x, y, r, sd) {
+  for (let i = 0; i < 14; i++) { const a = i / 14 * TWO_PI + 0.2 * hash2(i, sd), L = r * (1.9 + 0.6 * hash2(i, sd + 1)), ex = x + Math.cos(a) * L, ey = y + Math.sin(a) * L * 0.9;
+    c.strokeStyle = '#3a1450'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x, y); c.lineTo(ex, ey); c.stroke();
+    c.fillStyle = 'rgba(255,150,230,.85)'; c.beginPath(); c.arc(ex, ey, 0.45, 0, TWO_PI); c.fill(); }
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.3, ['#c070c8', '#6a2878', '#2e0c3c']); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#2a0a36'; c.lineWidth = 0.5; c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.45)'; c.beginPath(); c.ellipse(x - r * 0.35, y - r * 0.4, r * 0.35, r * 0.18, -0.6, 0, TWO_PI); c.fill();
+}
+// a brain-coral head (any context, y down): a domed mound lit from the top left, meandering grooves as line pairs
+function jellyBrain(c, x, y, r, col, sd) {
+  c.fillStyle = gRG(c, x - r * 0.4, y - r * 0.5, r * 1.5, [gCol(gMix(col, [255, 250, 255], 0.35)), gCol(col), gCol(gMix(col, [20, 10, 50], 0.5))]); c.beginPath(); c.ellipse(x, y, r, r * 0.86, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = gCol(gMix(col, [20, 10, 50], 0.6), 0.8); c.lineWidth = 0.6; c.stroke();
+  c.save(); c.beginPath(); c.ellipse(x, y, r * 0.92, r * 0.78, 0, 0, TWO_PI); c.clip();
+  const dk = gCol(gMix(col, [30, 12, 60], 0.55), 0.6), lt = gCol(gMix(col, [255, 250, 255], 0.5), 0.5);
+  for (let k = -3; k <= 3; k++) {
+    const yy = y + k * r * 0.24, P = [];
+    for (let i = 0; i <= 6; i++) { const u = i / 6; P.push([x - r + 2 * r * u, yy + Math.sin(u * 9 + k * 1.7 + sd) * r * 0.09]); }
+    gPair(c, P, dk, lt, Math.max(0.5, r * 0.09), -0.5);
+  }
+  c.restore();
+  c.fillStyle = 'rgba(255,255,255,.4)'; c.beginPath(); c.ellipse(x - r * 0.4, y - r * 0.45, r * 0.3, r * 0.13, -0.6, 0, TWO_PI); c.fill();
+}
+// a clump of tube sponges (any context, y down), opening toward the shaft (into: -1 or +1), their rims glowing
+function jellyTubes(c, x, y, n, into, col, glowC, sd) {
+  for (let k = 0; k < n; k++) {
+    const h1 = hash2(k, sd), w = 3 + 2.2 * h1, L = 9 + 10 * hash2(k, sd + 1), ang = -Math.PI / 2 - into * (0.25 + 0.5 * hash2(k, sd + 2)), bx = x + (k - (n - 1) / 2) * 5.5, by = y + 3;
+    const tx = bx + Math.cos(ang) * L, ty = by + Math.sin(ang) * L;
+    c.strokeStyle = gCol(gMix(col, [20, 10, 50], 0.55)); c.lineWidth = w * 2 + 1; c.lineCap = 'round'; c.beginPath(); c.moveTo(bx, by); c.lineTo(tx, ty); c.stroke();
+    c.strokeStyle = gLG(c, bx - w, 0, bx + w, 0, [gCol(gMix(col, [255, 250, 255], 0.3)), gCol(col), gCol(gMix(col, [20, 10, 50], 0.35))]); c.lineWidth = w * 2; c.beginPath(); c.moveTo(bx, by); c.lineTo(tx, ty); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(bx - w * 0.5, by); c.lineTo(tx - w * 0.5, ty); c.stroke();
+    // the glowing rim of its opening
+    c.fillStyle = gCol(gMix(glowC, [255, 255, 255], 0.2), 0.95); c.beginPath(); c.ellipse(tx, ty, w * 1.05, w * 0.5, ang + Math.PI / 2, 0, TWO_PI); c.fill();
+    c.fillStyle = gCol(gMix(col, [10, 4, 30], 0.7)); c.beginPath(); c.ellipse(tx, ty, w * 0.6, w * 0.28, ang + Math.PI / 2, 0, TWO_PI); c.fill();
+  }
+}
+// a branching staghorn sprig (any context, y down)
+function jellySprig(c, x, y, L, ang, col, sd, depth = 0) {
+  const ex = x + Math.cos(ang) * L, ey = y + Math.sin(ang) * L;
+  c.strokeStyle = gCol(gMix(col, [20, 10, 50], 0.45)); c.lineWidth = Math.max(1, 3.2 - depth); c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y); c.lineTo(ex, ey); c.stroke();
+  c.strokeStyle = gCol(gMix(col, [255, 250, 255], 0.3)); c.lineWidth = Math.max(0.6, 2.2 - depth); c.beginPath(); c.moveTo(x, y); c.lineTo(ex, ey); c.stroke();
+  if (depth < 2) for (const e of [-1, 1]) jellySprig(c, lerp(x, ex, 0.55), lerp(y, ey, 0.55), L * 0.6, ang + e * (0.5 + 0.2 * hash2(depth, sd + e)), col, sd + 3, depth + 1);
+  else { c.fillStyle = gCol(gMix(col, [255, 255, 255], 0.6)); c.beginPath(); c.arc(ex, ey, 1.1, 0, TWO_PI); c.fill(); }
+}
+// a sea fan (any context, y down): a lattice fan on a short stalk
+function jellyFan(c, x, y, r, ang, col) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  c.fillStyle = gCol(col, 0.28); c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r, -Math.PI * 0.85, -Math.PI * 0.15); c.closePath(); c.fill();
+  c.strokeStyle = gCol(gMix(col, [255, 240, 255], 0.2), 0.75); c.lineWidth = 0.7;
+  for (let k = 0; k <= 7; k++) { const a = -Math.PI * (0.85 - 0.7 * k / 7); c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(Math.cos(a) * r * 0.5 + 2, Math.sin(a) * r * 0.5, Math.cos(a) * r, Math.sin(a) * r); c.stroke(); }
+  for (let q = 1; q <= 3; q++) { c.beginPath(); c.arc(0, 0, r * q / 3.4, -Math.PI * 0.85, -Math.PI * 0.15); c.stroke(); }
+  c.strokeStyle = gCol(gMix(col, [20, 10, 50], 0.5)); c.lineWidth = 1.6; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -r * 0.35); c.stroke();
+  c.restore();
+}
+// luminous polyps: a little cluster of glowing buds (any context, y down)
+function jellyPolyps(c, x, y, n, col, sd) {
+  for (let k = 0; k < n; k++) { const px = x + (hash2(k, sd) - 0.5) * 12, py = y + (hash2(k, sd + 1) - 0.5) * 9, r = 0.9 + 0.8 * hash2(k, sd + 2);
+    c.fillStyle = gCol(col, 0.3); c.beginPath(); c.arc(px, py, r * 2.4, 0, TWO_PI); c.fill();
+    c.fillStyle = gCol(gMix(col, [255, 255, 255], 0.6)); c.beginPath(); c.arc(px, py, r, 0, TWO_PI); c.fill(); }
+}
+// a glow nest (any context, y down): a hollow in the reef full of glowing tube sponges and polyps
+function jellyNestPaint(c, x, y, into, n, sd, pink, R) {
+  c.fillStyle = gRG(c, 0 + x, y, 24, [gCol(gMix(R.deep, [0, 0, 0], 0.3)), gCol(R.deep, 0.9), gCol(R.deep, 0)]); c.beginPath(); c.ellipse(x, y, 24, 17, 0, 0, TWO_PI); c.fill();
+  const gc = pink ? R.acc2 : R.acc;
+  c.fillStyle = gRG(c, x, y + 2, 20, [gCol(gc, 0.45), gCol(gc, 0.12), gCol(gc, 0)]); c.beginPath(); c.ellipse(x, y + 2, 20, 14, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = gCol(R.rim, 0.55); c.lineWidth = 1.3; c.lineCap = 'round'; c.beginPath(); c.ellipse(x, y, 21, 15, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+  jellyTubes(c, x, y + 6, n, into, gMix(R.brain, gc, 0.25), gc, sd);
+  jellyPolyps(c, x - into * 10, y + 9, 5, gc, sd + 9);
+}
+function jellyWallPaint(c, side, a0, a1, x0, x1) {
+  const WXM = new Map(), wx = a => { const q = Math.round(a); let v = WXM.get(q); if (v === undefined) { v = walls(q)[side]; WXM.set(q, v); } return v; };
+  const into = side ? 1 : -1, A0 = a0 - 12, A1 = a1 + 12, outer = side ? x1 + 4 : x0 - 4, X0 = Math.min(x0, x1) - 6, X1 = Math.max(x0, x1) + 6;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the wall's soft shadow into the shaft
+  for (const [lw, al] of [[26, 0.06], [13, 0.09], [6, 0.12]]) { c.strokeStyle = `rgba(6,4,24,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  const R0 = jellyReef((a0 + a1) / 2);
+  c.save(); body(); c.clip();
+  c.fillStyle = gCol(R0.deep); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  // heaped boulders of coral rock, back to front (hashed on a world grid, so tiles join seamlessly)
+  const BS = 30;
+  for (const layer of [0, 1]) for (let gy = Math.floor((A0 - 40) / BS); gy <= Math.floor((A1 + 40) / BS); gy++) for (let gx = Math.floor((X0 - 40) / BS); gx <= Math.floor((X1 + 40) / BS); gx++) {
+    const hh = hash2(gx * 97 + gy, 0x9b1 + layer); if (layer && hh > 0.6) continue;
+    const ba = gy * BS + BS * hash2(gx, gy + 0x9b2 + layer * 5), bx = gx * BS + BS * hash2(gy, gx + 0x9b3 + layer * 5), dd = (bx - wx(ba)) * into;
+    if (dd < -14 || dd > 190) continue;
+    const R = jellyReef(ba), r = (layer ? 13 : 20) + (layer ? 8 : 12) * hash2(gx, gy + 0x9b4 + layer), depthK = clamp(dd / 160, 0, 1);
+    const col = gMix(gMix(R.rock, R.deep, 0.15 + 0.55 * depthK), [255, 255, 255], (hash2(gy, gx + 0x9b5) - 0.5) * 0.08);
+    c.fillStyle = gRG(c, bx - r * 0.35, -ba - r * 0.5, r * 1.5, [gCol(gMix(col, R.rim, 0.28)), gCol(col), gCol(gMix(col, R.deep, 0.55))]); c.beginPath(); c.ellipse(bx, -ba, r, r * 0.8, (hash2(gx, gy) - 0.5) * 0.6, 0, TWO_PI); c.fill();
+    c.strokeStyle = gCol(gMix(col, R.deep, 0.65), 0.7); c.lineWidth = 0.7; c.beginPath(); c.ellipse(bx, -ba, r, r * 0.8, (hash2(gx, gy) - 0.5) * 0.6, 0.15, Math.PI - 0.15); c.stroke();
+    c.strokeStyle = gCol(gMix(col, R.rim, 0.6), 0.4); c.lineWidth = 0.8; c.beginPath(); c.ellipse(bx, -ba, r * 0.85, r * 0.66, (hash2(gx, gy) - 0.5) * 0.6, Math.PI * 1.15, Math.PI * 1.6); c.stroke();
+  }
+  // the light: the moon's glow and the shaft's bioluminescence brighter by the lip, sinking into deep indigo inside
+  const ex = wx((a0 + a1) / 2);
+  c.fillStyle = gLG(c, ex, 0, ex + into * 120, 0, [gCol(R0.rim, 0.12), gCol(R0.rim, 0), 'rgba(6,4,24,.2)', 'rgba(6,4,24,.5)']); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  // the reef's growth: brain coral, tube sponges, staghorn sprigs, sea fans, polyps
+  const CS = 24;
+  for (let gy = Math.floor((A0 - 10) / CS); gy <= Math.floor((A1 + 10) / CS); gy++) for (let gx = Math.floor((X0 - 10) / CS); gx <= Math.floor((X1 + 10) / CS); gx++) {
+    const hsh = hash2(gx * 131 + gy, 0x9c1); if (hsh > 0.5) continue;
+    const pa = gy * CS + CS * hash2(gx, gy + 0x9c2), px = gx * CS + CS * hash2(gy, gx + 0x9c3), dd = (px - wx(pa)) * into;
+    if (dd < 9 || dd > 130) continue;
+    const R = jellyReef(pa), fade = clamp(1 - (dd - 60) / 90, 0.35, 1), sd = gx * 7 + gy;
+    c.globalAlpha = fade;
+    if (hsh < 0.12) jellyBrain(c, px, -pa, 6 + 6 * hash2(gx, gy + 0x9c4), R.brain, sd);
+    else if (hsh < 0.2) jellyTubes(c, px, -pa, 2 + Math.floor(3 * hash2(gx, gy + 0x9c5)), into, gMix(R.brain, R.rock, 0.3), hash2(gx, gy + 0x9c6) < 0.5 ? R.acc : R.acc2, sd);
+    else if (hsh < 0.27) jellySprig(c, px, -pa, 7 + 5 * hash2(gx, gy + 0x9c7), -Math.PI / 2 - into * 0.6 * hash2(gx, gy + 0x9c8), gMix(R.brain, [255, 200, 220], 0.2), sd);
+    else if (hsh < 0.31 && dd > 30) jellyFan(c, px, -pa, 11 + 6 * hash2(gx, gy + 0x9c9), -into * 0.4, gMix(R.acc2, R.brain, 0.4));
+    else if (hsh < 0.42) jellyPolyps(c, px, -pa, 3 + Math.floor(3 * hash2(gx, gy + 0x9ca)), hash2(gx, gy + 0x9cb) < 0.5 ? R.acc : R.acc2, sd);
+    else { const r = 1.4 + 2 * hash2(gx, gy + 0x9cc); c.fillStyle = gCol(gMix(R.rock, R.deep, 0.6), 0.6); c.beginPath(); c.arc(px, -pa, r, 0, TWO_PI); c.fill(); c.strokeStyle = gCol(R.rim, 0.3); c.lineWidth = 0.5; c.beginPath(); c.arc(px, -pa, r, Math.PI * 1.1, Math.PI * 1.8); c.stroke(); }
+    c.globalAlpha = 1;
+  }
+  // the glow nests
+  for (const N of jellyNests(side, A0 - 20, A1 + 20)) jellyNestPaint(c, wx(N.a) + into * 28, -N.a, into, N.n, N.sd, N.pink, jellyReef(N.a));
+  c.restore();
+  // the lip: a band of coral rock along the edge, then rounded lumps (lit on top by the moon, shaded under), a lit line
+  const rim = R0.rim, rk = R0.rock;
+  c.save(); body(); c.clip();
+  c.strokeStyle = gCol(gMix(rk, rim, 0.2)); c.lineWidth = 12; gPoly(c, pts, false); c.stroke();
+  c.strokeStyle = gCol(gMix(rk, R0.deep, 0.6), 0.6); c.lineWidth = 1; gPoly(c, pts.map(([x, y]) => [x + into * 6.2, y]), false); c.stroke();
+  c.restore();
+  // the reef's edge: an irregular run of coral rock lumps, brain-coral heads, sponge tubes and polyp buds (lit on top
+  // by the moon, shaded under), each only a few units proud of the wall line
+  c.strokeStyle = gCol(rim, side ? 0.32 : 0.5); c.lineWidth = 1; gPoly(c, pts.map(([x, y]) => [x + into * 1.5, y - 1.6]), false); c.stroke();
+  for (let k = Math.floor((A0 - 30) / 16); k <= Math.ceil((A1 + 30) / 16); k++) {
+    // two items per 16 units, placed by hash (so tiles agree at their joins)
+    for (const m of [0, 1]) {
+      const hh = hash2(k * 2 + m, 0x9d1 + side), aa = k * 16 + m * 8 + 6 * (hash2(k * 2 + m, 0x9d2 + side) - 0.5);
+      if (aa < A0 - 10 || aa > A1 + 10) continue;
+      const x = wx(aa), y = -aa, R = jellyReef(aa), kind = hash2(k * 2 + m, 0x9d5 + side);
+      const id = k * 2 + m + side * 7919;
+      if (kind < 0.44) {   // a lump of coral rock, each its own shape, now and then a glowing polyp on it
+        const rx = 2.6 + 3 * hh, ry = 6 + 7 * hash2(k * 2 + m, 0x9d6 + side), cx = x + into * rx * 0.45;
+        jellyBlob(c, cx, y, rx, ry, (hh - 0.5) * 0.35, id, 8, 0.26);
+        c.fillStyle = gRG(c, cx - rx * 0.4, y - ry * 0.55, Math.max(rx, ry) * 1.5, [gCol(gMix(R.rim, [255, 255, 255], 0.25)), gCol(gMix(R.rock, R.rim, 0.42)), gCol(gMix(R.rock, R.deep, 0.5))]); c.fill();
+        c.strokeStyle = gCol(gMix(R.rock, R.deep, 0.7), 0.65); c.lineWidth = 0.5; c.stroke();
+        if (hh < 0.25) { c.fillStyle = gCol(R.deep, 0.5); c.beginPath(); c.arc(cx - into * rx * 0.2, y + ry * 0.25, Math.min(rx, ry) * 0.28, 0, TWO_PI); c.fill(); }   // a pit
+        else if (hh > 0.7) { const gc = hh > 0.85 ? R.acc2 : R.acc; c.fillStyle = gCol(gc, 0.3); c.beginPath(); c.arc(cx - into * rx * 0.3, y - ry * 0.6, 2.6, 0, TWO_PI); c.fill(); c.fillStyle = gCol(gMix(gc, [255, 255, 255], 0.6)); c.beginPath(); c.arc(cx - into * rx * 0.3, y - ry * 0.6, 1.1, 0, TWO_PI); c.fill(); }
+      } else if (kind < 0.55) jellyBrain(c, x + into * 1.5, y, 4.5 + 2.5 * hh, R.brain, k);   // a brain-coral head
+      else if (kind < 0.64) jellyTubes(c, x + into * 2, y + 2, 1 + Math.floor(2 * hh), into, gMix(R.brain, R.rock, 0.3), hh < 0.5 ? R.acc : R.acc2, k * 3 + side);
+      else if (kind < 0.72) jellyPolyps(c, x + into * 2, y, 3 + Math.floor(3 * hh), hh < 0.5 ? R.acc : R.acc2, id);   // glowing polyps
+      else if (kind < 0.8) jellyStar(c, x + into * 2, y, 3.8 + 1.6 * hh, hh * 6, [['#ffd8a8', '#ff8c5a', '#c0442e'], ['#ffe0f4', '#ff7ac8', '#b02c88'], ['#e8dcff', '#a888f0', '#5a3eae']][Math.floor(hh * 3)], id);   // a sea star
+      else if (kind < 0.86) jellyUrchin(c, x + into * 4, y, 2.4 + 1.2 * hh, id);   // a sea urchin
+      else if (kind < 0.94) { const P = hh < 0.5 ? JELLYP.pink : JELLYP.cyan; for (let q = 0; q < 3; q++) jellyBall(c, x - into * (1 + q * 2.4), y - 1 - q * 2.8 + (q === 1 ? 2 : 0), 1.3 + 0.4 * q, P, hh < 0.5 ? JELLYP.pinkEdge : JELLYP.cyanEdge, 0.4); }
+      else jellySprig(c, x + into * 1, y, 5 + 4 * hh, -Math.PI / 2 - into * 0.5, gMix(R.brain, [255, 200, 220], 0.3), k);
+    }
+  }
+}
+// the wall's x at a height, memoised per level (the live glows ask for the same heights every frame)
+function jellyWallX(a, side) {
+  const L = G.level, M = L._jlw || (L._jlw = new Map()), key = Math.round(a) * 2 + side;
+  let x = M.get(key); if (x === undefined) { x = walls(Math.round(a))[side]; M.set(key, x); if (M.size > 6000) M.clear(); }
+  return x;
+}
+let jellyMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+function jellyTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+function jellyDrawWalls() {
+  jellyCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, Pd = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / JELLY_WB), j1 = Math.floor(top / JELLY_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const wide = drawPad > 0 ? 1 : 0, id = `w${side}_${j}_${wide}`, need = j <= j1;
+      if (!need && (jellyMade || JELLYC.tiles.has(id))) continue;
+      if (!JELLYC.tiles.has(id)) jellyMade++;
+      const a0 = j * JELLY_WB, a1 = a0 + JELLY_WB;
+      let Tl = JELLYC.tiles.get(id);
+      if (!Tl) {
+        let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+        const vis = ox / s + 30, x0 = side ? lo - 20 : wide ? lo - 210 : Math.max(lo - 210, -vis), x1 = side ? (wide ? hi + 210 : Math.min(hi + 210, WORLD_W + vis)) : hi + 20;
+        Tl = jellyTile(id, x0, x1, a0, a1, c => jellyWallPaint(c, side, a0, a1, x0, x1));
+      }
+      if (!need) continue;
+      jellyTileBlit(Tl);
+      const y0 = sy(a1) - 1, hh = JELLY_WB * s + 2;
+      ctx.fillStyle = Tl.deep || (Tl.deep = gCol(jellyReef(a0 + 80).deep));
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + Pd) ctx.fillRect(xe, y0, cssW + 30 + Pd - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - Pd) ctx.fillRect(-30 - Pd, y0, xe + 30 + Pd, hh); }
+    }
+  }
+  jellyMade = 0;
+  // live: each glow nest breathing its light, batched (one composite switch, the cached glow sprites)
+  const T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const side of [0, 1]) {
+    const into = side ? 1 : -1;
+    for (const N of jellyNestsCached(side)) {
+      if (N.a < G.camAlt - 60 || N.a > G.camAlt + viewH + 60) continue;
+      const R = jellyReef(N.a), gw = jellyGlowCv(N.pink ? R.acc2 : R.acc), X = sx(jellyWallX(N.a, side) + into * 24), Y = sy(N.a), r = 50 * s;
+      ctx.globalAlpha = 0.3 + 0.12 * Math.sin(T * 1.9 + N.sd); ctx.drawImage(gw, X - r, Y - r, r * 2, r * 2);
+    }
+  }
+  ctx.restore();
+}
+// the nests over the whole stage per side, worked out once per level
+function jellyNestsCached(side) {
+  const L = G.level; if (!L) return [];
+  const C = L._jln || (L._jln = [null, null]);
+  return C[side] || (C[side] = jellyNests(side, 0, L.end + 400));
+}
+
+// ---- the backdrop: the reef receding into the night water ----
+// far (0.07): night water with dark reef pinnacles rising out of the deep, each rimmed by the moon and grown over with
+// bioluminescent life (branching coral tipped with glowing buds, sea fans with neon rims, tube sponges ringed with
+// light, brain-coral domes, kelp ribbons beaded with light, anemone tufts), continuous from tile to tile (their edges
+// are fixed at the joins and every growth is drawn by each tile it reaches). Each section dresses them as its own: the moonlit shelf's sandy
+// ledges and sea whips, the swarms' far clouds of tiny jellies, the anemone meadows on every ledge, the manta run's
+// wide open blue with a far school of fish, the plankton grotto's arches glowing green, the lion's mane deep's amber
+// light and hanging jelly silhouettes, the gauntlet's bloom, the Moon Pool's silver. near (0.2): big staghorn coral and
+// sea whips reaching in from the sides, soft and dim. Depth is shown by easing colour toward each section's haze;
+// every section has its own light. Live: the moon's shafts swaying, far jellies pulsing as they drift, a manta's shadow
+// gliding through now and then (a handful of cheap blits).
+const JELLY_FAR = 0.07, JELLY_NEAR = 0.2, JELLY_BB = 460, JELLY_NB = 320;
+const JELLY_LIGHT = {
+  'Moonlit Shelf': { top: [44, 40, 110], bot: [12, 10, 44], haze: [52, 48, 120], glow: [200, 220, 255], moon: [220, 226, 255], rock: [90, 80, 160] },
+  'Drifting Swarms': { top: [26, 44, 108], bot: [6, 12, 40], haze: [34, 58, 124], glow: [110, 230, 255], moon: [180, 230, 255], rock: [60, 84, 160] },
+  'Anemone Gardens': { top: [52, 28, 100], bot: [16, 6, 40], haze: [66, 38, 116], glow: [255, 120, 220], moon: [240, 200, 255], rock: [104, 64, 150] },
+  'Manta Run': { top: [22, 34, 100], bot: [4, 8, 34], haze: [30, 46, 116], glow: [120, 190, 255], moon: [190, 210, 255], rock: [52, 66, 146] },
+  'Glow Grotto': { top: [16, 52, 84], bot: [4, 16, 30], haze: [26, 70, 96], glow: [140, 255, 200], moon: [190, 255, 230], rock: [44, 96, 126] },
+  "Lion's Mane Deep": { top: [50, 28, 74], bot: [16, 8, 30], haze: [70, 40, 84], glow: [255, 170, 90], moon: [255, 210, 200], rock: [104, 64, 116] },
+  'Bloom Gauntlet': { top: [44, 22, 92], bot: [12, 4, 36], haze: [60, 32, 108], glow: [255, 110, 220], moon: [230, 200, 255], rock: [88, 56, 140] },
+  'The Moon Pool': { top: [60, 60, 136], bot: [16, 16, 56], haze: [70, 70, 146], glow: [220, 230, 255], moon: [240, 244, 255], rock: [108, 100, 180] },
+};
+function jellyLightAt(a) {
+  const ss = (G.level && G.level.sections) || [], i = jellySecIdx(a), me = JELLY_LIGHT[ss[i] && ss[i].name] || JELLY_LIGHT['Moonlit Shelf'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 320) { k = 0.5 * smooth(ss[i + 1].a0 - 320, ss[i + 1].a0, a); o = JELLY_LIGHT[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 320) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 320, a)); o = JELLY_LIGHT[ss[i - 1].name]; }
+  if (!o) return me;
+  const out = {}; for (const q in me) out[q] = gMix(me[q], o[q], k); return out;
+}
+function jellyXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+const jellyC = (col, L, k, a = 1) => gCol(gMix(col, L.haze, k), a);
+const JELLY_SET = {
+  'Moonlit Shelf': 'shelf', 'Drifting Swarms': 'swarm', 'Anemone Gardens': 'garden', 'Manta Run': 'open',
+  'Glow Grotto': 'grotto', "Lion's Mane Deep": 'mane', 'Bloom Gauntlet': 'bloom', 'The Moon Pool': 'pool',
+};
+// a far pinnacle's centre and half-width at the join below tile j (shared by both tiles at that join)
+function jellyTowerAt(j, q, u0, u1) { const W = u1 - u0; return [u0 + W * [0.2, 0.52, 0.8][q] + W * 0.08 * (hash2(j, 0xa11 + q) - 0.5), (q === 1 ? 12 : 20) + (q === 1 ? 8 : 16) * hash2(j, 0xa12 + q)]; }
+// the pinnacle's spine points [x, y, half-width] over tile j (y down), and its edge x on a side at point i
+function jellyTowerPts(j, q, u0, u1) {
+  const n = 18, P = [], y0 = -(j + 1) * JELLY_BB - 4, y1 = -j * JELLY_BB + 4, [cx0, w0] = jellyTowerAt(j, q, u0, u1), [cx1, w1] = jellyTowerAt(j + 1, q, u0, u1);
+  for (let i = 0; i <= n; i++) { const u = i / n, e = Math.sin(u * Math.PI); P.push([lerp(cx0, cx1, u) + e * 22 * (hash2(j, 0xa13 + q) - 0.5), lerp(y1, y0, u), lerp(w0, w1, u) * (1 + e * 0.25 * (hash2(j, 0xa14 + q) - 0.3))]); }
+  const edge = (sg, i) => P[i][0] + sg * (P[i][2] + 3 * Math.sin(i * 1.9 + q + j * 0.7) * Math.sin(i / n * Math.PI));
+  return { P, edge, n };
+}
+// each section's neon (three glow colours) and its reef life's mix: [branch, fan, tubes, brain, kelp, tuft]
+const JELLY_NEON = {
+  shelf: [[[130, 240, 255], [210, 225, 255], [255, 170, 230]], [0.22, 0.3, 0.18, 0.15, 0.15, 0]],
+  swarm: [[[110, 240, 255], [150, 255, 210], [255, 150, 230]], [0.25, 0.15, 0.3, 0.1, 0.2, 0]],
+  garden: [[[255, 110, 220], [255, 190, 240], [180, 255, 130]], [0.12, 0.2, 0.15, 0.15, 0.08, 0.3]],
+  open: [[[120, 200, 255], [170, 255, 120], [110, 240, 255]], [0.2, 0.12, 0.13, 0.1, 0.45, 0]],
+  grotto: [[[150, 255, 190], [200, 255, 110], [110, 230, 255]], [0.18, 0.1, 0.3, 0.3, 0.12, 0]],
+  mane: [[[255, 180, 90], [255, 130, 200], [255, 225, 150]], [0.25, 0.35, 0.12, 0.08, 0.2, 0]],
+  bloom: [[[255, 110, 220], [110, 240, 255], [190, 255, 110]], [0.18, 0.16, 0.18, 0.12, 0.16, 0.2]],
+  pool: [[[225, 235, 255], [255, 200, 240], [160, 240, 255]], [0.2, 0.32, 0.18, 0.2, 0.1, 0]],
+};
+// a soft neon point: a halo (the cached glow) and a bright core (any context, world units)
+function jellyNeonDot(c, x, y, r, col, a = 1) {
+  jellyGlow(c, x, y, r * 4, col, 0.55 * a);
+  c.fillStyle = gCol(gMix(col, [255, 255, 255], 0.55), 0.95 * a); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+}
+// the reef's growths on a far pinnacle (any context, world units, y down): each a dark silhouette rimmed and tipped
+// with the section's neon. sg: the side it grows out toward. dk/md: the silhouette's dark and its rim-lit tone.
+function jellyFarGrowth(c, kind, x, y, sg, z, N, dk, md, sd) {
+  const g1 = N[sd % 3], g2 = N[(sd + 1) % 3];
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  if (kind === 0) {   // branching coral: a forked antler reaching out and up, every tip a glowing bud
+    const br = (bx, by, L, ang, w, d) => {
+      const ex = bx + Math.cos(ang) * L, ey = by + Math.sin(ang) * L;
+      c.strokeStyle = dk; c.lineWidth = w; c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo((bx + ex) / 2 + sg * 2, (by + ey) / 2, ex, ey); c.stroke();
+      c.strokeStyle = md; c.lineWidth = w * 0.35; c.beginPath(); c.moveTo(bx - 0.6, by - w * 0.25); c.quadraticCurveTo((bx + ex) / 2 + sg * 2 - 0.6, (by + ey) / 2 - w * 0.25, ex - 0.6, ey - w * 0.25); c.stroke();
+      if (d < 2) { br(ex, ey, L * 0.68, ang - 0.5 - 0.2 * hash2(d, sd), w * 0.7, d + 1); br(ex, ey, L * 0.62, ang + 0.45 + 0.2 * hash2(d + 3, sd), w * 0.66, d + 1); }
+      else jellyNeonDot(c, ex, ey, 1.3, g1);
+    };
+    br(x, y, 15 * z, sg > 0 ? -0.75 : -Math.PI + 0.75, 4.2 * z, 0);
+  } else if (kind === 1) {   // a sea fan: a lattice on a stalk, its rim glowing
+    const r = 22 * z, ang = sg * 0.55;
+    c.save(); c.translate(x, y); c.rotate(ang);
+    c.fillStyle = gCol(g2, 0.13); c.beginPath(); c.moveTo(0, 0); c.arc(0, -4, r, -Math.PI * 0.86, -Math.PI * 0.14); c.closePath(); c.fill();
+    c.strokeStyle = gCol(g2, 0.42); c.lineWidth = 0.9; for (let k = 0; k <= 8; k++) { const a = -Math.PI * (0.86 - 0.72 * k / 8); c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(Math.cos(a) * r * 0.5 + 2, Math.sin(a) * r * 0.5 - 4, Math.cos(a) * r, Math.sin(a) * r - 4); c.stroke(); }
+    c.strokeStyle = gCol(g2, 0.3); c.lineWidth = 0.6; for (let q = 1; q <= 3; q++) { c.beginPath(); c.arc(0, -4, r * q / 3.3, -Math.PI * 0.86, -Math.PI * 0.14); c.stroke(); }
+    c.strokeStyle = gCol(gMix(g2, [255, 255, 255], 0.3), 0.8); c.lineWidth = 1.2; c.beginPath(); c.arc(0, -4, r, -Math.PI * 0.86, -Math.PI * 0.14); c.stroke();
+    c.strokeStyle = dk; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, 3); c.lineTo(0, -5); c.stroke();
+    jellyGlow(c, 0, -r * 0.8, r * 1.1, g2, 0.18);
+    c.restore();
+  } else if (kind === 2) {   // tube sponges: a clump of tall tubes, their open rims ringed with light
+    for (let k = 0; k < 3; k++) {
+      const w = (2.6 + 1.4 * hash2(k, sd)) * z, L = (12 + 12 * hash2(k, sd + 1)) * z, a = -Math.PI / 2 + sg * (0.15 + 0.3 * k) * 0.9, bx = x + sg * k * 3.5 * z, ex = bx + Math.cos(a) * L, ey = y + Math.sin(a) * L;
+      c.strokeStyle = dk; c.lineWidth = w * 2; c.beginPath(); c.moveTo(bx, y); c.lineTo(ex, ey); c.stroke();
+      c.strokeStyle = md; c.lineWidth = w * 0.6; c.beginPath(); c.moveTo(bx - w * 0.5, y); c.lineTo(ex - w * 0.5, ey); c.stroke();
+      c.fillStyle = gCol(gMix(g1, [255, 255, 255], 0.3), 0.95); c.beginPath(); c.ellipse(ex, ey, w * 1.05, w * 0.45, a + Math.PI / 2, 0, TWO_PI); c.fill();
+      c.fillStyle = dk; c.beginPath(); c.ellipse(ex, ey, w * 0.6, w * 0.24, a + Math.PI / 2, 0, TWO_PI); c.fill();
+      jellyGlow(c, ex, ey, w * 4, g1, 0.4);
+    }
+  } else if (kind === 3) {   // a brain-coral dome bulging from the side, its grooves faintly glowing
+    const r = 10 * z, cx = x - sg * r * 0.25;
+    c.fillStyle = dk; c.beginPath(); c.ellipse(cx, y, r, r * 0.8, 0, 0, TWO_PI); c.fill();
+    c.save(); c.beginPath(); c.ellipse(cx, y, r * 0.9, r * 0.7, 0, 0, TWO_PI); c.clip();
+    c.strokeStyle = gCol(g1, 0.4); c.lineWidth = 0.7; for (let k = -2; k <= 2; k++) { c.beginPath(); for (let i = 0; i <= 6; i++) { const u = i / 6, xx = cx - r + 2 * r * u, yy = y + k * r * 0.28 + Math.sin(u * 9 + k + sd) * r * 0.08; i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); } c.stroke(); }
+    c.restore();
+    c.strokeStyle = gCol(gMix(g1, [255, 255, 255], 0.3), 0.7); c.lineWidth = 1.1; c.beginPath(); c.ellipse(cx, y, r, r * 0.8, 0, Math.PI * 1.1, Math.PI * 1.85); c.stroke();
+  } else if (kind === 4) {   // kelp: a long ribbon swaying up from the side, beads of light along it
+    const L = (90 + 70 * hash2(sd, 3)) * z, P = [];
+    for (let i = 0; i <= 12; i++) { const u = i / 12; P.push([x + sg * (8 + 14 * u) * z + Math.sin(u * 5 + sd) * 7 * z * u, y - L * u]); }
+    c.strokeStyle = dk; c.lineWidth = 3.2 * z; gPoly(c, P, false); c.stroke();
+    c.strokeStyle = gCol(gMix(g2, [40, 60, 60], 0.45), 0.6); c.lineWidth = 1.1 * z; gPoly(c, P.map(([u, v]) => [u - 0.8, v]), false); c.stroke();
+    for (let i = 3; i <= 12; i += 3) { const [u, v] = P[i], bl = sg * (i % 2 ? 1 : -1); c.fillStyle = dk; c.beginPath(); c.ellipse(u + bl * 3.5 * z, v + 1, 4 * z, 1.6 * z, bl * 0.5, 0, TWO_PI); c.fill(); jellyNeonDot(c, u, v, 0.9, g2, 0.8); }
+    jellyNeonDot(c, P[12][0], P[12][1], 1.4, g2);
+  } else {   // a tuft of anemones on a ledge: little glowing tentacle bursts
+    for (let m = 0; m < 3; m++) { const ax = x + sg * (4 + 7 * m) * z, ay = y - 1; c.strokeStyle = gCol(m % 2 ? g1 : g2, 0.85); c.lineWidth = 1; for (let t = 0; t < 7; t++) { const an = -Math.PI / 2 + (t - 3) * 0.26; c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo(ax + Math.cos(an) * 5 * z, ay + Math.sin(an) * 5 * z, ax + Math.cos(an) * 8 * z, ay + Math.sin(an) * 9 * z); c.stroke(); } jellyGlow(c, ax, ay - 5, 9 * z, m % 2 ? g1 : g2, 0.35); }
+  }
+}
+// a far pinnacle over tile j: a dark column of reef rock rimmed by the moon, its growths drawn for this tile and its
+// neighbours (so whatever crosses a join is whole on both sides)
+function jellyTowerPaint(c, j, q, u0, u1, L, k, kind) {
+  const W = u1 - u0, gx = u0 + W * [0.2, 0.52, 0.8][q], { P, edge, n } = jellyTowerPts(j, q, u0, u1);
+  const R0 = gMix(L.bot, L.rock, 0.17), lit = jellyC(gMix(R0, L.moon, 0.14), L, k), md = jellyC(R0, L, k), dkc = jellyC(gMix(R0, L.bot, 0.6), L, k);
+  c.beginPath(); for (let i = 0; i <= n; i++) c.lineTo(edge(-1, i), P[i][1]); for (let i = n; i >= 0; i--) c.lineTo(edge(1, i), P[i][1]); c.closePath();
+  c.fillStyle = gLG(c, gx - 34, 0, gx + 34, 0, [lit, md, dkc]); c.fill();
+  // long weathered grooves down the stone (line pairs following its spine), and dark pockets with a glimmer inside
+  for (let g = 0; g < 3; g++) {
+    const f = -0.55 + 0.55 * g + 0.2 * (hash2(g, j + q * 5 + 0xa15) - 0.5), Q = [];
+    for (let i = 0; i <= n; i++) Q.push([P[i][0] + f * P[i][2] + 2 * Math.sin(i * 0.9 + g * 2 + j), P[i][1]]);
+    gPair(c, Q, jellyC(gMix(R0, L.bot, 0.75), L, k, 0.5), jellyC(gMix(R0, L.moon, 0.3), L, k, 0.22), 1.1, -0.9);
+  }
+  for (let i = 0; i < 4; i++) {
+    const ii = 2 + Math.floor(hash2(i, j * 5 + q + 0xa16) * (n - 3)), x = P[ii][0] + (hash2(i, j + 0xa17) - 0.5) * P[ii][2], y = P[ii][1], r = 3 + 3 * hash2(i, j + q);
+    c.fillStyle = jellyC(gMix(R0, L.bot, 0.85), L, k, 0.85); jellyBlob(c, x, y, r, r * 0.75, 0, i + j * 9 + q, 6, 0.2); c.fill();
+    c.strokeStyle = jellyC(gMix(R0, L.moon, 0.35), L, k, 0.4); c.lineWidth = 0.8; c.beginPath(); c.ellipse(x, y, r, r * 0.75, 0, Math.PI * 1.1, Math.PI * 1.8); c.stroke();
+  }
+  // the moon's rim on its left side, a faint neon bounce on its right
+  const N = (JELLY_NEON[kind] || JELLY_NEON.shelf)[0];
+  c.strokeStyle = jellyC(gMix(R0, L.moon, 0.45), L, k, 0.55); c.lineWidth = 1.5; c.beginPath(); for (let i = 0; i <= n; i++) c.lineTo(edge(-1, i) + 1.2, P[i][1]); c.stroke();
+  c.strokeStyle = jellyC(N[q % 3], L, k, 0.14); c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i <= n; i++) c.lineTo(edge(1, i) - 1, P[i][1]); c.stroke();
+  // glowing polyps dotted over its face
+  for (let i = 0; i < 9; i++) { const ii = 1 + Math.floor(hash2(i, j * 3 + q + 0xa18) * (n - 1)), x = P[ii][0] + (hash2(i, j + 0xa19) - 0.5) * P[ii][2] * 1.4, y = P[ii][1] + (hash2(i, j + 0xa1a) - 0.5) * 14; jellyNeonDot(c, x, y, 0.8, N[i % 3], 0.6); }
+}
+function jellyTowerGrowths(c, j, q, u0, u1, L, k, kind) {
+  const [N, mix] = JELLY_NEON[kind] || JELLY_NEON.shelf, z = q === 1 ? 0.75 : 1;
+  const R0 = gMix(L.bot, L.rock, 0.17), dk = jellyC(gMix(R0, L.bot, 0.2), L, k), md = jellyC(gMix(R0, L.moon, 0.3), L, k, 0.7);
+  for (let jj = j - 1; jj <= j + 1; jj++) {
+    const { P, edge, n } = jellyTowerPts(jj, q, u0, u1);
+    for (let i = 1; i < n; i++) for (const sg of [-1, 1]) {
+      const h1 = hash2(jj * 40 + i * 2 + (sg > 0 ? 1 : 0), 0xa50 + q); if (h1 > 0.36) continue;
+      let r = hash2(jj * 40 + i, 0xa51 + q + sg), g = 0; while (g < 5 && r > mix[g]) { r -= mix[g]; g++; }
+      jellyFarGrowth(c, g, edge(sg, i) - sg * 4, P[i][1], sg, z, N, dk, md, (jj * 31 + i * 7 + q) & 1023);
+    }
+  }
+}
+// a far jelly's silhouette (any context): a soft dome with trailing threads
+function jellyFarJelly(c, x, y, r, col, L, k) {
+  c.fillStyle = jellyC(col, L, k, 0.45); c.beginPath(); c.moveTo(x - r, y); c.bezierCurveTo(x - r, y - r * 1.2, x + r, y - r * 1.2, x + r, y); c.closePath(); c.fill();
+  c.strokeStyle = jellyC(col, L, k, 0.5); c.lineWidth = 0.9; for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(x - r * 0.5 + i * r * 0.5, y); c.quadraticCurveTo(x - r * 0.3 + i * r * 0.5, y + r * 1.4, x - r * 0.6 + i * r * 0.5, y + r * 2.6); c.stroke(); }
+}
+function jellyFarPaint(c, sec, a0, a1, u0, u1) {
+  const L = JELLY_LIGHT[sec] || JELLY_LIGHT['Moonlit Shelf'], kind = JELLY_SET[sec] || 'shelf', j = Math.floor(a0 / JELLY_BB), K = 0.1, y0 = -(j + 1) * JELLY_BB, y1 = -j * JELLY_BB, W = u1 - u0;
+  // far clouds of tiny jellies (the swarms, the bloom, the mane deep's big hanging ones)
+  if (kind === 'swarm' || kind === 'bloom' || kind === 'mane' || kind === 'shelf') {
+    const n = kind === 'swarm' ? 26 : kind === 'mane' ? 6 : 12;
+    for (let q = 0; q < n; q++) { const x = u0 + W * hash2(q, j + 0xa24), y = y0 + (y1 - y0) * hash2(q, j + 0xa25), r = kind === 'mane' ? 9 + 6 * hash2(q, j) : 2.5 + 2.5 * hash2(q, j); jellyFarJelly(c, x, y, r, kind === 'mane' ? [255, 170, 100] : q % 3 ? L.glow : [255, 150, 220], L, 0.3); }
+  }
+  // the open blue: a far school of little fish
+  if (kind === 'open') { c.fillStyle = jellyC([150, 180, 240], L, 0.45, 0.6); const cx = u0 + W * (0.3 + 0.4 * hash2(j, 0xa26)), cy = y0 + 120 + 200 * hash2(j, 0xa27); for (let q = 0; q < 40; q++) { const a = q * 2.4, r = 40 * Math.sqrt(q / 40); const x = cx + Math.cos(a) * r * 1.6, y = cy + Math.sin(a) * r * 0.7; c.beginPath(); c.ellipse(x, y, 3.2, 1.2, 0.1, 0, TWO_PI); c.fill(); c.beginPath(); c.moveTo(x - 3, y); c.lineTo(x - 5.5, y - 1.5); c.lineTo(x - 5.5, y + 1.5); c.closePath(); c.fill(); } }
+  // the pinnacles (the middle one hazier), continuous across the joins, then their reef life
+  for (let q = 0; q < 3; q++) { const kq = K + (q === 1 ? 0.28 : 0); jellyTowerPaint(c, j, q, u0, u1, L, kq, kind); jellyTowerGrowths(c, j, q, u0, u1, L, kq, kind); }
+  // the grotto's arches: a bridge of rock between two towers, plankton glowing under it
+  if (kind === 'grotto' || (kind === 'pool' && j % 2 === 0)) {
+    const [xa] = jellyTowerAt(j, 0, u0, u1), [xb] = jellyTowerAt(j, 1, u0, u1), y = y0 + 180 + 80 * hash2(j, 0xa28);
+    const RA = gMix(L.bot, L.rock, 0.17), NA = (JELLY_NEON[kind] || JELLY_NEON.shelf)[0]; c.fillStyle = gLG(c, 0, y - 60, 0, y + 10, [jellyC(gMix(RA, L.moon, 0.18), L, K), jellyC(RA, L, K), jellyC(gMix(RA, L.bot, 0.4), L, K)]);
+    c.beginPath(); c.moveTo(xa, y - 18); c.quadraticCurveTo((xa + xb) / 2, y - 70, xb, y - 18); c.lineTo(xb, y + 10); c.quadraticCurveTo((xa + xb) / 2, y - 36, xa, y + 10); c.closePath(); c.fill();
+    for (let q = 0; q < 9; q++) { const u = 0.08 + 0.84 * q / 8, x = lerp(xa, xb, u), yb = y + 10 - 46 * 4 * u * (1 - u) * 0.98 + 2, Ln = 10 + 22 * hash2(q, j + 0xa2b); c.strokeStyle = jellyC(gMix(RA, NA[q % 3], 0.35), L, K, 0.8); c.lineWidth = 1; c.beginPath(); c.moveTo(x, yb); c.quadraticCurveTo(x + 3, yb + Ln * 0.5, x - 1, yb + Ln); c.stroke(); jellyNeonDot(c, x - 1, yb + Ln, 1.2, NA[q % 3], 0.85); }
+    c.strokeStyle = jellyC(gMix(RA, L.moon, 0.45), L, K, 0.55); c.lineWidth = 1.4; c.beginPath(); c.moveTo(xa, y - 18); c.quadraticCurveTo((xa + xb) / 2, y - 70, xb, y - 18); c.stroke();
+    c.fillStyle = jellyC(L.glow, L, 0.2, 0.5); for (let q = 0; q < 26; q++) { const x = lerp(xa, xb, hash2(q, j + 0xa29)), yy = y - 20 + 60 * hash2(q, j + 0xa2a) - 30 * Math.sin(Math.PI * (x - xa) / (xb - xa)); c.beginPath(); c.arc(x, yy, 1 + hash2(q, j), 0, TWO_PI); c.fill(); }
+  }
+  // a calm veil of haze over it all
+  c.fillStyle = jellyC(L.haze, L, 0, 0.12); c.fillRect(u0 - 10, y0, W + 20, y1 - y0);
+}
+// near: a big staghorn coral or a pair of sea whips reaching in from a side; soft and dim
+function jellyNearPaint(c, a0, a1, u0, u1, sec) {
+  const L = JELLY_LIGHT[sec] || JELLY_LIGHT['Moonlit Shelf'], j = Math.floor(a0 / JELLY_NB), k = 0.6, NN = (JELLY_NEON[JELLY_SET[sec]] || JELLY_NEON.shelf)[0];
+  if (hash2(j, 0xa31) < 0.3) return;
+  const side = hash2(j, 0xa32) < 0.5 ? 0 : 1, dd = side ? -1 : 1, x0 = side ? u1 + 6 : u0 - 6, y = -a1 + (hash2(j, 0xa34) < 0.55 ? 115 + 170 * hash2(j, 0xa33) : 200 + 85 * hash2(j, 0xa33));
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  if (hash2(j, 0xa34) < 0.55) {
+    // staghorn: a thick antler of coral out of the side, its branches tipped with glowing buds
+    const br = (x, yy, len, ang, w, dpt) => {
+      const ex = x + Math.cos(ang) * len, ey = yy + Math.sin(ang) * len;
+      c.strokeStyle = jellyC(gMix(L.rock, L.bot, 0.4), L, k); c.lineWidth = w + 2; c.beginPath(); c.moveTo(x, yy); c.lineTo(ex, ey); c.stroke();
+      c.strokeStyle = jellyC(L.rock, L, k); c.lineWidth = w; c.stroke();
+      c.strokeStyle = jellyC(gMix(L.rock, L.moon, 0.5), L, k, 0.6); c.lineWidth = w * 0.3; c.beginPath(); c.moveTo(x - 1, yy - w * 0.3); c.lineTo(ex - 1, ey - w * 0.3); c.stroke();
+      if (dpt < 3) { br(ex, ey, len * 0.7, ang - 0.45 - 0.2 * hash2(dpt, j), w * 0.7, dpt + 1); br(ex, ey, len * 0.66, ang + 0.4 + 0.2 * hash2(dpt + 4, j), w * 0.68, dpt + 1); }
+      else jellyNeonDot(c, ex, ey, 1.7, NN[dpt % 3], 0.8);
+    };
+    br(x0, y, 40, side ? -Math.PI + 0.5 : -0.5, 9, 0);
+  } else {
+    // sea whips: long thin wavy stems from the side, curving up
+    for (let q = 0; q < 3; q++) {
+      const yy = y + q * 14, P = []; for (let i = 0; i <= 10; i++) { const u = i / 10; P.push([x0 + dd * (70 + 20 * q) * Math.sin(u * 1.2), yy - 180 * u + 10 * Math.sin(u * 7 + q)]); }
+      c.strokeStyle = jellyC([150, 70, 140], L, k); c.lineWidth = 3 - q * 0.5; gPoly(c, P, false); c.stroke();
+      c.strokeStyle = jellyC([255, 170, 220], L, k, 0.5); c.lineWidth = 0.8; gPoly(c, P.map(([x, yv]) => [x - 0.8, yv]), false); c.stroke();
+      for (let i = 4; i <= 10; i += 3) jellyNeonDot(c, P[i][0], P[i][1], i === 10 ? 1.6 : 1, NN[(q + i) % 3], 0.7);
+    }
+  }
+}
+function jellyRooms() {
+  const ss = (G.level && G.level.sections) || [], m = G.camAlt + viewH / 2, i = jellySecIdx(m), W = 300, nm = q => (ss[q] && ss[q].name) || 'Moonlit Shelf';
+  if (ss[i + 1] && m > ss[i + 1].a0 - W) return { a: nm(i), b: nm(i + 1), k: smooth(ss[i + 1].a0 - W, ss[i + 1].a0 + W, m), nx: null };
+  if (i > 0 && m < ss[i].a0 + W) return { a: nm(i - 1), b: nm(i), k: smooth(ss[i].a0 - W, ss[i].a0 + W, m), nx: null };
+  return { a: nm(i), b: null, k: 0, nx: ss[i + 1] && m > ss[i + 1].a0 - W - 900 ? nm(i + 1) : null };
+}
+// a soft beam of moonlight (screen space, cached once): a tall tapering gradient
+let jellyBeamCv = null;
+function jellyBeam() {
+  if (jellyBeamCv) return jellyBeamCv;
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 256; const q = cv.getContext('2d');
+  const g = q.createLinearGradient(0, 0, 64, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  q.fillStyle = g; q.fillRect(0, 0, 64, 256);
+  q.globalCompositeOperation = 'destination-in'; const v = q.createLinearGradient(0, 0, 0, 256); v.addColorStop(0, 'rgba(0,0,0,1)'); v.addColorStop(1, 'rgba(0,0,0,0)'); q.fillStyle = v; q.fillRect(0, 0, 64, 256);
+  return (jellyBeamCv = cv);
+}
+// a manta's far shadow (cached): a soft ray silhouette
+function jellyShadowSprite() {
+  return jellySprite('mshadow', 90, 100, 45, 50, c => {
+    c.fillStyle = 'rgba(8,10,40,.55)'; c.beginPath(); c.moveTo(30, 0); c.bezierCurveTo(20, -30, -10, -46, -18, -46); c.bezierCurveTo(-12, -24, -28, -8, -36, 0); c.bezierCurveTo(-28, 8, -12, 24, -18, 46); c.bezierCurveTo(-10, 46, 20, 30, 30, 0); c.fill();
+    c.strokeStyle = 'rgba(8,10,40,.45)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-34, 0); c.lineTo(-44, 1); c.stroke();
+  });
+}
+function jellyDrawBackground() {
+  jellyCacheCheck(); jellyMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = jellyXSpan();
+  const L = jellyLightAt(G.camAlt + viewH / 2), R = jellyRooms();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, [gCol(L.top), gCol(gMix(L.top, L.bot, 0.55)), gCol(L.bot)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // the moon's shafts slanting down from far above, slowly swaying
+  { const bm = jellyBeam(); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 4; i++) { const x = cssW * (0.12 + 0.27 * i) + Math.sin(T * 0.13 + i * 2) * 20, w = (50 + 30 * (i % 2)) * s, a = 0.075 + 0.03 * Math.sin(T * 0.4 + i * 1.7);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(x, -20); ctx.rotate(0.18 + 0.03 * Math.sin(T * 0.1 + i)); ctx.drawImage(bm, -w / 2, 0, w, H * 1.25); ctx.restore(); }
+    ctx.restore(); }
+  const layer = (f, tag, paint, B, sec, al) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${sec}|${j}`, need = al > 0.01 && j <= Math.floor(pa1 / B);
+      if (!need && (jellyMade || JELLYC.tiles.has(id))) continue;
+      if (!JELLYC.tiles.has(id)) jellyMade++;
+      const Tl = jellyTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1, sec));
+      if (need) { ctx.globalAlpha = al; jellyTileBlit(Tl, f); ctx.globalAlpha = 1; }
+    }
+  };
+  const rooms = R.b ? [[R.a, 1], [R.b, R.k]] : [[R.a, 1]];
+  if (R.nx) rooms.push([R.nx, 0]);
+  jellyDrawSchools(L);
+  for (const [sec, al] of rooms) layer(JELLY_FAR, 'f', (c, a0, a1, x0, x1, sc) => jellyFarPaint(c, sc, a0, a1, x0, x1), JELLY_BB, sec, al);
+  // live: far jellies drifting and pulsing, and now and then a manta's shadow gliding through the far water
+  {
+    const sec = R.b && R.k > 0.5 ? R.b : R.a, kind = JELLY_SET[sec], gl = jellyGlowCv(L.glow), gp = jellyGlowCv([255, 130, 220]);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 7; i++) {
+      const sp = 0.012 + 0.01 * hash2(i, 0xa41), x = ox + playW * pmod(hash2(i, 0xa42) + T * sp * (i % 2 ? 1 : -1), 1.2) - 0.1 * playW, y = pmod(hash2(i, 0xa43) * H * 1.6 - G.camAlt * 0.09 * s + T * 4, H + 80) - 40, r = (6 + 5 * hash2(i, 0xa44)) * s, pu = 0.6 + 0.4 * Math.sin(T * 1.5 + i * 2);
+      ctx.globalAlpha = 0.18 * pu; ctx.drawImage(i % 3 ? gl : gp, x - r * 2.4, y - r * 2.4, r * 4.8, r * 4.8);
+      ctx.globalAlpha = 0.22 * pu; ctx.fillStyle = i % 3 ? gCol(L.glow) : 'rgb(255,150,220)'; ctx.beginPath(); ctx.moveTo(x - r, y); ctx.bezierCurveTo(x - r, y - r * 1.1 * pu, x + r, y - r * 1.1 * pu, x + r, y); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    const every = kind === 'open' ? 9 : 19, u = pmod(T / every, 1), j = Math.floor(T / every);
+    if (u < 0.55) { const k = u / 0.55, d = j % 2 ? 1 : -1, x = ox + playW * (d > 0 ? lerp(-0.3, 1.3, k) : lerp(1.3, -0.3, k)), y = H * (0.25 + 0.4 * hash2(j, 0xa45)) + Math.sin(k * 6) * 10 * s; jellyBlitAt(jellyShadowSprite(), x, y, Math.sin(k * 6) * 0.05, d, 0.38, 1.1 + 0.3 * hash2(j, 0xa46)); }
+  }
+  for (const [sec, al] of rooms) layer(JELLY_NEAR, 'n', jellyNearPaint, JELLY_NB, sec, al);
+  jellyDrawDrifters(R.b && R.k > 0.5 ? R.b : R.a);
+  jellyDrawMotes();
+  jellyMade = 0;
+}
+// schools of tiny glowing fish far back (two cached schools wheeling slowly across the deep, behind the pinnacles)
+function jellySchoolSprite(v) {
+  return jellySprite(`school${v}`, 150, 70, 75, 35, c => {
+    for (let i = 0; i < 28; i++) {
+      const a = i * 2.39996 + v, r = 30 * Math.sqrt((i + 0.5) / 28), x = Math.cos(a) * r * 1.9, y = Math.sin(a) * r * 0.75 + Math.sin(x * 0.06) * 4, k = 0.8 + 0.4 * hash2(i, v);
+      c.fillStyle = 'rgba(150,240,255,.18)'; c.beginPath(); c.arc(x, y, 3.2 * k, 0, TWO_PI); c.fill();
+      c.fillStyle = v % 2 ? 'rgba(255,200,240,.9)' : 'rgba(200,250,255,.9)'; c.beginPath(); c.ellipse(x, y, 2.4 * k, 0.9 * k, 0.08, 0, TWO_PI); c.fill();
+      c.beginPath(); c.moveTo(x - 2 * k, y); c.lineTo(x - 3.8 * k, y - 1.1 * k); c.lineTo(x - 3.8 * k, y + 1.1 * k); c.closePath(); c.fill();
+    }
+  });
+}
+function jellyDrawSchools(L) {
+  const T = G.t;
+  for (let i = 0; i < 2; i++) {
+    const per = 70 + 20 * i, u = pmod(T / per + i * 0.5, 1), d = i ? -1 : 1, x = ox + playW * (d > 0 ? lerp(-0.4, 1.4, u) : lerp(1.4, -0.4, u)), y = pmod(H * (0.3 + 0.35 * i) - G.camAlt * 0.04 * s, H + 160 * s) - 80 * s;
+    jellyBlitAt(jellySchoolSprite(i), x, y + Math.sin(T * 0.5 + i) * 10 * s, Math.sin(T * 0.3 + i) * 0.06, d, 0.55, 0.8 + 0.2 * Math.sin(T * 0.4 + i * 2), 0.8);
+  }
+}
+// harmless life drifting in the shaft's water behind everything that matters: small pale jellies pulsing slowly
+// upward (more of them in the deep sections and the gauntlet), drawn small and dim so they never read as a trap
+function jellyDrawDrifters(sec) {
+  const kind = JELLY_SET[sec] || 'shelf', n = kind === 'bloom' ? 5 : kind === 'mane' || kind === 'pool' ? 3 : kind === 'swarm' ? 0 : 2, T = G.t;
+  for (let i = 0; i < n; i++) {
+    const sp = 9 + 5 * hash2(i, 0xa61), x = ox + playW * (0.15 + 0.7 * hash2(i, 0xa62)) + Math.sin(T * 0.25 + i * 2.1) * 26 * s, y = pmod(hash2(i, 0xa63) * (H + 200) - T * sp * s + G.camAlt * 0.35 * s, H + 200) - 100;
+    const pu = Math.floor(pmod(T * 0.9 + i * 0.37, 1) * 4), wv = Math.floor(pmod(T * 3 + i, 8));
+    jellyBlitAt(jellyMoonSprite(pu, wv, i % 2), x, y, Math.sin(T * 0.6 + i) * 0.15, 1, 0.42, 0.42);
+    jellyGlow(ctx, x, y, 14 * s, i % 2 ? [255, 150, 230] : [140, 230, 255], 0.22);
+  }
+}
+// marine snow drifting down and plankton twinkling in the night water (motes)
+MOTE_DRIFT.jlmote = [8, -14];
+{ const base = moteKind; moteKind = function (m, a) { return jellyOn() ? 'jlmote' : base(m, a); }; }
+function jellyDrawMotes() {
+  const T = G.t, gc = jellyGlowCv([120, 240, 255]), gp = jellyGlowCv([255, 130, 220]);
+  for (const m of motes) {
+    const mx = ox + m.x * playW + Math.sin(T * 0.4 + m.ph) * 8 * s, y = m.y, r = (0.9 + m.sz * 0.5) * s * (0.6 + m.depth * 0.6);
+    if (m.r < 0.32) {   // a plankton spark, twinkling cyan or pink
+      const tw = Math.max(0, Math.sin(T * 1.7 + m.ph * 3));
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.2 + 0.35 * m.depth) * tw; const g = m.r < 0.12 ? gp : gc; ctx.drawImage(g, mx - r * 5, y - r * 5, r * 10, r * 10); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.3 + 0.6 * tw; ctx.fillStyle = m.r < 0.12 ? '#ffd8f4' : '#d8ffff'; ctx.beginPath(); ctx.arc(mx, y, r * 0.6, 0, TWO_PI); ctx.fill();
+    } else {   // a fleck of marine snow
+      ctx.globalAlpha = 0.12 + 0.22 * m.depth; ctx.fillStyle = '#d8d4f4'; ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- The Moon Pool: the finish ----
+// At the top of the reef the column opens into a round coral grotto: an amphitheatre of heaped coral rock and brain
+// coral domes, its roof open to a round window of moonlit water where the moon's light pours in, tube sponges and
+// anemones glowing round its walls, sea fans either side. On a pedestal of stacked plate coral sits a giant scalloped
+// clam holding the great Moon Pearl, and above it hovers Luna, a huge friendly moon jelly with a crown of glowing buds,
+// pulsing slowly, her tentacles swaying. On the clear the clam yawns wide and the pearl flares, Luna gives a big happy
+// pulse, a ring of light runs out through the grotto and a rush of bubbles fills it.
+const JELLY_FIN = { half: 176, wall: 300, dome: 190 };
+function jellyApse(c) { const F = JELLY_FIN; c.beginPath(); c.moveTo(-F.half, 0); c.lineTo(-F.half, -F.wall); c.ellipse(0, -F.wall, F.half, F.dome, 0, Math.PI, TWO_PI); c.lineTo(F.half, 0); c.closePath(); }
+function jellyChamberSprite() {
+  const F = JELLY_FIN;
+  return jellySprite('chamber', 440, 560, 220, 520, c => {
+    const L = JELLY_LIGHT['The Moon Pool'], R = JELLY_REEF['The Moon Pool'];
+    c.save(); jellyApse(c); c.clip();
+    // the grotto's back wall: deep moonlit water, a pool of silver light at its heart
+    c.fillStyle = gLG(c, 0, -F.wall - F.dome, 0, 0, ['#5a5aa8', '#34307a', '#1c1848']); c.fillRect(-F.half, -F.wall - F.dome, F.half * 2, F.wall + F.dome);
+    c.fillStyle = gRG(c, 0, -260, 210, ['rgba(220,226,255,.45)', 'rgba(160,170,240,.16)', 'rgba(120,120,220,0)']); c.fillRect(-F.half, -F.wall - F.dome, F.half * 2, F.wall + F.dome);
+    // the moon window in the roof: a round opening onto bright water, its light falling in a broad beam
+    c.fillStyle = gRG(c, 0, -F.wall - 60, 80, ['#ffffff', '#e8ecff', '#a8b0f0', '#5a5ab0']); c.beginPath(); c.ellipse(0, -F.wall - 64, 74, 56, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = gLG(c, 0, -F.wall - 40, 0, -40, ['rgba(230,236,255,.35)', 'rgba(230,236,255,.12)', 'rgba(230,236,255,0)']); c.beginPath(); c.moveTo(-60, -F.wall - 50); c.lineTo(60, -F.wall - 50); c.lineTo(120, -30); c.lineTo(-120, -30); c.closePath(); c.fill();
+    // ripples of the surface far above, seen through the window
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.2; for (let k = 0; k < 4; k++) { c.beginPath(); c.ellipse(0, -F.wall - 64 + k * 6 - 8, 50 - k * 8, 8 - k, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); }
+    // the grotto's walls: heaped coral rock round the window and down both sides
+    const rock = (x, y, r, k2) => { const col = gMix(R.rock, R.deep, k2); c.fillStyle = gRG(c, x - r * 0.4, y - r * 0.5, r * 1.5, [gCol(gMix(col, R.rim, 0.35)), gCol(col), gCol(gMix(col, R.deep, 0.55))]); c.beginPath(); c.ellipse(x, y, r, r * 0.82, 0, 0, TWO_PI); c.fill(); c.strokeStyle = gCol(gMix(col, R.deep, 0.7), 0.7); c.lineWidth = 0.8; c.beginPath(); c.ellipse(x, y, r, r * 0.82, 0, 0.2, Math.PI - 0.2); c.stroke(); c.strokeStyle = gCol(R.rim, 0.45); c.lineWidth = 1; c.beginPath(); c.ellipse(x, y, r * 0.84, r * 0.66, 0, Math.PI * 1.15, Math.PI * 1.6); c.stroke(); };
+    for (let k = 0; k < 18; k++) { const an = Math.PI * (1.02 + 0.96 * k / 17), x = Math.cos(an) * (F.half - 10), y = -F.wall + Math.sin(an) * (F.dome - 6); rock(x, y, 26 + 8 * hash2(k, 1), 0.2); }
+    for (let k = 0; k < 14; k++) { const ring = Math.PI * (1.08 + 0.84 * k / 13), x = Math.cos(ring) * 92, y = -F.wall - 64 + Math.sin(ring) * 72; if (y < -F.wall - 64 - 30) rock(x, y, 16 + 6 * hash2(k, 2), 0.05); }
+    for (const e of [-1, 1]) for (let k = 0; k < 9; k++) { const y = -20 - k * 34, x = e * (F.half - 16 - 10 * hash2(k, e + 3)); rock(x, y, 22 + 8 * hash2(k, e + 4), 0.25); }
+    // brain-coral domes and tube sponges on the side walls, sea fans, anemones
+    for (const e of [-1, 1]) {
+      jellyBrain(c, e * 136, -230, 16, R.brain, 3 + e); jellyBrain(c, e * 128, -120, 13, R.brain, 5 + e);
+      jellyTubes(c, e * 140, -170, 4, -e, gMix(R.brain, R.rock, 0.3), e > 0 ? R.acc2 : R.acc, 11 + e);
+      jellyTubes(c, e * 146, -60, 3, -e, gMix(R.brain, R.rock, 0.3), e > 0 ? R.acc : R.acc2, 17 + e);
+      jellyFan(c, e * 120, -280, 30, -e * 0.35, [255, 170, 230]);
+      jellyPolyps(c, e * 112, -200, 6, R.acc, 23 + e); jellyPolyps(c, e * 150, -96, 5, R.acc2, 29 + e);
+      for (let m = 0; m < 2; m++) { const ax = e * (104 + m * 14), ay = -18 - m * 4; for (let t2 = 0; t2 < 9; t2++) { const an = -Math.PI / 2 + (t2 - 4) * 0.2; c.strokeStyle = m ? '#ff8ad4' : '#ff6ac8'; c.lineWidth = 2.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo(ax + Math.cos(an) * 8, ay + Math.sin(an) * 8, ax + Math.cos(an) * 14, ay + Math.sin(an) * 15); c.stroke(); c.fillStyle = '#e8ffff'; c.beginPath(); c.arc(ax + Math.cos(an) * 14, ay + Math.sin(an) * 15, 1.2, 0, TWO_PI); c.fill(); } }
+    }
+    // the pedestal: stacked plate coral, each tier lit along its top
+    for (const [y, w, hh] of [[-10, 74, 12], [-28, 60, 11], [-44, 46, 10]]) {
+      c.fillStyle = gLG(c, 0, y - hh, 0, y + hh, ['#e6dcff', '#9a86e0', '#4a3a9a']); c.beginPath(); c.ellipse(0, y, w, hh, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#3a2a7a'; c.lineWidth = 1; c.stroke();
+      c.strokeStyle = 'rgba(250,246,255,.8)'; c.lineWidth = 1.3; c.beginPath(); c.ellipse(0, y, w * 0.94, hh * 0.8, 0, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+      for (let k = -3; k <= 3; k++) gPair(c, [[k * w * 0.12, y - hh * 0.2], [k * w * 0.2, y + hh * 0.8]], 'rgba(40,24,100,.45)', 'rgba(230,220,255,.4)', 0.9, -0.7);
+    }
+    c.restore();
+    // the grotto's rim: a lip of coral rock round the apse edge
+    c.save(); jellyApse(c); c.strokeStyle = gCol(gMix(R.rock, R.rim, 0.3)); c.lineWidth = 8; c.stroke(); c.strokeStyle = gCol(R.rim, 0.6); c.lineWidth = 1.4; c.stroke(); c.restore();
+  });
+}
+// the clam (anchored at the middle of its rim): its lower shell, a scalloped bowl with ribs as line pairs; its open lid
+// behind (k how far open, quantised), a scalloped fan of pale nacre inside a pink shell
+function jellyClamShell(up, k) {
+  const q = Math.round(k * 8);
+  return jellySprite(`clam${up ? 1 : 0}_${up ? q : 0}`, 136, 110, 68, 70, c => {
+    const P = JELLYP.shell, rim = n => { for (let i = 0; i <= 12; i++) { const x = 60 - 120 * i / 12; c.lineTo(x, (i % 2 ? -3 : 0) * n); } };
+    if (!up) {
+      c.beginPath(); c.moveTo(-60, 0); c.bezierCurveTo(-56, 26, -24, 36, 0, 36); c.bezierCurveTo(24, 36, 56, 26, 60, 0); rim(1); c.closePath();
+      c.fillStyle = gRG(c, -20, -6, 70, [P[0], P[1], P[2], P[3]]); c.fill();
+      c.strokeStyle = JELLYP.shellEdge; c.lineWidth = 1.2; c.stroke();
+      for (let i = 1; i < 12; i++) { const x = 60 - 120 * i / 12; gPair(c, [[x, 0], [x * 0.35, 32]], 'rgba(90,20,80,.4)', 'rgba(255,230,250,.5)', 1.2, -0.9); }
+      c.strokeStyle = 'rgba(255,240,252,.8)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-54, 2); c.quadraticCurveTo(-30, 6, -10, 5); c.stroke();
+    } else {
+      const ry = 14 + 46 * (q / 8);
+      c.beginPath(); c.moveTo(-60, 0); for (let i = 0; i <= 14; i++) { const an = Math.PI + Math.PI * i / 14, r = i % 2 ? 1.05 : 1; c.lineTo(Math.cos(an) * 60 * r, Math.sin(an) * ry * r); } c.closePath();
+      c.fillStyle = gRG(c, -10, -ry * 0.4, 70, ['#fffaff', '#f6e0f6', '#d8a8dc', '#a06aa8']); c.fill();
+      c.strokeStyle = JELLYP.shellEdge; c.lineWidth = 1.2; c.stroke();
+      for (let i = 1; i < 14; i++) { const an = Math.PI + Math.PI * i / 14; gPair(c, [[0, 0], [Math.cos(an) * 56, Math.sin(an) * ry * 0.93]], 'rgba(150,90,160,.35)', 'rgba(255,255,255,.6)', 1, -0.7); }
+      c.strokeStyle = gCol(jellyHex(P[1]), 0.9); c.lineWidth = 4; c.beginPath(); c.ellipse(0, 0, 60, ry, 0, Math.PI, TWO_PI); c.stroke();
+    }
+  });
+}
+function jellyBigPearl() { return jellySprite('bigpearl', 34, 34, 17, 17, c => jellyBall(c, 0, 0, 13, JELLYP.pearl, JELLYP.pearlEdge, 0.7)); }
+// Luna, the great moon jelly: her bell (frames: pulse 0..5, happy 0/1), anchored at her bell's centre
+function jellyLunaSprite(pulse, happy) {
+  return jellySprite(`luna${pulse}_${happy}`, 200, 150, 100, 80, c => {
+    c.save(); c.scale(3.4, 3.4); jellyMoonPaintBell(c, pulse / 5, happy); c.restore();
+  });
+}
+// a moon jelly's bell only (for Luna; any context): pulse 0..1 squeeze, happy closed-eye smile, a crown of glowing buds
+function jellyMoonPaintBell(c, pulse, happy) {
+  const sq = 1 - 0.12 * pulse, w = 20 * sq, top = -19 * (2 - sq), rim = 6;
+  const dome = () => { c.beginPath(); c.moveTo(-w, rim); c.bezierCurveTo(-w * 1.05, top * 0.4, -w * 0.62, top, 0, top); c.bezierCurveTo(w * 0.62, top, w * 1.05, top * 0.4, w, rim);
+    for (let k = 11; k >= 0; k--) { const xa = -w + 2 * w * (k + 1) / 12, xb = -w + 2 * w * k / 12; c.quadraticCurveTo((xa + xb) / 2, rim + 2.6, xb, rim); } c.closePath(); };
+  c.fillStyle = gRG(c, -w * 0.35, top * 0.7, w * 1.7, ['rgba(250,250,255,.97)', 'rgba(190,220,255,.86)', 'rgba(170,150,240,.82)', 'rgba(110,90,200,.82)']); dome(); c.fill();
+  for (const [gx, gy, gr, ga] of [[0, -8, 5.4, 0], [-10, -4, 4, -0.5], [10, -4, 4, 0.5]]) {
+    c.strokeStyle = 'rgba(255,140,214,.85)'; c.lineWidth = 2; c.beginPath(); c.arc(gx, gy, gr, Math.PI * 0.85 + ga, Math.PI * 2.15 + ga); c.stroke();
+    c.strokeStyle = 'rgba(255,245,252,.7)'; c.lineWidth = 0.6; c.beginPath(); c.arc(gx - 0.3, gy - 0.6, gr, Math.PI * 1.05 + ga, Math.PI * 1.8 + ga); c.stroke();
+  }
+  for (let k = -3; k <= 3; k++) gPair(c, [[k * 3.6, top * 0.84], [k * 6.4, rim - 1]], 'rgba(80,70,190,.22)', 'rgba(255,255,255,.25)', 0.6, -0.5);
+  c.strokeStyle = '#4a3aa0'; c.lineWidth = 0.6; dome(); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.ellipse(0, rim, w * 0.8, (rim - top) * 0.86, 0, Math.PI * 1.12, Math.PI * 1.4); c.stroke();
+  c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-w * 0.42, top * 0.64, 1.9, 1, -0.6, 0, TWO_PI); c.fill();
+  // her crown: glowing buds round the top of the bell
+  for (let k = 0; k < 7; k++) { const an = Math.PI * (1.2 + 0.6 * k / 6), x = Math.cos(an) * w * 0.55, y = top * 0.15 + Math.sin(an) * (rim - top) * 0.78; c.fillStyle = 'rgba(255,190,240,.45)'; c.beginPath(); c.arc(x, y, 1.6, 0, TWO_PI); c.fill(); c.fillStyle = '#fff6fc'; c.beginPath(); c.arc(x, y, 0.7, 0, TWO_PI); c.fill(); }
+  // her face: big gentle eyes (or happy closed arcs), a smile, blush
+  const ey = -4 + pulse;
+  if (happy) { for (const e of [-1, 1]) { c.strokeStyle = '#2a1a6a'; c.lineWidth = 1; c.beginPath(); c.arc(e * 5.6, ey + 1, 2.2, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); } }
+  else jellyEyes(c, 0, ey, 2.4, 0, 0.25, '#4a6ae0', 2.3, 'rgba(200,170,250,.95)');
+  for (const e of [-1, 1]) { c.fillStyle = 'rgba(255,120,200,.4)'; c.beginPath(); c.ellipse(e * 10, ey + 3.6, 2.6, 1.3, 0, 0, TWO_PI); c.fill(); }
+  c.strokeStyle = '#2a1a6a'; c.lineWidth = 0.8; c.beginPath(); c.arc(0, ey + 2.6, happy ? 2.6 : 1.8, 0.15, Math.PI - 0.15); c.stroke();
+}
+function jellyDrawLuna() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'jelly')) return;
+  const E = a.end; if (sy(E + 560) > H + 40 || sy(E - 60) < -40) return;
+  const T = G.t, won = a.clearT >= 0, pay = won ? smooth(0, 1, a.clearT) : 0, cx = sx(WORLD_W / 2);
+  jellyGlow(ctx, cx, sy(E + 240), (230 + 80 * pay) * s, [190, 200, 255], 0.22 + 0.2 * pay);
+  jellyBlit(jellyChamberSprite(), WORLD_W / 2, E);
+  // the window's moonlight shimmering
+  { const k = 0.5 + 0.5 * Math.sin(T * 0.9); jellyGlow(ctx, cx, sy(E + 364), (80 + 10 * k) * s, [230, 236, 255], 0.35 + 0.1 * k + 0.3 * pay); }
+  // the polyps and sponges round the grotto breathing their glow (a ring of light running round it on the clear)
+  {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gc = jellyGlowCv([120, 230, 255]), gp = jellyGlowCv([255, 130, 220]);
+    for (let k = 0; k < 14; k++) { const e = k % 2 ? 1 : -1, y = E + 40 + (k >> 1) * 36, x = WORLD_W / 2 + e * (140 - 10 * Math.sin(k)), wave = won ? Math.max(0, 1 - Math.abs((y - E) / 70 - a.clearT * 3)) : 0, r = (16 + 14 * wave) * s;
+      ctx.globalAlpha = Math.min(1, 0.22 + 0.1 * Math.sin(T * 1.8 + k) + 0.7 * wave); ctx.drawImage(k % 3 ? gc : gp, sx(x) - r, sy(y) - r, r * 2, r * 2); }
+    ctx.restore();
+  }
+  // the clam on its pedestal, the Moon Pearl glowing inside (the upper shell yawns on the clear)
+  const ca = E + 72, open = 0.35 + 0.08 * Math.sin(T * 0.8) + 0.5 * pay;
+  jellyBlit(jellyClamShell(true, open), WORLD_W / 2, ca);
+  const px = cx, py = sy(ca + 12);
+  jellyGlow(ctx, px, py, (50 + 40 * pay) * s, [255, 200, 245], 0.6 + 0.3 * pay + 0.1 * Math.sin(T * 2));
+  jellyBlitAt(jellyBigPearl(), px, py, 0, 1, 1, 1 + 0.15 * pay);
+  jellyBlit(jellyClamShell(false, 0), WORLD_W / 2, ca);
+  // Luna: she hovers, pulsing slowly; her tentacles sway behind the clam; on the clear a big happy pulse
+  const pulse = won ? Math.abs(Math.sin(T * 4)) * (1 - smooth(2, 5, a.clearT)) : 0.5 + 0.5 * Math.sin(T * 1.6), la = E + 250 + 8 * Math.sin(T * 0.8) + 30 * pay, LX = cx, LY = sy(la);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 9; i++) {
+    const x0 = LX + (-48 + 12 * i) * s, P = [];
+    for (let k = 0; k <= 8; k++) { const u = k / 8; P.push([x0 + Math.sin(T * 1.3 + i * 0.9 + u * 4) * 10 * s * u, LY + (18 + 120 * u) * s]); }
+    ctx.strokeStyle = i % 2 ? 'rgba(190,220,255,.5)' : 'rgba(255,170,230,.45)'; ctx.lineWidth = 2.2 * s; gPoly(ctx, P, false); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 0.7 * s; ctx.stroke();
+  }
+  for (const e of [-1, 1]) { const P = []; for (let k = 0; k <= 6; k++) { const u = k / 6; P.push([LX + (e * 8 + Math.sin(T * 1.5 + e + u * 4) * 8 * u) * s, LY + (16 + 70 * u) * s, (5 - 2 * u + 1.6 * Math.sin(u * 12 + T * 2)) * s]); } jellyTube(ctx, P, 'rgba(255,170,226,.82)', 'rgba(160,50,140,.6)', 'rgba(255,240,250,.7)', 0.6 * s); }
+  jellyGlow(ctx, LX, LY, 110 * s, [200, 200, 255], 0.3 + 0.2 * pulse + 0.25 * pay);
+  jellyBlitAt(jellyLunaSprite(Math.round(pulse * 5), won ? 1 : 0), LX, LY);
+}
+function jellyDrawMidground() { jellyDrawLuna(); }
+
+// ---- the landing: plate-coral shelves grow out of the walls to meet under you, glowing tube-sponge lamps at the walls
+function jellyDeckSeg() {
+  return jellySprite('deckseg', 24, 18, 0, 6, c => {
+    c.fillStyle = gLG(c, 0, -6, 0, 8, ['#d8ccff', '#8a74d8', '#4a3a98']); c.fillRect(0, -6, 24, 13);
+    c.fillStyle = 'rgba(250,246,255,.7)'; c.fillRect(0, -6, 24, 1.2);
+    for (const [x, r] of [[3, 2.6], [9, 2], [14.5, 2.8], [20.5, 2.2]]) { c.fillStyle = gRG(c, x - 0.8, -6.5, r * 1.4, ['#f0eaff', '#b4a2ec', '#7a64c4']); c.beginPath(); c.arc(x, -5.2, r, Math.PI, TWO_PI); c.fill(); }
+    c.strokeStyle = 'rgba(250,246,255,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(0, -6); c.quadraticCurveTo(6, -8, 12, -6.5); c.quadraticCurveTo(18, -8.4, 24, -6); c.stroke();
+    for (let k = 0; k < 4; k++) gPair(c, [[k * 6 + 1, -2], [k * 6 + 4, 6]], 'rgba(40,24,100,.4)', 'rgba(230,220,255,.35)', 0.8, -0.6);
+    c.fillStyle = '#3a2a7a'; for (let x = 2; x < 24; x += 5) { c.beginPath(); c.moveTo(x, 7); c.lineTo(x + 2.4, 7); c.lineTo(x + 1.2, 10); c.closePath(); c.fill(); }
+  });
+}
+function jellyDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, seg = jellyDeckSeg();
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, tip = lerp(w - side * 4, meet - side * 0.5, e), x0 = Math.min(w, tip), x1 = Math.max(w, tip);
+    if (e > 0.04 && x1 - x0 > 2) {
+      ctx.save(); ctx.beginPath(); ctx.rect(sx(x0), y - 10 * s, (x1 - x0) * s, 30 * s); ctx.clip();
+      for (let x = side < 0 ? tip - 24 * Math.ceil((tip - w) / 24) : tip; x < x1; x += 24) jellyBlitAt(seg, sx(x), y);
+      ctx.restore();
+      ctx.save(); ctx.translate(sx(tip), y); ctx.scale(s, s); jellyBall(ctx, 0, 0, 6, JELLYP.coral, JELLYP.coralEdge, 0.5); ctx.restore();
+    }
+    // a tube-sponge lamp at each wall, its rim glowing, flaring on the clear
+    const lx = w - side * 9, la = E + 26;
+    ctx.save(); ctx.translate(sx(lx), sy(E + 2)); ctx.scale(s, s); jellyTubes(ctx, 0, 0, 3, -side, [150, 120, 220], side < 0 ? [120, 236, 255] : [255, 130, 220], 77 + side); ctx.restore();
+    jellyGlow(ctx, sx(lx), sy(la), (18 + 16 * pay) * s, side < 0 ? [120, 236, 255] : [255, 130, 220], 0.5 + 0.12 * Math.sin(T * 3 + side) + 0.3 * pay);
+  }
+}
+function jellyLunaBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  for (let k = 0; k < 26; k++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, v = 120 + Math.random() * 240; puff(WORLD_W / 2 + (Math.random() - 0.5) * 120, a.end + 80, Math.cos(an) * v, -Math.sin(an) * v, 0.9 + Math.random() * 0.9, 1.6 + Math.random() * 1.8, 'sparkle', [[255, 200, 245], [170, 240, 255], [240, 240, 255]][k % 3]); }
+  for (const e of [-1, 0, 1]) jellyBubbles(WORLD_W / 2 + e * 110, a.end + 30, 12, 160, 120, 1);
+  sfx('jlfinish');
+}
+
+// ---- light, speed and the foreground ----
+// the night water's light: an indigo vignette at the edges (never black), the moon from straight above, the Moon
+// Pool's silver glow as you near the finish
+function jellyDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.8);
+  vg.addColorStop(0, 'rgba(14,8,50,0)'); vg.addColorStop(1, 'rgba(14,8,50,.38)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const L = jellyLightAt(G.camAlt + viewH / 2);
+  const sg = ctx.createRadialGradient(cssW * 0.45, -40, 10, cssW * 0.45, -40, Math.max(cssW, H) * 0.75); sg.addColorStop(0, gCol(L.moon, 0.13)); sg.addColorStop(0.6, gCol(L.moon, 0.03)); sg.addColorStop(1, gCol(L.moon, 0)); ctx.fillStyle = sg; ctx.fillRect(X0, Y0, WW, HH);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'jelly') {
+    const ha = a.end + 220, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(210,215,255,${(0.1 + 0.14 * pay) * k})`); g.addColorStop(0.5, `rgba(180,150,255,${0.05 * k})`); g.addColorStop(1, 'rgba(180,150,255,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: water streaming past the walls and bubbles rushing down the shaft
+function jellyDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(5 * k); i++) {
+    const j = hash2(i + side * 31, 0xe31), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xe32) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(jellyWallX(a, side)) + (side ? -1 : 1) * (10 + 14 * j) * s, len = (24 + 100 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol([170, 210, 255], (0.05 + 0.14 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.4 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  const n = 4 + Math.round(12 * k * k), S = jellyBubbleSprite();
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xe33)) + Math.sin(G.t * 3 + i) * 4 * s, r = (2 + 2.5 * hash2(i, 0xe34)) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xe35)) + hash2(i, 0xe36) * H * 2) % (H + 200)) - 100;
+    ctx.globalAlpha = 0.3 + 0.4 * k * hash2(i, 0xe37); ctx.drawImage(S.cv, x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+// Foreground: a sea whip or a frond of soft coral close to the camera at the screen's edges (in indigo shade with lit
+// edges), fading back when a trap or you are near
+function jellyFgSprite(side, v) {
+  return jellySprite(`fg${side}_${v}`, 80, 200, side ? 70 : 10, 100, c => {
+    const d = side ? -1 : 1;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (v === 0) {
+      // a soft-coral frond curling up from below the screen, little polyps along it
+      const P = []; for (let y = 100; y >= -90; y -= 8) P.push([8 * d + 12 * Math.sin(y * 0.02) * d + (y < -40 ? (-40 - y) * 0.45 * d : 0), y]);
+      c.strokeStyle = '#1c1448'; c.lineWidth = 17; gPoly(c, P, false); c.stroke();
+      c.strokeStyle = gLG(c, -10, 0, 30, 0, ['#5a3e9a', '#3a2a78', '#241a58']); c.lineWidth = 13; gPoly(c, P, false); c.stroke();
+      c.strokeStyle = 'rgba(210,190,255,.4)'; c.lineWidth = 2.2; gPoly(c, P.map(([x, y]) => [x - 3.5, y]), false); c.stroke();
+      for (let k = 2; k < P.length - 1; k += 2) { const [x, y] = P[k]; c.fillStyle = 'rgba(255,140,220,.55)'; c.beginPath(); c.arc(x + 5 * d, y, 2, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(160,240,255,.5)'; c.beginPath(); c.arc(x - 4 * d, y + 4, 1.6, 0, TWO_PI); c.fill(); }
+    } else {
+      // a cluster of sea whips, thin and wavy
+      for (let q = 0; q < 5; q++) {
+        const x = (4 + q * 6) * d, len = 120 + 60 * hash2(q, 0xe41);
+        c.strokeStyle = q % 2 ? '#3a2470' : '#2c1c5c'; c.lineWidth = 3 - q * 0.3; c.beginPath(); c.moveTo(x, 100); c.bezierCurveTo(x + 8, 100 - len * 0.3, x - 8, 100 - len * 0.7, x + 4 * d, 100 - len); c.stroke();
+        c.strokeStyle = 'rgba(230,180,255,.3)'; c.lineWidth = 0.7; c.stroke();
+      }
+    }
+    c.fillStyle = 'rgba(14,8,50,.3)'; c.fillRect(-60, -100, 160, 200);
+  });
+}
+function jellyDrawForeground() {
+  const f = 1.35, slot = 360, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xe51) < 0.55) continue;
+    const side = hash2(i, 0xe52) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xe53) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.15 + 0.7 * smooth(40, 220, dist);
+    const S = jellyFgSprite(side, Math.floor(hash2(i, 0xe54) * 2));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (jellyOn()) jellyDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (jellyOn()) jellyDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (jellyOn()) jellyDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (jellyOn()) jellyDrawLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (jellyOn()) jellyDrawDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (jellyOn()) jellyDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (jellyOn()) jellyDrawForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (jellyOn() && !boss) jellyLunaBurst(); }; }
 // (game slot: Jelly Drift, island level 12)
 // ---------- Basalt Deep (island level 14): its look, traps, fire opals, glow-worm nests, the dark and sounds ----------
 // The stage's shaft and traps are laid out by createBasaltLevel (LEVELGEN); here they come alive and get drawn. While it
