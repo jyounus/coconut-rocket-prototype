@@ -4081,6 +4081,176 @@ const pinballStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick
 }
 const pinballSummary = () => `PASS: Pinball Palace: ${pinballStats.seeds} layouts × ${pinballStats.len} m, only its own traps (${Object.entries(pinballStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${pinballStats.minW.toFixed(0)}+ wide, wall slope ${pinballStats.slope.toFixed(2)} (max ${PB.RULES.maxWallSlope}); open lanes at every moment past bumpers ${pinballStats.lane.pinballBumper.toFixed(0)}+, flippers ${pinballStats.lane.pinballFlipper.toFixed(0)}+, the ball ${pinballStats.lane.pinballBall.toFixed(0)}+ (both sides of it), target banks ${pinballStats.lane.pinballBank.toFixed(0)}+ (minLane ${PB.RULES.minLane}), beats ${pinballStats.beatGap.toFixed(0)}+ apart; pickups ${pinballStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${pinballStats.rolls} rollover lamps (5X at ${PB.PINBALL.lamps[2]} lamps); ${pinballStats.traps} beats and ${pinballStats.stars} golden stars (reach and escape) flown by the widest pilot in ${pinballStats.searches} searches, the slowest pass ${pinballStats.worst.toFixed(1)} s`;
 // (test slot: Pinball Palace, island level 29)
+// ---------- Adventure: Candy Caverns (island level 30), an authored stage with its own traps ----------
+// As Kooky Lab's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every golden bonbon flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases. A gumdrop and its push ring and a fountain's pour count as solid (every beat can
+// be passed without ever being boinged or coated in chocolate); jawbreakers, bubbles, chutes, blowers, ledges, bowls and
+// lollipops are solid anyway.
+const CK = new Function(regions.join('\n') + '\nreturn { createCandyLevel, candyShapes, candyDanger, candyEnd, candyGumAt, candyChocAt, candyJawAt, candyJawPos, candyBubAt, candyStreamX, CANDY, CANDY_STAGE, CANDY_TYPES, ADV_CANDY, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const candyStats = { seeds: 0, traps: 0, searches: 0, worst: 0, bons: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, bubLane: Infinity, lollyLane: Infinity, jawDrop: 0, push: 0 };
+{
+  const R = CK.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CK.ADV_CANDY, X = CK.CANDY;
+  if (st0.theme !== 'candy' || !(st0.reward > 0)) fail('Candy Caverns is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'candyBonbons' && g.n === 3) || !st0.goals.some(g => g.k === 'candyLollyCoins' && g.n > 0)) fail('Candy Caverns has three missions: the Great Cake, 3 golden bonbons and the lollipop coins', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CK.UNITS_PER_M - CK.candyEnd()) > 1e-6) fail('the Candy Caverns stage length matches its layout', `${st0.len}`);
+  // the stage's order: gumdrops, then fountains, then jawbreakers, then blowers, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { gumPair: 'candyGum', gumBoth: 'candyGum', chocPair: 'candyChoc', chocGum: 'candyChoc', jawBoth: 'candyJaw', jawGum: 'candyJaw', jawChoc: 'candyJaw', bubPair: 'candyBubble', bubJaw: 'candyJaw', bubChoc: 'candyChoc', bubGum: 'candyBubble' };
+    const S = CK.CANDY_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each candy trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a candy trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'candyGum,candyChoc,candyJaw,candyBubble') fail('Candy Caverns teaches gumdrops, then fountains, then jawbreakers, then blowers', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) fail('Candy Caverns has a breather', '');
+    if (!S[S.length - 1].finish) fail('Candy Caverns ends at the Great Cake', '');
+  }
+  // a gumdrop's boing shoves you sideways, never harder than a couple of steering strokes
+  candyStats.push = X.gum.push;
+  if (X.gum.push > 640) fail('a gumdrop never pushes harder than 640', `${X.gum.push}`);
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CK.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // every shape of the traps at t, lethal and soft alike (the search never lets itself be boinged or coated)
+  const allShapes = (traps, t, S) => { for (const h of traps) CK.candyShapes(h, t, S, h.noSoft ? 'body' : undefined); return S; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.candyDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CK.createCandyLevel(CK.advSeed(st), st), hz = [], fr = [];
+    candyStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('candy traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('candy pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    candyStats.len = level.end / 10;
+    for (const h of hz) if (!CK.CANDY_TYPES.has(h.type)) fail('Candy Caverns only has its own traps', h.type);
+    for (const h of hz) candyStats.kinds[h.type] = (candyStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); candyStats.beatGap = Math.min(candyStats.beatGap, g); if (g < 0) fail('candy beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.alt !== q.alt && p.hi > q.lo && q.hi > p.lo) fail('the traps of a candy beat never overlap', `${b.kind} at ${b.a}`); }
+    for (const h of level.lollies) if (hz.some(q => q !== h && q.hi > h.lo - 20 && q.lo < h.hi + 20)) fail('a lollipop never crowds a trap', `${h.alt}`);
+    if (hz.some(h => h.hi > level.end - 320)) fail('the Great Cake below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      candyStats.minW = Math.min(candyStats.minW, r - l); candyStats.slope = Math.max(candyStats.slope, l2 - l, r - r2);
+    }
+    if (candyStats.minW < R.minWidth) fail('the candy shaft is never narrower than minWidth', candyStats.minW.toFixed(1));
+    if (candyStats.slope > R.maxWallSlope) fail('the candy walls never step in faster than maxWallSlope', candyStats.slope.toFixed(2));
+    for (const h of hz) {
+      if (h.type === 'candyJaw') {
+        // the walls are straight where a jawbreaker bounces (its knocks are computed on them), it only ever falls, it
+        // leaves its chute level and it shatters on a wall
+        for (let a = h.lo; a <= h.hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs(l - h.L) > 0.5 || Math.abs(r - h.R) > 0.5) { fail('the walls are straight where a jawbreaker bounces', `${h.alt} at ${a | 0}`); break; } }
+        let pa = Infinity; for (let tau = 0; tau <= h.tEnd; tau += 0.02) { const p = CK.candyJawPos(h, tau); if (p.a > pa + 1e-9) fail('a jawbreaker only ever falls', `${h.alt}`); pa = p.a; }
+        const pe = CK.candyJawPos(h, h.tEnd); if (Math.abs(pe.x - (h.side > 0 ? h.L + X.jaw.r : h.R - X.jaw.r)) > 0.5 && Math.abs(pe.x - (h.side > 0 ? h.R - X.jaw.r : h.L + X.jaw.r)) > 0.5) fail('a jawbreaker shatters on a wall', `${h.alt} ${pe.x.toFixed(1)}`);
+        candyStats.jawDrop = Math.max(candyStats.jawDrop, h.alt - pe.a);
+        if (h.alt - pe.a > X.jaw.drop + 0.5) fail('a jawbreaker falls no further than its drop', `${h.alt}`);
+        if (h.P < X.jaw.tell + h.tEnd + 0.5) fail('one jawbreaker at a time per chute', `${h.alt}`);
+      }
+      if (h.type === 'candyBubble') {
+        // at full size, still at the lips, a bubble leaves the widest pilot a lane by the far wall; the walls are straight
+        // where it drifts; it pops on the far wall
+        const S = []; CK.candyShapes(h, 0, S, 'still'); S.push({ k: 'c', x: h.base + h.side * (X.bub.mouth + X.bub.R - 3), a: h.alt, r: X.bub.R });
+        let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + h.side * q.r] : [q.x0 + h.side * q.r, q.x1 + h.side * q.r]; for (const x of xs) reach = Math.max(reach, h.side * x); }
+        const [l, r] = level.walls(h.alt), lane = h.side > 0 ? r - reach : -reach - l;
+        candyStats.bubLane = Math.min(candyStats.bubLane, lane);
+        if (lane < W + 12) fail('a full bubble at the lips leaves the widest pilot a lane', `${h.alt} ${lane.toFixed(0)}`);
+        for (let a = h.lo; a <= h.hi; a += 4) { const [l2, r2] = level.walls(a); if (Math.abs((h.side > 0 ? r2 : l2) - h.far) > 0.5) { fail('the far wall is straight where a bubble drifts', `${h.alt}`); break; } }
+        const T = []; CK.candyShapes(h, (1 - h.ph) * h.P - CK.CANDY.bub.pop - 0.004 + 50 * h.P, T, 'body'); const bb = T.find(q => q.k === 'c' && q.r > 40);
+        if (!bb || Math.abs(h.side * (bb.x + h.side * bb.r / 0.97) - h.side * h.far) > 2.5) fail('a bubble pops on the far wall', `${h.alt} ${bb ? (bb.x + h.side * bb.r / 0.97 - h.far).toFixed(1) : 'none'}`);
+      }
+      if (h.type === 'candyChoc') {
+        // the pour lands in its bowl
+        const bx = CK.candyStreamX(h, X.choc.H);
+        if (Math.abs(bx - CK.candyStreamX(h, X.choc.H - 2)) > 1) fail('a fountain pours straight into its bowl', `${h.alt}`);
+      }
+      if (h.type === 'candyLolly') {
+        const S = CK.candyShapes(h, 0, [], 'still'); let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + h.side * q.r] : [q.x0 + h.side * q.r, q.x1 + h.side * q.r]; for (const x of xs) reach = Math.max(reach, h.side * x); }
+        const [l, r] = level.walls(h.alt), lane = h.side > 0 ? r - reach : -reach - l; candyStats.lollyLane = Math.min(candyStats.lollyLane, lane);
+        if (lane < W + 60) fail('a lollipop leaves a wide lane', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CK.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('candy pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the golden bonbons, the Lollipop Garden's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CK.laneSize().w / 2 + 6 + CK.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CK.candyDanger(h)) dd = Math.min(dd, CK.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) candyStats.pick = Math.min(candyStats.pick, dd);
+      if (dd < need - 0.5) fail('candy pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CK.pickR(fr[i]) + CK.pickR(fr[j]) + CK.PICK_GAP - 0.01) fail('candy pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'bonbon').length !== 3) fail('Candy Caverns holds exactly 3 golden bonbons', `${fr.filter(f => f.kind === 'bonbon').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('Candy Caverns keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      // (it starts 150 under the beat, or just over the last beat's reach where that is closer)
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      candyStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        candyStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every candy trap can be passed by the widest pilot from any phase, never boinged or coated', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.candyDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else candyStats.worst = Math.max(candyStats.worst, tm);
+      }
+    }
+    // every golden bonbon can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'bonbon')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      // (a bonbon by a pour is a dare: there the chocolate only slows you)
+      const flyTraps = traps.map(h => h.type === 'candyChoc' && own.includes(h) ? { ...h, noSoft: true } : h);
+      for (let p = 0; p < 6; p++) {
+        candyStats.searches++;
+        const tm = fly(level, flyTraps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < CK.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every golden bonbon can be grabbed and escaped by the widest pilot', `bonbon at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      candyStats.bons++;
+    }
+  }
+}
+const candySummary = () => `PASS: Candy Caverns: ${candyStats.seeds} layouts × ${candyStats.len} m, only its own traps (${Object.entries(candyStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each trap taught alone first; shaft ${candyStats.minW.toFixed(0)}+ wide, wall slope ${candyStats.slope.toFixed(2)} (max ${CK.RULES.maxWallSlope}); full bubbles leave ${candyStats.bubLane.toFixed(0)}+ lanes, lollipops ${candyStats.lollyLane.toFixed(0)}+, jawbreakers fall ${candyStats.jawDrop.toFixed(0)} at most, gumdrops push ${candyStats.push} at most; beats ${candyStats.beatGap.toFixed(0)}+ apart; pickups ${candyStats.pick.toFixed(1)}+ from any reach; ${candyStats.traps} beats × 6 phases and ${candyStats.bons} golden bonbons flown by the widest pilot never boinged or coated (${candyStats.searches} searches, slowest ${candyStats.worst.toFixed(1)} s)`;
 // (test slot: Candy Caverns, island level 30)
 // (test slot: Cheddar Caverns, island level 31)
 // (test slot: Toybox Tower, island level 32)
@@ -4113,4 +4283,5 @@ console.log(cliffsSummary());
 console.log(labSummary());
 console.log(organSummary());
 console.log(pinballSummary());
+console.log(candySummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);

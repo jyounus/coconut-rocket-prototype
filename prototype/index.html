@@ -10539,6 +10539,392 @@ const ADV_PINBALL = { name: 'Pinball Palace', theme: 'pinball', seed: 'isl-29-pi
   goals: [{ k: 'finish', text: 'Hit the jackpot' }, { k: 'pinballStar', n: 3 }, { k: 'pinballX', n: 5 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Pinball Palace, island level 29)
+/* LEVELGEN:BEGIN */
+// ---------- Candy Caverns (island level 30): the stage, its traps' shapes and its layout ----------
+// An authored stage like Kooky Lab (see createLabLevel): a cave of sweets bored up through the volcano, climbed from the
+// Sugar Gate to the Great Cake at the top. One sweet trap at a time, each taught alone and slow before it is combined
+// (the Gumdrop Grove, Fudge Falls, Jawbreaker Alley), a breather (the Lollipop Garden), the Bubblegum Works, the Sugar
+// Rush mixing them all, then the Great Cake and its landing. Its own shaft (chocolate-and-candy strata swelling in soft
+// melted bulges), its own traps and its own look (G.theme 'candy', see the candy drawing).
+// The traps (every one leaves a way through on its own clock that the widest pilot fits):
+// - candyGum (Gumdrop Bounce): a wobbly sugar-crusted gumdrop on a wall. For `tell` s it squashes flat and screws its
+//   eyes shut, then BOINGS out: a push ring rolls across the shaft (out to `reach`, `band` above and below it) and
+//   shoves whatever it meets toward the far wall. Never lethal (touching the gumdrop itself boings you too).
+// - candyChoc (Chocolate Fountain): a wafer ledge out of a wall, a cupcake-liner bowl on a candy-cane bracket `H` under
+//   its tip. Chocolate pools on the ledge, bulges and bubbles for `tell` s, then pours off the tip into the bowl for
+//   `pour` s. Getting caught in the pour coats you in chocolate: heavy (a weaker climb, sluggish steering) until it
+//   wears off over `wear` s (the bear licks it off at once: its perk). The ledge and the bowl are solid.
+// - candyJaw (Jawbreaker): a striped candy chute out of a wall. Its jawbreaker rattles in the mouth for `tell` s, then
+//   rolls out level across the shaft and falls, bouncing off wall after wall (each knock chips a layer off it) until it
+//   shatters on its last wall within `drop` below the chute. Only ever falls. The chute and the ball are lethal.
+// - candyBubble (Bubblegum Blower, this stage's own): a chewing-gum blob in a wafer cup on a wall. It chews; for `tell`
+//   s it puffs its cheeks, then blows a bubble out to radius `R` (`blow` s) that lets go and drifts slowly across the
+//   shaft at `vd` (sagging `sink`), popping on the far wall. The blob, its cup and the bubble are lethal.
+// - candyLolly (Lollipop Swirl, the twist): a swirl lollipop stuck in a wall on its stick, spinning; every `every` s it
+//   flings a coin out across the shaft (catch them: the stage's lollipop mission). The lollipop is solid.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const CANDY = {
+  step: { every: [150, 280], D: [0, 13], ramp: 70 },   // wall relief: soft melted bulges swelling in and out
+  gum: { tell: 0.85, fire: 0.32, settle: 0.55, p: 38, b: 27, reach: 176, band: 44, push: 560, ease: 400 },
+  choc: { len: 104, H: 118, tell: 0.95, pour: 1.5, curl: 10, r: 9, bowl: 13, wear: 2.2, bear: 0.4, ease: 430 },
+  jaw: { tell: 1.0, V: 380, g: 250, r: 21, mouth: 52, drop: 540, ease: 480 },
+  bub: { tell: 0.8, blow: 1.25, vd: 132, R: 60, mouth: 40, sink: 18, pop: 0.22, ease: 470 },
+  lolly: { stick: 34, r: 18, every: 2.0, v: [150, 215], up: 200, g: 330, life: 2.4 },
+  chiliGap: 470, end: 420,
+};
+const CANDY_TYPES = new Set(['candyGum', 'candyChoc', 'candyJaw', 'candyBubble', 'candyLolly']);
+// The stage, bottom to top (as LABK_STAGE: each section's width w and its beats [rise, kind, options], then `tail` of
+// clear shaft; a calm section is `len` of open shaft). drop: this beat holds one of the 3 golden bonbons. lolly: the
+// heights (above the section's foot) and walls of its lollipops.
+const CANDY_STAGE = [
+  { name: 'Sugar Gate', w: 380, len: 860, calm: true, lolly: [[420, 1], [640, -1]] },
+  { name: 'Gumdrop Grove', w: 378, beats: [[560, 'candyGum', { side: 1, P: 3.4 }], [520, 'candyGum', { side: -1, P: 3.3, ph: 0.4 }], [560, 'gumPair', { P: 3.3 }],
+    [640, 'gumBoth', { P: 3.2 }], [520, 'candyGum', { side: 1, P: 3.1 }], [600, 'gumPair', { P: 3.1 }], [640, 'gumBoth', { P: 3.0 }], [600, 'gumPair', { P: 3.0 }]], tail: 560, lolly: [[410, -1]] },
+  { name: 'Fudge Falls', w: 380, beats: [[620, 'candyChoc', { side: -1, P: 4.4 }], [600, 'candyChoc', { side: 1, P: 4.3, ph: 0.3, drop: true }], [640, 'chocPair', { P: 4.3 }],
+    [700, 'chocGum', { P: 4.2 }], [660, 'chocPair', { P: 4.1 }], [720, 'chocGum', { P: 4.0 }], [680, 'chocPair', { P: 3.9 }]], tail: 580, lolly: [[450, 1]] },
+  { name: 'Jawbreaker Alley', w: 380, beats: [[720, 'candyJaw', { side: 1, P: 4.8 }], [700, 'candyJaw', { side: -1, P: 4.6, ph: 0.4 }], [720, 'candyJaw', { side: 1, P: 4.6, drop: true }],
+    [760, 'jawBoth', { P: 4.6 }], [840, 'jawGum', { P: 4.4 }], [860, 'jawChoc', { P: 4.4 }], [840, 'jawBoth', { P: 4.4 }]], tail: 600, lolly: [[340, -1]] },
+  { name: 'Lollipop Garden', w: 384, len: 1180, calm: true, lolly: [[180, 1], [300, -1], [700, 1], [820, -1], [980, 1]] },
+  { name: 'Bubblegum Works', w: 380, beats: [[620, 'candyBubble', { side: -1, P: 5.4 }], [640, 'candyBubble', { side: 1, P: 5.2, ph: 0.3 }], [660, 'candyBubble', { side: -1, P: 5.2, drop: true }],
+    [700, 'bubPair', { P: 5.2 }], [880, 'bubJaw', { P: 5.0 }], [700, 'bubChoc', { P: 5.0 }], [680, 'bubGum', { P: 5.0 }], [700, 'bubPair', { P: 5.0 }], [720, 'bubGum', { P: 4.9 }]], tail: 600, lolly: [[400, 1]] },
+  { name: 'Sugar Rush', w: 376, beats: [[600, 'gumPair', { P: 2.9 }], [640, 'chocGum', { P: 3.9 }], [820, 'jawBoth', { P: 4.3 }], [820, 'bubGum', { P: 4.9 }], [700, 'chocPair', { P: 3.9 }],
+    [900, 'bubJaw', { P: 4.9 }], [900, 'gumBoth', { P: 2.9 }], [640, 'jawChoc', { P: 4.3 }], [860, 'bubPair', { P: 4.9 }], [860, 'jawGum', { P: 4.3 }], [860, 'bubChoc', { P: 4.9 }], [840, 'jawBoth', { P: 4.2 }], [700, 'gumPair', { P: 2.8 }], [700, 'chocGum', { P: 3.8 }]], tail: 720 },
+  { name: 'The Great Cake', w: 384, len: 900, calm: true, finish: true },
+];
+const candyLen = sec => sec.calm || !sec.beats ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const candyEnd = () => { let y = 0; for (const sec of CANDY_STAGE) { if (sec.finish) return y + CANDY.end; y += candyLen(sec); } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a gumdrop's clock: p how far its dome stands out of the wall, b its half height, tell 0..1, front the push ring's
+// reach (-1 when none), wave 0..1 through the boing
+function candyGumAt(h, t) {
+  const X = CANDY.gum, u = pmod(t / h.P + h.ph, 1) * h.P, R = h.P - X.tell - X.fire - X.settle;
+  if (u < R) return { ph: 'rest', p: X.p * (1 + 0.04 * Math.sin(t * 5 + h.ph * 9)), b: X.b, tell: 0, front: -1, u };
+  let v = u - R;
+  if (v < X.tell) { const k = smooth(0, 1, v / X.tell); return { ph: 'tell', p: X.p * (1 - 0.42 * k), b: X.b * (1 + 0.2 * k), tell: v / X.tell, front: -1, u }; }
+  v -= X.tell;
+  if (v < X.fire) { const k = v / X.fire; return { ph: 'fire', p: X.p * (0.58 + 0.72 * Math.sin(Math.min(1, k * 1.7) * Math.PI / 2)), b: X.b * lerp(1.2, 0.86, Math.min(1, k * 1.7)), tell: 0, front: lerp(X.p, X.reach, 1 - (1 - k) ** 2), wave: k, u }; }
+  v -= X.fire;
+  const k = clamp(v / X.settle, 0, 1), w = Math.exp(-4 * k) * Math.cos(k * Math.PI * 3);
+  return { ph: 'settle', p: X.p * (1 + 0.3 * w), b: X.b * (1 - 0.14 * w), tell: 0, front: -1, settle: k, u };
+}
+// a fountain's clock: tell 0..1 (bulging), head / tail the pour's front and back below the lip (-1 when none)
+const candyFall = tau => 150 * tau + 480 * tau * tau;
+const candyFallT = d => (-150 + Math.sqrt(150 * 150 + 4 * 480 * d)) / 960;
+function candyChocAt(h, t) {
+  const X = CANDY.choc, u = pmod(t / h.P + h.ph, 1) * h.P, dr = candyFallT(X.H), I = h.P - X.tell - X.pour - dr;
+  if (u < I) return { ph: 'rest', tell: 0, head: -1, tail: -1, u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', tell: v / X.tell, head: -1, tail: -1, u };
+  v -= X.tell;
+  if (v < X.pour) return { ph: 'pour', tell: 0, head: Math.min(X.H, candyFall(v)), tail: 0, v, u };
+  v -= X.pour;
+  return { ph: 'drain', tell: 0, head: X.H, tail: Math.min(X.H, candyFall(v)), v: v + X.pour, u };
+}
+// where the pour is dy below the lip (it falls off the tip and curls a little further out)
+const candyStreamX = (h, dy) => h.base + h.side * (CANDY.choc.len - 6 + CANDY.choc.curl * (1 - Math.exp(-dy / 18)));
+// a jawbreaker's flight τ s after it leaves the chute: x, a, its knocks so far (n) and the wall it last hit
+function candyJawPos(h, tau) {
+  const X = CANDY.jaw, lo = h.L + X.r, hi = h.R - X.r, W = hi - lo, s0 = h.side > 0 ? h.x0 - lo : hi - h.x0;
+  const dist = s0 + X.V * tau, m = pmod(dist, 2 * W), pos = m < W ? m : 2 * W - m;
+  return { x: h.side > 0 ? lo + pos : hi - pos, a: h.alt - 0.5 * X.g * tau * tau, n: Math.floor(dist / W), dir: (m < W ? 1 : -1) * h.side };
+}
+// a chute's clock: rest (reload 0..1 as a new ball rolls in), tell 0..1 (rattling), fly (τ, x, a, n), and the shatter
+function candyJawAt(h, t) {
+  const X = CANDY.jaw, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - h.tEnd;
+  if (u < I) return { ph: 'rest', reload: clamp(u / 0.5, 0, 1), tell: 0, u, since: u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', reload: 1, tell: v / X.tell, u };
+  v -= X.tell;
+  return { ph: 'fly', tau: v, ...candyJawPos(h, v), u };
+}
+// a blower's clock: rest (chewing), tell 0..1 (cheeks puffing), blow (the bubble growing at the lips: r, x, a), drift
+// (let go: r, x, a), pop 0..1 (bursting on the far wall)
+function candyBubAt(h, t) {
+  const X = CANDY.bub, d = h.side, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.blow - h.tD - X.pop;
+  if (u < I) return { ph: 'rest', tell: 0, u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', tell: v / X.tell, u };
+  v -= X.tell;
+  if (v < X.blow) { const k = v / X.blow, r = lerp(4, X.R, 1 - (1 - k) ** 2.2); return { ph: 'blow', k, r, x: h.base + d * (X.mouth + r - 3), a: h.alt, u }; }
+  v -= X.blow;
+  const x1 = h.base + d * (X.mouth + X.R - 3);
+  if (v < h.tD) { const k = v / h.tD; return { ph: 'drift', k, r: X.R, x: x1 + d * X.vd * v, a: h.alt - X.sink * k * k, u }; }
+  v -= h.tD;
+  return { ph: 'pop', k: clamp(v / X.pop, 0, 1), r: X.R, x: x1 + d * X.vd * h.tD, a: h.alt - X.sink, u };
+}
+// Every collision shape of a candy trap at time t, fitted to its drawing. kind: undefined for all of them, 'body' the
+// lethal parts only, 'soft' only the parts that push or coat you (a gumdrop and its ring, the pour), 'still' only the
+// parts that never move.
+function candyShapes(h, t, S = [], kind) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, lethal = kind === undefined || kind === 'body' || kind === 'still', soft = kind === undefined || kind === 'soft', moving = kind !== 'still';
+  if (h.type === 'candyGum') {
+    if (soft && moving) {
+      const st = candyGumAt(h, t), r = Math.min(st.p * 0.56, st.b * 0.86);
+      S.push({ k: 's', x0: b + d * (st.p - r), a0: A - st.b + r, x1: b + d * (st.p - r), a1: A + st.b - r, r, soft: 1 });
+      if (st.front > 0) { const rr = Math.min(CANDY.gum.band, st.front / 2); S.push({ k: 's', x0: b + d * rr, a0: A, x1: b + d * (st.front - rr), a1: A, r: rr, soft: 1, ring: 1 }); }   // the push ring: a stadium out to its front
+    }
+  } else if (h.type === 'candyChoc') {
+    const X = CANDY.choc, bx = candyStreamX(h, X.H), bA = A - 4 - X.H;
+    if (lethal) {
+      cap(b - d * 4, A - 7, b + d * (X.len - 9), A - 7, 11);   // the wafer ledge and the chocolate pooled on it
+      cap(bx - X.bowl, bA - 7, bx + X.bowl, bA - 7, 9);   // the cupcake-liner bowl
+      { const q = (bx - b) * d, P = [[-6, -28], [q * 0.4, -28], [q - 14, -25], [q - 6, -17]]; for (let i = 0; i < 3; i++) cap(b + d * P[i][0], bA + P[i][1], b + d * P[i + 1][0], bA + P[i + 1][1], 4); }   // its candy-cane bracket
+    }
+    if (soft && moving) {
+      const st = candyChocAt(h, t);
+      if (st.head > 0 && st.tail < X.H) {
+        const y0 = Math.max(0, st.tail), y1 = st.head, ym = (y0 + y1) / 2;
+        if (y1 - y0 > 1) { S.push({ k: 's', x0: candyStreamX(h, y0), a0: A - 4 - y0, x1: candyStreamX(h, ym), a1: A - 4 - ym, r: X.r, soft: 1 }); S.push({ k: 's', x0: candyStreamX(h, ym), a0: A - 4 - ym, x1: candyStreamX(h, y1), a1: A - 4 - y1, r: X.r, soft: 1 }); }
+      }
+    }
+  } else if (h.type === 'candyJaw') {
+    const X = CANDY.jaw;
+    if (lethal) { cap(b - d * 4, A, b + d * 34, A, 23); c(b + d * 42, A, 25); c(b + d * 17, A + 66, 22); cap(b + d * 17, A + 44, b + d * 17, A + 22, 8); }   // the chute, its flared lip, the globe of spare jawbreakers on the wall above and its feed pipe
+    if (lethal && moving) { const st = candyJawAt(h, t); if (st.ph === 'fly') c(st.x, st.a, X.r); }
+  } else if (h.type === 'candyBubble') {
+    const X = CANDY.bub;
+    if (lethal) { cap(b - d * 4, A - 4, b + d * 30, A - 4, 13); c(b + d * 22, A + 8, 14); }   // the wafer cup on its bracket, the blob in it
+    if (lethal && moving) { const st = candyBubAt(h, t); if (st.ph === 'blow' || st.ph === 'drift') c(st.x, st.a, st.r * 0.97); }
+  } else if (h.type === 'candyLolly') {
+    const X = CANDY.lolly;
+    if (lethal) { cap(b - d * 4, A, b + d * (X.stick + 2), A, 3.5); c(b + d * (X.stick + X.r - 2), A, X.r); }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): a gumdrop's push ring, a fountain's ledge, bowl and
+// pour, a jawbreaker's whole fall, a bubble's whole drift, a lollipop.
+function candyDanger(h) {
+  const S = [];
+  if (h.type === 'candyGum') { const X = CANDY.gum; S.push({ k: 'b', x0: Math.min(h.base, h.base + h.side * X.reach), x1: Math.max(h.base, h.base + h.side * X.reach), a0: h.alt - X.band, a1: h.alt + X.band }); }
+  else if (h.type === 'candyChoc') { candyShapes(h, 0, S, 'still'); for (let k = 0; k <= 12; k++) { const dy = k / 12 * CANDY.choc.H; S.push({ k: 'c', x: candyStreamX(h, dy), a: h.alt - 4 - dy, r: CANDY.choc.r }); } }
+  else if (h.type === 'candyJaw') { candyShapes(h, 0, S, 'still'); for (let k = 0; k <= 60; k++) { const p = candyJawPos(h, k / 60 * h.tEnd); S.push({ k: 'c', x: p.x, a: p.a, r: CANDY.jaw.r }); } }
+  else if (h.type === 'candyBubble') { candyShapes(h, 0, S, 'still'); const X = CANDY.bub; S.push({ k: 's', x0: h.base + h.side * (X.mouth + 2), a0: h.alt - X.sink * 0.5, x1: h.base + h.side * (X.mouth + X.R * 2 + X.vd * h.tD - X.R), a1: h.alt - X.sink * 0.5, r: X.R + X.sink * 0.5 }); }
+  else candyShapes(h, 0, S, 'still');
+  return S;
+}
+
+// Candy Caverns' shaft, laid out in full from CANDY_STAGE (the seed only nudges looks and phases). It answers the same
+// questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createCandyLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xCA4D7) >>> 0), Q = CANDY;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of CANDY_STAGE) { const len = candyLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = candyEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the walls' relief on a side: soft melted bulges (each its own depth and kind of candy) swelling in and out over long
+  // smooth ramps, eased flat where a trap is mounted and over the launch. Never steeper than RULES.maxWallSlope.
+  const SP = Q.step, flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knots = [[], []];
+  for (const side of [0, 1]) { let a = -60, i = 0; while (a < topA + 400) { knots[side].push({ a, d: lerp(SP.D[0], SP.D[1], hash2(i, (seed & 0xffff) + 811 + side * 17)), t: Math.floor(hash2(i, (seed & 0xffff) + 819 + side * 17) * 4) }); a += lerp(SP.every[0], SP.every[1], hash2(i, (seed & 0xffff) + 813 + side * 17)); i++; } }
+  const knotAt = (a, side) => { const K = knots[side]; let lo = 0, hi = K.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m].a <= a) lo = m; else hi = m; } return lo; };
+  // each knot's bulge: a rounded swell (in, out) peaking mid-panel, so the wall reads as melted candy, not steps
+  const panelAt = (a, side) => { const K = knots[side], i = knotAt(a, side), k0 = K[i], k1 = K[i + 1] || k0, u = clamp((a - k0.a) / Math.max(1, k1.a - k0.a), 0, 1); return k0.d * Math.sin(Math.PI * u) ** 1.4 + 2 * Math.sin(a * 0.021 + side * 2); };
+  const reliefAt = (a, side) => Math.max(0, panelAt(a, side)) * smooth(380, 620, a) * (1 - flatK(a, side));
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSide = 0;
+  const one = (type, A, o, ease) => { lastSide = o.side; return [{ type, side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease }]; };
+  const make = {
+    candyGum(A, o) { flat(A - 70, A + 70, o.side); return one('candyGum', A, o, Q.gum.ease); },
+    gumPair(A, o) {   // gumdrops on facing walls 300 apart, half a cycle out of step (the first on the other wall from the last)
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.candyGum(A, { side: d, P: o.P, ph: p0 }), ...make.candyGum(A + 300, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    gumBoth(A, o) {   // gumdrops on both walls at one height, half a cycle out of step
+      const p0 = o.ph ?? ph();
+      return [...make.candyGum(A, { side: 1, P: o.P, ph: p0 }), ...make.candyGum(A, { side: -1, P: o.P, ph: p0 + 0.5 })];
+    },
+    candyChoc(A, o) { flat(A - Q.choc.H - 50, A + 50, o.side); return one('candyChoc', A, o, Q.choc.ease); },
+    chocPair(A, o) {   // fountains on facing walls, the second's bowl well over the first's ledge, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.candyChoc(A, { side: d, P: o.P, ph: p0 }), ...make.candyChoc(A + Q.choc.H + 230, { side: -d, P: o.P, ph: p0 + 0.45 })];
+    },
+    chocGum(A, o) {   // a fountain, then a gumdrop above its ledge on the far wall (its boing throws you toward the pour)
+      const d = -(lastSide || pick());
+      return [...make.candyChoc(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.candyGum(A + 250, { side: -d, P: o.P - 1.1, ph: ph() })];
+    },
+    candyJaw(A, o) { flat(A - Q.jaw.drop - 60, A + 110, 0); return one('candyJaw', A, o, Q.jaw.ease); },
+    jawBoth(A, o) {   // chutes on both walls at one height, firing in turn (each ball's first knock lands well below the far chute)
+      const p0 = o.ph ?? ph();
+      return [...make.candyJaw(A, { side: 1, P: o.P, ph: p0 }), ...make.candyJaw(A, { side: -1, P: o.P, ph: p0 + 0.5 })];
+    },
+    jawGum(A, o) {   // a jawbreaker, then a gumdrop above its chute on the far wall
+      const d = -(lastSide || pick());
+      return [...make.candyJaw(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.candyGum(A + 230, { side: -d, P: o.P - 1.4, ph: ph() })];
+    },
+    jawChoc(A, o) {   // a jawbreaker, then a fountain above its chute on the far wall
+      const d = -(lastSide || pick());
+      return [...make.candyJaw(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.candyChoc(A + Q.choc.H + 150, { side: -d, P: o.P - 0.4, ph: ph() })];
+    },
+    candyBubble(A, o) { flat(A - 80, A + 80, 0); return one('candyBubble', A, o, Q.bub.ease); },
+    bubPair(A, o) {   // blowers on facing walls 280 apart, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.candyBubble(A, { side: d, P: o.P, ph: p0 }), ...make.candyBubble(A + 280, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    bubJaw(A, o) {   // a jawbreaker, then a blower above its chute
+      const d = -(lastSide || pick());
+      return [...make.candyJaw(A, { side: d, P: o.P - 0.6, ph: o.ph ?? ph() }), ...make.candyBubble(A + 240, { side: -d, P: o.P, ph: ph() })];
+    },
+    bubChoc(A, o) {   // a fountain, then a blower above its ledge on the far wall
+      const d = -(lastSide || pick());
+      return [...make.candyChoc(A, { side: d, P: o.P - 0.9, ph: o.ph ?? ph() }), ...make.candyBubble(A + 250, { side: -d, P: o.P, ph: ph() })];
+    },
+    bubGum(A, o) {   // a blower, then a gumdrop above it on the same wall (its boing throws you out over the next bubble)
+      const d = -(lastSide || pick());
+      return [...make.candyBubble(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.candyGum(A + 260, { side: -d, P: o.P - 1.9, ph: ph() })];
+    },
+  };
+  const beats = [], lollies = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, candy: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.lolly) for (const [da, side] of sc.lolly) { const A = sc.calm ? sc.a0 + da : sc.a1 - sc.tail + da; flat(A - 60, A + 60, side); lollies.push({ type: 'candyLolly', side, alt: A, P: Q.lolly.every, ph: rng() }); }
+    if (!sc.beats) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const h of [...beats.flatMap(b => b.hs), ...lollies]) {
+    const d = h.side;
+    if (h.type === 'candyGum') {
+      const [L, R] = lOpening(h.alt - 40, h.alt + 40);
+      h.base = d > 0 ? L : R; h.x = (L + R) / 2; h.lo = h.alt - Q.gum.band - 4; h.hi = h.alt + Q.gum.band + 4;
+    } else if (h.type === 'candyChoc') {
+      const X = Q.choc, [L, R] = lOpening(h.alt - X.H - 30, h.alt + 20);
+      h.base = d > 0 ? L : R; h.x = (L + R) / 2; h.lo = h.alt - 4 - X.H - 32; h.hi = h.alt + 26;
+    } else if (h.type === 'candyJaw') {
+      const X = Q.jaw, [L, R] = lOpening(h.alt - X.drop - 30, h.alt + 40);
+      h.base = d > 0 ? L : R; h.L = L; h.R = R; h.x0 = h.base + d * X.mouth; h.x = (L + R) / 2;
+      // the last knock on a wall before it has fallen `drop`: it shatters there
+      const W = R - L - 2 * X.r, s0 = d > 0 ? h.x0 - (L + X.r) : (R - X.r) - h.x0, tMax = Math.sqrt(2 * X.drop / X.g);
+      let n = 1; while ((n + 1) * W - s0 <= X.V * tMax) n++;
+      h.nB = n; h.tEnd = (n * W - s0) / X.V;
+      h.P = Math.max(h.P, X.tell + h.tEnd + 1.1);
+      h.lo = h.alt - 0.5 * X.g * h.tEnd * h.tEnd - X.r - 12; h.hi = h.alt + 92;
+    } else if (h.type === 'candyBubble') {
+      const X = Q.bub, [L, R] = lOpening(h.alt - 70, h.alt + 70);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2;
+      h.tD = Math.max(0.2, (Math.abs(h.far - h.base) - X.mouth - 2 * X.R + 3) / X.vd);
+      h.P = Math.max(h.P, X.tell + X.blow + h.tD + X.pop + 0.9);
+      h.lo = h.alt - X.R - X.sink - 6; h.hi = h.alt + X.R + 6;
+    } else if (h.type === 'candyLolly') {
+      const X = Q.lolly, [L, R] = lOpening(h.alt - 24, h.alt + 24);
+      h.base = d > 0 ? L : R; h.x = (L + R) / 2; h.lo = h.alt - X.r - 4; h.hi = h.alt + X.r + 4;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, candyDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  let bons = 0;
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  for (const sc of secs) {
+    if (!sc.calm) continue;
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.5);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Lollipop Garden: a ring of coconuts round a golden one, then a weave
+      const cA = sc.a0 + 520, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 92, cA + Math.sin(an) * 76, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 680, sc.a1 - 90, 0.6, 3);
+    }
+  }
+  // each trap's coconuts show the way: a column up the far lane past a gumdrop, a column up the open side of a fountain,
+  // a pair either side of a chute's first knock, a column up the far side of a blower (each golden bonbon a dare: tucked
+  // in beside a pour, in the middle of a jawbreaker's fall, in front of a blower's lips)
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      const d = h.side, [l, r] = lWalls(h.alt);
+      if (h.type === 'candyGum') {
+        const far = d > 0 ? r - 60 : l + 60;
+        for (let k = 0; k < 3; k++) add(far, h.alt - 50 + k * 50, 'coco', { clear: 22 });
+      } else if (h.type === 'candyChoc') {
+        const x = d > 0 ? r - 80 : l + 80;
+        for (let k = 0; k < 4; k++) add(x, h.alt - Q.choc.H - 10 + k * 46, 'coco', { clear: 26 });
+        if (h.drop && bons < 3) { if (add(candyStreamX(h, Q.choc.H * 0.45) + d * 34, h.alt - 4 - Q.choc.H * 0.45, 'bonbon', { bonbon: true, clear: -Infinity })) bons++; }
+      } else if (h.type === 'candyJaw') {
+        add((l + r) / 2, h.alt + 70); add((l + r) / 2 - 26, h.alt + 112); add((l + r) / 2 + 26, h.alt + 112);
+        if (h.drop && bons < 3) { if (add((h.L + h.R) / 2, h.alt - 230, 'bonbon', { bonbon: true, clear: -Infinity })) bons++; }
+      } else if (h.type === 'candyBubble') {
+        const x = d > 0 ? r - 70 : l + 70;
+        add(x, h.alt - Q.bub.R - 50); add(x, h.alt + Q.bub.R + 40); add(x, h.alt + Q.bub.R + 84);
+        if (h.drop && bons < 3) { if (add(h.base + d * (Q.bub.mouth + 40), h.alt, 'bonbon', { bonbon: true, clear: -Infinity })) bons++; }
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(q => q.hi)) + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+    void top;
+  }
+  // the chili line (as the lab's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, candy: true, sections: secs, beats, lollies, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, knots, panelAt,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 30): its own shaft (createCandyLevel), the candy look (G.theme), its missions and its
+// length in metres (from the layout).
+const ADV_CANDY = { name: 'Candy Caverns', theme: 'candy', seed: 'isl-30-candy', reward: 230, target: 0, len: candyEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Great Cake' }, { k: 'candyBonbons', n: 3 }, { k: 'candyLollyCoins', n: 6 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Candy Caverns, island level 30)
 // (LEVELGEN slot: Cheddar Caverns, island level 31)
 // (LEVELGEN slot: Toybox Tower, island level 32)
@@ -39282,7 +39668,7 @@ const ISLAND = {
     { id: 27, name: 'Kooky Lab', region: 'lab', pilot: 'axolotl', perk: 'Too slippery for the slime to stick', stage: 'lab' },
     { id: 28, name: 'Pipe Organ Cavern', region: 'organ', pilot: 'firefly', perk: 'Glows to the beat and shows the next blast', stage: 'organ' },
     { id: 29, name: 'Pinball Palace', region: 'pinball', pilot: 'hamster', perk: 'Bumpers bounce the turbo ball up, never back', stage: 'pinball' },
-    { id: 30, name: 'Candy Caverns', region: 'candy', pilot: 'bear', perk: 'Licks the chocolate off fast' },
+    { id: 30, name: 'Candy Caverns', region: 'candy', pilot: 'bear', perk: 'Licks the chocolate off fast', stage: 'candy' },
     { id: 31, name: 'Cheddar Caverns', region: 'cheese', pilot: 'dachshund', perk: 'One bark and the cat paw pulls back' },
     { id: 32, name: 'Toybox Tower', region: 'toybox', pilot: 'robot', perk: 'Toy soldiers salute and stop' },
     { id: 33, name: 'Monkey Carnival', region: 'carnival', pilot: 'lemur', perk: 'The monkeys think he is part of the act' },
@@ -39362,6 +39748,7 @@ ADV_STAGES.cliffs = ADV_CLIFFS;   // (island level 25, Gull Cliffs: see createCl
 ADV_STAGES.lab = ADV_LAB;   // (island level 27, Kooky Lab: see createLabLevel)
 ADV_STAGES.organ = ADV_ORGAN;   // (island level 28, Pipe Organ Cavern: see createOrganLevel)
 ADV_STAGES.pinball = ADV_PINBALL;   // (island level 29, Pinball Palace: see createPinballLevel)
+ADV_STAGES.candy = ADV_CANDY;   // (island level 30, Candy Caverns: see createCandyLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -70624,6 +71011,1811 @@ ADV_GOALS.pinballX = { text: g => `Light the ${g.n}X multiplier`, done: (r, g) =
 // play-testing hook (only with ?debug in the URL): the table's shapes and clocks for scripts
 if (/[?&]debug\b/.test(location.search)) window.CRP = { PINBALL, PINBALL_STAGE, pinballShapes, pinballDanger, pinballFlipState, pinballBallState, pinballBankState, createPinballLevel, pinballMult, cache: PINBALL_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Pinball Palace, island level 29)
+// ---------- Candy Caverns (island level 30): its look, traps, golden bonbons, lollipop coins, chocolate and sounds ----------
+// The stage's shaft and traps are laid out by createCandyLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'candy': a cave of sweets bored up through the volcano, lit warm pink and cream from above with
+// glossy sugar shine everywhere. Its walls are layered candy strata (chocolate, strawberry, mint and caramel bands with
+// chips, sprinkles and sweets pressed in, every section its own mix) swelling in soft melted bulges; their edge is a
+// real twisted candy-cane rope with icing dripping over it. Behind the shaft the cave's sugar halls recede in calm
+// parallax layers, different in every section (frosted gates, gumdrop hills, chocolate falls, gumball towers, lollipop
+// trees, bubble pipes, the cake factory), with motes of sprinkles tumbling down. Art as the rest of the game: cartoony,
+// 2-3 stop gradients lit from the top left, every edge a darker shade of its own colour (never black), detail as line
+// pairs (a dark furrow over a lit ridge), sheen strokes and soft glows; the backdrop stays calm and pushed back so the
+// traps and pickups read first. Performance: everything that never moves (the wall strata, the backdrop's layers, the
+// traps' mounts and bodies, the finish) is painted once into offscreen canvases at the screen's pixel scale and
+// blitted each frame (see candyTile, candySprite); only what moves or glows is drawn live, every glow one cached sprite.
+const CANDYP = {
+  pal: { bgTop: [236, 178, 206], bgBot: [112, 58, 98], far: [214, 150, 190], far2: [190, 126, 170], wall: [108, 60, 40], wallIn: [52, 26, 18], rim: [255, 200, 224] },
+  pink: ['#ffe4f0', '#ff9cc4', '#e0609a', '#a8346c'], pinkEdge: '#9c2c60',
+  mint: ['#e4fff6', '#8fe6cf', '#3fae93', '#24705f'], mintEdge: '#226a5a',
+  choc: ['#c08452', '#7a4426', '#4a2412', '#2e1408'], chocEdge: '#3a1a0a',
+  cream: ['#fffaf2', '#f6e6d6', '#dcc4ae', '#b89a80'], creamEdge: '#a08066',
+  cane: ['#fff6f4', '#e8394e', '#a8243a'], caneEdge: '#9a2034',
+  lemon: ['#fff6c4', '#ffd84a', '#e0a020', '#a86c10'], lemonEdge: '#94600e',
+  grape: ['#efe2ff', '#b496ff', '#7a5ad8', '#4c3494'], grapeEdge: '#46308a',
+  lime: ['#f0ffd4', '#9fe05a', '#5aa82a', '#36721a'], limeEdge: '#2e6a16',
+  orange: ['#ffecd0', '#ffa04a', '#d8661a', '#98400c'], orangeEdge: '#8a3a0c',
+  wafer: ['#fbe2aa', '#e8bd76', '#c08a46', '#8a5a26'], waferEdge: '#7a4c1e',
+  gold: ['#fffbe0', '#ffe27a', '#e8b030', '#a8740e'], goldEdge: '#8a5a0a',
+  bubble: ['#fff0f8', '#ffb4da', '#ff74b8', '#d63c8c'], bubbleEdge: '#b02a72',
+};
+const CANDY_SPRINK = ['#ff6fa8', '#7fe0c8', '#ffd84a', '#8fb4ff', '#ffffff', '#ff9a4a', '#b496ff'];
+const candyOn = () => !!(G && G.theme === 'candy');
+{ const base = pal; pal = function (key, a) { return candyOn() && CANDYP.pal[key] ? CANDYP.pal[key].slice() : base(key, a); }; }
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const CANDYC = { key: '', tiles: new Map(), sprites: new Map(), glows: new Map() };
+function candyCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== CANDYC.key) { CANDYC.key = key; CANDYC.tiles.clear(); CANDYC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function candyTile(id, x0, x1, a0, a1, paint) {
+  let T = CANDYC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    CANDYC.tiles.set(id, T);
+    if (CANDYC.tiles.size > 72) { for (const kk of CANDYC.tiles.keys()) { CANDYC.tiles.delete(kk); if (CANDYC.tiles.size <= 58) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function candySprite(id, w, h, ax, ay, paint) {
+  let S = CANDYC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; CANDYC.sprites.set(id, S);
+    if (CANDYC.sprites.size > 190) { for (const kk of CANDYC.sprites.keys()) { CANDYC.sprites.delete(kk); if (CANDYC.sprites.size <= 160) break; } }
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt), mirrored when flip < 0
+function candyBlit(S, x, alt, alpha = 1, flip = 1) {
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  if (flip < 0) { ctx.save(); ctx.translate(sx(x), sy(alt)); ctx.scale(-1, 1); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore(); }
+  else ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+// blit a sprite with its anchor at screen (X, Y), turned by ang, mirrored when flip < 0, scaled by k (kx, ky)
+function candyBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1, k = 1, ky = k) {
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (k !== 1 || ky !== 1) ctx.scale(k, ky); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+// a soft additive glow: one cached radial sprite per colour (no gradient built per frame)
+function candyGlow(c, x, y, r, col, a) {
+  if (a < 0.01 || r < 0.6) return;
+  const key = col.join(',');
+  let cv = CANDYC.glows.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 48, 48, 47, [gCol(col, 1), gCol(col, 0.42), gCol(col, 0.12), gCol(col, 0)]); q.fillRect(0, 0, 96, 96);
+    CANDYC.glows.set(key, cv);
+  }
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(cv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+// a glossy ball lit from the top left (any context): 3-stop body, an edge of its own darker colour, a sheen and a glint
+function candyBall(c, x, y, r, P, edge, sheen = 0.55) {
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, r * 0.07); c.stroke();
+  c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, r * 0.13); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.72, 3.5, 4.5); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.88)'; c.beginPath(); c.ellipse(x - r * 0.42, y - r * 0.5, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+}
+// a sprinkle (any context): a little rounded rod with a darker underside and a lit top
+function candySprinkle(c, x, y, ang, col, L = 3.2, w = 1.3) {
+  c.save(); c.translate(x, y); c.rotate(ang); c.lineCap = 'round';
+  c.strokeStyle = 'rgba(70,20,30,.35)'; c.lineWidth = w + 0.5; c.beginPath(); c.moveTo(-L / 2, 0.45); c.lineTo(L / 2, 0.45); c.stroke();
+  c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(-L / 2, 0); c.lineTo(L / 2, 0); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = w * 0.35; c.beginPath(); c.moveTo(-L / 2 + 0.4, -w * 0.25); c.lineTo(L / 2 - 0.4, -w * 0.25); c.stroke();
+  c.restore();
+}
+// a twisted candy-cane rod (any context) along the polyline P, w thick: cream body, red twist stripes, round shading
+function candyCaneRod(c, P, w, phase = 0, stripe = '#e8394e', bodyCol = '#fbf2f0', edgeCol = CANDYP.caneEdge) {
+  if (P.length < 2) return;
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  gPoly(c, P, false); c.strokeStyle = edgeCol; c.lineWidth = w + 1.4; c.stroke();
+  gPoly(c, P, false); c.strokeStyle = bodyCol; c.lineWidth = w; c.stroke();
+  // the stripes: short slanted strokes every w*1.6 along the length, clipped to the rod
+  let acc = phase * w, tot = 0;
+  c.strokeStyle = stripe; c.lineWidth = w * 0.42; c.lineCap = 'butt';
+  for (let i = 0; i < P.length - 1; i++) {
+    const [x0, y0] = P[i], [x1, y1] = P[i + 1], L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) continue;
+    const ux = (x1 - x0) / L, uy = (y1 - y0) / L, nx = -uy, ny = ux;
+    for (let d = (w * 1.6 - (acc % (w * 1.6))) % (w * 1.6); d < L; d += w * 1.6) {
+      const px = x0 + ux * d, py = y0 + uy * d, hw = w * 0.46;
+      c.beginPath(); c.moveTo(px - nx * hw - ux * hw * 0.55, py - ny * hw - uy * hw * 0.55); c.lineTo(px + nx * hw + ux * hw * 0.55, py + ny * hw + uy * hw * 0.55); c.stroke();
+    }
+    acc += L; tot += L;
+  }
+  // round shading: a darker belly line and a lit top line
+  c.lineCap = 'round';
+  c.save(); c.translate(0.35 * w * 0.3, 0.35 * w * 0.5); gPoly(c, P, false); c.strokeStyle = 'rgba(140,30,50,.28)'; c.lineWidth = w * 0.32; c.stroke(); c.restore();
+  c.save(); c.translate(-w * 0.12, -w * 0.2); gPoly(c, P, false); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = w * 0.16; c.stroke(); c.restore();
+  c.restore();
+  void tot;
+}
+// cartoon eyes (any context) at x, y, radius r; look -1..1 sideways; shut 0..1 closes them into happy/strained arcs
+function candyEyes(c, x, y, r, look = 0, shut = 0, iris = '#5a2a1a', gap = 1.15) {
+  for (const e of [-1, 1]) {
+    const ex = x + e * r * gap;
+    if (shut > 0.6) {   // squeezed shut: two chevrons
+      c.strokeStyle = iris; c.lineWidth = Math.max(0.8, r * 0.32); c.lineCap = 'round'; c.lineJoin = 'round';
+      c.beginPath(); c.moveTo(ex - e * r * 0.7, y - r * 0.55); c.lineTo(ex + e * r * 0.35, y); c.lineTo(ex - e * r * 0.7, y + r * 0.55); c.stroke();
+      continue;
+    }
+    const hy = r * 1.1 * (1 - shut * 0.8);
+    c.fillStyle = gRG(c, ex - r * 0.3, y - r * 0.3, r * 1.3, ['#ffffff', '#f6eef2', '#d8c8d0']); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(120,50,70,.75)'; c.lineWidth = Math.max(0.5, r * 0.14); c.stroke();
+    c.save(); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.clip();
+    c.fillStyle = iris; c.beginPath(); c.arc(ex + look * r * 0.38, y + r * 0.1, r * 0.6, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + look * r * 0.38 - r * 0.2, y - r * 0.16, r * 0.22, 0, TWO_PI); c.fill();
+    c.restore();
+  }
+}
+
+// ---- sounds ----
+const CANDY_SFX = {
+  // a gumdrop squashing down: a rubbery creak rising
+  cgsquish: (t, B, v) => { vTone(B, t, 180, { f2: 420, glide: 0.8, type: 'triangle', v: 0.06 * v, dur: 0.8, a: 0.1, vib: [11, 14], vibAt: 0 }); vNoise(B, t, { type: 'bandpass', f: 900, q: 6, v: 0.025 * v, dur: 0.7, a: 0.2 }); },
+  // ...and boinging out: a springy boing with a wobble
+  cgboing: (t, B, v) => { vTone(B, t, 160, { f2: 620, glide: 0.09, type: 'sine', v: 0.14 * v, dur: 0.5, vib: [17, 60], vibAt: 0.05 }); vTone(B, t, 320, { f2: 1240, glide: 0.09, type: 'triangle', v: 0.04 * v, dur: 0.3 }); },
+  // a fountain's chocolate bubbling up: low glops
+  cbubble: (t, B, v) => { for (let i = 0; i < 4; i++) vTone(B, t + i * 0.2 + Math.random() * 0.05, 140 + Math.random() * 90, { f2: 300 + Math.random() * 120, glide: 0.07, type: 'sine', v: 0.06 * v, dur: 0.1 }); },
+  // ...pouring: a thick glugging pour
+  cpour: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 700, f2: 380, v: 0.08 * v, dur: 1.4, a: 0.08 }); for (let i = 0; i < 6; i++) vTone(B, t + i * 0.22, 110 + (i % 3) * 30, { f2: 70, glide: 0.12, type: 'sine', v: 0.07 * v, dur: 0.16 }); },
+  // coated in chocolate: a heavy splotch
+  ccoat: (t, B) => { vTone(B, t, 300, { f2: 90, glide: 0.22, type: 'sine', v: 0.14, dur: 0.3 }); vNoise(B, t, { type: 'lowpass', f: 800, f2: 240, v: 0.12, dur: 0.3, a: 0.01 }); },
+  // the bear licking it off: three quick slurps
+  click: (t, B) => { for (let i = 0; i < 3; i++) { vNoise(B, t + i * 0.09, { type: 'bandpass', f: 1800 - i * 200, q: 3, v: 0.07, dur: 0.06, a: 0.01 }); vTone(B, t + i * 0.09, 600, { f2: 900, glide: 0.05, type: 'sine', v: 0.04, dur: 0.06 }); } },
+  // a jawbreaker rattling in its chute: hard candy clacks
+  crattle: (t, B, v) => { for (let i = 0; i < 7; i++) { vNoise(B, t + i * 0.13 + Math.random() * 0.03, { type: 'bandpass', f: 2600 + Math.random() * 800, q: 8, v: 0.05 * v, dur: 0.03 }); vTone(B, t + i * 0.13, 900 + Math.random() * 300, { type: 'square', lp: 2400, v: 0.012 * v, dur: 0.03 }); } },
+  // ...rolling out: a deep thunk and a roll
+  croll: (t, B, v) => { vTone(B, t, 220, { f2: 110, glide: 0.1, type: 'triangle', v: 0.12 * v, dur: 0.16 }); vNoise(B, t + 0.04, { type: 'lowpass', f: 500, v: 0.06 * v, dur: 0.5, a: 0.05 }); },
+  // ...knocking a wall: a bright hard-candy clack
+  cknock: (t, B, v) => { vTone(B, t, 1500, { f2: 700, glide: 0.04, type: 'square', lp: 3200, v: 0.07 * v, dur: 0.06 }); vNoise(B, t, { f: 3400, q: 3, v: 0.08 * v, dur: 0.05 }); vTone(B, t, 160, { f2: 90, glide: 0.08, type: 'sine', v: 0.1 * v, dur: 0.14 }); },
+  // ...shattering: sugar-glass breaking and tinkling
+  cshatter: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 3200, v: 0.1 * v, dur: 0.3, a: 0.002 }); for (let i = 0; i < 7; i++) vTone(B, t + i * 0.035 + Math.random() * 0.02, 2400 + Math.random() * 2600, { type: 'sine', v: 0.03 * v, dur: 0.12, send: 0.2 }); vTone(B, t, 200, { f2: 80, glide: 0.15, type: 'sine', v: 0.09 * v, dur: 0.2 }); },
+  // a gum blob puffing its cheeks: a squeaky inflating stretch
+  cpuff: (t, B, v) => { vTone(B, t, 400, { f2: 700, glide: 0.7, type: 'triangle', v: 0.04 * v, dur: 0.75, a: 0.1, vib: [24, 18], vibAt: 0 }); },
+  // ...blowing: a long rubbery rising whistle
+  cblow: (t, B, v) => { vTone(B, t, 240, { f2: 620, glide: 1.2, type: 'sine', v: 0.06 * v, dur: 1.25, a: 0.08, vib: [7, 10], vibAt: 0.1 }); vNoise(B, t, { type: 'bandpass', f: 1200, f2: 2200, q: 2, v: 0.02 * v, dur: 1.2, a: 0.2 }); },
+  // ...the bubble popping: a wet POP
+  cpop: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 1600, q: 1.5, v: 0.16 * v, dur: 0.07, a: 0.001 }); vTone(B, t, 900, { f2: 200, glide: 0.06, type: 'sine', v: 0.12 * v, dur: 0.1 }); vTone(B, t + 0.02, 1800, { f2: 2600, glide: 0.05, type: 'triangle', v: 0.03 * v, dur: 0.06 }); },
+  // a lollipop flinging a coin: a twangy pluck
+  cfling: (t, B, v) => { vTone(B, t, 520, { f2: 1040, glide: 0.08, type: 'triangle', v: 0.05 * v, dur: 0.2 }); vTone(B, t + 0.04, 1560, { type: 'sine', v: 0.025 * v, dur: 0.15, send: 0.2 }); },
+  // a golden bonbon: a sparkling arpeggio and a crinkle of foil
+  cbonbon: (t, B) => { [72, 76, 79, 84, 88, 91].forEach((m, i) => vTone(B, t + i * 0.05, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.06, dur: 0.6, send: 0.3 })); for (let i = 0; i < 8; i++) vNoise(B, t + i * 0.025, { type: 'highpass', f: 5000, v: 0.025, dur: 0.02 }); },
+  // the Great Cake on the clear: a party chord, a kazoo-ish toot and candle sparkles
+  cfinish: (t, B) => { [60, 64, 67, 72, 76, 79, 84].forEach((m, i) => vTone(B, t + i * 0.06, mf(m), { type: 'triangle', v: 0.05, dur: 1.9, a: 0.04, send: 0.4 })); vTone(B, t, mf(48), { type: 'sine', v: 0.08, dur: 2, a: 0.1 }); vTone(B, t + 0.5, mf(72), { f2: mf(79), glide: 0.3, type: 'sawtooth', lp: 1800, v: 0.04, dur: 0.5 }); for (let i = 0; i < 14; i++) vTone(B, t + 0.3 + i * 0.07, 1400 + Math.random() * 1600, { type: 'sine', v: 0.025, dur: 0.08, send: 0.3 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = CANDY_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const candyVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.candyGum = 'Boinged by a gumdrop';
+CAUSES.candyChoc = 'Crashed into a wafer ledge';
+CAUSES.candyJaw = 'Cracked by a jawbreaker';
+CAUSES.candyBubble = 'Popped by a bubblegum bubble';
+CAUSES.candyLolly = 'Bonked a lollipop';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'candyGum' ? [150, 240, 110] : cause === 'candyChoc' ? [220, 160, 110] : cause === 'candyJaw' ? [255, 120, 180] : cause === 'candyBubble' ? [255, 150, 210] : cause === 'candyLolly' ? [255, 200, 120] : base(cause); }; }
+// the lethal shapes (a gumdrop's boing and the chocolate only push or slow you)
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!CANDY_TYPES.has(h.type)) return base(h);
+  return candyShapes(h, G.t, [], 'body').map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.candy) candyUpdateTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.candy) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && CANDY_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// The bear's perk: licks the chocolate off at once
+const candyBear = () => settings.character === 'bear';
+// Chocolate (a fountain's pour): G.candyChoc 1 while touching, wearing off over CANDY.choc.wear s (the bear's
+// CANDY.choc.bear); the engine pushes less, the climb tops out lower and the steering is sluggish while it lasts. A
+// gumdrop's boing: G.candyPushV, a sideways shove easing off. Both only bend that frame's physics (cfg is untouched).
+const CANDY_COAT = { thrust: 0.3, maxUp: 0.45, lag: 0.84 };
+{ const base = update; update = function (dt) {
+  if (!G || !candyOn()) return base(dt);
+  if (G.state !== 'play' && G.state !== 'clear') { G.candyChoc = 0; G.candyTouch = false; G.candyPushV = 0; return base(dt); }
+  const ch = G.state === 'play' ? G.candyChoc || 0 : 0;
+  if (ch <= 0) return base(dt);
+  const t0 = cfg.thrust, m0 = cfg.maxUp, l0 = cfg.lag, B = CANDY_COAT;
+  cfg.thrust = t0 * (1 - B.thrust * ch); cfg.maxUp = m0 * (1 - B.maxUp * ch); cfg.lag = lerp(l0, B.lag, ch);
+  try { base(dt); } finally { cfg.thrust = t0; cfg.maxUp = m0; cfg.lag = l0; }
+}; }
+// the boing's shove: drags the rocket sideways (never into a wall: inside the steering's own range)
+{ const base = steer; steer = function (dt) {
+  base(dt);
+  if (!candyOn() || G.state !== 'play') { if (G) G.candyPushV = 0; return; }
+  const p = G.p, v = G.candyPushV || 0;
+  if (Math.abs(v) > 1) {
+    const [lo, hi] = steerRange(); p.x = clamp(p.x + v * dt, lo, hi);
+    p.tilt = lerp(p.tilt, clamp(v * 0.0012, -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 8));
+    G.candyPushV = v * Math.exp(-dt * 4.2);
+  } else G.candyPushV = 0;
+}; }
+// sugar shards, chocolate drops, gum shreds and sprinkles (world space; drawn by the candy particle wrapper)
+function candyShards(x, a, n, v, cols) {
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.4 + 0.6 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.abs(Math.sin(an)) * sp * 0.6 + 30, 0.6 + Math.random() * 0.5, 1.8 + Math.random() * 1.8, 'cshard', { rot: Math.random() * 6, spin: (Math.random() - 0.5) * 18, col: cols[i % cols.length] }); }
+}
+function candyChocDrops(x, a, n, v, up = 50) {
+  for (let i = 0; i < n; i++) { const an = Math.PI * (0.05 + 0.9 * Math.random()), sp = v * (0.35 + 0.65 * Math.random()); puff(x + (Math.random() - 0.5) * 8, a, Math.cos(an) * sp * (Math.random() < 0.5 ? -1 : 1), Math.sin(an) * sp * 0.8 + up, 0.6 + Math.random() * 0.5, 1.6 + Math.random() * 2, 'cchoc'); }
+}
+function candyGumShreds(x, a, n, r) {
+  for (let i = 0; i < n; i++) { const an = i / n * TWO_PI + Math.random() * 0.4, sp = 60 + Math.random() * 120; puff(x + Math.cos(an) * r, a + Math.sin(an) * r, Math.cos(an) * sp, Math.sin(an) * sp, 0.7 + Math.random() * 0.4, 2.6 + Math.random() * 2.4, 'cgum', { rot: an + Math.PI / 2, spin: (Math.random() - 0.5) * 8 }); }
+}
+function candySprinkleBurst(x, a, n, v) {
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp + 40, 0.7 + Math.random() * 0.5, 1.6, 'csprink', { rot: Math.random() * 6, spin: (Math.random() - 0.5) * 20, col: CANDY_SPRINK[i % CANDY_SPRINK.length] }); }
+}
+const CANDY_JAWCOL = [[255, 120, 180], [130, 230, 205], [255, 216, 74], [180, 150, 255]];
+function candyUpdateTraps(dt) {
+  const top = G.camAlt + viewH, X = CANDY, p = G.p, play = G.state === 'play' && p.invuln <= 0;
+  let coated = false;
+  for (const h of G.hazards) {
+    if (!CANDY_TYPES.has(h.type)) continue;
+    const d = h.side, vis = h.hi > G.camAlt - 80 && h.lo < top + 80, nearP = h.hi > p.alt - 220 && h.lo < p.alt + 220;
+    if (h.type === 'candyGum') {
+      const st = candyGumAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('cgsquish', { v: candyVol(h.alt) });
+      if (st.ph === 'fire' && was.ph !== 'fire' && vis) { sfx('cgboing', { v: candyVol(h.alt) }); candySprinkleBurst(h.base + d * 20, h.alt, 6, 120); }
+      if (play && nearP) {
+        const S = candyShapes(h, G.t, [], 'soft').map(shrinkShape), ring = S.some(q => q.ring && shapeHits(q)), body = S.some(q => !q.ring && shapeHits(q));
+        const cyc = Math.floor(G.t / h.P + h.ph);
+        if ((ring && h.pushed !== cyc) || (body && !(G.t - (h.bodyT || -9) < 0.6))) {
+          if (ring) h.pushed = cyc; h.bodyT = G.t;
+          G.candyPushV = d * X.gum.push * (ring ? 1 : 0.6);
+          G.stats.candyBoing = (G.stats.candyBoing || 0) + 1;
+          if (!ring) sfx('cgboing', { v: 0.7 });
+          vibrate([12, 20]); p.squash = Math.max(p.squash, 0.7);
+          if (!G.candyBoingT || G.t - G.candyBoingT > 2.5) { G.candyBoingT = G.t; chainEvent('Boing!', '#c8ff9a', 0.9); }
+          for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; puff(p.x + Math.cos(an) * 24, p.alt + Math.sin(an) * 24, d * 120 + Math.cos(an) * 60, Math.sin(an) * 60, 0.35, 2, 'sparkle', [210, 255, 170]); }
+        }
+      }
+      h.st = st;
+    } else if (h.type === 'candyChoc') {
+      const st = candyChocAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('cbubble', { v: candyVol(h.alt) });
+      if (st.ph === 'pour' && was.ph !== 'pour' && vis) sfx('cpour', { v: candyVol(h.alt) * 0.9 });
+      // splashes where the pour lands in the bowl
+      if (st.ph === 'pour' && st.head >= X.choc.H - 1 && vis && Math.random() < dt * 14) { const bx = candyStreamX(h, X.choc.H); candyChocDrops(bx + (Math.random() - 0.5) * 10, h.alt - 4 - X.choc.H + 2, 1, 70, 60); }
+      if (play && nearP && st.head > 0 && candyShapes(h, G.t, [], 'soft').map(shrinkShape).some(shapeHits)) coated = true;
+      h.st = st;
+    } else if (h.type === 'candyJaw') {
+      const st = candyJawAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('crattle', { v: candyVol(h.alt) });
+      if (st.ph === 'fly' && was.ph !== 'fly' && vis) { sfx('croll', { v: candyVol(h.alt) }); candySprinkleBurst(h.x0, h.alt, 5, 90); }
+      if (st.ph === 'fly' && was.ph === 'fly' && st.n > was.n && st.n < h.nB && vis) {
+        sfx('cknock', { v: candyVol(st.a) }); const wx = st.n % 2 ? (d > 0 ? h.R : h.L) : (d > 0 ? h.L : h.R);
+        candyShards(wx - Math.sign(wx - h.x) * 4, st.a, 6, 150, [CANDY_JAWCOL[(st.n - 1) % 4], [255, 246, 250]]);
+        if (Math.abs(st.a - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.6);
+      }
+      // the shatter on its last wall
+      if (was.ph === 'fly' && st.ph !== 'fly' && vis) {
+        const end = candyJawPos(h, h.tEnd); sfx('cshatter', { v: candyVol(end.a) });
+        candyShards(end.x, end.a, 16, 230, [...CANDY_JAWCOL, [255, 246, 250]]); candySprinkleBurst(end.x, end.a, 8, 160);
+        if (Math.abs(end.a - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 2.2);
+      }
+      h.st = st;
+    } else if (h.type === 'candyBubble') {
+      const st = candyBubAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('cpuff', { v: candyVol(h.alt) });
+      if (st.ph === 'blow' && was.ph !== 'blow' && vis) sfx('cblow', { v: candyVol(h.alt) });
+      if (st.ph === 'pop' && was.ph !== 'pop' && vis) { sfx('cpop', { v: candyVol(h.alt) }); candyGumShreds(st.x, st.a, 14, st.r * 0.8); if (Math.abs(h.alt - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.4); }
+      h.st = st;
+    } else if (h.type === 'candyLolly') {
+      // every P s (on screen, while you fly) a coin leaves the swirl's rim and arcs out across the shaft
+      const cyc = Math.floor(G.t / h.P + h.ph);
+      if (h.cyc !== undefined && cyc !== h.cyc && G.state === 'play' && h.alt > G.camAlt + 40 && h.alt < top - 30) {
+        const L = X.lolly, hx = h.base + d * (L.stick + L.r - 2), v = lerp(L.v[0], L.v[1], hash2(cyc, h.alt | 0));
+        G.fruit.push({ x: hx + d * (L.r + 4), alt: h.alt + 8, kind: 'coco', lolly: true, vx: d * v, vy: L.up, born: G.t });
+        sfx('cfling', { v: candyVol(h.alt) * 0.8 });
+        for (let k = 0; k < 5; k++) puff(hx + d * L.r, h.alt + 8, d * (40 + Math.random() * 60), (Math.random() - 0.3) * 80, 0.3, 1.8, 'sparkle', [255, 236, 150]);
+      }
+      h.cyc = cyc;
+    }
+  }
+  candyCoatTick(dt, coated);
+  // flung lollipop coins fly, bounce off the walls and fade after a while
+  const L = X.lolly;
+  for (let i = G.fruit.length - 1; i >= 0; i--) {
+    const f = G.fruit[i]; if (!f.lolly) continue;
+    if (G.t - f.born > L.life) { G.fruit.splice(i, 1); continue; }
+    f.vy -= L.g * dt; f.x += f.vx * dt; f.alt += f.vy * dt;
+    const [wl, wr] = walls(f.alt);
+    if (f.x < wl + COCO_R + 2) { f.x = wl + COCO_R + 2; f.vx = Math.abs(f.vx) * 0.55; }
+    if (f.x > wr - COCO_R - 2) { f.x = wr - COCO_R - 2; f.vx = -Math.abs(f.vx) * 0.55; }
+  }
+}
+function candyCoatTick(dt, touch) {
+  const p = G.p, was = G.candyChoc || 0;
+  if (touch) {
+    if (!G.candyTouch) {
+      G.stats.candyCoated = (G.stats.candyCoated || 0) + 1;
+      sfx('ccoat'); vibrate([18, 30, 18]); p.squash = Math.max(p.squash, 0.8); G.shake = Math.max(G.shake, 1.6);
+      candyChocDrops(p.x, p.alt, 10, 110, 30);
+      if (candyBear()) { sfx('click'); if (!G.candyLickT || G.t - G.candyLickT > 3) { G.candyLickT = G.t; chainEvent('Licked clean! Yum!', '#ffe0c0', 1.2); } }
+      else chainEvent('Chocolate-coated!', '#f0c8a0', 1.2);
+    }
+    G.candyChoc = candyBear() ? Math.max(was, 0.35) : 1;
+  } else if (was > 0) G.candyChoc = Math.max(0, was - dt / (candyBear() ? CANDY.choc.bear : CANDY.choc.wear));
+  G.candyTouch = touch;
+  if (G.candyChoc > 0.15 && Math.random() < dt * 9 * G.candyChoc) puff(p.x + (Math.random() - 0.5) * 30, p.alt - 16 - Math.random() * 10, p.vx * 0.3, -40 - Math.random() * 50, 0.7, 1.6 + Math.random() * 1.6, 'cchoc');
+}
+// the chocolate on the pilot while coated: glossy drips hanging off the rocket's foot (and a tongue swipe for the bear)
+{ const base = drawPlayer; drawPlayer = function () {
+  base();
+  if (!candyOn() || !(G.candyChoc > 0.02) || G.state !== 'play') return;
+  const p = G.p, k = G.candyChoc, X = sx(p.x), Y = sy(p.alt), T = G.t, P = CANDYP.choc;
+  ctx.save(); ctx.globalAlpha = Math.min(1, k * 1.4);
+  for (let i = 0; i < 5; i++) {
+    const dx = (i - 2) * 9 * s, len = (8 + 6 * Math.sin(T * 2 + i * 1.7) + (i % 2) * 5) * s * k, y0 = Y + (14 + Math.abs(i - 2) * 3) * s, w = (3.6 - Math.abs(i - 2) * 0.5) * s;
+    ctx.fillStyle = gLG(ctx, X + dx - w, 0, X + dx + w, 0, [P[1], P[0], P[2]]);
+    ctx.beginPath(); ctx.moveTo(X + dx - w * 1.5, y0 - 3 * s); ctx.quadraticCurveTo(X + dx - w * 0.6, y0 + len * 0.5, X + dx - w * 0.6, y0 + len); ctx.arc(X + dx, y0 + len, w * 0.65, Math.PI, 0, true); ctx.quadraticCurveTo(X + dx + w * 0.6, y0 + len * 0.5, X + dx + w * 1.5, y0 - 3 * s); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = CANDYP.chocEdge; ctx.lineWidth = 0.7 * s; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,230,200,.75)'; ctx.beginPath(); ctx.arc(X + dx - w * 0.25, y0 + len - w * 0.2, w * 0.25, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+}; }
+
+// ---- golden bonbons: a round sweet wrapped in gold foil, twisted at both ends, in risky spots, worth a big coin each,
+// and the stage's bonbon mission; lollipop coins: the coins the lollipop swirls fling, and their mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.lolly && candyOn()) {
+    const n = G.stats.candyLolly = (G.stats.candyLolly || 0) + 1, of = advGoalN('candyLollyCoins');
+    base(f);
+    if (of && n <= of) chainEvent(n >= of ? `Lollipop coins ${n}/${of}! Sweet!` : `Lollipop coin ${n}/${of}`, '#ffe0f0', 1.1);
+    return;
+  }
+  if (f.kind !== 'bonbon') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.candyBons = (st.candyBons || 0) + 1, of = advGoalN('candyBonbons');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Golden bonbon ${n}/${of}!` : 'Golden bonbon!', '#ffe9a0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 230, 160];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 190, Math.sin(a) * 190, 0.6, 2.4, 'sparkle', k % 2 ? [255, 230, 120] : [255, 170, 210]); }
+  candySprinkleBurst(f.x, f.alt, 14, 200);
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe9a0', big: true, sub: 'golden bonbon' });
+  vibrate([20, 30, 20]); sfx('cbonbon');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'bonbon')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'bonbon');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'bonbon') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s * 1.2, s * 1.2); candyDrawBonbonArt(ctx, G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the bonbons found, the lollipop coins caught
+ADV_GOALS.candyBonbons = { text: g => `Find all ${g.n} golden bonbons`, done: (r, g) => (r.stats.candyBons || 0) >= g.n, any: true, prog: (g, st) => `${st.candyBons || 0}/${g.n}` };
+ADV_GOALS.candyLollyCoins = { text: g => `Catch ${g.n} coins flung by lollipops`, done: (r, g) => (r.stats.candyLolly || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.candyLolly || 0)}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'candyBonbons' || g.k === 'candyLollyCoins')) return;
+  const st = G.stats, T = G.t, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(60,20,40,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    ctx.save(); ctx.translate(xr - tw - 13, y); icon(); ctx.restore();
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'candyBonbons') { const n = st.candyBons || 0, got = n >= g.n; line(`${n}/${g.n}`, got ? '#ffe9a0' : '#fff2f6', () => { ctx.translate(0, 0.5); ctx.scale(0.62, 0.62); candyDrawBonbonArt(ctx, T, 0, true); }); }
+    else if (g.k === 'candyLollyCoins') {
+      const n = Math.min(g.n, st.candyLolly || 0), got = n >= g.n;
+      line(`${n}/${g.n}`, got ? '#ffe0f0' : '#fff2f6', () => { ctx.scale(0.58, 0.58); candyDrawLollyIcon(ctx); });
+    }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 30 plays it (its own shaft replaces the one advStart lays out, as the lab's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'candy' || (G.level && G.level.candy)) return;
+  G.level = createCandyLevel(G.seed, st); G.candyChoc = 0; G.candyTouch = false; G.candyPushV = 0;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Great Cake ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the candy traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRCANDY = { CANDY, CANDY_STAGE, candyShapes, candyGumAt, candyChocAt, candyJawAt, candyJawPos, candyBubAt, candyDanger, createCandyLevel, CANDYC, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the traps' art (each anchored at its wall at the trap's height, drawn for the left wall: x into the shaft, y
+// down; mirrored on the right wall). Static bodies are cached sprites; what moves is drawn live. ----
+
+// ---- the Gumdrop ----
+// four flavours (light, lit, mid, deep, glow), picked per gumdrop
+const CANDY_GUMS = [
+  { P: ['#f2ffd8', '#8ee83a', '#3eae10', '#1f6a08'], edge: '#2e6a16', glow: [170, 250, 120], iris: '#2e5a14' },
+  { P: ['#fff0d8', '#ff9a2a', '#e05a0a', '#962e04'], edge: '#8a3a0c', glow: [255, 180, 100], iris: '#7a3008' },
+  { P: ['#ffe6ee', '#ff4f84', '#d4144a', '#860a2c'], edge: '#861a36', glow: [255, 130, 160], iris: '#701428' },
+  { P: ['#f2e8ff', '#a47aff', '#6a3ae8', '#3a1c98'], edge: '#46308a', glow: [190, 160, 255], iris: '#3a2478' },
+];
+const candyGumLook = h => CANDY_GUMS[Math.floor(hash2(h.alt | 0, h.side + 5) * 4) % 4];
+// the body at rest (p0 out of the wall, b0 half height), its wall foot at (0, 0); squashed and stretched by scaling
+function candyGumSprite(v) {
+  const X = CANDY.gum, p = X.p, b = X.b, L = CANDY_GUMS[v], P = L.P;
+  return candySprite('gum' + v, p + 22, b * 2 + 18, 10, b + 9, c => {
+    // the dome's silhouette: a sugared gumdrop lying on its flat base against the wall
+    const dome = () => { c.beginPath(); c.moveTo(-3, -b); c.bezierCurveTo(p * 0.55, -b * 1.04, p * 1.03, -b * 0.56, p, 0); c.bezierCurveTo(p * 1.03, b * 0.56, p * 0.55, b * 1.04, -3, b); c.closePath(); };
+    c.fillStyle = 'rgba(40,10,30,.35)'; c.beginPath(); c.ellipse(1, 3, 7, b + 3, 0, 0, TWO_PI); c.fill();
+    // jelly body: deep saturated colour, lit through from inside
+    dome(); c.fillStyle = gRG(c, p * 0.42, 0, Math.max(p, b) * 1.15, [P[1], P[2], P[3]]); c.fill();
+    c.save(); dome(); c.clip();
+    // facets: the moulded gumdrop's flat faces, a fan of panels from the crown, each lit by its angle to the top-left light
+    const cx = p * 0.62, cy = -b * 0.05, N = 7;
+    for (let i = 0; i < N; i++) {
+      const a0 = -Math.PI / 2 - 0.15 + i * (Math.PI + 0.3) / N, a1 = a0 + (Math.PI + 0.3) / N, R = Math.max(p, b) * 1.6, mid = (a0 + a1) / 2;
+      const lit = Math.cos(mid - (-2.2)) * 0.5 + 0.5;   // facing the top-left
+      c.fillStyle = lit > 0.5 ? gCol([255, 255, 255], (lit - 0.5) * 0.42) : gCol([40, 0, 30], (0.5 - lit) * 0.5);
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R); c.lineTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R); c.closePath(); c.fill();
+      c.strokeStyle = gCol([255, 255, 255], 0.28); c.lineWidth = 0.7; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R); c.stroke();
+    }
+    // the crown facet: a small flat top catching the light
+    c.fillStyle = gRG(c, cx - 2, cy - 2, 7, ['rgba(255,255,255,.75)', 'rgba(255,255,255,0)']); c.beginPath(); c.arc(cx, cy, 7, 0, TWO_PI); c.fill();
+    // jelly translucency: light passing through, a bright rim glow along the lower edge (back-lit), a dark core
+    c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = gCol(L.glow, 0.55); c.lineWidth = 4; c.beginPath(); c.moveTo(0, b - 1); c.bezierCurveTo(p * 0.55, b * 1.0, p * 1.0, b * 0.52, p - 1, 0); c.stroke();
+    c.globalCompositeOperation = 'source-over';
+    // sugar crystals all over: little cubes, a lit face and a shaded face, a few glinting
+    for (let i = 0; i < 70; i++) {
+      const u = hash2(i, 31 + v), w = hash2(i, 37 + v) * 2 - 1, px = 1 + u * p * 0.95, py = w * b * Math.sqrt(Math.max(0, 1 - (u * 0.97) ** 2)) * 0.95, r = 0.7 + hash2(i, 41) * 0.7;
+      c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(px - r, py - r, r * 1.3, r * 1.3);
+      c.fillStyle = gCol([40, 0, 30], 0.35); c.fillRect(px - r * 0.2, py + r * 0.3, r * 1.1, r * 0.6);
+    }
+    c.restore();
+    dome(); c.strokeStyle = L.edge; c.lineWidth = 1.4; c.stroke();
+    // juicy sheen: a broad soft band along the top and a hard glint
+    c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 3; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(p * 0.1, -b * 0.82); c.quadraticCurveTo(p * 0.6, -b * 0.78, p * 0.84, -b * 0.34); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(p * 0.32, -b * 0.62, 3, 1.5, -0.3, 0, TWO_PI); c.fill();
+    // the sugar crust round its foot on the wall
+    for (let i = 0; i < 11; i++) { const yy = -b + 1 + i * (2 * b - 2) / 10; c.fillStyle = 'rgba(255,250,246,.95)'; c.beginPath(); c.arc(-1 + (i % 2) * 1.4, yy, 1.8, 0, TWO_PI); c.fill(); }
+  });
+}
+function candyDrawGum(h) {
+  const X = CANDY.gum, d = h.side, T = G.t, st = h.st || candyGumAt(h, T), v = Math.floor(hash2(h.alt | 0, h.side + 5) * 4) % 4, L = CANDY_GUMS[v], Y = sy(h.alt), bx = h.base;
+  // the push ring rolling out: a glowing sugar stadium out to its front (exactly its push shape)
+  if (st.front > 0) {
+    const fr = st.front, rr = Math.min(X.band, fr / 2), k = 1 - st.wave;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (let j = 0; j < 3; j++) {
+      const f2 = fr - j * 16; if (f2 < 20) continue; const r2 = Math.min(X.band, f2 / 2) * (1 - j * 0.12);
+      const xa = sx(bx + d * r2), xb = sx(bx + d * (f2 - r2));
+      ctx.strokeStyle = gCol(j ? L.glow : [255, 255, 240], (0.75 - j * 0.2) * k); ctx.lineWidth = (3 - j * 0.8) * s;
+      ctx.beginPath(); ctx.moveTo(xa, Y - r2 * s); ctx.lineTo(xb, Y - r2 * s); ctx.arc(xb, Y, r2 * s, -Math.PI / 2, Math.PI / 2, d < 0); ctx.lineTo(xa, Y + r2 * s); ctx.stroke();
+    }
+    candyGlow(ctx, sx(bx + d * fr * 0.6), Y, (fr * 0.55 + 20) * s, L.glow, 0.25 * k);
+    // sugar sparkles riding the front
+    for (let i = 0; i < 5; i++) { const an = (i - 2) * 0.55, xx = sx(bx + d * (fr - rr + Math.cos(an) * rr)), yy = Y + Math.sin(an) * rr * s; candyGlow(ctx, xx, yy, 6 * s, [255, 255, 230], 0.7 * k); }
+    ctx.restore();
+    void rr;
+  }
+  // its caution glow: pulsing through the squash
+  if (st.tell > 0) candyGlow(ctx, sx(bx + d * st.p * 0.6), Y, (34 + 16 * st.tell) * s, L.glow, 0.18 + 0.3 * st.tell * (0.6 + 0.4 * Math.sin(T * 24)));
+  else candyGlow(ctx, sx(bx + d * st.p * 0.6), Y, 30 * s, L.glow, 0.12);
+  const S = candyGumSprite(v), jig = st.ph === 'tell' ? Math.sin(T * 40) * 0.5 * st.tell : 0;
+  candyBlitAt(S, sx(bx) + jig * s, Y, 0, d, 1, st.p / X.p, st.b / X.b);
+  // the face: eyes screwed shut through the squash, wide on the boing; a little mouth
+  const ex = sx(bx + d * st.p * 0.56), ey = Y - st.b * 0.14 * s, er = 4.4 * s * (st.b / X.b) ** 0.3;
+  if (st.ph === 'tell' && st.tell > 0.25) candyEyes(ctx, ex, ey, er, 0, 1, L.iris);
+  else candyEyes(ctx, ex, ey, er * (st.ph === 'fire' ? 1.15 : 1), d * 0.35, 0, L.iris);
+  ctx.strokeStyle = L.edge; ctx.lineWidth = 1.1 * s; ctx.lineCap = 'round';
+  if (st.ph === 'fire') { ctx.fillStyle = '#6a1a34'; ctx.beginPath(); ctx.ellipse(ex, ey + 7 * s, 2.6 * s, 3.2 * s, 0, 0, TWO_PI); ctx.fill(); ctx.fillStyle = '#ff8aa8'; ctx.beginPath(); ctx.ellipse(ex, ey + 8.6 * s, 1.6 * s, 1.2 * s, 0, 0, TWO_PI); ctx.fill(); }
+  else if (st.ph === 'tell') { ctx.beginPath(); ctx.moveTo(ex - 3 * s, ey + 6 * s); ctx.lineTo(ex - 1 * s, ey + 5 * s); ctx.lineTo(ex + 1 * s, ey + 6.4 * s); ctx.lineTo(ex + 3 * s, ey + 5 * s); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(ex, ey + 4.4 * s, 2.4 * s, 0.35, Math.PI - 0.35); ctx.stroke(); }
+  // rosy cheeks
+  ctx.fillStyle = 'rgba(255,170,190,.45)'; for (const e of [-1, 1]) { ctx.beginPath(); ctx.ellipse(ex + e * er * 2.3, ey + 4 * s, 2.2 * s, 1.3 * s, 0, 0, TWO_PI); ctx.fill(); }
+  // strain lines in the squash
+  if (st.ph === 'tell' && st.tell > 0.3) { ctx.strokeStyle = gCol([255, 255, 255], 0.7 * st.tell); ctx.lineWidth = 1.2 * s; for (const e of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx(bx + d * (st.p + 4)), Y + e * (st.b + 2) * s); ctx.lineTo(sx(bx + d * (st.p + 9)), Y + e * (st.b + 7) * s); ctx.stroke(); } }
+}
+
+// ---- the Chocolate Fountain ----
+// its static parts: the wafer ledge (biscuit and cream layers, a waffle grid, its cut face at the tip showing the
+// layers, a chocolate-dipped wafer corbel under it), and H below its tip the pleated cupcake-liner bowl on a candy-cane
+// bracket hooking up from the wall. Anchored at the ledge's wall end, its top at y = 0.
+function candyChocMount() {
+  const X = CANDY.choc, bx = X.len - 6 + X.curl * (1 - Math.exp(-X.H / 18)), by = X.H + 4;
+  return candySprite('cmount', bx + 40, by + 50, 10, 16, c => {
+    const W = CANDYP.wafer, len = X.len;
+    // the corbel: a little chocolate-dipped wafer wedge under the ledge's wall end
+    c.fillStyle = gLG(c, 0, 18, 0, 46, [W[1], W[2]]); c.beginPath(); c.moveTo(-6, 17); c.lineTo(30, 17); c.lineTo(-6, 48); c.closePath(); c.fill();
+    c.strokeStyle = CANDYP.waferEdge; c.lineWidth = 0.8; c.stroke();
+    for (let k = 1; k < 4; k++) { c.strokeStyle = 'rgba(140,90,40,.45)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-6, 17 + k * 7); c.lineTo(30 - k * 8.6, 17 + k * 0.4); c.stroke(); }
+    c.fillStyle = gLG(c, 0, 30, 0, 48, [CANDYP.choc[1], CANDYP.choc[2]]); c.beginPath(); c.moveTo(-6, 34); c.lineTo(10, 30); c.quadraticCurveTo(6, 38, 9, 41); c.quadraticCurveTo(2, 42, -6, 48); c.closePath(); c.fill();
+    // the ledge: five layers, biscuit and cream, with the waffle grid pressed in
+    const LAY = [[0, 4.2, ['#fbe2aa', '#d9a55a']], [4.2, 2.4, ['#fff6e6', '#f0dcc0']], [6.6, 4.2, ['#f6d494', '#c88d44']], [10.8, 2.4, ['#fff6e6', '#f0dcc0']], [13.2, 4.6, ['#ecc07a', '#b67a36']]];
+    for (const [y0, hh, cc] of LAY) { c.fillStyle = gLG(c, 0, y0, 0, y0 + hh, cc); c.fillRect(-6, y0, len + 6, hh); }
+    c.strokeStyle = 'rgba(150,90,40,.5)'; c.lineWidth = 0.6;
+    for (let x = -2; x < len - 2; x += 5) { c.beginPath(); c.moveTo(x, 0.4); c.lineTo(x, 4); c.moveTo(x + 2.5, 6.8); c.lineTo(x + 2.5, 10.6); c.moveTo(x, 13.4); c.lineTo(x, 17.6); c.stroke(); }
+    c.fillStyle = 'rgba(255,240,210,.55)'; c.fillRect(-6, 0.5, len + 6, 0.8);
+    // its cut face at the tip: the layers in section, a lit edge
+    c.fillStyle = gLG(c, len - 2, 0, len + 3, 0, ['#f8dca0', '#d6a058']); c.beginPath(); c.roundRect(len - 3, 0, 5, 17.8, 1.4); c.fill();
+    for (const y0 of [4.2, 10.8]) { c.fillStyle = '#fff4e2'; c.fillRect(len - 3, y0, 5, 2.4); }
+    c.strokeStyle = CANDYP.waferEdge; c.lineWidth = 0.9; c.strokeRect(-6, 0, len + 8, 17.8);
+    c.strokeStyle = 'rgba(255,248,230,.7)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(len + 1.6, 0.6); c.lineTo(len + 1.6, 17); c.stroke();
+    // the bracket: a candy-cane hook from the wall up under the bowl
+    candyCaneRod(c, [[-8, by + 28], [bx * 0.4, by + 28], [bx - 14, by + 25], [bx - 6, by + 17]], 6.4, 0.3);
+    // the bowl: a pleated pink cupcake liner, a crimped rim
+    const bw = 40, bh = 16, cup = () => { c.beginPath(); c.moveTo(bx - bw / 2, by); c.lineTo(bx + bw / 2, by); c.lineTo(bx + bw / 2 - 6, by + bh); c.quadraticCurveTo(bx, by + bh + 2, bx - bw / 2 + 6, by + bh); c.closePath(); };
+    c.fillStyle = 'rgba(70,20,40,.28)'; c.beginPath(); c.ellipse(bx + 2, by + bh + 4, bw * 0.4, 3.4, 0, 0, TWO_PI); c.fill();
+    cup(); c.fillStyle = gLG(c, bx - bw / 2, 0, bx + bw / 2, 0, ['#ffd6e6', '#ff9cc4', '#ee78aa', '#c04c84']); c.fill();
+    c.save(); cup(); c.clip();
+    for (let k = -7; k <= 7; k++) { const x0 = bx + k * 2.8; c.strokeStyle = k % 2 ? 'rgba(150,40,90,.45)' : 'rgba(255,255,255,.55)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(x0, by); c.lineTo(x0 - k * 0.42, by + bh + 2); c.stroke(); }
+    c.fillStyle = gLG(c, 0, by, 0, by + bh, ['rgba(255,255,255,.18)', 'rgba(120,20,70,.25)']); c.fillRect(bx - bw / 2, by, bw, bh + 2);
+    c.restore();
+    cup(); c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.9; c.stroke();
+    // the chocolate in it (its surface ripples live) and the crimped rim over it
+    c.fillStyle = gLG(c, 0, by - 4, 0, by + 3, ['#a06a3e', '#6b3a24', '#3a1a0c']); c.beginPath(); c.ellipse(bx, by + 0.5, bw / 2 - 0.5, 4.2, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,214,180,.45)'; c.lineWidth = 1; c.beginPath(); c.ellipse(bx - 3, by, bw / 2 - 6, 2.3, 0, Math.PI * 1.1, Math.PI * 1.7); c.stroke();
+    for (let k = -9; k <= 9; k++) { const xx = bx + k * 2.1, yy = by + 3.6 * Math.sqrt(Math.max(0, 1 - (k / 9.6) ** 2)); c.fillStyle = k % 2 ? '#ffc6dc' : '#fff0f6'; c.beginPath(); c.arc(xx, yy, 1.6, 0, TWO_PI); c.fill(); }
+    c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.6; c.beginPath(); c.ellipse(bx, by + 0.5, bw / 2 + 0.6, 4.6, 0, 0.05, Math.PI - 0.05); c.stroke();
+  });
+}
+function candyDrawChoc(h) {
+  const X = CANDY.choc, d = h.side, T = G.t, st = h.st || candyChocAt(h, T), b = h.base, A = h.alt, P = CANDYP.choc;
+  const lipA = A - 4, bx = candyStreamX(h, X.H), bA = lipA - X.H, pourOn = st.ph === 'pour' || st.ph === 'drain';
+  const tell = st.ph === 'tell' ? st.tell : 0, bulge = tell * 6 + (st.ph === 'pour' ? 3 : 0);
+  candyGlow(ctx, sx(bx), sy(bA + 40), 60 * s, [230, 150, 90], 0.08 + (pourOn ? 0.14 : 0) + tell * 0.1);
+  candyBlit(candyChocMount(), b, A, 1, d);
+  // the pour: a glossy rope of chocolate from the lip to the bowl, a gob at its head, a drop at its tail
+  if (st.head > 0 && st.tail < X.H) {
+    const y0 = Math.max(0, st.tail), y1 = st.head, thin = st.ph === 'drain' ? 0.6 : lerp(0.6, 1, smooth(0, 0.15, st.v || 0));
+    const wid = dy => (6 + 4.5 * Math.exp(-dy / 22)) * thin * (1 - 0.2 * dy / X.H) * (1 + 0.07 * Math.sin(dy * 0.2 - T * 13));
+    const L = yy => sx(candyStreamX(h, yy)) - wid(yy) * s, R = yy => sx(candyStreamX(h, yy)) + wid(yy) * s, Y = yy => sy(lipA - yy);
+    if (y1 - y0 > 1) {
+      const path = (k0, k1) => { ctx.beginPath(); for (let yy = y0; yy <= y1; yy += 4) ctx.lineTo(lerp(L(yy), R(yy), k0), Y(yy)); ctx.lineTo(lerp(L(y1), R(y1), k0), Y(y1)); for (let yy = y1; yy >= y0; yy -= 4) ctx.lineTo(lerp(L(yy), R(yy), k1), Y(yy)); ctx.closePath(); };
+      const cx = sx(candyStreamX(h, (y0 + y1) / 2));
+      path(0, 1); ctx.fillStyle = gLG(ctx, cx - 9 * s, 0, cx + 9 * s, 0, ['#5a2c14', '#b07040', '#8a4e2c', '#4a220e']); ctx.fill();
+      ctx.strokeStyle = CANDYP.chocEdge; ctx.lineWidth = 0.9 * s; ctx.stroke();
+      ctx.save(); ctx.clip();
+      path(0.16, 0.42); ctx.fillStyle = 'rgba(222,160,112,.5)'; ctx.fill();
+      ctx.lineCap = 'round'; ctx.lineWidth = 1.3 * s; ctx.strokeStyle = 'rgba(255,238,218,.85)';
+      ctx.beginPath(); for (let yy = y0 + 2; yy <= y1; yy += 4) ctx.lineTo(lerp(L(yy), R(yy), 0.28), Y(yy)); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,160,200,.4)'; ctx.lineWidth = 1.1 * s; ctx.beginPath(); for (let yy = y0 + 2; yy <= y1; yy += 4) ctx.lineTo(lerp(L(yy), R(yy), 0.86), Y(yy)); ctx.stroke();
+      for (let k = 0; k < 4; k++) { const yy = candyFrac(T * 2.4 + k / 4) * X.H; if (yy < y0 + 4 || yy > y1 - 4) continue; ctx.fillStyle = 'rgba(255,240,220,.7)'; ctx.beginPath(); ctx.ellipse(lerp(L(yy), R(yy), 0.3), Y(yy), 1.1 * s, 4 * s, 0, 0, TWO_PI); ctx.fill(); }
+      ctx.restore();
+    }
+    if (st.ph === 'pour' && y1 < X.H) { ctx.save(); ctx.translate(sx(candyStreamX(h, y1)), Y(y1) + 1 * s); ctx.scale(s, s); candyBall(ctx, 0, 0, wid(y1) * 1.2, ['#d09a70', '#8a5030', '#4a2410', '#2e1408'], CANDYP.chocEdge, 0.4); ctx.restore(); }
+    if (st.ph === 'drain' && y0 > 0) { const xx = sx(candyStreamX(h, y0)), yy = Y(y0); ctx.fillStyle = gRG(ctx, xx - 1, yy - 2, 5 * s, ['#c8946a', '#5a2e16']); ctx.beginPath(); ctx.moveTo(xx, yy - 8 * s); ctx.quadraticCurveTo(xx + 3.6 * s, yy, xx, yy + 3 * s); ctx.quadraticCurveTo(xx - 3.6 * s, yy, xx, yy - 8 * s); ctx.fill(); }
+  }
+  // drips off the lip between pours
+  if (!pourOn) for (let j = 0; j < 2; j++) {
+    const u = candyFrac(T * 0.9 + j * 0.5 + h.ph), dy = candyFall(u * 0.5) * 0.9; if (dy > X.H) continue;
+    const xx = sx(candyStreamX(h, dy)), yy = sy(lipA - dy);
+    ctx.fillStyle = gRG(ctx, xx - 1, yy - 1, 4 * s, ['#c08a5a', '#4a2412']);
+    ctx.beginPath(); ctx.moveTo(xx, yy - (4 + u * 3) * s); ctx.quadraticCurveTo(xx + 2.6 * s, yy, xx, yy + 2.4 * s); ctx.quadraticCurveTo(xx - 2.6 * s, yy, xx, yy - (4 + u * 3) * s); ctx.fill();
+  }
+  // the chocolate pooled on the ledge, bulging over the lip through the tell, little drip tongues hanging off its front
+  const wx = sx(b + d * 4), tx = sx(b + d * (X.len - 2)), Yt = sy(A), k = s * d;
+  ctx.beginPath(); ctx.moveTo(wx, Yt + 4 * s);
+  ctx.lineTo(wx, Yt - (4 + bulge * 0.3) * s);
+  ctx.quadraticCurveTo((wx + tx) / 2, Yt - (7.5 + bulge * 0.5) * s, tx + 4 * k, Yt - (4 + bulge * 0.4) * s);
+  ctx.quadraticCurveTo(tx + (3 + bulge) * k, Yt - 2 * s, tx + (2 + bulge * 0.6) * k, Yt + (6 + bulge) * s);
+  ctx.quadraticCurveTo(tx, Yt + (10 + bulge * 0.8) * s, tx - 3 * k, Yt + 6 * s);
+  for (let q = 1; q <= 5; q++) { const xx = lerp(tx, wx, q / 6), dd = (3 + ((q * 7) % 5) * 1.5 + Math.sin(T * 2 + q) * 0.8) * s; ctx.quadraticCurveTo(xx - 2 * k, Yt + 4 * s, xx - 3 * k, Yt + 4 * s + dd); ctx.quadraticCurveTo(xx - 4.5 * k, Yt + 4 * s + dd + 2 * s, xx - 6 * k, Yt + 4 * s); }
+  ctx.closePath();
+  ctx.fillStyle = gLG(ctx, 0, Yt - 9 * s, 0, Yt + 12 * s, ['#b07848', '#6b3a24', '#3a1a0c']); ctx.fill();
+  ctx.strokeStyle = CANDYP.chocEdge; ctx.lineWidth = 1 * s; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,220,180,.55)'; ctx.lineWidth = 1.4 * s; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(wx + 6 * k, Yt - (4.6 + bulge * 0.3) * s); ctx.quadraticCurveTo((wx + tx) / 2, Yt - (6.6 + bulge * 0.5) * s, tx - 4 * k, Yt - (4.8 + bulge * 0.4) * s); ctx.stroke();
+  // sprinkles stuck in it
+  for (let q = 0; q < 5; q++) { const xx = lerp(wx, tx, 0.12 + q * 0.18), yy = Yt - (4.2 + bulge * 0.35) * s + Math.sin(q * 2.3) * 1.2 * s; ctx.save(); ctx.translate(xx, yy); ctx.scale(s, s); candySprinkle(ctx, 0, 0, q * 1.3, CANDY_SPRINK[q % 7], 2.8, 1.1); ctx.restore(); }
+  // bubbles popping on the pool through the tell
+  for (let j = 0; j < 3; j++) {
+    const u = candyFrac(T * 1.6 + j * 0.37), px = lerp(wx, tx, 0.25 + j * 0.22), r = (1.2 + u * 2.4) * (0.2 + tell + (pourOn ? 0.4 : 0)) * s;
+    if (r < 0.5) continue;
+    ctx.strokeStyle = `rgba(230,180,130,${0.8 * (1 - u)})`; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.arc(px, Yt - (5 + bulge * 0.4) * s - r * 0.4, r, Math.PI, TWO_PI); ctx.stroke();
+  }
+  // the bowl's surface ripples where the pour lands
+  if (st.head >= X.H - 1 && st.tail < X.H) {
+    const Yb = sy(bA) + 0.5 * s;
+    for (let q = 0; q < 2; q++) { const u = candyFrac(T * 2.2 + q * 0.5); ctx.strokeStyle = `rgba(230,180,140,${0.7 * (1 - u)})`; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.ellipse(sx(bx), Yb, (4 + u * 12) * s, (1.2 + u * 2.4) * s, 0, 0, TWO_PI); ctx.stroke(); }
+  }
+  // a warm caramel caution glow on the lip (it slows, it does not hurt)
+  candyGlow(ctx, tx, Yt, (24 + tell * 12) * s, [255, 170, 90], 0.12 + tell * 0.22);
+}
+const candyFrac = x => x - Math.floor(x);
+
+// ---- the Jawbreaker ----
+// its chute: a fat peppermint-striped pipe out of the wall with a flared mint lip, fed from above by a glass globe of
+// spare jawbreakers on a candy-cane collar, a coin crank on its side. Anchored at the wall at the chute's middle.
+function candyJawChute() {
+  return candySprite('jchute', 96, 140, 8, 96, c => {
+    const M = CANDYP.mint, cr = 23;
+    // the feed pipe from the globe down into the chute
+    c.fillStyle = gLG(c, 9, 0, 25, 0, ['#c8b0b8', '#fff6f8', '#e8d0d8', '#a08890']); c.fillRect(9, -48, 16, 30);
+    c.strokeStyle = 'rgba(160,40,60,.8)'; c.lineWidth = 3; for (let y = -46; y < -20; y += 7) { c.beginPath(); c.moveTo(9, y + 4); c.lineTo(25, y); c.stroke(); }
+    c.strokeStyle = CANDYP.caneEdge; c.lineWidth = 0.8; c.strokeRect(9, -48, 16, 30);
+    // the globe: glass over a pile of jawbreakers, a pink cap and a cane collar
+    const gx = 17, gy = -66, gr = 22;
+    c.save(); c.beginPath(); c.arc(gx, gy, gr, 0, TWO_PI); c.clip();
+    c.fillStyle = 'rgba(255,236,246,.25)'; c.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+    const BALLS = [[-10, 12, 7, 0], [3, 13, 7.4, 1], [14, 10, 6.6, 2], [-15, 2, 6, 3], [-3, 2, 6.8, 2], [9, 0, 6.6, 0], [-8, -9, 6, 1], [5, -10, 6.2, 3], [16, -4, 5.6, 1]];
+    for (const [x, y, r, k] of BALLS) { const col = ['#ff7ab0', '#7fe0c8', '#ffd84a', '#b496ff'][k]; candyBall(c, gx + x, gy + y, r, ['#ffffff', col, gCol(gMix(candyHex(col), [60, 20, 60], 0.35)), gCol(gMix(candyHex(col), [40, 10, 40], 0.6))], gCol(gMix(candyHex(col), [60, 10, 40], 0.55)), 0.4); c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.1; c.beginPath(); c.arc(gx + x, gy + y, r * 0.62, 0.3 + k, 1.6 + k); c.stroke(); }
+    c.restore();
+    c.fillStyle = gRG(c, gx - 8, gy - 10, gr * 1.2, ['rgba(255,255,255,.35)', 'rgba(255,255,255,0)', 'rgba(200,120,170,.18)']); c.beginPath(); c.arc(gx, gy, gr, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(200,140,180,.9)'; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 2.2; c.lineCap = 'round'; c.beginPath(); c.arc(gx, gy, gr - 4, 3.6, 4.5); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(gx - 9, gy - 12, 3, 1.6, -0.7, 0, TWO_PI); c.fill();
+    c.fillStyle = gRG(c, gx - 4, gy - gr - 6, 12, CANDYP.pink); c.beginPath(); c.ellipse(gx, gy - gr + 2, 11, 6, 0, Math.PI, 0); c.closePath(); c.fill(); c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.8; c.stroke();
+    candyBall(c, gx, gy - gr - 4, 3.2, ['#fff4f8', '#ff6fa8', '#c03a7c', '#8a2458'], CANDYP.pinkEdge, 0.5);
+    candyCaneRod(c, [[gx - 13, gy + gr - 3], [gx + 13, gy + gr - 3]], 5.5, 0);
+    // the bracket bolting the globe to the wall
+    c.fillStyle = gLG(c, -4, 0, 4, 0, CANDYP.cream); c.beginPath(); c.roundRect(-5, gy - 6, 8, 30, 3); c.fill(); c.strokeStyle = CANDYP.creamEdge; c.lineWidth = 0.7; c.stroke();
+    // the chute: a fat striped pipe out of the wall (shading round it), the red twist stripes
+    c.save(); c.beginPath(); c.roundRect(-8, -cr, 48, cr * 2, 6); c.clip();
+    c.fillStyle = gLG(c, 0, -cr, 0, cr, ['#e8d6dc', '#fff8fa', '#f4e6ea', '#d4b8c2', '#a88894']); c.fillRect(-8, -cr, 48, cr * 2);
+    c.fillStyle = 'rgba(232,57,78,.92)'; for (let k = -2; k < 8; k++) { const x0 = -8 + k * 11; c.beginPath(); c.moveTo(x0, cr); c.lineTo(x0 + 9, -cr); c.lineTo(x0 + 14.5, -cr); c.lineTo(x0 + 5.5, cr); c.closePath(); c.fill(); }
+    c.fillStyle = gLG(c, 0, -cr, 0, cr, ['rgba(255,255,255,.35)', 'rgba(255,255,255,0)', 'rgba(120,20,40,0)', 'rgba(120,20,40,.35)']); c.fillRect(-8, -cr, 48, cr * 2);
+    c.restore();
+    c.strokeStyle = CANDYP.caneEdge; c.lineWidth = 1; c.beginPath(); c.roundRect(-8, -cr, 48, cr * 2, 6); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-6, -cr + 4); c.lineTo(36, -cr + 4); c.stroke();
+    // the crank on its side: a cream disc with a pink knob
+    c.fillStyle = gRG(c, 12, 8, 9, CANDYP.cream); c.beginPath(); c.arc(14, 10, 7, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.creamEdge; c.lineWidth = 0.7; c.stroke();
+    // the flared lip: a thick mint frosting ring round the mouth, piped ridges, sprinkles
+    c.fillStyle = gLG(c, 36, -cr - 3, 50, cr + 3, [M[0], M[1], M[2], M[3]]); c.beginPath(); c.ellipse(42, 0, 8, cr + 3, 0, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.mintEdge; c.lineWidth = 1; c.stroke();
+    for (let k = -3; k <= 3; k++) { const yy = k * (cr / 3.6); gPair(c, [[37, yy], [46.5, yy * 1.04]], 'rgba(30,110,90,.4)', 'rgba(240,255,250,.7)', 0.8, -0.8); }
+    c.fillStyle = '#2a0c14'; c.beginPath(); c.ellipse(44, 0, 4, cr - 3, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = gLG(c, 40, 0, 48, 0, ['rgba(80,20,40,.9)', 'rgba(140,40,70,.6)']); c.beginPath(); c.ellipse(44.5, 0, 3, cr - 4, 0, 0, TWO_PI); c.fill();
+    for (let k = 0; k < 6; k++) candySprinkle(c, 41 + (k % 2) * 3, -cr + 5 + k * 7.2, k * 1.1, CANDY_SPRINK[k], 2.6, 1.1);
+    // the crank knob's lit dot and a little heart on the pipe
+    c.fillStyle = '#ff6fa8'; c.beginPath(); c.arc(17.6, 6.6, 2, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.arc(17, 6, 0.7, 0, TWO_PI); c.fill();
+  });
+}
+function candyHex(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+// the jawbreaker: layer 0 its striped candy shell, layer 1 the mint shell under it (chipped and cracked), r = CANDY.jaw.r
+const CANDY_JAWSTRIPES = ['#ff6fa8', '#fff4f8', '#5fd3b8', '#fff4f8', '#ffc93a', '#fff4f8', '#9a7aff', '#fff4f8'];
+function candyJawBall(layer) {
+  const r = CANDY.jaw.r;
+  return candySprite('jball' + layer, r * 2 + 6, r * 2 + 6, r + 3, r + 3, c => {
+    c.save(); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.clip();
+    if (layer === 0) {
+      // swirled bands round the ball, curving like meridians (it rolls: the sprite turns)
+      c.fillStyle = '#fff4f8'; c.fillRect(-r, -r, r * 2, r * 2);
+      for (let i = 0; i < 8; i++) {
+        if (i % 2) continue; const a0 = -Math.PI / 2 + i * Math.PI / 8, a1 = a0 + Math.PI / 8;
+        c.fillStyle = CANDY_JAWSTRIPES[i];
+        c.beginPath(); for (let q = 0; q <= 12; q++) { const y = -r + q * r / 6; const w = Math.sqrt(Math.max(0, r * r - y * y)); c.lineTo(Math.sin(a0) * w * 1.02, y); } for (let q = 12; q >= 0; q--) { const y = -r + q * r / 6; const w = Math.sqrt(Math.max(0, r * r - y * y)); c.lineTo(Math.sin(a1) * w * 1.02, y); } c.closePath(); c.fill();
+        c.save(); c.scale(-1, 1); c.fill(); c.restore();
+      }
+      c.fillStyle = '#ff6fa8'; c.beginPath(); c.ellipse(0, 0, r * 0.12, r, 0, 0, TWO_PI); c.fill();
+    } else {
+      // the mint layer underneath: a white swirl, chips knocked out showing the yellow layer under that, cracks
+      c.fillStyle = gRG(c, -r * 0.3, -r * 0.3, r * 1.3, ['#e6fff8', '#8fe6cf', '#3fae93']); c.fillRect(-r, -r, r * 2, r * 2);
+      c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 2.4; c.beginPath(); for (let a = 0; a < 3.6 * Math.PI; a += 0.25) { const rr = 1 + a / (3.6 * Math.PI) * r; c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } c.stroke();
+      for (const [cx, cy, cr] of [[r * 0.45, -r * 0.3, 5], [-r * 0.5, r * 0.4, 4]]) { c.fillStyle = gRG(c, cx - 1, cy - 1, cr, ['#fff6c4', '#ffd84a', '#e0a020']); c.beginPath(); c.moveTo(cx - cr, cy); c.lineTo(cx - cr * 0.3, cy - cr); c.lineTo(cx + cr, cy - cr * 0.4); c.lineTo(cx + cr * 0.6, cy + cr * 0.8); c.lineTo(cx - cr * 0.5, cy + cr * 0.7); c.closePath(); c.fill(); c.strokeStyle = 'rgba(30,110,90,.7)'; c.lineWidth = 0.7; c.stroke(); }
+      gPair(c, [[-r * 0.1, -r * 0.9], [-r * 0.05, -r * 0.45], [r * 0.2, -r * 0.2], [r * 0.12, r * 0.15]], 'rgba(30,100,80,.7)', 'rgba(255,255,255,.55)', 0.9, 0.7);
+      gPair(c, [[-r * 0.85, r * 0.1], [-r * 0.45, r * 0.05], [-r * 0.3, r * 0.4]], 'rgba(30,100,80,.7)', 'rgba(255,255,255,.55)', 0.8, 0.7);
+    }
+    c.restore();
+    c.strokeStyle = layer ? CANDYP.mintEdge : CANDYP.pinkEdge; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
+  });
+}
+// the ball's light (drawn over the turning stripes, unturned): sphere shading, a sheen and a glint, and its scowl
+function candyJawShade(layer) {
+  const r = CANDY.jaw.r;
+  return candySprite('jshade' + layer, r * 2 + 6, r * 2 + 6, r + 3, r + 3, c => {
+    c.fillStyle = gRG(c, -r * 0.4, -r * 0.45, r * 1.6, ['rgba(255,255,255,.38)', 'rgba(255,255,255,0)', layer ? 'rgba(20,80,70,.45)' : 'rgba(110,20,70,.48)']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+    c.strokeStyle = layer ? 'rgba(220,255,245,.6)' : 'rgba(255,200,226,.6)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 0, r - 1.6, 0.3, 1.6); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 2.6; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, r * 0.72, 3.5, 4.5); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-r * 0.4, -r * 0.52, r * 0.18, r * 0.1, -0.7, 0, TWO_PI); c.fill();
+    // the scowl: angry eyes under heavy brows, gritted teeth
+    for (const e of [-1, 1]) {
+      const ex = e * r * 0.34, ey = -r * 0.12;
+      c.fillStyle = '#fffafc'; c.beginPath(); c.ellipse(ex, ey, r * 0.2, r * 0.24, 0, 0, TWO_PI); c.fill(); c.strokeStyle = layer ? CANDYP.mintEdge : '#8a1c44'; c.lineWidth = 0.8; c.stroke();
+      c.fillStyle = '#e8394e'; c.beginPath(); c.arc(ex + e * -r * 0.04, ey + r * 0.05, r * 0.12, 0, TWO_PI); c.fill();
+      c.fillStyle = '#4a0c1c'; c.beginPath(); c.arc(ex + e * -r * 0.05, ey + r * 0.06, r * 0.06, 0, TWO_PI); c.fill();
+      c.strokeStyle = layer ? '#1e5a4a' : '#7a1838'; c.lineWidth = 2.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(ex - e * r * 0.24, ey - r * 0.32); c.lineTo(ex + e * r * 0.18, ey - r * 0.16); c.stroke();
+    }
+    c.fillStyle = layer ? '#1e5a4a' : '#7a1838'; c.beginPath(); c.moveTo(-r * 0.32, r * 0.34); c.quadraticCurveTo(0, r * 0.56, r * 0.32, r * 0.34); c.quadraticCurveTo(0, r * 0.44, -r * 0.32, r * 0.34); c.fill();
+    c.fillStyle = '#fff'; c.fillRect(-r * 0.2, r * 0.36, r * 0.13, r * 0.09); c.fillRect(-r * 0.04, r * 0.38, r * 0.12, r * 0.09); c.fillRect(r * 0.11, r * 0.36, r * 0.11, r * 0.08);
+  });
+}
+function candyDrawJawBall(X0, Y0, rot, layer, sq = 1, sqAng = 0, alpha = 1) {
+  ctx.save(); ctx.translate(X0, Y0); if (alpha < 1) ctx.globalAlpha = alpha;
+  if (sq !== 1) { ctx.rotate(sqAng); ctx.scale(sq, 1 / sq); ctx.rotate(-sqAng); }
+  const B = candyJawBall(layer), S = candyJawShade(layer);
+  ctx.save(); ctx.rotate(rot); ctx.drawImage(B.cv, -B.ax * s, -B.ay * s, B.w * s, B.h * s); ctx.restore();
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s);
+  ctx.restore();
+}
+function candyDrawJaw(h) {
+  const X = CANDY.jaw, d = h.side, T = G.t, st = h.st || candyJawAt(h, T), Y = sy(h.alt), bx = h.base;
+  // the ball in the mouth: peeking out and rattling through the tell (behind the lip), hidden while it reloads
+  if (st.ph === 'tell' || (st.ph === 'rest' && st.reload >= 1)) {
+    const k = st.ph === 'tell' ? smooth(0, 0.6, st.tell) : 0, rat = st.ph === 'tell' ? Math.sin(T * 46) * 1.4 * st.tell : 0;
+    const x = bx + d * (26 + 14 * k);
+    ctx.save(); ctx.beginPath(); const xl = sx(bx + d * 40); ctx.rect(d > 0 ? xl - 200 : xl, Y - 40 * s, 200, 80 * s); ctx.clip();
+    if (k > 0.05) candyDrawJawBall(sx(x) + rat * s, Y + Math.abs(rat) * 0.4 * s, 0, 0);
+    ctx.restore();
+  }
+  // the chute
+  candyBlit(candyJawChute(), bx, h.alt, 1, d);
+  // the tell: a red pulse at the mouth and chevrons pointing the way it will roll
+  if (st.ph === 'tell') {
+    const a = smooth(0, 0.3, st.tell) * (0.55 + 0.45 * Math.sin(st.tell * 30));
+    candyGlow(ctx, sx(bx + d * 46), Y, 44 * s, [255, 80, 120], 0.45 * a);
+    ctx.save(); ctx.strokeStyle = `rgba(255,120,170,${0.4 + 0.5 * st.tell})`; ctx.lineWidth = 2 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 0; i < 3; i++) { const u = candyFrac(T * 1.8 + i / 3), x = sx(bx + d * (70 + u * 90)); ctx.globalAlpha = Math.sin(u * Math.PI) * st.tell; ctx.beginPath(); ctx.moveTo(x - d * 5 * s, Y - 7 * s); ctx.lineTo(x + d * 2 * s, Y); ctx.lineTo(x - d * 5 * s, Y + 7 * s); ctx.stroke(); }
+    ctx.restore();
+  }
+  // the ball in flight: rolling (its stripes turn with the distance), squashed on each knock, streaks behind it
+  if (st.ph === 'fly') {
+    const P = st, layer = Math.min(1, P.n), Pb = candyJawPos(h, Math.max(0, P.tau - 0.05));
+    const dist = (d > 0 ? 1 : -1) * X.V * P.tau, rot = dist / X.r * (P.dir > 0 ? 1 : 1);
+    const lo = h.L + X.r, hi = h.R - X.r, near = Math.min(P.x - lo, hi - P.x), sq = 1 - 0.14 * (1 - smooth(0, 8, near));
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,170,210,.32)'; ctx.lineCap = 'round';
+    for (const o of [-0.55, 0, 0.55]) { ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.moveTo(sx(Pb.x + o * X.r), sy(Pb.a + 6)); ctx.lineTo(sx(P.x + o * X.r * 0.8), sy(P.a + X.r * 0.85)); ctx.stroke(); }
+    ctx.restore();
+    candyGlow(ctx, sx(P.x), sy(P.a), X.r * 2.1 * s, [255, 90, 140], 0.3);
+    candyDrawJawBall(sx(P.x), sy(P.a), rot * 0.5, layer, sq, 0);
+  }
+}
+
+// ---- the Bubblegum Blower ----
+// its mount: a waffle-cone cup on a candy-cane bracket out of the wall (the blob sits in it); anchored at the wall at
+// the bubble's height (its mouth at (mouth, 0))
+function candyBubMount() {
+  return candySprite('bmount', 70, 60, 10, 20, c => {
+    const W = CANDYP.wafer;
+    candyCaneRod(c, [[-8, 18], [8, 18], [16, 14]], 5, 0.6);
+    // the cup: a waffle cone bowl, rim of rolled wafer
+    const cup = () => { c.beginPath(); c.moveTo(2, -2); c.lineTo(42, -2); c.lineTo(36, 20); c.quadraticCurveTo(22, 24, 8, 20); c.closePath(); };
+    c.fillStyle = 'rgba(70,20,40,.25)'; c.beginPath(); c.ellipse(22, 23, 16, 3, 0, 0, TWO_PI); c.fill();
+    cup(); c.fillStyle = gLG(c, 2, 0, 42, 0, [W[2], W[0], W[1], W[2], W[3]]); c.fill();
+    c.save(); cup(); c.clip();
+    c.strokeStyle = 'rgba(140,84,36,.6)'; c.lineWidth = 0.9;
+    for (let k = -6; k < 10; k++) { c.beginPath(); c.moveTo(k * 6, -2); c.lineTo(k * 6 + 24, 24); c.stroke(); c.beginPath(); c.moveTo(k * 6 + 24, -2); c.lineTo(k * 6, 24); c.stroke(); }
+    c.strokeStyle = 'rgba(255,236,190,.45)'; c.lineWidth = 0.6;
+    for (let k = -6; k < 10; k++) { c.beginPath(); c.moveTo(k * 6 + 1, -2); c.lineTo(k * 6 + 25, 24); c.stroke(); }
+    c.fillStyle = gLG(c, 0, -2, 0, 22, ['rgba(255,255,255,.12)', 'rgba(90,40,10,.3)']); c.fillRect(0, -2, 44, 26);
+    c.restore();
+    cup(); c.strokeStyle = CANDYP.waferEdge; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = gLG(c, 0, -5, 0, 2, [W[0], W[1], W[2]]); c.beginPath(); c.roundRect(0, -5, 44, 6, 3); c.fill(); c.strokeStyle = CANDYP.waferEdge; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = 'rgba(255,246,220,.75)'; c.fillRect(3, -4.2, 38, 1);
+    // a drizzle of pink icing over the rim, sprinkles in it
+    c.fillStyle = gLG(c, 0, -6, 0, 6, ['#ffe4f0', '#ff9cc4', '#e06a9e']); c.beginPath(); c.moveTo(1, -4); c.lineTo(43, -4); c.lineTo(43, 0);
+    for (let k = 0; k < 6; k++) { const x = 43 - k * 7, dd = 2 + (k * 5 % 4) * 1.6; c.quadraticCurveTo(x - 1, 0, x - 2, dd + 1); c.arc(x - 3.5, dd + 1, 1.5, 0, Math.PI); c.quadraticCurveTo(x - 6, 0, x - 7, 0); }
+    c.closePath(); c.fill(); c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.6; c.stroke();
+    for (let k = 0; k < 5; k++) candySprinkle(c, 6 + k * 8, -2.6, k * 1.4, CANDY_SPRINK[(k + 2) % 7], 2.4, 1);
+  });
+}
+// the gum blob: a chewed pink blob with stubby arms on the cup's rim; mood 0 chewing, 1 cheeks puffed, 2 blowing
+function candyBlobSprite(mood) {
+  return candySprite('blob' + mood, 56, 52, 26, 30, c => {
+    const B = CANDYP.bubble, puff = mood === 1 ? 1 : mood === 2 ? 0.6 : 0;
+    const body = () => { c.beginPath(); c.moveTo(-16, 8); c.bezierCurveTo(-20, -6, -14, -20, -2, -21); c.bezierCurveTo(10, -22, 18 + puff * 3, -12, 18 + puff * 4, -2); c.bezierCurveTo(19 + puff * 4, 6, 12, 10, 4, 10); c.bezierCurveTo(-4, 11, -12, 11, -16, 8); c.closePath(); };
+    body(); c.fillStyle = gRG(c, -6, -12, 30, [B[0], B[1], B[2], B[3]]); c.fill();
+    c.save(); body(); c.clip();
+    // chewed texture: soft dimples (dark furrow + lit ridge pairs) and a stretchy fold
+    for (const [x, y, r] of [[-9, -10, 3.2], [2, -15, 2.6], [-11, 2, 2.4], [9, -16, 2]]) { c.strokeStyle = 'rgba(170,40,100,.45)'; c.lineWidth = 0.9; c.beginPath(); c.arc(x, y, r, 0.2, 2.6); c.stroke(); c.strokeStyle = 'rgba(255,240,248,.7)'; c.lineWidth = 0.7; c.beginPath(); c.arc(x - 0.4, y - 0.6, r, 3.4, 5.6); c.stroke(); }
+    c.fillStyle = 'rgba(150,30,90,.18)'; c.beginPath(); c.ellipse(0, 9, 18, 5, 0, 0, TWO_PI); c.fill();
+    c.restore();
+    body(); c.strokeStyle = CANDYP.bubbleEdge; c.lineWidth = 1.1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); c.moveTo(-14, -6); c.quadraticCurveTo(-12, -17, -2, -18.6); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-8, -15, 2.2, 1.2, -0.5, 0, TWO_PI); c.fill();
+    // cheeks: round and rosy, big when puffed
+    c.fillStyle = 'rgba(255,90,150,.42)'; c.beginPath(); c.ellipse(8 + puff * 2, 1, 4 + puff * 3, 2.6 + puff * 2.2, 0, 0, TWO_PI); c.fill();
+    if (puff > 0.5) { c.fillStyle = gRG(c, 10, -2, 9, ['rgba(255,255,255,.5)', 'rgba(255,160,210,0)']); c.beginPath(); c.arc(11, -1, 8, 0, TWO_PI); c.fill(); }
+    // eyes looking out into the shaft
+    for (const [ex, ey] of [[2, -9], [10, -10]]) {
+      if (mood === 1) { c.strokeStyle = '#6a1440'; c.lineWidth = 1.3; c.lineCap = 'round'; c.beginPath(); c.arc(ex, ey, 2.4, Math.PI + 0.3, -0.3); c.stroke(); continue; }
+      c.fillStyle = '#fffafc'; c.beginPath(); c.ellipse(ex, ey, 2.8, 3.3, 0, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(120,30,70,.7)'; c.lineWidth = 0.6; c.stroke();
+      c.fillStyle = '#4a1030'; c.beginPath(); c.arc(ex + 0.9, ey + 0.4, 1.6, 0, TWO_PI); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(ex + 0.3, ey - 0.4, 0.6, 0, TWO_PI); c.fill();
+    }
+    // the mouth: chewing, a tight O for the puff, pursed lips round the bubble's root when blowing
+    if (mood === 0) { c.fillStyle = '#8a1a4a'; c.beginPath(); c.ellipse(14, 2, 2.6, 1.8, 0.2, 0, TWO_PI); c.fill(); c.fillStyle = '#fff'; c.fillRect(12.6, 0.9, 1.2, 0.9); }
+    else if (mood === 1) { c.fillStyle = '#8a1a4a'; c.beginPath(); c.arc(17.5, 1, 1.3, 0, TWO_PI); c.fill(); }
+    else { c.fillStyle = gRG(c, 18, 0, 4, ['#ff9cc8', '#e05a9a']); c.beginPath(); c.ellipse(19.5, 0, 2.2, 3, 0, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.bubbleEdge; c.lineWidth = 0.7; c.stroke(); }
+    // stubby arms gripping the rim
+    for (const [x, y] of [[-12, 9], [12, 10]]) { c.fillStyle = gRG(c, x - 1, y - 2, 5, [B[1], B[2]]); c.beginPath(); c.ellipse(x, y, 4.2, 2.8, 0, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.bubbleEdge; c.lineWidth = 0.7; c.stroke(); }
+  });
+}
+// the bubble: a big glossy translucent pink sphere (drawn at r = CANDY.bub.R, scaled), a window glint, a soft swirl
+function candyBubbleSprite() {
+  const R = CANDY.bub.R;
+  return candySprite('bubble', R * 2 + 8, R * 2 + 8, R + 4, R + 4, c => {
+    c.fillStyle = gRG(c, -R * 0.3, -R * 0.35, R * 1.25, ['rgba(255,236,248,.55)', 'rgba(255,170,214,.5)', 'rgba(255,120,188,.62)', 'rgba(214,60,140,.85)']); c.beginPath(); c.arc(0, 0, R, 0, TWO_PI); c.fill();
+    // a gum-thin film: a darker rim band and a lighter swirl floating in it
+    c.strokeStyle = 'rgba(200,50,130,.55)'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R - 2, 0, TWO_PI); c.stroke();
+    c.strokeStyle = 'rgba(255,220,240,.35)'; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.1, R * 0.15, R * 0.55, 0.3, 2.2); c.stroke();
+    c.strokeStyle = CANDYP.bubbleEdge; c.lineWidth = 1.3; c.beginPath(); c.arc(0, 0, R, 0, TWO_PI); c.stroke();
+    // reflections: a curved window glint up left, a thin rim light down right, two specks
+    c.fillStyle = 'rgba(255,255,255,.75)'; c.beginPath(); c.moveTo(-R * 0.62, -R * 0.2); c.quadraticCurveTo(-R * 0.6, -R * 0.62, -R * 0.2, -R * 0.66); c.quadraticCurveTo(-R * 0.48, -R * 0.5, -R * 0.62, -R * 0.2); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, R * 0.84, 0.35, 1.2); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.arc(-R * 0.15, -R * 0.72, 2.4, 0, TWO_PI); c.arc(R * 0.5, R * 0.48, 1.4, 0, TWO_PI); c.fill();
+  });
+}
+function candyDrawBubble(h) {
+  const X = CANDY.bub, d = h.side, T = G.t, st = h.st || candyBubAt(h, T), Y = sy(h.alt), bx = h.base;
+  candyBlit(candyBubMount(), bx, h.alt, 1, d);
+  // the blob: chewing (a squish in time), puffing its cheeks (a wobble), blowing
+  const mood = st.ph === 'tell' ? 1 : st.ph === 'blow' ? 2 : 0, chew = mood === 0 ? Math.sin(T * 7 + h.ph * 5) : 0;
+  const ky = 1 + 0.06 * chew + (mood === 1 ? 0.05 * Math.sin(T * 30) * st.tell : 0), kx = 1 - 0.04 * chew + (mood === 1 ? 0.08 * st.tell : 0);
+  candyBlitAt(candyBlobSprite(mood), sx(bx + d * 22), sy(h.alt + 8) + (1 - ky) * 10 * s, 0, d, 1, kx, ky);
+  if (st.ph === 'tell') candyGlow(ctx, sx(bx + d * 34), Y, (30 + 14 * st.tell) * s, [255, 110, 180], 0.2 + 0.3 * st.tell * (0.6 + 0.4 * Math.sin(T * 22)));
+  // the bubble: growing at the lips (a neck of gum to the mouth), then drifting free, wobbling, then popping
+  if (st.ph === 'blow' || st.ph === 'drift') {
+    const r = st.r, wob = 1 + 0.035 * Math.sin(T * 9 + h.ph * 3), X0 = sx(st.x), Y0 = sy(st.a), S = candyBubbleSprite(), k = r / X.R;
+    candyGlow(ctx, X0, Y0, r * 1.5 * s, [255, 120, 190], 0.22);
+    if (st.ph === 'blow') {
+      // the neck of stretched gum back to the lips
+      const mx = sx(bx + d * (X.mouth - 2)); ctx.fillStyle = gLG(ctx, 0, Y - 4 * s, 0, Y + 4 * s, ['#ffc4e2', '#ff7ab8', '#d84a94']);
+      ctx.beginPath(); ctx.moveTo(mx, Y - 3 * s); ctx.quadraticCurveTo((mx + X0) / 2, Y - 2 * s, X0 - d * r * 0.8 * s, Y0 - r * 0.45 * s); ctx.lineTo(X0 - d * r * 0.8 * s, Y0 + r * 0.45 * s); ctx.quadraticCurveTo((mx + X0) / 2, Y + 2 * s, mx, Y + 3 * s); ctx.closePath(); ctx.fill();
+    }
+    candyBlitAt(S, X0, Y0, 0, 1, 1, k * wob, k / wob);
+    // a stretched gum spot where it let go
+    if (st.ph === 'drift' && st.k < 0.3) { ctx.fillStyle = `rgba(214,60,140,${0.6 * (1 - st.k / 0.3)})`; ctx.beginPath(); ctx.arc(X0 - d * r * s * 0.98, Y0, 3 * s, 0, TWO_PI); ctx.fill(); }
+  } else if (st.ph === 'pop') {
+    // the burst: a ring of gum flying out (particles carry the shreds), a flash
+    const r = st.r * (1 + 0.4 * st.k);
+    candyGlow(ctx, sx(st.x), sy(st.a), r * 1.4 * s, [255, 200, 230], 0.6 * (1 - st.k));
+    ctx.strokeStyle = gCol([255, 150, 210], 0.8 * (1 - st.k)); ctx.lineWidth = 3 * (1 - st.k) * s; ctx.setLineDash([8 * s, 10 * s]); ctx.beginPath(); ctx.arc(sx(st.x), sy(st.a), r * s, 0, TWO_PI); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+// ---- the Lollipop Swirl ----
+// its stick (a cream stick into the wall, a little candy collar), and its head: a swirl of three colours in a glossy
+// disc (the swirl turns live: the head sprite spins), wrapped in cellophane twisted round the stick
+function candyLollyStick() {
+  const X = CANDY.lolly;
+  return candySprite('lstick', X.stick + 16, 22, 8, 11, c => {
+    c.fillStyle = gLG(c, 0, -2.8, 0, 2.8, ['#ffffff', '#efe6dc', '#c4b4a4']); c.fillRect(-6, -2.8, X.stick + 6, 5.6);
+    c.strokeStyle = '#a08e7c'; c.lineWidth = 0.7; c.strokeRect(-6, -2.8, X.stick + 6, 5.6);
+    c.fillStyle = 'rgba(255,255,255,.8)'; c.fillRect(-6, -2, X.stick + 6, 0.9);
+    // a sugar collar where it goes into the wall
+    c.fillStyle = gRG(c, -1, -2, 7, CANDYP.pink); c.beginPath(); c.ellipse(0, 0, 3.4, 6.2, 0, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.7; c.stroke();
+    // the cellophane twist round the stick by the head
+    c.fillStyle = 'rgba(255,255,255,.38)'; c.beginPath(); c.moveTo(X.stick - 6, 0); c.lineTo(X.stick + 3, -7); c.lineTo(X.stick + 4, 7); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 0.7; c.stroke();
+    c.strokeStyle = '#ff6fa8'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(X.stick - 5, -3.4); c.lineTo(X.stick - 5, 3.4); c.stroke();
+  });
+}
+function candyLollyHead(v) {
+  const r = CANDY.lolly.r, C3 = [['#ff5a96', '#5fd3b8', '#ffd84a'], ['#9a7aff', '#ff8a4a', '#7fe0c8'], ['#e8394e', '#ffffff', '#ff9cc4']][v];
+  return candySprite('lhead' + v, r * 2 + 6, r * 2 + 6, r + 3, r + 3, c => {
+    c.fillStyle = gRG(c, -5, -6, r * 1.4, ['#fff8fb', '#ffe2ee', '#e9b6cc']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+    c.save(); c.beginPath(); c.arc(0, 0, r - 0.5, 0, TWO_PI); c.clip();
+    for (const [col, off, lw] of [[C3[0], 0, 4.6], [C3[1], Math.PI, 3.6], [C3[2], Math.PI / 2, 1.8]]) {
+      c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.beginPath();
+      for (let a = 0; a < 4.4 * Math.PI; a += 0.22) { const rr = 1 + a / (4.4 * Math.PI) * (r + 1); c.lineTo(Math.cos(a + off) * rr, Math.sin(a + off) * rr); }
+      c.stroke();
+    }
+    c.restore();
+  });
+}
+function candyLollyGloss() {
+  const r = CANDY.lolly.r;
+  return candySprite('lgloss', r * 2 + 10, r * 2 + 10, r + 5, r + 5, c => {
+    c.fillStyle = gRG(c, -r * 0.4, -r * 0.45, r * 1.5, ['rgba(255,255,255,.32)', 'rgba(255,255,255,0)', 'rgba(120,30,70,.42)']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+    c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 1.1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 2.2; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, r * 0.74, 3.5, 4.5); c.stroke();
+    c.fillStyle = '#fff'; c.beginPath(); c.ellipse(-r * 0.4, -r * 0.5, 3, 1.6, -0.7, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, r + 2.4, 0, TWO_PI); c.stroke();
+  });
+}
+function candyDrawLolly(h) {
+  const X = CANDY.lolly, d = h.side, T = G.t, v = Math.floor(hash2(h.alt | 0, 77) * 3) % 3, hx = h.base + d * (X.stick + X.r - 2);
+  candyBlit(candyLollyStick(), h.base, h.alt, 1, d);
+  candyGlow(ctx, sx(hx), sy(h.alt), X.r * 2.2 * s, [255, 210, 140], 0.18);
+  const H0 = candyLollyHead(v); candyBlitAt(H0, sx(hx), sy(h.alt), T * 3.2 * d + h.ph * 6, 1);
+  candyBlitAt(candyLollyGloss(), sx(hx), sy(h.alt));
+  // a twinkle on the rim just before it flings
+  const u = candyFrac(G.t / h.P + h.ph);
+  if (u > 0.85) { const k = (u - 0.85) / 0.15; candyGlow(ctx, sx(hx + d * X.r * 0.8), sy(h.alt + 8), 10 * s, [255, 240, 170], 0.8 * k); }
+}
+DRAW.candyGum = candyDrawGum; DRAW.candyChoc = candyDrawChoc; DRAW.candyJaw = candyDrawJaw; DRAW.candyBubble = candyDrawBubble; DRAW.candyLolly = candyDrawLolly;
+// the lollipop icon on the HUD (a swirl on its stick)
+function candyDrawLollyIcon(c) {
+  c.save(); c.lineCap = 'round';
+  c.strokeStyle = 'rgba(60,20,40,.85)'; c.lineWidth = 5; c.beginPath(); c.moveTo(0, 2); c.lineTo(0, 16); c.stroke();
+  c.strokeStyle = '#fff6ee'; c.lineWidth = 2.6; c.stroke();
+  c.fillStyle = 'rgba(60,20,40,.85)'; c.beginPath(); c.arc(0, -3, 11, 0, TWO_PI); c.fill();
+  c.fillStyle = '#ffe8f2'; c.beginPath(); c.arc(0, -3, 9, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#ff5a96'; c.lineWidth = 2.6; c.beginPath(); for (let a = 0; a < 4 * Math.PI; a += 0.3) { const rr = 0.6 + a / (4 * Math.PI) * 8; c.lineTo(Math.cos(a) * rr, -3 + Math.sin(a) * rr); } c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-3.6, -7, 2, 1.1, -0.7, 0, TWO_PI); c.fill();
+  c.restore();
+}
+
+// ---- the golden bonbon: a round sweet in crinkled gold foil, twisted fringed ends left and right, a pink ribbon at
+// each twist (its solid art inside COCO_R) ----
+function candyBonbonSprite() {
+  return candySprite('bonbon', 40, 30, 20, 15, c => {
+    const G0 = CANDYP.gold;
+    // the twisted ends: fans of foil pleats
+    for (const e of [-1, 1]) {
+      c.save(); c.scale(e, 1);
+      c.fillStyle = gLG(c, 8, -8, 18, 8, [G0[0], G0[1], G0[2], G0[3]]);
+      c.beginPath(); c.moveTo(8, -2.6); c.lineTo(17.5, -9); c.quadraticCurveTo(19.5, -4.5, 18.5, -1.5); c.quadraticCurveTo(20, 1.5, 18, 4.5); c.quadraticCurveTo(19, 7.6, 17.5, 9); c.lineTo(8, 2.6); c.closePath(); c.fill();
+      c.strokeStyle = CANDYP.goldEdge; c.lineWidth = 0.7; c.stroke();
+      for (const yy of [-5.5, -1.8, 1.8, 5.5]) { c.strokeStyle = 'rgba(140,90,10,.55)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(9.5, yy * 0.3); c.lineTo(18, yy); c.stroke(); c.strokeStyle = 'rgba(255,255,220,.75)'; c.lineWidth = 0.45; c.beginPath(); c.moveTo(9.5, yy * 0.3 - 0.7); c.lineTo(17.6, yy - 0.9); c.stroke(); }
+      // the ribbon at the twist
+      c.fillStyle = gLG(c, 0, -4, 0, 4, ['#ffc4dc', '#ff5a96', '#c02a6a']); c.beginPath(); c.roundRect(7, -3.8, 3.2, 7.6, 1.2); c.fill(); c.strokeStyle = CANDYP.pinkEdge; c.lineWidth = 0.5; c.stroke();
+      c.restore();
+    }
+    // the wrapped ball: gold foil with crinkle facets (line pairs), a bright sheen
+    c.fillStyle = gRG(c, -3.2, -3.6, 11.5, [G0[0], G0[1], G0[2], G0[3]]); c.beginPath(); c.arc(0, 0, 8.8, 0, TWO_PI); c.fill();
+    c.strokeStyle = CANDYP.goldEdge; c.lineWidth = 0.8; c.stroke();
+    for (const P of [[[-6, -3], [-2, -1], [-3, 4]], [[1, -7], [2, -2], [6, 1]], [[-4, 6], [1, 3], [5, 6]]]) gPair(c, P, 'rgba(150,96,10,.55)', 'rgba(255,255,230,.8)', 0.7, -0.6);
+    c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.5; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, 6.2, 3.5, 4.5); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-3.4, -4.6, 1.8, 1, -0.7, 0, TWO_PI); c.fill();
+    // a pink heart stamped in the foil
+    c.fillStyle = 'rgba(255,110,160,.85)'; c.beginPath(); c.moveTo(1.6, 3.6); c.bezierCurveTo(-1.2, 1.4, -0.6, -1.4, 1.6, -0.2); c.bezierCurveTo(3.8, -1.4, 4.4, 1.4, 1.6, 3.6); c.fill();
+  });
+}
+function candyDrawBonbonArt(c, t, ph, hud) {
+  const bob = hud ? 0 : Math.sin(t * 2.6 + ph) * 1.6, S = candyBonbonSprite();
+  if (!hud) {
+    const pul = 0.5 + 0.5 * Math.sin(t * 3 + ph);
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const key = 'bonHalo'; let cv = CANDYC.glows.get(key);
+    if (!cv) { cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d'); q.fillStyle = gRG(q, 48, 48, 47, ['rgba(255,236,170,.9)', 'rgba(255,190,210,.4)', 'rgba(255,200,150,.12)', 'rgba(255,200,150,0)']); q.fillRect(0, 0, 96, 96); CANDYC.glows.set(key, cv); }
+    c.globalAlpha = 0.24 + 0.14 * pul; c.drawImage(cv, -30, -28 + bob, 60, 60); c.restore();
+  }
+  c.save(); c.translate(0, bob); c.rotate(Math.sin(t * 1.7 + ph) * 0.12);
+  c.drawImage(S.cv, -S.ax, -S.ay, S.w, S.h);
+  c.restore();
+  if (!hud) for (let i = 0; i < 3; i++) {
+    const tw = Math.max(0, Math.sin(t * 3.2 + i * 2.1 + ph)), r = 2.6 * tw; if (r < 0.3) continue;
+    const x = [-12, 11, 3][i], y = [-9, -5, 11][i] + bob;
+    c.fillStyle = `rgba(255,252,240,${0.95 * tw})`; c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r); c.fill();
+  }
+}
+
+// ---- the stage's particles: sugar shards (tumbling), chocolate drops (falling), gum shreds, sprinkles ----
+{ const base = updateParticles; updateParticles = function (dt) {
+  base(dt);
+  if (!candyOn()) return;
+  for (const q of G.particles) {
+    if (q.kind === 'cchoc') q.vy -= 640 * dt;
+    else if (q.kind === 'cshard' || q.kind === 'csprink') { q.vy -= 620 * dt; if (q.ex) q.ex.rot += q.ex.spin * dt; }
+    else if (q.kind === 'cgum') { q.vy -= 380 * dt; q.vx *= Math.exp(-dt * 2); if (q.ex) q.ex.rot += q.ex.spin * dt; }
+  }
+}; }
+const candyPartCv = new Map();
+function candyPartSprite(kind, col) {
+  const key = kind + (col ? col.join ? col.join(',') : col : '');
+  let cv = candyPartCv.get(key); if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = 40; const c = cv.getContext('2d'); c.translate(20, 20); c.scale(2, 2);
+  if (kind === 'cchoc') { c.fillStyle = gRG(c, -2, -2, 7, ['#d09a70', '#7a4426', '#3a1a0a']); c.beginPath(); c.arc(0, 0, 6, 0, TWO_PI); c.fill(); c.strokeStyle = CANDYP.chocEdge; c.lineWidth = 0.7; c.stroke(); c.fillStyle = 'rgba(255,236,210,.85)'; c.beginPath(); c.arc(-2, -2, 1.5, 0, TWO_PI); c.fill(); }
+  else if (kind === 'cshard') { const q = col || [255, 200, 230]; gPoly(c, [[-6, -2], [3, -5.5], [6.5, 1], [-1, 5]]); c.fillStyle = gLG(c, -6, -5, 6, 5, [gCol(gMix(q, [255, 255, 255], 0.5)), gCol(q), gCol(gMix(q, [80, 20, 60], 0.35))]); c.fill(); c.strokeStyle = gCol(gMix(q, [60, 10, 40], 0.55)); c.lineWidth = 0.7; c.stroke(); c.strokeStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.moveTo(-4, -1.6); c.lineTo(2.6, -4); c.stroke(); }
+  else if (kind === 'cgum') { c.fillStyle = gLG(c, 0, -3, 0, 3, ['#ffd0e8', '#ff7ab8', '#d04890']); c.beginPath(); c.moveTo(-7, -1.5); c.quadraticCurveTo(0, -3.4, 7, -1); c.quadraticCurveTo(8, 1, 6, 2); c.quadraticCurveTo(0, 0.6, -6, 2.4); c.quadraticCurveTo(-8, 1, -7, -1.5); c.fill(); c.strokeStyle = CANDYP.bubbleEdge; c.lineWidth = 0.6; c.stroke(); c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-5, -1.4); c.quadraticCurveTo(0, -2.6, 5, -1); c.stroke(); }
+  else { candySprinkle(c, 0, 0, 0, col || '#ff6fa8', 7, 2.6); }
+  candyPartCv.set(key, cv); return cv;
+}
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles, mine = q => q.kind === 'cchoc' || q.kind === 'cshard' || q.kind === 'cgum' || q.kind === 'csprink';
+  if (additive || !ps.some(mine)) return base(additive);
+  G.particles = ps.filter(q => !mine(q)); try { base(additive); } finally { G.particles = ps; }
+  for (const q of ps) {
+    if (!mine(q)) continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
+    if (y < -40 || y > H + 40) continue;
+    const r = q.size * s, cv = candyPartSprite(q.kind, q.ex && q.ex.col);
+    ctx.globalAlpha = Math.min(1, t * 3);
+    if (q.ex && q.ex.rot != null) { ctx.save(); ctx.translate(x, y); ctx.rotate(q.ex.rot); ctx.drawImage(cv, -r * 1.3, -r * 1.3, r * 2.6, r * 2.6); ctx.restore(); }
+    else ctx.drawImage(cv, x - r * 1.3, y - r * 1.3, r * 2.6, r * 2.6);
+  }
+  ctx.globalAlpha = 1;
+}; }
+
+// ---- the shaft's walls: layered candy strata behind a twisted candy-cane rope ----
+// The rock of the cave is sweets: horizontal strata of chocolate, strawberry, mint, caramel, sponge and cream, every
+// band its own thickness, wavy where it was poured, sagging toward the shaft where it has softened, chips, seeds, crumbs,
+// sprinkles and swirls pressed in. Each of the wall's melted bulges (the relief's knots, see createCandyLevel) carries one
+// sweet set into the strata: a big peppermint disc, a broken chocolate bar, a cluster of gumballs or a wrapped toffee.
+// Every section mixes its own bands (blended across the joins). The edge is a real twisted candy-cane rope following
+// every bulge, with royal icing piped along its back and dripping down the wall at each knot.
+const CANDY_WB = 160;   // wall tile height
+const CANDY_MAT = {
+  choc: { c: [[164, 104, 64], [116, 66, 38], [74, 38, 20]], bits: 'chips', chip: [52, 24, 12] },
+  milk: { c: [[206, 146, 98], [168, 106, 66], [118, 70, 40]], bits: 'swirl' },
+  straw: { c: [[255, 200, 218], [244, 148, 180], [200, 96, 134]], bits: 'seeds' },
+  mint: { c: [[206, 252, 234], [146, 224, 198], [84, 172, 148]], bits: 'chips', chip: [80, 40, 24] },
+  caramel: { c: [[255, 218, 146], [232, 170, 86], [182, 116, 44]], bits: 'swirl' },
+  sponge: { c: [[255, 240, 200], [246, 214, 152], [212, 168, 104]], bits: 'crumb' },
+  cream: { c: [[255, 252, 246], [248, 236, 226], [222, 202, 190]], bits: 'sprinkles' },
+  jam: { c: [[246, 104, 132], [206, 46, 86], [146, 22, 58]], bits: 'seeds' },
+  lemon: { c: [[255, 248, 190], [255, 222, 96], [222, 170, 42]], bits: 'crumb' },
+  grape: { c: [[230, 216, 255], [184, 154, 250], [122, 92, 202]], bits: 'swirl' },
+  bubble: { c: [[255, 218, 238], [255, 154, 202], [222, 92, 152]], bits: 'sprinkles' },
+  lime: { c: [[224, 255, 186], [164, 228, 104], [98, 170, 52]], bits: 'seeds' },
+};
+const CANDY_WSECS = {
+  'Sugar Gate': { mats: ['sponge', 'cream', 'straw', 'cream', 'sponge', 'jam'], deep: [120, 56, 70], sweet: 'pepper' },
+  'Gumdrop Grove': { mats: ['lime', 'cream', 'straw', 'mint', 'sponge', 'lime'], deep: [56, 84, 54], sweet: 'gumball' },
+  'Fudge Falls': { mats: ['choc', 'caramel', 'milk', 'choc', 'cream', 'caramel'], deep: [62, 30, 16], sweet: 'bar' },
+  'Jawbreaker Alley': { mats: ['straw', 'cream', 'lemon', 'mint', 'cream', 'grape'], deep: [92, 46, 86], sweet: 'gumball' },
+  'Lollipop Garden': { mats: ['straw', 'lemon', 'grape', 'cream', 'mint', 'bubble'], deep: [110, 60, 104], sweet: 'pepper' },
+  'Bubblegum Works': { mats: ['bubble', 'grape', 'cream', 'bubble', 'straw', 'grape'], deep: [108, 34, 84], sweet: 'toffee' },
+  'Sugar Rush': { mats: ['choc', 'jam', 'mint', 'choc', 'caramel', 'jam'], deep: [70, 22, 36], sweet: 'bar' },
+  'The Great Cake': { mats: ['sponge', 'jam', 'cream', 'sponge', 'cream', 'straw'], deep: [118, 64, 54], sweet: 'toffee' },
+};
+function candySecIdx(a) { const ss = (G.level && G.level.sections) || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++; return i; }
+// the section's wall recipe at height a: near a join the bands come half from the neighbour (picked per band, no mush)
+function candyWSecAt(a, pick) {
+  const ss = (G.level && G.level.sections) || [], i = candySecIdx(a), me = CANDY_WSECS[ss[i] && ss[i].name] || CANDY_WSECS['Sugar Gate'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 160) { k = 0.5 * smooth(ss[i + 1].a0 - 160, ss[i + 1].a0, a); o = CANDY_WSECS[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 160) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 160, a)); o = CANDY_WSECS[ss[i - 1].name]; }
+  if (!o) return me;
+  return { mats: (pick == null ? k > 0.25 : pick < k) ? o.mats : me.mats, deep: gMix(me.deep, o.deep, k), sweet: k > 0.25 ? o.sweet : me.sweet };
+}
+// the strata: band boundary n sits near alt n*17 (jittered); each band's material from its section
+const CANDY_BAND = 17;
+const candyBandA = n => n * CANDY_BAND + (hash2(n, 0xc31) - 0.5) * 10;
+// a band boundary's height at depth dd into the wall: wavy where it was poured, sagging toward the shaft (softened)
+const candyBandY = (n, x, dd) => candyBandA(n) + 2.2 * Math.sin(x * 0.045 + n * 1.7) + 1.3 * Math.sin(x * 0.12 + n * 3.1) - 5.5 * Math.exp(-dd / 26);
+function candyWallPaint(c, side, a0, a1, x0, x1) {
+  const into = side ? 1 : -1, wx = a => walls(a)[side], A0 = a0 - 10, A1 = a1 + 10, sd = side * 131 + 11, L = G.level;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  const P = (dd, a) => [wx(a) + into * dd, -a];
+  const outer = side ? x1 + 4 : x0 - 4, midA = (a0 + a1) / 2, X0 = Math.min(x0, x1) - 8, XW = Math.abs(x1 - x0) + 16;
+  const S0 = candyWSecAt(midA);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the shadow the wall throws into the shaft (soft, warm, no line)
+  for (const [lw, al] of [[24, 0.05], [12, 0.07], [5, 0.09]]) { c.strokeStyle = `rgba(110,30,60,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  // the bands, bottom to top: a 3-stop fill lit from above, a dark furrow and lit ridge where each meets the next
+  const n0 = Math.floor(A0 / CANDY_BAND) - 2, n1 = Math.ceil(A1 / CANDY_BAND) + 2, wmid = wx(midA);
+  const xs = []; for (let x = Math.min(x0, x1) - 8; x <= Math.max(x0, x1) + 8; x += 6) xs.push(x);
+  const dOf = x => Math.max(0, into * (x - wx(midA)));
+  for (let n = n0; n < n1; n++) {
+    const am = candyBandA(n + 0.5), S = candyWSecAt(am, hash2(n, 0xc33)), M = CANDY_MAT[S.mats[Math.floor(hash2(n, 0xc32 + (side ? 0 : 0)) * S.mats.length)]];
+    const yb = xs.map(x => -candyBandY(n, x, dOf(x))), yt = xs.map(x => -candyBandY(n + 1, x, dOf(x)));
+    const top = Math.min(...yt), bot = Math.max(...yb);
+    c.beginPath(); xs.forEach((x, i) => i ? c.lineTo(x, yt[i]) : c.moveTo(x, yt[i])); for (let i = xs.length - 1; i >= 0; i--) c.lineTo(xs[i], yb[i]); c.closePath();
+    c.fillStyle = gLG(c, 0, top, 0, bot, [gCol(M.c[0]), gCol(M.c[1]), gCol(M.c[2])]); c.fill();
+    // what is pressed into the band (only where it shows: never past the deep shade)
+    c.save(); c.clip();
+    const bh = Math.max(4, bot - top), nb = Math.round(bh * 0.5);
+    for (let q = 0; q < nb; q++) {
+      const u = hash2(n * 31 + q, 0xc34 + sd), dd = 4 + u * u * 120, xx = wmid + into * dd, yy = lerp(top + 2, bot - 2, hash2(n * 31 + q, 0xc35 + sd)), r = hash2(q, n + 0xc36);
+      if (M.bits === 'chips') { c.fillStyle = gCol(M.chip); c.beginPath(); c.moveTo(xx - 1.8, yy + 1.2); c.lineTo(xx, yy - 1.8); c.lineTo(xx + 1.9, yy + 1.2); c.closePath(); c.fill(); c.fillStyle = 'rgba(255,230,210,.45)'; c.fillRect(xx - 0.6, yy - 1, 0.9, 0.9); }
+      else if (M.bits === 'seeds') { c.fillStyle = 'rgba(255,236,150,.9)'; c.beginPath(); c.ellipse(xx, yy, 0.65, 1.1, r * 3, 0, TWO_PI); c.fill(); c.fillStyle = gCol(M.c[2], 0.7); c.beginPath(); c.arc(xx + 0.5, yy + 0.8, 0.45, 0, TWO_PI); c.fill(); }
+      else if (M.bits === 'crumb') { c.fillStyle = r < 0.5 ? gCol(M.c[2], 0.55) : 'rgba(255,255,240,.6)'; c.beginPath(); c.arc(xx, yy, 0.6 + r * 0.8, 0, TWO_PI); c.fill(); }
+      else if (M.bits === 'sprinkles') { if (q % 2) continue; candySprinkle(c, xx, yy, r * 6, CANDY_SPRINK[Math.floor(r * 7) % 7], 3, 1.2); }
+      else if (M.bits === 'swirl' && q % 3 === 0) { gPair(c, [[xx - 4, yy], [xx - 1, yy - 1.6], [xx + 2, yy - 0.4], [xx + 3, yy + 1.2]], gCol(M.c[2], 0.75), gCol(M.c[0], 0.85), 0.8, -0.8); }
+    }
+    c.restore();
+    c.lineWidth = 1; c.strokeStyle = gCol(gMix(M.c[2], [60, 20, 30], 0.35), 0.75);
+    c.beginPath(); xs.forEach((x, i) => i ? c.lineTo(x, yt[i] + 0.6) : c.moveTo(x, yt[i] + 0.6)); c.stroke();
+    c.strokeStyle = gCol(M.c[0], 0.9); c.lineWidth = 0.8;
+    c.beginPath(); xs.forEach((x, i) => i ? c.lineTo(x, yt[i] + 1.6) : c.moveTo(x, yt[i] + 1.6)); c.stroke();
+  }
+  // the sweets set into the bulges (one per knot panel)
+  const K = (L && L.knots && L.knots[side]) || [];
+  const ks = []; for (let i = 0; i < K.length - 1; i++) if (K[i + 1].a > A0 - 40 && K[i].a < A1 + 40) ks.push([K[i].a, K[i + 1].a, i]);
+  for (const [ka, kb, i] of ks) {
+    const hh = kb - ka, m = (ka + kb) / 2, S = candyWSecAt(m), kind = (K[i] && K[i].t) || 0, rr = hash2(i, 0xc41 + sd);
+    // a soft shade under the bulge above
+    c.fillStyle = gLG(c, 0, -kb, 0, -kb + 26, ['rgba(90,30,50,.2)', 'rgba(90,30,50,0)']); gPoly(c, [P(-6, kb), P(170, kb), P(170, kb - 26), P(-6, kb - 26)]); c.fill();
+    if (hh < 70 || kind === 3) continue;
+    const [x, ] = P(24 + rr * 10, m), y = -m - (rr - 0.5) * hh * 0.3, sw = kind === 0 ? S.sweet : ['pepper', 'bar', 'gumball', 'toffee'][(kind + i) % 4];
+    c.save(); c.translate(x, y); c.scale(into, 1);
+    if (sw === 'pepper') {
+      // a peppermint disc half sunk in the strata: red and white wedges, a glossy dome
+      const r = 11;
+      c.fillStyle = 'rgba(90,30,50,.25)'; c.beginPath(); c.arc(1.5, 2, r + 1.5, 0, TWO_PI); c.fill();
+      c.fillStyle = '#fff6f4'; c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+      c.fillStyle = '#e8394e'; for (let k = 0; k < 8; k += 2) { const a = k * Math.PI / 4 + rr; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r, a, a + Math.PI / 4); c.closePath(); c.fill(); }
+      c.fillStyle = gRG(c, -4, -4, r * 1.4, ['rgba(255,255,255,.4)', 'rgba(255,255,255,0)', 'rgba(120,20,40,.35)']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+      c.strokeStyle = CANDYP.caneEdge; c.lineWidth = 0.9; c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.6; c.beginPath(); c.arc(0, 0, r * 0.72, 3.5, 4.5); c.stroke();
+    } else if (sw === 'bar') {
+      // a broken chunk of chocolate bar: squares with bevels, a snapped edge
+      const w = 26, h = 18;
+      c.fillStyle = 'rgba(60,20,20,.3)'; c.fillRect(-w / 2 + 2, -h / 2 + 2, w, h);
+      c.fillStyle = gLG(c, 0, -h / 2, 0, h / 2, ['#9a5c34', '#6a3a1e', '#4a2410']); c.beginPath(); c.moveTo(-w / 2, -h / 2); c.lineTo(w / 2 - 3, -h / 2); c.lineTo(w / 2, -h / 2 + 5); c.lineTo(w / 2 - 2, 0); c.lineTo(w / 2 + 1, h / 2); c.lineTo(-w / 2, h / 2); c.closePath(); c.fill();
+      c.strokeStyle = CANDYP.chocEdge; c.lineWidth = 0.8; c.stroke();
+      for (let qx = 0; qx < 3; qx++) for (let qy = 0; qy < 2; qy++) { const bx = -w / 2 + 1.5 + qx * 8, by = -h / 2 + 1.5 + qy * 8.2; c.fillStyle = gLG(c, bx, by, bx + 6, by + 6, ['#b87848', '#7a4426', '#5a2e16']); c.beginPath(); c.roundRect(bx, by, 6.4, 6.6, 1); c.fill(); c.fillStyle = 'rgba(255,220,180,.4)'; c.fillRect(bx + 0.6, by + 0.6, 5, 0.8); }
+    } else if (sw === 'gumball') {
+      // a cluster of gumballs pressed into the bulge
+      for (const [gx, gy, r, k] of [[-6, 3, 6.5, 0], [5, 4, 6, 1], [0, -6, 6.2, 2]]) { const col = [CANDYP.lemon, CANDYP.mint, CANDYP.pink, CANDYP.grape][(k + i) % 4]; c.fillStyle = 'rgba(90,30,50,.25)'; c.beginPath(); c.arc(gx + 1.2, gy + 1.6, r, 0, TWO_PI); c.fill(); candyBall(c, gx, gy, r, col, gCol(gMix(candyHex(col[3]), [40, 10, 30], 0.3)), 0.6); }
+    } else {
+      // a toffee in twisted cellophane, its ends fanned out
+      for (const e of [-1, 1]) { c.fillStyle = 'rgba(255,240,250,.75)'; c.beginPath(); c.moveTo(e * 7, 0); c.lineTo(e * 16, -6); c.lineTo(e * 15, 0); c.lineTo(e * 16, 6); c.closePath(); c.fill(); c.strokeStyle = 'rgba(200,120,160,.8)'; c.lineWidth = 0.6; c.stroke(); }
+      c.fillStyle = gRG(c, -3, -3, 11, ['#ffe0a0', '#e09a3c', '#a8601a']); c.beginPath(); c.ellipse(0, 0, 9, 6.5, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#8a4e14'; c.lineWidth = 0.8; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.ellipse(0, 0, 9.6, 7, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.3; c.beginPath(); c.ellipse(-1, -1, 6, 4, 0, 3.6, 4.6); c.stroke();
+    }
+    c.restore();
+  }
+  // deeper in, the strata sink into the warm dark of the cave behind
+  c.fillStyle = gLG(c, P(30, midA)[0], 0, P(196, midA)[0], 0, [gCol(S0.deep, 0), gCol(S0.deep, 0.5), gCol(S0.deep, 0.94)]); c.fillRect(X0, -A1 - 8, XW, A1 - A0 + 16);
+  // the rope throws a soft shade on the strata just behind it
+  c.strokeStyle = 'rgba(100,30,50,.24)'; c.lineWidth = 16; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x + into * 9; i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke();
+  // royal icing piped along behind the rope: a scalloped bead line, dripping down the wall at each knot
+  const Pi = pts.map(([x, y]) => [x + into * 7.5, y]);
+  c.strokeStyle = 'rgba(200,150,170,.9)'; c.lineWidth = 5; gPoly(c, Pi, false); c.stroke();
+  c.strokeStyle = '#fffaf6'; c.lineWidth = 3.8; gPoly(c, Pi, false); c.stroke();
+  for (let k = 0; k < Pi.length; k += 2) { const [x, y] = Pi[k]; c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.arc(x - 0.6, y - 0.6, 0.9, 0, TWO_PI); c.fill(); }
+  for (const [ka, , i] of ks) {
+    for (let q = 0; q < 3; q++) {
+      const da = ka + 4 + q * 9 + hash2(i, q + 0xc51) * 6, Lg = 6 + 16 * hash2(i * 3 + q, 0xc52 + sd), [x, y] = P(7.5 + q * 3.2, da);
+      if (da < A0 || da > A1) continue;
+      c.fillStyle = 'rgba(200,150,170,.9)'; c.beginPath(); c.moveTo(x - 2.6, y); c.lineTo(x - 1.8, y + Lg); c.arc(x, y + Lg, 1.9 + 0.2, Math.PI, 0, true); c.lineTo(x + 2.6, y); c.closePath(); c.fill();
+      c.fillStyle = '#fffaf6'; c.beginPath(); c.moveTo(x - 2, y); c.lineTo(x - 1.3, y + Lg); c.arc(x, y + Lg, 1.6, Math.PI, 0, true); c.lineTo(x + 2, y); c.closePath(); c.fill();
+      c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.arc(x - 0.6, y + Lg - 0.4, 0.6, 0, TWO_PI); c.fill();
+    }
+  }
+  c.restore();
+  // the rope: a fat twisted candy cane along the edge, lit along its top-left, shaded under each bulge
+  const Pt = pts.map(([x, y]) => [x + into * 3, y]);
+  candyCaneRod(c, Pt, 6.2, hash2(side, a0 | 0) * 3 + a0 / 6.2 / 1.6 % 1);
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [xa, ya] = Pt[k], [xb, yb] = Pt[k + 1], up = (xb - xa) * into;
+    if (Math.abs(up) < 0.2) continue;
+    c.strokeStyle = up > 0 ? 'rgba(120,20,50,.3)' : 'rgba(255,255,255,.35)'; c.lineWidth = 2.6; c.beginPath(); c.moveTo(xa - into * 1.2, ya); c.lineTo(xb - into * 1.2, yb); c.stroke();
+  }
+}
+let candyMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+function candyTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+function candyDrawWalls() {
+  candyCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, Pd = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / CANDY_WB), j1 = Math.floor(top / CANDY_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const id = `w${side}_${j}`, need = j <= j1;
+      if (!need && (candyMade || CANDYC.tiles.has(id))) continue;
+      if (!CANDYC.tiles.has(id)) candyMade++;
+      const a0 = j * CANDY_WB, a1 = a0 + CANDY_WB;
+      let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+      const x0 = side ? lo - 14 : lo - 200, x1 = side ? hi + 200 : hi + 14;
+      const Tl = candyTile(id, x0, x1, a0, a1, c => candyWallPaint(c, side, a0, a1, x0, x1));
+      if (!need) continue;
+      candyTileBlit(Tl);
+      const y0 = sy(a1) - 1, hh = CANDY_WB * s + 2, S = candyWSecAt(a0 + 80);
+      ctx.fillStyle = gCol(S.deep);
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + Pd) ctx.fillRect(xe, y0, cssW + 30 + Pd - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - Pd) ctx.fillRect(-30 - Pd, y0, xe + 30 + Pd, hh); }
+    }
+  }
+  candyMade = 0;
+}
+
+// ---- the backdrop: a cave of sweets receding behind the shaft, darker and cooler with depth (never milky) ----
+// The shaft rises up a candy canyon. far (0.07): the canyon's deep back cliffs in cool shadow, the mid cliffs nearer in
+// (layered cookie, wafer and frosting strata under a dripping frosting lip), licorice-twist and candy-cane pillars
+// rising through the gap between them, giant sweets set into the cliff faces, sugar-crystal clusters growing out of
+// their edges, and in Fudge Falls glossy chocolate falls spilling from spouts in the cliffs into splash pools. near
+// (0.2): dark, soft outcrops of the cave reaching in from the screen's edges, each holding a sweet or a crystal cluster.
+// Every section has its own rock, pillars, sweets and light (blended through at the joins). Depth is shown by pushing
+// colour toward each section's dark cool shade, so the bright glossy traps and pickups pop in front.
+const CANDY_FAR = 0.07, CANDY_NEAR = 0.2, CANDY_BB = 440;
+const CANDY_LIGHT = {
+  'Sugar Gate': { top: [92, 52, 104], bot: [40, 20, 54], haze: [86, 30, 104], lamp: [255, 200, 230] },
+  'Gumdrop Grove': { top: [40, 86, 92], bot: [16, 40, 52], haze: [14, 84, 86], lamp: [200, 255, 220] },
+  'Fudge Falls': { top: [96, 54, 50], bot: [40, 18, 24], haze: [92, 36, 40], lamp: [255, 214, 170] },
+  'Jawbreaker Alley': { top: [60, 52, 120], bot: [24, 18, 58], haze: [48, 34, 130], lamp: [210, 200, 255] },
+  'Lollipop Garden': { top: [110, 50, 110], bot: [46, 18, 60], haze: [110, 30, 112], lamp: [255, 214, 236] },
+  'Bubblegum Works': { top: [112, 40, 96], bot: [44, 14, 48], haze: [116, 24, 92], lamp: [255, 190, 230] },
+  'Sugar Rush': { top: [104, 30, 58], bot: [40, 10, 30], haze: [110, 16, 52], lamp: [255, 180, 190] },
+  'The Great Cake': { top: [112, 70, 60], bot: [46, 24, 30], haze: [120, 60, 44], lamp: [255, 230, 190] },
+};
+function candyLightAt(a) {
+  const ss = (G.level && G.level.sections) || [], i = candySecIdx(a), me = CANDY_LIGHT[ss[i] && ss[i].name] || CANDY_LIGHT['Sugar Gate'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 320) { k = 0.5 * smooth(ss[i + 1].a0 - 320, ss[i + 1].a0, a); o = CANDY_LIGHT[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 320) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 320, a)); o = CANDY_LIGHT[ss[i - 1].name]; }
+  const nm = ss[i] && ss[i].name;
+  if (!o) return { ...me, name: nm };
+  return { top: gMix(me.top, o.top, k), bot: gMix(me.bot, o.bot, k), haze: gMix(me.haze, o.haze, k), lamp: gMix(me.lamp, o.lamp, k), name: nm };
+}
+function candyXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+// a colour pushed back into the section's dark cool shade at depth k (C: as a css colour, alpha a)
+const candyHz = (col, L, k) => gMix(col, L.haze, k);
+const candyC = (col, L, k, a = 1) => gCol(candyHz(col, L, k), a);
+const candyV3 = (c, y0, y1, P, L, k) => gLG(c, 0, y0, 0, y1, P.map(q => candyC(q, L, k)));
+const candyR3 = (c, x, y, r, P, L, k) => gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, P.map(q => candyC(q, L, k)));
+const CANDYB = {
+  pink: [[255, 196, 222], [255, 92, 160], [196, 30, 104]], mint: [[200, 255, 236], [60, 214, 176], [16, 140, 112]],
+  lemon: [[255, 246, 170], [255, 206, 40], [214, 140, 10]], grape: [[226, 206, 255], [150, 106, 255], [90, 50, 200]],
+  orange: [[255, 220, 170], [255, 136, 40], [206, 80, 10]], lime: [[226, 255, 180], [130, 220, 50], [60, 150, 20]],
+  red: [[255, 170, 180], [232, 40, 64], [150, 16, 40]], choc: [[190, 120, 74], [110, 58, 28], [60, 26, 10]],
+};
+const CANDYB_LIST = [CANDYB.pink, CANDYB.mint, CANDYB.lemon, CANDYB.grape, CANDYB.orange, CANDYB.lime];
+const candyPick = (A, n) => A[((Math.round(n) % A.length) + A.length) % A.length];
+// smooth, non-repeating wander (continuous in the height a, so tiles join seamlessly)
+const candyN = (a, sd) => 0.6 * Math.sin(a * 0.0085 + sd) + 0.32 * Math.sin(a * 0.0197 + sd * 2.1) + 0.08 * Math.sin(a * 0.043 + sd * 3.7);
+// every section's cave: its rock strata (cookie, wafer, frosting...), the frosting lip, its pillars, sweets and crystals
+const CANDY_CAVE = {
+  'Sugar Gate': { rock: [[250, 200, 150], [255, 150, 190], [255, 240, 230], [220, 150, 96]], lip: [255, 170, 210], pillar: 'cane', sweets: ['pepper', 'gumball'], crystal: [255, 190, 230] },
+  'Gumdrop Grove': { rock: [[150, 230, 120], [250, 210, 150], [110, 210, 190], [255, 240, 220]], lip: [214, 255, 200], pillar: 'licorice', pcol: [70, 200, 120], sweets: ['gumdrop', 'gumball'], crystal: [190, 255, 200] },
+  'Fudge Falls': { rock: [[180, 110, 64], [236, 180, 110], [120, 66, 34], [250, 220, 170]], lip: [255, 226, 190], pillar: 'wafer', sweets: ['bar', 'truffle'], crystal: [255, 220, 170], falls: 1 },
+  'Jawbreaker Alley': { rock: [[150, 120, 255], [255, 120, 190], [120, 220, 230], [255, 230, 120]], lip: [170, 160, 255], pillar: 'cane', sweets: ['gumball', 'pepper'], crystal: [190, 200, 255] },
+  'Lollipop Garden': { rock: [[255, 150, 210], [255, 220, 120], [180, 140, 255], [130, 230, 200]], lip: [255, 150, 220], pillar: 'lolly', sweets: ['pepper', 'gumdrop'], crystal: [255, 200, 240] },
+  'Bubblegum Works': { rock: [[255, 120, 190], [190, 130, 255], [255, 190, 220], [140, 90, 210]], lip: [255, 130, 200], pillar: 'licorice', pcol: [230, 60, 120], sweets: ['gumball', 'toffee'], crystal: [255, 170, 220] },
+  'Sugar Rush': { rock: [[150, 70, 40], [230, 50, 90], [255, 200, 210], [100, 40, 24]], lip: [255, 120, 150], pillar: 'licorice', pcol: [200, 30, 50], sweets: ['bar', 'toffee'], crystal: [255, 160, 180] },
+  'The Great Cake': { rock: [[250, 220, 160], [230, 60, 100], [255, 250, 240], [220, 170, 110]], lip: [255, 246, 230], pillar: 'wafer', sweets: ['toffee', 'pepper'], crystal: [255, 230, 160] },
+};
+// ---- painters (any context, world units, y down) ----
+// a cliff mass on one side (side 0 left, 1 right) whose edge wanders with the height: strata inside, a frosting lip
+function candyCliff(c, side, a0, a1, u0, u1, edgeQ, wob, R, L, k, sd) {
+  const W = u1 - u0, ex = a => side ? u1 - W * (edgeQ + wob * candyN(a, sd)) : u0 + W * (edgeQ + wob * candyN(a, sd)), A0 = a0 - 4, A1 = a1 + 4, outer = side ? u1 + 10 : u0 - 10, into = side ? 1 : -1;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 6) pts.push([ex(a), -a]);
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  const xm0 = ex((a0 + a1) / 2) + (side ? 40 : -40);
+  c.save(); body(); c.clip();
+  // the strata: layers of uneven thickness that bend down toward the shaft (rock beds, never shelves), each its own
+  // material, a dark furrow and a lit ridge on top
+  const dip = (side ? -1 : 1) * (0.16 + 0.06 * Math.sin(sd)), xe = side ? u1 : u0, bnd = n => n * 78 + 22 * Math.sin(n * 1.3 + sd);
+  const n0 = Math.floor(A0 / 78) - 2, n1 = Math.ceil(A1 / 78) + 2;
+  for (let n = n0; n < n1; n++) {
+    const col = R[Math.floor(hash2(n, sd + 7) * R.length)], b0 = bnd(n), b1 = bnd(n + 1);
+    const wv = (x, m) => -(m + dip * (x - xe) * -1 + 6 * Math.sin(x * 0.012 + n * 0.7 + sd)) ;
+    c.beginPath(); for (let x = u0 - 10; x <= u1 + 10; x += 12) c.lineTo(x, wv(x, b1)); for (let x = u1 + 10; x >= u0 - 10; x -= 12) c.lineTo(x, wv(x, b0)); c.closePath();
+    const ym = wv(xm0, b1), yb = wv(xm0, b0);
+    c.fillStyle = gLG(c, 0, ym, 0, yb, [candyC(gMix(col, [255, 255, 255], 0.3), L, k), candyC(col, L, k), candyC(gMix(col, [40, 10, 30], 0.4), L, k)]); c.fill();
+    c.strokeStyle = candyC(gMix(col, [255, 255, 255], 0.5), L, k, 0.35); c.lineWidth = 1.6; c.beginPath(); for (let x = u0 - 10; x <= u1 + 10; x += 12) c.lineTo(x, wv(x, b1) + 1.2); c.stroke();
+  }
+  // shade deepening away from the edge (the cliff turns away from the light)
+  const xm = ex((a0 + a1) / 2);
+  c.fillStyle = gLG(c, xm, 0, xm + into * 160, 0, [candyC([255, 255, 255], L, 1, 0), candyC(L.haze, L, 0, 0.3)]); c.fillRect(Math.min(xm, xm + into * 200) - 10, -A1, 220, A1 - A0);
+  c.restore();
+  // the frosting lip down its edge: a thick coat with drip tongues hanging off it into the gap
+  const lipW = 11;
+  c.strokeStyle = candyC(gMix(R[0], [40, 10, 40], 0.4), L, k); c.lineWidth = lipW + 2; c.lineJoin = 'round'; gPoly(c, pts, false); c.stroke();
+  c.strokeStyle = candyC(CANDY_CAVE_LIP, L, k * 0.7); c.lineWidth = lipW; gPoly(c, pts, false); c.stroke();
+  for (let a = Math.ceil(A0 / 70) * 70; a < A1 - 20; a += 70) {
+    const q = hash2(Math.round(a / 70), sd + 11); if (q < 0.5) continue;
+    const x = ex(a) - into * 2, y = -a, dl = 8 + q * 22, sx2 = -into;
+    c.fillStyle = candyC(CANDY_CAVE_LIP, L, k * 0.7); c.beginPath(); c.moveTo(x, y - 6); c.quadraticCurveTo(x + sx2 * 5, y, x + sx2 * 3, y + dl); c.arc(x + sx2 * 1.5, y + dl, 2.4, 0, Math.PI); c.quadraticCurveTo(x - sx2 * 1, y + 4, x, y + 6); c.closePath(); c.fill();
+  }
+  c.strokeStyle = candyC([255, 255, 255], L, k, 0.7); c.lineWidth = 1.6; gPoly(c, pts.map(([x, y]) => [x - into * 1.5 - 0.5, y]), false); c.stroke();
+  return ex;
+}
+let CANDY_CAVE_LIP = [255, 240, 246];
+// a pillar rising through the full tile (continuous with its neighbours): a licorice twist, a candy cane, a wafer roll
+// or a giant lollipop stick
+function candyPillar(c, kind, x, a0, a1, w, L, k, pcol) {
+  const y0 = -a1 - 4, y1 = -a0 + 4;
+  if (kind === 'licorice') {
+    const P = pcol || [200, 30, 50];
+    c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [candyC(gMix(P, [40, 0, 20], 0.5), L, k), candyC(gMix(P, [255, 255, 255], 0.25), L, k), candyC(P, L, k), candyC(gMix(P, [20, 0, 10], 0.65), L, k)]); c.fillRect(x - w / 2, y0, w, y1 - y0);
+    c.save(); c.beginPath(); c.rect(x - w / 2, y0, w, y1 - y0); c.clip();
+    for (let a = Math.floor(a0 / 14) * 14 - 14; a < a1 + 14; a += 14) { c.strokeStyle = candyC(gMix(P, [20, 0, 10], 0.6), L, k, 0.8); c.lineWidth = 2.2; c.beginPath(); c.moveTo(x - w / 2, -a); c.lineTo(x + w / 2, -a - 9); c.stroke(); c.strokeStyle = candyC([255, 230, 240], L, k, 0.55); c.lineWidth = 1.1; c.beginPath(); c.moveTo(x - w / 2, -a - 2.5); c.lineTo(x + w / 2, -a - 11.5); c.stroke(); }
+    c.restore();
+  } else if (kind === 'wafer') {
+    c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [candyC([150, 96, 44], L, k), candyC([250, 214, 150], L, k), candyC([220, 164, 90], L, k), candyC([120, 74, 30], L, k)]); c.fillRect(x - w / 2, y0, w, y1 - y0);
+    for (let a = Math.floor(a0 / 8) * 8 - 8; a < a1 + 8; a += 8) { c.strokeStyle = candyC([130, 80, 30], L, k, 0.55); c.lineWidth = 0.9; c.beginPath(); c.moveTo(x - w / 2, -a); c.lineTo(x + w / 2, -a); c.stroke(); }
+    c.fillStyle = candyC([255, 246, 230], L, k, 0.5); c.fillRect(x - w * 0.28, y0, 2, y1 - y0);
+  } else {
+    // a candy cane (or, in the garden, a lollipop's striped stick): white with a red twist, round shading
+    const stripe = kind === 'lolly' ? [255, 120, 190] : [232, 40, 64];
+    c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [candyC([200, 180, 190], L, k), candyC([255, 252, 252], L, k), candyC([236, 220, 226], L, k), candyC([150, 120, 140], L, k)]); c.fillRect(x - w / 2, y0, w, y1 - y0);
+    c.save(); c.beginPath(); c.rect(x - w / 2, y0, w, y1 - y0); c.clip();
+    c.fillStyle = candyC(stripe, L, k);
+    for (let a = Math.floor(a0 / 18) * 18 - 36; a < a1 + 36; a += 18) { c.beginPath(); c.moveTo(x - w / 2, -a); c.lineTo(x + w / 2, -a - 12); c.lineTo(x + w / 2, -a - 18); c.lineTo(x - w / 2, -a - 6); c.closePath(); c.fill(); }
+    c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [candyC([0, 0, 0], L, 1, 0), candyC(L.haze, L, 0, 0.45)]); c.fillRect(x - w / 2, y0, w, y1 - y0);
+    c.restore();
+  }
+  c.strokeStyle = candyC([255, 255, 255], L, k, 0.55); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - w * 0.22, y0); c.lineTo(x - w * 0.22, y1); c.stroke();
+}
+// a giant sweet half buried in a cliff face, juicy and glossy (k pushes it back)
+function candySweet(c, kind, x, y, r, L, k, sd) {
+  c.fillStyle = candyC([20, 6, 20], L, 0.3, 0.35); c.beginPath(); c.ellipse(x + r * 0.12, y + r * 0.16, r * 1.08, r * 1.05, 0, 0, TWO_PI); c.fill();
+  if (kind === 'pepper') {
+    c.fillStyle = candyC([255, 250, 250], L, k); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+    c.fillStyle = candyC([232, 30, 60], L, k); for (let i = 0; i < 8; i += 2) { const a = i * Math.PI / 4 + sd; c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, a, a + Math.PI / 4); c.closePath(); c.fill(); }
+  } else if (kind === 'gumball' || kind === 'gumdrop') {
+    const P = candyPick(CANDYB_LIST, sd);
+    c.fillStyle = candyR3(c, x, y, r, P, L, k);
+    if (kind === 'gumball') { c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); }
+    else { c.beginPath(); c.moveTo(x - r, y + r * 0.6); c.bezierCurveTo(x - r, y - r * 1.2, x + r, y - r * 1.2, x + r, y + r * 0.6); c.closePath(); c.fill(); for (let i = 0; i < 14; i++) { c.fillStyle = candyC([255, 255, 255], L, k, 0.75); c.fillRect(x + (hash2(i, sd) - 0.5) * r * 1.5, y + (hash2(i, sd + 1) - 0.7) * r, 1.6, 1.6); } }
+  } else if (kind === 'bar') {
+    c.fillStyle = candyV3(c, y - r, y + r, CANDYB.choc, L, k); c.beginPath(); c.roundRect(x - r * 1.3, y - r * 0.8, r * 2.6, r * 1.6, 4); c.fill();
+    for (let qx = 0; qx < 3; qx++) for (let qy = 0; qy < 2; qy++) { const bx = x - r * 1.2 + qx * r * 0.82, by = y - r * 0.7 + qy * r * 0.72; c.fillStyle = candyC([170, 104, 60], L, k); c.beginPath(); c.roundRect(bx, by, r * 0.7, r * 0.6, 2); c.fill(); c.fillStyle = candyC([255, 220, 180], L, k, 0.5); c.fillRect(bx + 1, by + 1, r * 0.6, 1.2); }
+  } else if (kind === 'truffle') {
+    c.fillStyle = candyR3(c, x, y, r, CANDYB.choc, L, k); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+    c.strokeStyle = candyC([255, 140, 190], L, k); c.lineWidth = r * 0.12; c.beginPath(); c.moveTo(x - r * 0.7, y - r * 0.2); c.quadraticCurveTo(x - r * 0.2, y - r * 0.7, x, y - r * 0.2); c.quadraticCurveTo(x + r * 0.3, y + r * 0.2, x + r * 0.7, y - r * 0.3); c.stroke();
+  } else {
+    for (const e of [-1, 1]) { c.fillStyle = candyC([255, 236, 246], L, k, 0.85); c.beginPath(); c.moveTo(x + e * r * 0.7, y); c.lineTo(x + e * r * 1.6, y - r * 0.6); c.lineTo(x + e * r * 1.6, y + r * 0.6); c.closePath(); c.fill(); }
+    c.fillStyle = candyR3(c, x, y, r, CANDYB.orange, L, k); c.beginPath(); c.ellipse(x, y, r, r * 0.72, 0, 0, TWO_PI); c.fill();
+  }
+  // gloss: a broad sheen arc and a hard glint (juicy, even pushed back)
+  c.strokeStyle = candyC([255, 255, 255], L, k * 0.6, 0.75); c.lineWidth = Math.max(1.4, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.74, 3.5, 4.5); c.stroke();
+  c.fillStyle = candyC([255, 255, 255], L, k * 0.5, 0.9); c.beginPath(); c.ellipse(x - r * 0.42, y - r * 0.52, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+}
+// a cluster of sugar crystals growing out of a cliff's edge, pointing in and down like icicles
+function candyCrystals(c, x, y, into, n, sc, col, L, k, sd) {
+  for (let i = 0; i < n; i++) {
+    const ang = Math.PI / 2 + into * (0.35 + 0.9 * hash2(i, sd)), len = (18 + 30 * hash2(i, sd + 1)) * sc, w = (5 + 4 * hash2(i, sd + 2)) * sc, bx = x + into * i * 3 * sc, by = y + (i - n / 2) * 6 * sc;
+    const tx = bx + Math.cos(ang) * len, ty = by + Math.sin(ang) * len, nx = -Math.sin(ang) * w, ny = Math.cos(ang) * w;
+    c.fillStyle = candyC(gMix(col, [255, 255, 255], 0.35), L, k, 0.92); c.beginPath(); c.moveTo(bx + nx, by + ny); c.lineTo(tx, ty); c.lineTo(bx, by); c.closePath(); c.fill();
+    c.fillStyle = candyC(gMix(col, [60, 20, 80], 0.3), L, k, 0.92); c.beginPath(); c.moveTo(bx - nx, by - ny); c.lineTo(tx, ty); c.lineTo(bx, by); c.closePath(); c.fill();
+    c.strokeStyle = candyC([255, 255, 255], L, k * 0.5, 0.85); c.lineWidth = 1; c.beginPath(); c.moveTo(bx + nx * 0.5, by + ny * 0.5); c.lineTo(tx, ty); c.stroke();
+  }
+}
+// the Fudge Falls' fall in far band j: a spout high in a cliff, a pool basin lower down (both on the same side)
+function candyFallSpot(j, u0, u1) {
+  const side = j % 2, W = u1 - u0, a1 = (j + 1) * CANDY_BB - 50 - 30 * hash2(j, 0xd51), a0 = j * CANDY_BB + 70 + 30 * hash2(j, 0xd52);
+  const sd = 5 + side * 3, ex = a => side ? u1 - W * (0.25 + 0.08 * candyN(a, sd)) : u0 + W * (0.25 + 0.08 * candyN(a, sd));
+  return { side, into: side ? -1 : 1, a0, a1, xs: ex(a1), xp: ex(a0), w: 22 + 8 * hash2(j, 0xd53) };
+}
+function candyFarCave(c, sec, a0, a1, u0, u1) {
+  const L = { ...(CANDY_LIGHT[sec] || CANDY_LIGHT['Sugar Gate']), name: sec }, C = CANDY_CAVE[sec] || CANDY_CAVE['Sugar Gate'], W = u1 - u0, j = Math.floor(a0 / CANDY_BB), cx = (u0 + u1) / 2;
+  CANDY_CAVE_LIP = C.lip;
+  // between the cliffs: quiet dark shade, one pillar as an accent
+  // the pillars through the gap
+  candyPillar(c, C.pillar, cx - 0.12 * W, a0, a1, 18, L, 0.5, C.pcol);
+  // the mid cliffs, nearer: richer strata, the frosting lip, sweets set in and crystals on the edge
+  const exs = [0, 1].map(side => candyCliff(c, side, a0, a1, u0, u1, 0.25, 0.08, C.rock, L, 0.21, 5 + side * 3));
+  for (const side of [0, 1]) {
+    const into = side ? -1 : 1, ex = exs[side], aS = a0 + CANDY_BB * (0.25 + 0.5 * hash2(j, side + 0xd41)), kind = C.sweets[Math.floor(hash2(j, side + 0xd42) * C.sweets.length)];
+    if (C.falls && side === j % 2) continue;
+    candySweet(c, kind, ex(aS) - into * 22, -aS, 30 + 8 * hash2(j, side + 0xd43), L, 0.18, j * 3 + side);
+    const aC = aS + (hash2(j, side + 0xd44) < 0.5 ? -110 : 110);
+    if (side === j % 2 && aC > a0 + 50 && aC < a1 - 30) candyCrystals(c, ex(aC) - into * 2, -aC, into, 5, 1.2, C.crystal, L, 0.08, j * 5 + side);
+  }
+  if (C.falls) {
+    // a chocolate fall: a spout in the cliff, a glossy sheet curving out and down, a splash pool on a basin of the cliff
+    const F = candyFallSpot(j, u0, u1), k = 0.3, into = F.into, top = -F.a1, bot = -F.a0, x0 = F.xs + into * 4;
+    const xAt = y => x0 + into * 10 * Math.min(1, (y - top) / 30) + into * 6 * ((y - top) / (bot - top)), half = y => F.w / 2 + 5 * ((y - top) / (bot - top));
+    // the splash pool: a glossy chocolate puddle spreading on a frosted ledge of the cliff, a foam crown round the impact
+    const bx = xAt(bot), bw = F.w + 34;
+    c.fillStyle = candyV3(c, bot - 2, bot + 30, [[250, 220, 170], [200, 140, 86], [120, 66, 34]], L, k); c.beginPath(); c.moveTo(F.xp - into * 14, bot - 2); c.lineTo(bx + into * (bw / 2 + 8), bot - 2); c.quadraticCurveTo(bx + into * (bw / 2 - 4), bot + 26, F.xp - into * 14, bot + 36); c.closePath(); c.fill();
+    c.fillStyle = gRG(c, bx - bw * 0.15, bot - 6, bw * 0.6, [candyC([170, 96, 50], L, k), candyC([96, 46, 18], L, k), candyC([54, 22, 8], L, k)]); c.beginPath(); c.ellipse(bx, bot - 2, bw / 2, 8, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = candyC([255, 220, 180], L, k * 0.5, 0.7); c.lineWidth = 1.4; c.beginPath(); c.ellipse(bx - 2, bot - 3.5, bw / 2 - 5, 5, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+    // the falling sheet: a ribbon whose edges ripple, rounded and glossy across its width
+    const wob = (y, e) => 1.6 * Math.sin(y * 0.11 + e * 2 + j) + 1.0 * Math.sin(y * 0.27 + e);
+    c.beginPath(); c.moveTo(x0 - into * 2, top - 6);
+    for (let y = top; y <= bot - 2; y += 4) c.lineTo(xAt(y) - half(y) + wob(y, 0), y);
+    for (let y = bot - 2; y >= top; y -= 4) c.lineTo(xAt(y) + half(y) + wob(y, 1), y);
+    c.closePath();
+    c.fillStyle = gLG(c, bx - F.w * 0.7, 0, bx + F.w * 0.7, 0, [candyC([70, 30, 12], L, k), candyC([170, 100, 54], L, k), candyC([236, 176, 120], L, k), candyC([140, 74, 34], L, k), candyC([64, 26, 10], L, k)]); c.fill();
+    // static gloss: long curved highlight streaks following the flow (bright core, softer partner)
+    c.save(); c.clip(); c.lineCap = 'round';
+    for (const [o, w, al] of [[-0.22, 3.2, 0.75], [-0.05, 1.4, 0.5], [0.24, 1.2, 0.35]]) {
+      c.strokeStyle = candyC([255, 236, 210], L, k * 0.4, al); c.lineWidth = w; c.beginPath();
+      for (let y = top - 4; y <= bot; y += 5) c.lineTo(xAt(y) + o * half(y) * 2 + wob(y, 0.5) * 0.6, y); c.stroke();
+    }
+    c.restore();
+    // the brink: the chocolate rolling over a frosting-crusted lip of the cliff, a glossy bulge where it curls over
+    c.fillStyle = gRG(c, x0 - into * 4, top - 8, F.w, [candyC([226, 160, 104], L, k), candyC([130, 70, 30], L, k), candyC([70, 30, 12], L, k)]);
+    c.beginPath(); c.moveTo(x0 - into * (F.w * 0.8 + 6), top - 8); c.quadraticCurveTo(x0 + into * 12, top - 16, x0 + into * (F.w * 0.5 + 12), top + 6); c.lineTo(x0 + into * (12 - F.w * 0.5), top + 6); c.quadraticCurveTo(x0 - into * 4, top + 4, x0 - into * (F.w * 0.8 + 6), top + 2); c.closePath(); c.fill();
+    c.strokeStyle = candyC([255, 236, 210], L, k * 0.4, 0.85); c.lineWidth = 2; c.beginPath(); c.moveTo(x0 - into * F.w * 0.6, top - 9); c.quadraticCurveTo(x0 + into * 6, top - 13, x0 + into * (F.w * 0.4 + 8), top - 1); c.stroke();
+    // splash foam crown at the impact: frothy lobes and flung drops
+    for (let q = 0; q < 7; q++) { const t = q / 6 - 0.5, r = 3.5 + 2.5 * hash2(q, j); c.fillStyle = candyC(gMix([200, 136, 86], [255, 230, 200], 0.3 + 0.4 * hash2(q, j + 1)), L, k); c.beginPath(); c.arc(bx + t * F.w * 1.3, bot - 4 - r * 0.6 - 4 * (1 - Math.abs(t) * 2), r, 0, TWO_PI); c.fill(); }
+    for (let q = 0; q < 5; q++) { const t = q / 4 - 0.5; c.fillStyle = candyC([160, 96, 50], L, k); c.beginPath(); c.arc(bx + t * F.w * 2, bot - 14 - 8 * hash2(q, j + 2), 1.8, 0, TWO_PI); c.fill(); }
+  }
+}
+// live: the falls' curved shine streaks flowing down, ripples and splash drops in their pools
+function candyFarLive(sec, al, T) {
+  if (al < 0.02 || sec !== 'Fudge Falls') return;
+  const f = CANDY_FAR, ca = G.camAlt * f, [u0, u1] = candyXSpan(), Y = a => H - (a - ca) * s, Xs = x => ox + x * s;
+  ctx.save(); ctx.lineCap = 'round';
+  for (let j = Math.floor((ca - CANDY_BB) / CANDY_BB); j * CANDY_BB < ca + viewH + CANDY_BB; j++) {
+    const F = candyFallSpot(j, u0, u1), y0 = Y(F.a1), y1 = Y(F.a0); if (y1 < -30 || y0 > H + 30) continue;
+    const into = F.into, x0 = F.xs + into * 4, len = F.a1 - F.a0;
+    const xAt = d => x0 + into * 10 * Math.min(1, d / 30) + into * 6 * (d / len);
+    for (let q = 0; q < 8; q++) {
+      const o = (q / 7 - 0.5) * F.w * 0.8, u = pmod(T * 0.7 + q * 0.37, 1), d0 = u * len, d1 = Math.min(len - 6, d0 + 40);
+      ctx.globalAlpha = al * 0.9 * Math.sin(u * Math.PI); ctx.strokeStyle = 'rgba(255,236,214,1)'; ctx.lineWidth = (1.4 + 1.2 * (q % 2)) * s;
+      ctx.beginPath(); ctx.moveTo(Xs(xAt(d0) + o), y0 + d0 * s); ctx.quadraticCurveTo(Xs(xAt((d0 + d1) / 2) + o + into * 2), y0 + (d0 + d1) / 2 * s, Xs(xAt(d1) + o), y0 + d1 * s); ctx.stroke();
+    }
+    const bx = xAt(len), bw = F.w + 30;
+    for (let q = 0; q < 3; q++) { const u = pmod(T * 1.3 + q / 3, 1); ctx.globalAlpha = al * 0.7 * (1 - u); ctx.strokeStyle = 'rgba(240,200,160,1)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.ellipse(Xs(bx), y1 + 4 * s, (6 + u * bw * 0.45) * s, (1.5 + u * 4) * s, 0, 0, TWO_PI); ctx.stroke(); }
+    for (let q = 0; q < 4; q++) { const u = pmod(T * 1.7 + q * 0.27, 1), xx = Xs(bx + (q - 1.5) * 7 + (q - 1.5) * u * 10), yy = y1 - (Math.sin(u * Math.PI) * 14) * s; ctx.globalAlpha = al * (1 - u); ctx.fillStyle = '#8a4e2c'; ctx.beginPath(); ctx.arc(xx, yy, 1.8 * s, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+// ---- near: dark, soft outcrops of the cave reaching in from the screen's edges (clearly background) ----
+function candyNearPaint(c, a0, a1, u0, u1, sec) {
+  const L = { ...(CANDY_LIGHT[sec] || CANDY_LIGHT['Sugar Gate']), name: sec }, C = CANDY_CAVE[sec] || CANDY_CAVE['Sugar Gate'], j = Math.floor(a0 / 300), k = 0.7;
+  const side = j % 2, into = side ? -1 : 1, base = side ? u1 + 10 : u0 - 10, am = a0 + 150 + (hash2(j, 0xd61) - 0.5) * 40, hh = 90 + 30 * hash2(j, 0xd62), reach = 60 + 40 * hash2(j, 0xd63) + (ox / s);
+  const ex = a => base + into * (reach * Math.pow(Math.max(0, 1 - ((a - am) / hh) ** 2), 0.6) + 4 * candyN(a, j));
+  const pts = []; for (let a = am - hh; a <= am + hh; a += 6) pts.push([ex(a), -a]);
+  c.save(); c.beginPath(); c.moveTo(base, -(am - hh)); for (const p of pts) c.lineTo(p[0], p[1]); c.lineTo(base, -(am + hh)); c.closePath(); c.clip();
+  for (let n = Math.floor((am - hh) / 70) - 1; n < (am + hh) / 70 + 1; n++) { const col = C.rock[Math.floor(hash2(n, j + 3) * C.rock.length)]; c.fillStyle = candyC(col, L, k); c.fillRect(Math.min(base, base + into * 300), -(n + 1) * 70, 300, 71); }
+  c.fillStyle = gLG(c, ex(am), 0, base, 0, [candyC(L.haze, L, 0, 0), candyC(L.haze, L, 0, 0.45)]); c.fillRect(Math.min(base, ex(am)) - 2, -(am + hh), Math.abs(ex(am) - base) + 4, hh * 2);
+  c.restore();
+  c.strokeStyle = candyC(C.lip, L, k); c.lineWidth = 6; c.lineJoin = 'round'; gPoly(c, pts, false); c.stroke();
+  const kind = C.sweets[j % C.sweets.length];
+  if (hash2(j, 0xd64) < 0.5) candySweet(c, kind, ex(am) - into * 26, -am, 16, L, k, j);
+  else candyCrystals(c, ex(am + 20) - into * 2, -(am + 20), into, 4, 1.1, C.crystal, L, k, j);
+}
+// which section's cave the camera is in, and the next one dissolving in near a join
+function candyRooms() {
+  const ss = (G.level && G.level.sections) || [], m = G.camAlt + viewH / 2, i = candySecIdx(m), W = 300, nm = q => (ss[q] && ss[q].name) || 'Sugar Gate';
+  if (ss[i + 1] && m > ss[i + 1].a0 - W) return { a: nm(i), b: nm(i + 1), k: smooth(ss[i + 1].a0 - W, ss[i + 1].a0 + W, m), nx: null };
+  if (i > 0 && m < ss[i].a0 + W) return { a: nm(i - 1), b: nm(i), k: smooth(ss[i].a0 - W, ss[i].a0 + W, m), nx: null };
+  return { a: nm(i), b: null, k: 0, nx: ss[i + 1] && m > ss[i + 1].a0 - W - 900 ? nm(i + 1) : null };
+}
+function candyDrawBackground() {
+  candyCacheCheck(); candyMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = candyXSpan();
+  const L = candyLightAt(G.camAlt + viewH / 2), R = candyRooms();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, [gCol(L.top), gCol(gMix(L.top, L.bot, 0.55)), gCol(L.bot)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // a soft glow deep down the canyon's middle (where the light comes from)
+  candyGlow(ctx, cssW / 2, H * 0.4, Math.max(cssW, H) * 0.5, [255, 210, 236], 0.12);
+  const layer = (f, tag, paint, B, sec, al) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${sec}|${j}`, need = al > 0.01 && j <= Math.floor(pa1 / B);
+      if (!need && (candyMade || CANDYC.tiles.has(id))) continue;
+      if (!CANDYC.tiles.has(id)) candyMade++;
+      const Tl = candyTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1, sec));
+      if (need) { ctx.globalAlpha = al; candyTileBlit(Tl, f); ctx.globalAlpha = 1; }
+    }
+  };
+  const rooms = R.b ? [[R.a, 1 - R.k], [R.b, R.k]] : [[R.a, 1]];
+  if (R.nx) rooms.push([R.nx, 0]);
+  for (const [sec, al] of rooms) layer(CANDY_FAR, 'f', (c, a0, a1, x0, x1, sc) => candyFarCave(c, sc, a0, a1, x0, x1), CANDY_BB, sec, al);
+  for (const [sec, al] of rooms) candyFarLive(sec, al, T);
+  for (const [sec, al] of rooms) layer(CANDY_NEAR, 'n', candyNearPaint, 300, sec, al);
+  candyDrawMotes();
+  candyMade = 0;
+}
+// sprinkles tumbling down through the air of the cave (motes)
+MOTE_DRIFT.csprk = [12, 32];
+{ const base = moteKind; moteKind = function (m, a) { return candyOn() ? 'csprk' : base(m, a); }; }
+function candyDrawMotes() {
+  const T = G.t;
+  for (const m of motes) {
+    const mx = ox + m.x * playW + Math.sin(T * 0.6 + m.ph) * 6 * s, y = m.y, Ls = (2.2 + m.sz * 0.9) * s, a = 0.18 + 0.32 * m.depth, ang = T * (1 + m.ph % 1.5) + m.ph * 3;
+    ctx.globalAlpha = a; ctx.strokeStyle = CANDY_SPRINK[Math.floor(m.ph * 7) % 7]; ctx.lineWidth = 1.2 * s * (0.6 + m.depth * 0.6); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(mx - Math.cos(ang) * Ls / 2, y - Math.sin(ang) * Ls / 2); ctx.lineTo(mx + Math.cos(ang) * Ls / 2, y + Math.sin(ang) * Ls / 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- The Great Cake: the finish ----
+// At the top of the shaft the cave opens into the sugar throne room: a tall rounded alcove of pink frosting piped in
+// rosettes, framed by an arch of macarons, ribbons of icing swagged across its crown. In the middle, on a glass cake
+// stand, rises the Great Cake: three tiers (strawberry sponge, mint, lemon) with chocolate dripping over each edge,
+// berries and sweets round every rim, and candles waiting along the tiers. On top sits the Gummy Bear King, a round red
+// gummy with a little gold crown and a lollipop sceptre, dozing (sleep bubbles rising). On the clear he wakes, beams and
+// waves the sceptre, every candle lights, and sprinkles and sparkles burst out over the cake.
+const CANDY_CAKE = { y: 40, stand: 30, t: [[170, 74], [128, 62], [88, 52]] };   // the stand's foot over the landing, its height, tiers [w, h]
+const candyCakeTop = () => CANDY_CAKE.stand + CANDY_CAKE.t.reduce((q, t) => q + t[1], 0);   // the top tier's top over the stand's foot
+function candyAlcoveSprite() {
+  return candySprite('alcove', 440, 600, 220, 560, c => {
+    const P = CANDYP.pink;
+    const apse = () => { c.beginPath(); c.moveTo(-176, 0); c.lineTo(-176, -350); c.bezierCurveTo(-176, -520, 176, -520, 176, -350); c.lineTo(176, 0); c.closePath(); };
+    c.save(); apse(); c.clip();
+    c.fillStyle = gLG(c, 0, -520, 0, 0, ['#ffd2e4', '#f6a8c8', '#d27aa4']); c.fillRect(-190, -540, 380, 550);
+    // piped rosettes in staggered rows, darker toward the rim (a dark curl over a lit curl each)
+    for (let row = 0, y = -510; y < 10; row++, y += 17) for (let x = -186 + (row % 2) * 9; x < 190; x += 18) {
+      const dd = Math.hypot(x / 176, (y + 250) / 290), sh = clamp(dd - 0.3, 0, 1) * 0.5, base = gMix([255, 214, 232], [196, 100, 150], sh);
+      c.fillStyle = gCol(base); c.beginPath(); c.arc(x, y, 7.6, 0, TWO_PI); c.fill();
+      c.strokeStyle = gCol(gMix(base, [140, 40, 90], 0.45)); c.lineWidth = 1.1; c.beginPath(); c.arc(x + 0.6, y + 0.6, 4.6, 0.3, 4.6); c.stroke();
+      c.strokeStyle = gCol(gMix(base, [255, 255, 255], 0.6)); c.lineWidth = 0.9; c.beginPath(); c.arc(x - 0.6, y - 0.8, 3.2, 3.4, 6.6); c.stroke();
+    }
+    c.fillStyle = gRG(c, 0, -230, 250, ['rgba(255,244,214,.55)', 'rgba(255,224,200,.2)', 'rgba(255,220,200,0)']); c.fillRect(-190, -540, 380, 550);
+    // ribbons of icing swagged across the crown, a pearl at every peak
+    for (const [yy, sag] of [[-420, 26], [-380, 20]]) {
+      c.strokeStyle = 'rgba(200,120,160,.7)'; c.lineWidth = 5.4; c.beginPath(); for (let k = 0; k < 4; k++) { const x0 = -150 + k * 75; c.moveTo(x0, yy); c.quadraticCurveTo(x0 + 37, yy + sag, x0 + 75, yy); } c.stroke();
+      c.strokeStyle = '#fffaf6'; c.lineWidth = 4; c.stroke();
+      for (let k = 0; k <= 4; k++) candyBall(c, -150 + k * 75, yy, 4, ['#ffffff', '#fff2f6', '#e6c8d6'], '#c8a0b4', 0.7);
+    }
+    c.restore();
+    // the frame: an arch of macarons (pastel shells round a cream filling) along the alcove's rim
+    const MAC = [CANDYP.pink, CANDYP.mint, CANDYP.lemon, CANDYP.grape, CANDYP.orange];
+    const rim = []; for (let y = 0; y > -350; y -= 22) rim.push([-178, y]); for (let k = 0; k <= 14; k++) { const t = k / 14; const bx = (1 - t) ** 3 * -176 + 3 * (1 - t) ** 2 * t * -176 + 3 * (1 - t) * t * t * 176 + t ** 3 * 176, by = (1 - t) ** 3 * -350 + 3 * (1 - t) ** 2 * t * -520 + 3 * (1 - t) * t * t * -520 + t ** 3 * -350; rim.push([bx * 1.02, by - 2]); } for (let y = -350; y <= 0; y += 22) rim.push([178, y]);
+    rim.forEach(([x, y], i) => {
+      const Q = MAC[i % 5]; c.save(); c.translate(x, y); c.rotate(Math.atan2(y + 300, x) + Math.PI / 2);
+      c.fillStyle = gRG(c, -3, -4, 14, Q); c.beginPath(); c.ellipse(0, -3.6, 11, 4.6, 0, 0, TWO_PI); c.fill(); c.beginPath(); c.ellipse(0, 3.6, 11, 4.6, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = gCol(gMix(candyHex(Q[3]), [60, 20, 40], 0.3)); c.lineWidth = 0.7; c.beginPath(); c.ellipse(0, -3.6, 11, 4.6, 0, 0, TWO_PI); c.stroke(); c.beginPath(); c.ellipse(0, 3.6, 11, 4.6, 0, 0, TWO_PI); c.stroke();
+      c.fillStyle = '#fff8ee'; c.fillRect(-10, -1.2, 20, 2.4);
+      c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-6, -6.4); c.lineTo(4, -6.6); c.stroke();
+      c.restore();
+    });
+    // the floor of the alcove: a checker of pink and cream fondant tiles in perspective
+    c.save(); c.beginPath(); c.rect(-176, -26, 352, 26); c.clip();
+    for (let r = 0; r < 3; r++) for (let q = -12; q < 12; q++) { const y0 = -26 + r * 9, x0 = q * (16 + r * 2), on = (q + r) % 2; c.fillStyle = on ? '#ffc6dc' : '#fff4ec'; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + 16 + r * 2, y0); c.lineTo(x0 + 18 + r * 2.4, y0 + 9); c.lineTo(x0 + 1.4, y0 + 9); c.closePath(); c.fill(); }
+    c.fillStyle = 'rgba(160,60,100,.18)'; c.fillRect(-176, -8, 352, 8);
+    c.restore();
+  });
+}
+// the cake on its stand (anchored at the stand's foot), candles unlit (their flames are live)
+function candyCakeSprite() {
+  const K = CANDY_CAKE;
+  return candySprite('cake', 260, 330, 130, 316, c => {
+    // the glass stand: a foot, a stem and a plate with a lit rim
+    c.fillStyle = 'rgba(120,40,70,.25)'; c.beginPath(); c.ellipse(0, -1, 60, 6, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = gLG(c, -40, 0, 40, 0, ['rgba(220,240,255,.75)', 'rgba(255,255,255,.95)', 'rgba(200,220,240,.8)']); c.beginPath(); c.ellipse(0, -4, 40, 6, 0, 0, TWO_PI); c.fill();
+    c.fillRect(-7, -K.stand + 6, 14, K.stand - 8);
+    c.strokeStyle = 'rgba(140,170,200,.9)'; c.lineWidth = 0.9; c.strokeRect(-7, -K.stand + 6, 14, K.stand - 8);
+    c.fillStyle = gLG(c, -96, 0, 96, 0, ['rgba(200,226,250,.85)', 'rgba(255,255,255,.98)', 'rgba(190,214,240,.85)']); c.beginPath(); c.ellipse(0, -K.stand + 4, 98, 8, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(130,160,196,.9)'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.95)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(0, -K.stand + 3, 92, 5.6, 0, Math.PI * 1.05, Math.PI * 1.6); c.stroke();
+    // the tiers, bottom up
+    const TIER = [
+      { body: ['#fff0e0', '#f6c8a4', '#d6966c'], band: '#ff5c8c', top: ['#ffffff', '#ffe8f2', '#f2bcd4'], drip: ['#9a5a34', '#5e2e14'], deco: 'berry' },
+      { body: ['#e8fff4', '#a8ecd4', '#5cbc9c'], band: '#ffffff', top: ['#ffffff', '#f2fff8', '#c8ecdc'], drip: ['#ff9cc4', '#d0558c'], deco: 'drop' },
+      { body: ['#fffbe0', '#ffe48a', '#e0b444'], band: '#b496ff', top: ['#ffffff', '#fff8e8', '#f0e0bc'], drip: ['#9a5a34', '#5e2e14'], deco: 'heart' },
+    ];
+    let y = -K.stand;
+    K.t.forEach(([w, h], i) => {
+      const T = TIER[i], y0 = y - h, hw = w / 2;
+      // the body: lit from the top left, a darker side, a ribbon band round it
+      c.fillStyle = gLG(c, -hw, 0, hw, 0, [T.body[0], T.body[1], T.body[1], T.body[2]]); c.fillRect(-hw, y0, w, h);
+      c.fillStyle = gLG(c, 0, y0, 0, y, ['rgba(255,255,255,.15)', 'rgba(120,40,40,0)', 'rgba(120,40,60,.22)']); c.fillRect(-hw, y0, w, h);
+      c.beginPath(); c.ellipse(0, y, hw, 6, 0, 0, Math.PI); c.fillStyle = T.body[2]; c.fill();
+      c.fillStyle = T.band; c.fillRect(-hw, y - h * 0.36, w, 6); c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(-hw, y - h * 0.36, w, 1.2); c.fillStyle = 'rgba(0,0,0,.08)'; c.fillRect(-hw, y - h * 0.36 + 4.6, w, 1.4);
+      // piped dots along the band and pearls round the foot
+      for (let x = -hw + 6; x < hw - 2; x += 9) { c.fillStyle = '#fffaf6'; c.beginPath(); c.arc(x, y - h * 0.36 + 3, 1.6, 0, TWO_PI); c.fill(); }
+      for (let x = -hw + 4; x < hw; x += 7) candyBall(c, x, y - 1 + 3 * Math.sqrt(Math.max(0, 1 - (x / hw) ** 2)), 2.8, ['#ffffff', '#fff6fa', '#e8ccd8'], '#c8a8b8', 0.6);
+      c.strokeStyle = gCol(gMix(candyHex(T.body[2]), [80, 20, 30], 0.35)); c.lineWidth = 1; c.beginPath(); c.moveTo(-hw, y0 + 4); c.lineTo(-hw, y); c.moveTo(hw, y0 + 4); c.lineTo(hw, y); c.stroke();
+      // the top: an iced ellipse
+      c.fillStyle = gLG(c, 0, y0 - 7, 0, y0 + 7, T.top); c.beginPath(); c.ellipse(0, y0, hw, 7, 0, 0, TWO_PI); c.fill();
+      // drips over the rim (a glossy sauce, its own darker edge)
+      c.beginPath(); c.moveTo(-hw - 1, y0);
+      for (let x = -hw; x < hw; x += 11) { const dl = 5 + 14 * hash2(i * 31 + Math.round(x), 0xe11); c.lineTo(x + 2, y0 + 2); c.quadraticCurveTo(x + 2.5, y0 + dl, x + 4.5, y0 + dl + 1.5); c.quadraticCurveTo(x + 6.5, y0 + dl, x + 7, y0 + 2); c.lineTo(x + 11, y0 + 2); }
+      c.lineTo(hw + 1, y0); c.ellipse(0, y0, hw + 1, 7.4, 0, 0, Math.PI, true); c.closePath();
+      c.fillStyle = gLG(c, 0, y0 - 7, 0, y0 + 20, [T.drip[0], T.drip[1]]); c.fill();
+      c.strokeStyle = gCol(gMix(candyHex(T.drip[1]), [30, 10, 10], 0.4)); c.lineWidth = 0.7; c.stroke();
+      c.fillStyle = gLG(c, 0, y0 - 6, 0, y0 + 6, [gCol(gMix(candyHex(T.drip[0]), [255, 255, 255], 0.3)), T.drip[0]]); c.beginPath(); c.ellipse(0, y0, hw - 1, 6.2, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1.3; c.beginPath(); c.ellipse(-2, y0 - 1, hw - 10, 4, 0, Math.PI * 1.08, Math.PI * 1.7); c.stroke();
+      // sweets round the rim (behind the candles): berries, chocolate drops or candy hearts
+      const n = Math.round(w / 22);
+      for (let q = 0; q < n; q++) {
+        const an = Math.PI * (0.08 + 0.84 * (q + 0.5) / n), x = -Math.cos(an) * (hw - 8), yy = y0 + Math.sin(an) * 4.4;
+        if (T.deco === 'berry') { candyBall(c, x, yy - 2, 4.4, ['#ffd0d8', '#ff3c5c', '#b8102c', '#7a0a1c'], '#7a0c1c', 0.7); c.fillStyle = '#4caa3c'; c.beginPath(); c.ellipse(x + 1, yy - 6.4, 2.4, 1, -0.5, 0, TWO_PI); c.fill(); }
+        else if (T.deco === 'drop') { c.fillStyle = gRG(c, x - 1, yy - 4, 5, ['#c08452', '#5a2c14']); c.beginPath(); c.moveTo(x, yy - 8); c.quadraticCurveTo(x + 4.6, yy, x, yy); c.quadraticCurveTo(x - 4.6, yy, x, yy - 8); c.fill(); }
+        else { c.fillStyle = ['#ff7ab0', '#7fe0c8', '#ffd84a'][q % 3]; c.beginPath(); c.moveTo(x, yy + 1); c.bezierCurveTo(x - 5, yy - 3, x - 2.4, yy - 7, x, yy - 4.4); c.bezierCurveTo(x + 2.4, yy - 7, x + 5, yy - 3, x, yy + 1); c.fill(); c.strokeStyle = 'rgba(120,40,70,.5)'; c.lineWidth = 0.5; c.stroke(); }
+      }
+      y = y0;
+    });
+  });
+}
+// the candles: [x, alt above the stand's foot, height, colour] on the tier rims (the king sits between them on top)
+function candyCandles() {
+  const K = CANDY_CAKE, out = [], cols = ['#ff7ab0', '#7fe0c8', '#ffd84a', '#b496ff'];
+  let y = K.stand;
+  K.t.forEach(([w, h], i) => { y += h; if (i === 2) return; const nx = i ? 2 : 3; for (let q = 0; q < nx; q++) for (const e of [-1, 1]) { const x = e * (w / 2 - 10 - q * ((w - K.t[i + 1][0]) / 2 - 18) / Math.max(1, nx - 1)); out.push([x, y - 2, 22 - i * 3, cols[(q + i + (e > 0 ? 1 : 0)) % 4]]); } });
+  const top = candyCakeTop(); out.push([-34, top - 2, 18, cols[0]], [34, top - 2, 18, cols[1]]);
+  return out;
+}
+function candyCandleSprite(col) {
+  return candySprite('candle' + col, 10, 30, 5, 28, c => {
+    c.fillStyle = gLG(c, -3, 0, 3, 0, [gCol(gMix(candyHex(col), [255, 255, 255], 0.5)), col, gCol(gMix(candyHex(col), [60, 20, 40], 0.35))]); c.beginPath(); c.roundRect(-3, -22, 6, 22, 1.4); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1.3; for (let y = -19; y < 0; y += 6) { c.beginPath(); c.moveTo(-3, y + 2); c.lineTo(3, y - 1.6); c.stroke(); }
+    c.strokeStyle = gCol(gMix(candyHex(col), [60, 20, 40], 0.45)); c.lineWidth = 0.6; c.beginPath(); c.roundRect(-3, -22, 6, 22, 1.4); c.stroke();
+    c.fillStyle = '#fff8ee'; c.beginPath(); c.ellipse(0, -22, 3, 1.2, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#5a3a2a'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(0, -22); c.quadraticCurveTo(0.6, -24, 0.2, -25.6); c.stroke();
+  });
+}
+// the Gummy Bear King (anchored at his seat): a translucent red gummy, a gold crown with gems, a lollipop sceptre
+function candyKingSprite(awake) {
+  return candySprite('king' + awake, 110, 120, 55, 100, c => {
+    const R = ['#ffd0d4', '#ff6070', '#e0283c', '#9a1022'], edge = '#8e1020';
+    const blob = (x, y, rx, ry, rot = 0) => { c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, TWO_PI); };
+    const fillG = (x, y, r) => { c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, R); c.fill(); c.strokeStyle = edge; c.lineWidth = 1; c.stroke(); };
+    // legs (sitting, feet forward) and the body: a round gummy belly with its inner glow
+    for (const e of [-1, 1]) { blob(e * 12, -6, 9, 7); fillG(e * 12, -6, 9); c.fillStyle = 'rgba(255,220,220,.55)'; c.beginPath(); c.ellipse(e * 12 - 2, -8, 3.6, 2.4, 0, 0, TWO_PI); c.fill(); }
+    blob(0, -26, 22, 22); fillG(0, -26, 24);
+    c.fillStyle = gRG(c, 2, -22, 16, ['rgba(255,240,200,.5)', 'rgba(255,200,180,0)']); c.beginPath(); c.arc(2, -22, 16, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,190,200,.55)'; c.beginPath(); c.ellipse(0, -20, 12, 10, 0, 0, TWO_PI); c.fill();
+    // arms: one resting on the belly (asleep) or raised with the sceptre (awake); the sceptre a lollipop on a gold rod
+    if (awake) {
+      blob(-22, -28, 7, 11, 0.5); fillG(-22, -28, 9);
+      c.save(); c.translate(26, -40); c.rotate(-0.35);
+      c.fillStyle = gLG(c, -2, 0, 2, 0, CANDYP.gold.slice(0, 3)); c.fillRect(-1.6, -36, 3.2, 40);
+      candyBall(c, 0, -42, 9, ['#fff4f8', '#ff6fa8', '#c03a7c', '#8a2458'], '#8a2458', 0.6);
+      c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.beginPath(); for (let a = 0; a < 3 * Math.PI; a += 0.3) { const rr = 0.6 + a / (3 * Math.PI) * 7; c.lineTo(Math.cos(a) * rr, -42 + Math.sin(a) * rr); } c.stroke();
+      c.restore();
+      blob(22, -40, 7, 11, -0.6); fillG(22, -40, 9);
+    } else {
+      for (const e of [-1, 1]) { blob(e * 16, -22, 7, 10, e * 0.8); fillG(e * 16, -22, 9); }
+      c.save(); c.translate(30, -6); c.rotate(0.9);
+      c.fillStyle = gLG(c, -2, 0, 2, 0, CANDYP.gold.slice(0, 3)); c.fillRect(-1.6, -30, 3.2, 34);
+      candyBall(c, 0, -36, 9, ['#fff4f8', '#ff6fa8', '#c03a7c', '#8a2458'], '#8a2458', 0.6);
+      c.restore();
+    }
+    // the head: round with round ears, a lighter muzzle
+    const hy = awake ? -62 : -58, tilt = awake ? 0 : 0.18;
+    c.save(); c.translate(0, hy); c.rotate(tilt);
+    for (const e of [-1, 1]) { blob(e * 14, -14, 7, 7); fillG(e * 14, -14, 8); c.fillStyle = 'rgba(255,150,160,.8)'; c.beginPath(); c.arc(e * 14, -14, 3.4, 0, TWO_PI); c.fill(); }
+    blob(0, 0, 19, 17); fillG(0, 0, 20);
+    blob(0, 6, 9, 6.4); c.fillStyle = gRG(c, -2, 4, 9, ['#ffe4e6', '#ff9aa6', '#e8506a']); c.fill();
+    c.fillStyle = '#7a0a1c'; c.beginPath(); c.ellipse(0, 3.2, 3, 2.1, 0, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(-0.8, 2.6, 0.8, 0, TWO_PI); c.fill();
+    if (awake) {
+      candyEyes(c, 0, -4, 3.3, 0.1, 0, '#4a0a14', 2.1);
+      c.strokeStyle = '#7a0a1c'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.arc(0, 6.4, 4.6, 0.2, Math.PI - 0.2); c.stroke();
+      c.fillStyle = '#ff9aa6'; c.beginPath(); c.ellipse(0, 9.6, 2.2, 1.4, 0, 0, TWO_PI); c.fill();
+    } else {
+      c.strokeStyle = '#7a0a1c'; c.lineWidth = 1.4; c.lineCap = 'round'; for (const e of [-1, 1]) { c.beginPath(); c.arc(e * 7, -4, 3.2, 0.3, Math.PI - 0.3); c.stroke(); }
+      c.beginPath(); c.ellipse(0, 8, 2, 1.4, 0, 0, TWO_PI); c.stroke();
+    }
+    c.fillStyle = 'rgba(255,150,170,.55)'; for (const e of [-1, 1]) { c.beginPath(); c.ellipse(e * 12, 4, 3.6, 2.2, 0, 0, TWO_PI); c.fill(); }
+    // gummy gloss: a broad sheen and a glint on the head
+    c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 2.4; c.beginPath(); c.arc(0, 0, 14, 3.6, 4.5); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(-8, -9, 2.6, 1.4, -0.7, 0, TWO_PI); c.fill();
+    // the crown: gold points with gems, tipped on his head
+    c.save(); c.translate(2, -18); c.rotate(awake ? -0.08 : 0.25);
+    c.beginPath(); c.moveTo(-11, 2); c.lineTo(-12, -8); c.lineTo(-6, -3); c.lineTo(0, -11); c.lineTo(6, -3); c.lineTo(12, -8); c.lineTo(11, 2); c.closePath();
+    c.fillStyle = gLG(c, -12, -11, 12, 2, CANDYP.gold); c.fill(); c.strokeStyle = CANDYP.goldEdge; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(-10, -1, 20, 1);
+    for (const [x, y, col] of [[-12, -8, '#7fe0c8'], [0, -11, '#ff5a96'], [12, -8, '#b496ff']]) candyBall(c, x, y, 2, ['#ffffff', col, gCol(gMix(candyHex(col), [40, 10, 40], 0.4))], gCol(gMix(candyHex(col), [40, 10, 40], 0.5)), 0.6);
+    c.restore();
+    c.restore();
+    // body gloss
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 2.6; c.beginPath(); c.arc(0, -26, 17, 3.5, 4.4); c.stroke();
+  });
+}
+function candyDrawCake() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'candy')) return;
+  const E = a.end; if (sy(E + 600) > H + 40 || sy(E - 60) < -40) return;
+  const T = G.t, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, K = CANDY_CAKE, cx = sx(WORLD_W / 2), awake = a.clearT >= 0.3, top = candyCakeTop();
+  candyGlow(ctx, cx, sy(E + K.y + 150), (220 + 60 * pay) * s, [255, 210, 170], 0.26 + 0.2 * pay);
+  candyBlit(candyAlcoveSprite(), WORLD_W / 2, E);
+  candyBlit(candyCakeSprite(), WORLD_W / 2, E + K.y);
+  // the candles, lit on the clear (flames flicker; each lights a moment after the last)
+  const cs = candyCandles();
+  cs.forEach(([x, al, hh, col], i) => {
+    const X = sx(WORLD_W / 2 + x), Y = sy(E + K.y + al);
+    candyBlitAt(candyCandleSprite(col), X, Y + 1 * s);
+    const lit = a.clearT >= 0 ? smooth(0.2 + i * 0.07, 0.4 + i * 0.07, a.clearT) : 0;
+    if (lit > 0.01) {
+      const fy = Y - 26 * s, fl = 1 + 0.12 * Math.sin(T * 13 + i * 2.3);
+      candyGlow(ctx, X, fy, 14 * s * fl, [255, 200, 110], 0.42 * lit);
+      ctx.fillStyle = `rgba(255,190,80,${lit})`; ctx.beginPath(); ctx.moveTo(X, fy - 7 * s * fl); ctx.quadraticCurveTo(X + 3.4 * s, fy, X, fy + 2.6 * s); ctx.quadraticCurveTo(X - 3.4 * s, fy, X, fy - 7 * s * fl); ctx.fill();
+      ctx.fillStyle = `rgba(255,250,220,${lit})`; ctx.beginPath(); ctx.ellipse(X, fy - 0.6 * s, 1.3 * s, 2.8 * s, 0, 0, TWO_PI); ctx.fill();
+    }
+    void hh;
+  });
+  // the king on top: dozing (a slow breathing bob, sleep bubbles), then awake and bouncing on the clear
+  const bob = awake ? 6 * Math.abs(Math.sin(T * 5)) * (1 - smooth(2, 4, a.clearT)) : Math.sin(T * 1.4) * 1.2;
+  const breathe = awake ? 1 : 1 + 0.025 * Math.sin(T * 1.4);
+  candyBlitAt(candyKingSprite(awake ? 1 : 0), cx, sy(E + K.y + top + bob), awake ? Math.sin(T * 6) * 0.06 : 0, 1, 1, 1, breathe);
+  if (!awake) for (let k = 0; k < 3; k++) {
+    const u = pmod(T * 0.35 + k / 3, 1), x = sx(WORLD_W / 2 + 12 + u * 16 + Math.sin(u * 6) * 3), y = sy(E + K.y + top + 66 + u * 60), r = (2 + u * 6) * s;
+    ctx.strokeStyle = `rgba(255,240,250,${0.85 * (1 - u)})`; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - u)})`; ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.25, 0, TWO_PI); ctx.fill();
+  }
+  if (pay > 0.01) { const fade = pay * (1 - 0.6 * smooth(3, 7, a.clearT)); candyGlow(ctx, cx, sy(E + K.y + top * 0.6), 190 * s, [255, 226, 180], 0.22 * fade); }
+}
+function candyDrawMidground() { candyDrawCake(); }
+
+// ---- the landing: wafer biscuit decks slide out of the walls to meet under you (decoration only) ----
+function candyDeckSeg() {
+  return candySprite('deckseg', 24, 18, 0, 6, c => {
+    const W = CANDYP.wafer;
+    c.fillStyle = gLG(c, 0, -6, 0, 4, ['#fffaf2', '#ffe2ee', '#f2bcd4']); c.beginPath(); c.roundRect(0, -6, 24, 4, 2); c.fill();
+    c.fillStyle = gLG(c, 0, -2, 0, 8, [W[0], W[1], W[2]]); c.fillRect(0, -2, 24, 9);
+    c.fillStyle = '#fff6e6'; c.fillRect(0, 1.4, 24, 1.6);
+    c.strokeStyle = 'rgba(140,84,36,.6)'; c.lineWidth = 0.6; for (let x = 3; x < 24; x += 6) { c.beginPath(); c.moveTo(x, -1.6); c.lineTo(x, 1); c.moveTo(x, 3.4); c.lineTo(x, 6.6); c.stroke(); }
+    c.strokeStyle = CANDYP.waferEdge; c.lineWidth = 0.6; c.strokeRect(0, -2, 24, 9);
+    c.fillStyle = 'rgba(255,255,255,.8)'; c.fillRect(1, -5.4, 22, 0.8);
+  });
+}
+function candyDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, seg = candyDeckSeg();
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, tip = lerp(w - side * 4, meet - side * 0.5, e), x0 = Math.min(w, tip), x1 = Math.max(w, tip);
+    if (e > 0.04 && x1 - x0 > 2) {
+      ctx.save(); ctx.beginPath(); ctx.rect(sx(x0), y - 10 * s, (x1 - x0) * s, 30 * s); ctx.clip();
+      for (let x = side < 0 ? tip - 24 * Math.ceil((tip - w) / 24) : tip; x < x1; x += 24) candyBlitAt(seg, sx(x), y);
+      ctx.restore();
+      // a cherry on the tip
+      ctx.save(); ctx.translate(sx(tip) + side * 3 * s, y - 8 * s); ctx.scale(s, s); candyBall(ctx, 0, 0, 3.6, ['#ffd0d8', '#ff3c5c', '#b8102c', '#7a0a1c'], '#7a0c1c', 0.7); ctx.restore();
+    }
+    // a lollipop post on the lip at each wall, its swirl spinning faster on the clear
+    const lx = w - side * 6, la = E + 30;
+    ctx.fillStyle = '#f6eee6'; ctx.fillRect(sx(lx) - 1.3 * s, sy(la), 2.6 * s, 30 * s);
+    candyBlitAt(candyLollyHead(1), sx(lx), sy(la), T * (1.5 + 6 * pay) * side, 1, 1, 0.5);
+    candyBlitAt(candyLollyGloss(), sx(lx), sy(la), 0, 1, 1, 0.5);
+    if (pay > 0) candyGlow(ctx, sx(lx), sy(la), 20 * s, [255, 200, 230], 0.5 * pay);
+  }
+}
+function candyCakeBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  const hx = WORLD_W / 2, ha = a.end + CANDY_CAKE.y + candyCakeTop() + 60;
+  for (let k = 0; k < 26; k++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = 120 + Math.random() * 220; puff(hx + (Math.random() - 0.5) * 80, ha, Math.cos(an) * v, -Math.sin(an) * v, 0.9 + Math.random() * 0.8, 1.6 + Math.random() * 1.6, 'sparkle', CANDY_JAWCOL[k % 4]); }
+  candySprinkleBurst(hx, ha - 20, 30, 260);
+  sfx('cfinish');
+}
+
+// ---- light, speed and the foreground ----
+// the cave's light: a warm raspberry vignette at the edges (never black), the section's lamp from the top left, the
+// cake's golden glow as you near the finish
+function candyDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.36, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.8);
+  vg.addColorStop(0, 'rgba(110,30,70,0)'); vg.addColorStop(1, 'rgba(110,30,70,.28)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const L = candyLightAt(G.camAlt + viewH / 2);
+  const sg = ctx.createRadialGradient(ox, 0, 10, ox, 0, Math.max(cssW, H) * 0.7); sg.addColorStop(0, gCol(L.lamp, 0.16)); sg.addColorStop(0.6, gCol(L.lamp, 0.04)); sg.addColorStop(1, gCol(L.lamp, 0)); ctx.fillStyle = sg; ctx.fillRect(X0, Y0, WW, HH);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'candy') {
+    const ha = a.end + CANDY_CAKE.y + 150, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,220,170,${(0.1 + 0.14 * pay) * k})`); g.addColorStop(0.5, `rgba(255,200,210,${0.05 * k})`); g.addColorStop(1, 'rgba(255,200,210,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: sugar streaks along the walls and sprinkles whipping past through the shaft
+function candyDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(5 * k); i++) {
+    const j = hash2(i + side * 31, 0xe31), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xe32) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (10 + 14 * j) * s, len = (24 + 100 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol([255, 230, 240], (0.06 + 0.16 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.4 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  const n = 4 + Math.round(12 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xe33)), len = (8 + 20 * hash2(i, 0xe34)) * (0.5 + 1.2 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xe35)) + hash2(i, 0xe36) * H * 2) % (H + 200)) - 100;
+    ctx.globalAlpha = 0.15 + 0.3 * k * hash2(i, 0xe37); ctx.strokeStyle = CANDY_SPRINK[i % 7]; ctx.lineWidth = (1.2 + 0.8 * hash2(i, 0xe38)) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: giant sweets close to the camera at the screen's edges (in warm shade with lit edges), fading back when
+// a trap or you are near so they never hide anything
+function candyFgSprite(side, v) {
+  return candySprite(`fg${side}_${v}`, 80, 200, side ? 70 : 10, 100, c => {
+    const d = side ? -1 : 1;
+    if (v === 0) {
+      // a huge candy cane stood up the edge, in shade
+      const P = []; for (let y = 100; y > -100; y -= 10) P.push([4 * d, y]);
+      candyCaneRod(c, P, 22, 0, '#a82a44', '#e6cfd2', '#6a1a2c');
+      c.strokeStyle = 'rgba(255,240,244,.45)'; c.lineWidth = 2; c.beginPath(); c.moveTo(4 * d - d * 8, -100); c.lineTo(4 * d - d * 8, 100); c.stroke();
+    } else {
+      // a giant lollipop on a stick from below the screen, its swirl head half in view (in warm shade)
+      c.fillStyle = gLG(c, 0, 0, 10 * d, 0, ['#d8c8bc', '#b8a698']); c.fillRect(Math.min(14 * d, 24 * d), -10, 10, 110);
+      c.fillStyle = '#e8cfd8'; c.beginPath(); c.arc(18 * d, -40, 36, 0, TWO_PI); c.fill();
+      c.save(); c.beginPath(); c.arc(18 * d, -40, 35, 0, TWO_PI); c.clip();
+      for (const [col, off, lw] of [['#b8365e', 0, 9], ['#3e9a86', Math.PI, 7]]) { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); for (let a = 0; a < 4.2 * Math.PI; a += 0.2) { const rr = 1 + a / (4.2 * Math.PI) * 37; c.lineTo(18 * d + Math.cos(a + off) * rr, -40 + Math.sin(a + off) * rr); } c.stroke(); }
+      c.fillStyle = 'rgba(90,20,50,.35)'; c.fillRect(-40, -80, 120, 80);
+      c.restore();
+      c.strokeStyle = '#6a1a3c'; c.lineWidth = 2; c.beginPath(); c.arc(18 * d, -40, 36, 0, TWO_PI); c.stroke();
+      c.strokeStyle = 'rgba(255,236,244,.55)'; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.arc(18 * d, -40, 28, 3.5, 4.4); c.stroke();
+    }
+  });
+}
+function candyDrawForeground() {
+  const f = 1.35, slot = 360, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xe41) < 0.55) continue;
+    const side = hash2(i, 0xe42) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xe43) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.15 + 0.7 * smooth(40, 220, dist);
+    const S = candyFgSprite(side, Math.floor(hash2(i, 0xe44) * 2));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (candyOn()) candyDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (candyOn()) candyDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (candyOn()) candyDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (candyOn()) candyDrawLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (candyOn()) candyDrawDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (candyOn()) candyDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (candyOn()) candyDrawForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (candyOn() && !boss) candyCakeBurst(); }; }
 // (game slot: Candy Caverns, island level 30)
 // (game slot: Cheddar Caverns, island level 31)
 // (game slot: Toybox Tower, island level 32)
