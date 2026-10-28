@@ -6813,6 +6813,389 @@ const ADV_GEODE = { name: 'Amethyst Geode', theme: 'geode', seed: 'isl-16-geode'
   goals: [{ k: 'finish', text: 'Reach the Heart of the Geode' }, { k: 'geodeHearts', n: 3 }, { k: 'geodeUnsinged' }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Amethyst Geode, island level 16)
+/* LEVELGEN:BEGIN */
+// ---------- the Fossil Bonepit (island level 21): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Amethyst Geode (see createGeodeLevel): a calm dig site, then one new trap at a time, each
+// taught alone and slow before it is combined (the Skull Gallery, the Ribcage Hall, the Serpent Strata), a breather (the
+// Amber Seam), the Boneyard mixing them and the Rex Gauntlet, then the Great Amber and its finish deck. Its own shaft
+// (sandstone walls of packed earth strata with bones, ammonites and amber in them), its own traps and its own look
+// (G.theme 'fossil', see the fossil drawing); it runs pinned to the jungle (pinJungle) like the temple.
+// The traps (every one leaves a way through on its own clock that the widest pilot fits):
+// - fossilSkull (Skull Snapper): a giant fossil skull jutting from a wall on its neck bones, its lower jaw level. Every
+//   P s its eye flares and it rears back, its upper skull hinging wide open (`tell` s), then it lunges out `lunge` and
+//   slams its upper jaw DOWN onto the lower one; it holds, then slides back. The bones kill; the cloud of bone dust
+//   round its jaws as they slam only dusts you (the "never dusted" mission). The far side always leaves a lane.
+// - fossilRib (Ribcage Gate): a giant's ribs in both walls, left and right staggered. Every P s they rattle out a
+//   little (`tell` s), then slide out across the shaft and interlock (from the bottom rib up, a ripple), hold shut, and
+//   slide back into the walls. They only ever move sideways. The dust they knock out as they slam shut only dusts you.
+// - fossilSerpent (Bone Serpent): a sea serpent's skeleton living in the strata. Every P s its amber eyes light up in
+//   its burrow and dust trickles out (`tell` s), then it swims out across the shaft (head first, its long spine
+//   undulating behind it) into the burrow on the far wall, a little lower: it never rises. You wait for its tail, or
+//   follow the tail across.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const FOSSIL = {
+  swell: [7, 4], notch: { D: [0, 12] },   // wall relief: a slow swell and rounded erosion bulges between knots
+  skull: { tell: 1.0, snap: 0.09, hold: 0.34, back: 0.62, rest: 0.16, open: 0.8, rear: 7, lunge: 48, hinge: [22, 6], len: 150, dust: 0.42, ease: 430 },
+  rib: { tell: 0.7, close: 0.2, hold: 0.75, open: 0.45, ripple: 0.05, gap: 28, n: 3, bend: 20, bow: 8, out: 44, over: 26, r: 9.2, ease: 440 },
+  serpent: { tell: 1.0, v: 285, sp: 17, n: 12, amp: 10, wave: 130, drop: 34, ease: 470 },
+  chiliGap: 470, end: 400,
+};
+const FOSSIL_TYPES = new Set(['fossilSkull', 'fossilRib', 'fossilSerpent']);
+// The stage, bottom to top (as GEODE_STAGE: each section's width w and its beats [rise, kind, options], then `tail` of
+// clear shaft; a calm section is `len` of open shaft; amber: this beat holds one of the 3 amber mosquitoes).
+const FOSSIL_STAGE = [
+  { name: 'Dig Site', w: 376, len: 760, calm: true },
+  { name: 'Skull Gallery', w: 368, beats: [[540, 'fossilSkull', { side: 1, P: 4.6 }], [660, 'fossilSkull', { side: -1, P: 4.4, ph: 0.4 }], [680, 'fossilSkull', { side: 1, P: 4.4, ph: 0.15, amber: true }],
+    [700, 'skullPair', { P: 4.4 }], [760, 'fossilSkull', { side: -1, P: 4.2 }], [700, 'skullPair', { P: 4.2 }]], tail: 560 },
+  { name: 'Ribcage Hall', w: 364, beats: [[540, 'fossilRib', { P: 4.0 }], [640, 'fossilRib', { P: 3.9, ph: 0.5, amber: true }], [700, 'ribSkull', { P: 4.0 }],
+    [740, 'ribDuo', { P: 3.9 }], [780, 'ribSkull', { P: 3.8 }], [760, 'ribDuo', { P: 3.8 }]], tail: 560 },
+  { name: 'Serpent Strata', w: 368, beats: [[620, 'fossilSerpent', { side: 1, P: 5.0 }], [680, 'fossilSerpent', { side: -1, P: 4.8, ph: 0.4, amber: true }], [720, 'serpentSkull', { P: 4.8 }],
+    [760, 'serpentRib', { P: 4.6 }], [760, 'serpentDuo', { P: 4.8 }], [760, 'serpentSkull', { P: 4.6 }]], tail: 600 },
+  { name: 'Amber Seam', w: 384, len: 1000, calm: true },
+  { name: 'Boneyard', w: 362, beats: [[600, 'skullPair', { P: 4.2 }], [760, 'serpentRib', { P: 4.4 }], [740, 'ribSkull', { P: 3.8 }], [740, 'serpentDuo', { P: 4.6 }],
+    [680, 'fossilSkull', { side: -1, P: 4.0 }], [760, 'serpentSkull', { P: 4.4 }], [740, 'ribSkull', { P: 3.8 }], [760, 'ribDuo', { P: 3.8 }]], tail: 620 },
+  { name: 'Rex Gauntlet', w: 358, beats: [[620, 'ribDuo', { P: 3.7 }], [760, 'serpentSkull', { P: 4.4 }], [720, 'skullPair', { P: 4.0 }], [780, 'serpentRib', { P: 4.4 }],
+    [720, 'ribSkull', { P: 3.7 }], [760, 'serpentDuo', { P: 4.4 }], [720, 'skullPair', { P: 3.9 }], [760, 'serpentRib', { P: 4.3 }], [720, 'ribDuo', { P: 3.6 }], [760, 'ribSkull', { P: 3.6 }]], tail: 780 },
+  { name: 'The Great Amber', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height (the finish deck), from the layout alone
+const fossilEnd = () => { let y = 0; for (const sec of FOSSIL_STAGE) { if (sec.finish) return y + FOSSIL.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+const fossilEase = k => 1 - (1 - k) * (1 - k);
+const fossilBack = k => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };   // ease out with an overshoot
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a skull's clock: th its upper skull's hinge angle (0 shut, wide open in the tell), e how far it has lunged out of the
+// wall (negative: reared back), tell 0..1, shake, dust 0..1 (the bone dust round its jaws after the slam), snap (just
+// slammed)
+function fossilSkullAt(h, t) {
+  const X = FOSSIL.skull, u = pmod(t / h.P + h.ph, 1) * h.P, E = h.lunge;
+  if (u < X.tell) { const k = smooth(0, 1, u / X.tell); return { th: lerp(X.rest, X.open, k), e: -X.rear * k, tell: u / X.tell, dust: 0, u }; }
+  let v = u - X.tell;
+  if (v < X.snap) { const k = v / X.snap; return { th: X.open * (1 - k * k), e: lerp(-X.rear, E, fossilEase(k)), tell: 1, dust: 0, u, moving: true }; }
+  v -= X.snap;
+  const dust = v < X.dust ? 1 - v / X.dust : 0;
+  if (v < X.hold) return { th: 0.02 * Math.abs(Math.sin(v * 30)) * (1 - v / X.hold), e: E, tell: 0, dust, u, shut: true };
+  v -= X.hold;
+  if (v < X.back) { const k = smooth(0, 1, v / X.back); return { th: X.rest * k, e: E * (1 - k), tell: 0, dust, u }; }
+  return { th: X.rest + 0.03 * Math.sin((v - X.back) / Math.max(0.1, h.P - X.tell - X.snap - X.hold - X.back) * Math.PI * 2), e: 0, tell: 0, dust: 0, u };
+}
+// a point of the skull in its own frame (pu out of the wall, pv up; the upper skull's points hinge by th) to the world
+function fossilSkullPt(h, st, pu, pv, upper) {
+  let u = pu, v = pv;
+  if (upper) { const [hu, hv] = FOSSIL.skull.hinge, c = Math.cos(st.th), sn = Math.sin(st.th); u = hu + (pu - hu) * c - (pv - hv) * sn; v = hv + (pu - hu) * sn + (pv - hv) * c; }
+  return [h.base + h.side * (u + st.e), h.alt + v];
+}
+// a ribcage's clock: tell 0..1 while it rattles, and each rib's closing (0 in the wall .. 1 shut, overshooting a little),
+// rib j (bottom first) a ripple later than the one under it; dust 0..1 after the slam
+function fossilRibAt(h, t) {
+  const X = FOSSIL.rib, u = pmod(t / h.P + h.ph, 1) * h.P, ks = [], n = h.ribs.length;
+  const tell = u < X.tell ? u / X.tell : 0;
+  for (let j = 0; j < n; j++) {
+    const v = u - X.tell - j * X.ripple;
+    let k;
+    if (u < X.tell) k = 0.06 * smooth(0, 1, u / X.tell);
+    else if (v < 0) k = 0.06;
+    else if (v < X.close) k = lerp(0.06, 1, fossilBack(v / X.close));
+    else if (v < X.close + X.hold) k = 1;
+    else if (v < X.close + X.hold + X.open) k = 1 - smooth(0, 1, (v - X.close - X.hold) / X.open);
+    else k = 0;
+    ks.push(k);
+  }
+  const w = u - X.tell - X.close, dust = w >= 0 && w < 0.45 ? 1 - w / 0.45 : 0;
+  return { tell, ks, dust, u, shut: ks.every(k => k > 0.9) };
+}
+// rib i's centre line at closing k: q 0 (its root, deep in the wall) .. 1 (its knobbly tip); returns [x, alt]
+function fossilRibPt(h, i, k, q) {
+  const R = h.ribs[i], X = FOSSIL.rib, tip = lerp(R.open, R.shut, k), s = (1 - q) * R.len;
+  return [tip - R.d * s, R.y + fossilRibY(q)];
+}
+const fossilRibR = q => FOSSIL.rib.r * (1 - 0.42 * q) + (q > 0.96 ? 1.4 : 0);
+// a rib's centre line's rise at q (gently bowed: it sags a little out of its socket, then sweeps up to its tip)
+function fossilRibY(q) { const X = FOSSIL.rib; return X.bend * q * q - X.bow * Math.sin(q * Math.PI); }
+// a serpent's clock: tell 0..1 while its eyes glow in the burrow, then its head's distance out along its path (null
+// before and after it swims)
+function fossilSerpentAt(h, t) {
+  const X = FOSSIL.serpent, u = pmod(t / h.P + h.ph, 1) * h.P;
+  if (u < X.tell) return { tell: u / X.tell, d: null, u };
+  const d = -60 + (u - X.tell) * X.v;
+  return { tell: 0, d: d - X.n * X.sp - 30 < h.span + 40 ? d : null, out: d - X.n * X.sp - 30 >= h.span + 40, u };
+}
+// the serpent's path: the point at distance dd out from its burrow (x across, alt dipping `drop` by the far wall,
+// with its undulation) and the path's slope there
+function fossilPathAt(h, dd) {
+  const X = FOSSIL.serpent, k = clamp(dd / h.span, 0, 1), w = dd / X.wave * (2 * Math.PI) + h.wph;
+  return [h.x0 + h.side * dd, h.alt - X.drop * k + X.amp * Math.sin(w), -X.drop / h.span + X.amp * (2 * Math.PI) / X.wave * Math.cos(w)];
+}
+// Every collision shape of a fossil trap at time t, fitted to its drawing. kind: undefined for all of them, 'body' the
+// lethal parts only, 'dust' the bone dust only (it dusts you, never kills), 'still' only the parts that never move.
+function fossilShapes(h, t, S = [], kind) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, mount = kind !== 'dust', moving = kind !== 'still';
+  if (h.type === 'fossilSkull') {
+    if (mount) c(b + d * 2, A + 10, 24);                                          // the packed-earth socket in the wall
+    if (mount && moving) {
+      const st = fossilSkullAt(h, t), P = (u, v, up) => fossilSkullPt(h, st, u, v, up);
+      if (st.e > 4) { const [x0, a0] = [b + d * 8, A + 10], [x1, a1] = P(14, 10, false); cap(x0, a0, x1, a1, 12); }   // its neck bones, out of the socket
+      { const [x0, a0] = P(24, -8, false); c(x0, a0, 13); }                       // the jaw's hinge
+      { const [x0, a0] = P(18, -6, false), [x1, a1] = P(138, -11, false); cap(x0, a0, x1, a1, 9); }   // the lower jaw
+      { const [x0, a0] = P(32, 26, true); c(x0, a0, 22); }                        // the back of the skull
+      { const [x0, a0] = P(38, 24, true), [x1, a1] = P(104, 15, true); cap(x0, a0, x1, a1, 15); }   // its middle
+      { const [x0, a0] = P(104, 13, true), [x1, a1] = P(150, 5, true); cap(x0, a0, x1, a1, 9); }    // the snout
+      { const [x0, a0] = P(52, 0, true), [x1, a1] = P(144, -2, true); cap(x0, a0, x1, a1, 5); }     // its row of upper teeth
+    }
+    if (kind === 'dust' || kind === undefined) {
+      const st = fossilSkullAt(h, t);
+      if (st.dust > 0.05) { const [x0, a0] = fossilSkullPt(h, st, 60, 2, false), [x1, a1] = fossilSkullPt(h, st, 166, 2, false); cap(x0, a0, x1, a1, 14 + 22 * st.dust); }
+    }
+  } else if (h.type === 'fossilRib') {
+    const X = FOSSIL.rib;
+    if (mount) for (const R of h.ribs) c(R.base + R.d * 1, R.y + 2, 11);             // the vertebra sockets in the walls
+    if (mount && moving) {
+      const st = fossilRibAt(h, t);
+      h.ribs.forEach((R, i) => {
+        const k = st.ks[i] + (st.tell ? 0.012 * Math.sin(t * 70 + i) : 0);
+        let prev = fossilRibPt(h, i, k, 0.2);
+        for (let q = 0.3; q <= 1.0001; q += 0.1) {
+          const P = fossilRibPt(h, i, k, q);
+          if (R.d > 0 ? P[0] > R.base - 6 : P[0] < R.base + 6) cap(prev[0], prev[1], P[0], P[1], fossilRibR(q));
+          prev = P;
+        }
+      });
+    }
+    if (kind === 'dust' || kind === undefined) {
+      const st = fossilRibAt(h, t);
+      if (st.dust > 0.05) { const r = 12 + 16 * st.dust; cap(h.cx - 70, h.blo - 2, h.cx + 70, h.blo - 2, r); cap(h.cx - 70, h.bhi + 2, h.cx + 70, h.bhi + 2, r); }
+    }
+  } else if (h.type === 'fossilSerpent') {
+    const X = FOSSIL.serpent;
+    if (mount) { c(h.x0 - d * 6, A + 2, 17); c(h.x1 + d * 6, A - X.drop + 2, 17); }   // the two burrows' rims
+    if (mount && moving) {
+      const st = fossilSerpentAt(h, t);
+      if (st.d != null) {
+        const inS = dd => dd > -8 && dd < h.span + 8, D = st.d;
+        if (inS(D + 20)) { const [x0, a0] = fossilPathAt(h, D), [x1, a1] = fossilPathAt(h, D + 44); if (inS(D + 44) || inS(D)) cap(x0, a0 + 1, x1, a1 - 1, 8.5); if (inS(D + 4)) c(x0 + d * 4, a0 + 2, 14); }
+        for (let i = 1; i <= X.n; i++) {
+          const dd = D - i * X.sp; if (!inS(dd)) continue;
+          const [x, a] = fossilPathAt(h, dd); c(x, a, 10 - 4.6 * i / X.n);
+          if (i <= 4 || i === X.n) { const [, , sl] = fossilPathAt(h, dd), nl = Math.hypot(1, sl), tx = d / nl, ta = sl / nl;
+            if (i <= 4) { const f = 1 - 0.12 * (i - 1); c(x + sl * d / nl * 12 * f - tx * 6 * f, a - 12 * f / nl - ta * 6 * f, 6.5 * f); }
+            else c(x - tx * 16, a - ta * 16, 7); }
+          if (i === 2 || i === 6) { const [, , sl] = fossilPathAt(h, dd), nl = Math.hypot(1, sl), nx = -sl / nl * d, na = 1 / nl, f = i === 2 ? 1 : 0.8; c(x - d * 7 + nx * 12 * f, a + na * 12 * f, 6.5 * f); c(x - d * 7 - nx * 12 * f, a - na * 12 * f, 6.5 * f); }
+        }
+      }
+    }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): a skull at every point of its cycle, every rib out shut,
+// a serpent's whole band across the shaft.
+function fossilDanger(h) {
+  const S = [];
+  if (h.type === 'fossilSkull') { for (let k = 0; k < 24; k++) fossilShapes(h, (k / 24) * h.P, S); }
+  else if (h.type === 'fossilRib') { const ks = h.ribs.map(() => 1.06); S.push(...fossilShapes(h, 0, [], 'still')); h.ribs.forEach((R, i) => { const [x0, a0] = fossilRibPt(h, i, ks[i], 0.3), [x1, a1] = fossilRibPt(h, i, ks[i], 1); S.push({ k: 's', x0, a0, x1, a1, r: FOSSIL.rib.r + 6 }); }); S.push({ k: 's', x0: h.cx - 70, a0: h.blo - 2, x1: h.cx + 70, a1: h.blo - 2, r: 30 }, { k: 's', x0: h.cx - 70, a0: h.bhi + 2, x1: h.cx + 70, a1: h.bhi + 2, r: 30 }); }
+  else if (h.type === 'fossilSerpent') { const X = FOSSIL.serpent; S.push(...fossilShapes(h, 0, [], 'still')); for (let dd = 0; dd < h.span; dd += 12) { const [x0, a0] = fossilPathAt(h, dd), [x1, a1] = fossilPathAt(h, dd + 12); S.push({ k: 's', x0, a0, x1, a1, r: 26 }); } void X; }
+  return S;
+}
+
+// The Fossil Bonepit's shaft, laid out in full from FOSSIL_STAGE (the seed only nudges looks and phases). It answers the
+// same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createFossilLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xF05511) >>> 0), Q = FOSSIL;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [], digs = [];
+  let y = 0;
+  for (const sec of FOSSIL_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = fossilEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the sandstone's relief on a side: a slow swell and rounded erosion bulges between knots ~110 apart (each knot its
+  // own depth, eased between them like weathered rock), eased flat where a trap is mounted and over the launch cave.
+  // Never steeper than RULES.maxWallSlope.
+  const ph0 = (seed & 0xfff) / 0xfff * 6.283, NC = Q.notch;
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knotA = (i, side) => i * 110 + 34 * (hash2(i, (seed & 0xffff) + 191 + side * 7) - 0.5);
+  const knotD = (i, side) => lerp(NC.D[0], NC.D[1], hash2(i, (seed & 0xffff) + 193 + side * 7));
+  const notchAt = (a, side) => { let i = Math.floor(a / 110); while (knotA(i, side) > a) i--; while (knotA(i + 1, side) <= a) i++; const a0 = knotA(i, side), a1 = knotA(i + 1, side); return lerp(knotD(i, side), knotD(i + 1, side), smooth(0, 1, (a - a0) / (a1 - a0))); };
+  const reliefAt = (a, side) => {
+    const p = ph0 + side * 2.3, [l0, l1] = Q.swell;
+    const r = l0 * (0.5 + 0.5 * Math.sin(a / 103 + p)) + l1 * (0.5 + 0.5 * Math.sin(a / 47 + p * 1.7)) + notchAt(a, side);
+    return r * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function fWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function fOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = fWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSkull = 0;
+  const make = {
+    fossilSkull(A, o) { flat(A - 50, A + 70, o.side); lastSkull = o.side; return [{ type: 'fossilSkull', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), amber: !!o.amber, ease: Q.skull.ease }]; },
+    skullPair(A, o) {   // skulls on facing walls 380 apart, half a cycle out of step (the first on the wall the last skull was on, so the zig-zag never doubles back)
+      const p0 = o.ph ?? ph(), d = lastSkull || pick();
+      return [...make.fossilSkull(A, { side: d, P: o.P, ph: p0 }), ...make.fossilSkull(A + 380, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    fossilRib(A, o) { flat(A - 40, A + 120, 0); return [{ type: 'fossilRib', side: 0, alt: A, P: o.P, ph: o.ph ?? ph(), amber: !!o.amber, ease: Q.rib.ease }]; },
+    ribSkull(A, o) {   // a ribcage, then a skull above it
+      return [...make.fossilRib(A, { P: o.P, ph: o.ph ?? ph() }), ...make.fossilSkull(A + 340, { side: pick(), P: o.P + 0.4, ph: ph() })];
+    },
+    ribDuo(A, o) {   // two ribcages 340 apart, a little out of step: the upper one opens just after the lower, so you ride the wave up through both
+      const p0 = o.ph ?? ph();
+      return [...make.fossilRib(A, { P: o.P, ph: p0 }), ...make.fossilRib(A + 340, { P: o.P, ph: p0 - 0.17 })];
+    },
+    fossilSerpent(A, o) { flat(A - 70, A + 30, 0); return [{ type: 'fossilSerpent', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), amber: !!o.amber, ease: Q.serpent.ease }]; },
+    serpentSkull(A, o) {   // a serpent, then a skull above it
+      const d = pick();
+      return [...make.fossilSerpent(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.fossilSkull(A + 290, { side: -d, P: o.P - 0.4, ph: ph() })];
+    },
+    serpentRib(A, o) {   // a serpent, then a ribcage above it
+      return [...make.fossilSerpent(A, { side: pick(), P: o.P, ph: o.ph ?? ph() }), ...make.fossilRib(A + 300, { P: Math.min(o.P - 0.6, 3.9), ph: ph() })];
+    },
+    serpentDuo(A, o) {   // serpents from facing walls 240 apart, out of step
+      const p0 = o.ph ?? ph(), d = pick();
+      return [...make.fossilSerpent(A, { side: d, P: o.P, ph: p0 }), ...make.fossilSerpent(A + 240, { side: -d, P: o.P, ph: p0 + 0.45 })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, fossil: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const b of beats) for (const h of b.hs) {
+    const d = h.side;
+    if (h.type === 'fossilSkull') {
+      const X = Q.skull, [L, R] = fOpening(h.alt - 40, h.alt + 60);
+      h.base = d > 0 ? L : R;
+      // its lunge: as far as leaves the widest pilot a lane on the far side, never past X.lunge
+      h.lunge = Math.max(20, Math.min(X.lunge, (R - L) - (X.len + 10) - (laneSize().w + 22)));
+      h.x = (L + R) / 2; h.lo = h.alt - 36 - 22; h.hi = h.alt + X.hinge[1] + Math.sin(X.open) * 150 + 24;
+    } else if (h.type === 'fossilRib') {
+      const X = Q.rib, [L, R] = fOpening(h.alt - 20, h.alt + X.n * X.gap + 30), cx = (L + R) / 2;
+      h.cx = cx; h.ribs = [];
+      for (let i = 0; i < X.n; i++) for (const dd of [1, -1]) {
+        const yy = h.alt + i * X.gap + (dd < 0 ? X.gap / 2 : 0), [l, r] = fWalls(yy), base = dd > 0 ? l : r;
+        const shut = cx + dd * X.over, open = base + dd * X.out;
+        h.ribs.push({ d: dd, y: yy, base, open, shut, len: Math.abs(shut - base) + 46 });
+      }
+      h.ribs.sort((p, q) => p.y - q.y);
+      h.blo = h.alt - X.r - 2 - X.bow * 0.7; h.bhi = h.ribs[h.ribs.length - 1].y + X.bend + X.r;
+      h.x = cx; h.lo = h.blo - 30; h.hi = h.bhi + 30;
+    } else if (h.type === 'fossilSerpent') {
+      const X = Q.serpent, [L, R] = fOpening(h.alt - X.drop - 30, h.alt + 20);
+      h.base = d > 0 ? L : R; h.x0 = h.base; h.x1 = d > 0 ? R : L; h.span = Math.abs(h.x1 - h.x0); h.wph = rng() * 6.283;
+      h.x = (L + R) / 2; h.lo = h.alt - X.drop - X.amp - 26; h.hi = h.alt + X.amp + 22;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, fossilDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = fWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = fWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = fWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38) => { for (let k = 0; k < n; k++) add(x, a0 + k * step); };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Amber Seam: an ammonite of coconuts (a spiral wound in to a golden centre), then a weave
+      const cA = sc.a0 + 380, cx = mid(cA);
+      for (let k = 0; k < 15; k++) { const an = k * 0.62 + 0.3, rr = 108 - k * 6.2; add(cx + Math.cos(an) * rr, cA + Math.sin(an) * rr * 0.92, k === 14 ? 'gold' : 'coco', { clear: -Infinity }); }
+      add(cx, cA, 'gold', { clear: -Infinity });
+      weave(sc.a0 + 600, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way: a column up the far lane past a skull, a line through a ribcage's middle, a pair
+  // under a serpent's band and over it (each amber mosquito a dare: by a skull's snout, in a ribcage's heart, on a
+  // serpent's path)
+  let ambers = 0;
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      const d = h.side;
+      if (h.type === 'fossilSkull') {
+        const [l, r] = fWalls(h.alt), x = d > 0 ? r - 50 : l + 50; for (let k = 0; k < 4; k++) add(x, h.alt - 70 + k * 40, 'coco', { clear: 34 });
+        if (h.amber && ambers < 3) { if (add(h.base + d * (Q.skull.len + h.lunge * 0.55), h.alt + 60, 'amber', { amber: true, clear: -Infinity })) ambers++; }
+      } else if (h.type === 'fossilRib') {
+        column(h.cx + (rng() - 0.5) * 20, h.lo - 50, 2, 40); add(h.cx, h.hi + 40);
+        if (h.amber && ambers < 3) { if (add(h.cx, (h.blo + h.bhi) / 2, 'amber', { amber: true, clear: -Infinity })) ambers++; }
+      } else if (h.type === 'fossilSerpent') {
+        const xm = (h.x0 + h.x1) / 2; add(xm - 40, h.lo - 30); add(xm + 40, h.lo - 30); add(xm, h.hi + 34);
+        if (h.amber && ambers < 3) { const [x, a] = fossilPathAt(h, h.span * 0.62); if (add(x, a, 'amber', { amber: true, clear: -Infinity })) ambers++; }
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = top.hi + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the geode's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+  // buried bones in the walls (only the dachshund digs them up, see the fossil perk): on quiet stretches of wall well
+  // away from every trap, one every so often, on alternating sides
+  for (let a = 380, side = 0; a < endAt - 200; a += 420 + 260 * hash2(Math.round(a), 0xB0E)) {
+    if (out.some(h => h.lo - 170 < a && h.hi + 170 > a)) continue;
+    digs.push({ side, alt: a, n: digs.length }); side ^= 1;
+  }
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: fWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, fossil: true, sections: secs, beats, top: topA, digs,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, notchAt, knotA,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 21): its own shaft (createFossilLevel), the fossil look (G.theme), its missions and its
+// length in metres (from the layout).
+const ADV_FOSSIL = { name: 'Fossil Bonepit', theme: 'fossil', seed: 'isl-21-fossil', reward: 220, target: 0, len: fossilEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Great Amber' }, { k: 'fossilAmber', n: 3 }, { k: 'fossilDustless' }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Fossil Bonepit, island level 21)
 // (LEVELGEN slot: Shipwreck Hold, island level 22)
 // (LEVELGEN slot: Cursed Treasure Vault, island level 23)
@@ -35556,7 +35939,7 @@ const ISLAND = {
   // They aren't on the island map yet, have no roads and open only from the level selector; each gets its stage
   // (a key in ADV_STAGES) when it is built.
   more: [
-    { id: 21, name: 'Fossil Bonepit', region: 'fossil', pilot: 'dachshund', perk: 'Digs up bones: buried bones become bonus coins' },
+    { id: 21, name: 'Fossil Bonepit', region: 'fossil', pilot: 'dachshund', perk: 'Digs up bones: buried bones become bonus coins', stage: 'fossil' },
     { id: 22, name: 'Shipwreck Hold', region: 'shipwreck', pilot: 'puffer', perk: 'Puffs up so the kraken lets go once' },
     { id: 23, name: 'Cursed Treasure Vault', region: 'vault', pilot: 'piggy', perk: 'Sniffs out mimics: they glow red' },
     { id: 24, name: 'Cascade Falls', region: 'cascade', pilot: 'duck', perk: 'Swims straight up the falls' },
@@ -35636,6 +36019,7 @@ ADV_STAGES.grotto = ADV_GROTTO;   // (island level 10, Glowshroom Grotto: see cr
 ADV_STAGES.geode = ADV_GEODE;   // (island level 16, Amethyst Geode: see createGeodeLevel)
 ADV_STAGES.lagoon = ADV_LAGOON;   // (island level 11, Hidden Lagoon: see createLagoonLevel)
 ADV_STAGES.bog = ADV_BOG;   // (island level 7, Murk Mire: see createBogLevel)
+ADV_STAGES.fossil = ADV_FOSSIL;   // (island level 21, Fossil Bonepit: see createFossilLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -51264,6 +51648,1465 @@ function drawGeodeForeground() {
 { const base = drawForeground; drawForeground = function () { if (geodeOn()) drawGeodeForeground(); else base(); }; }
 { const base = stageClear; stageClear = function (boss) { base(boss); if (geodeOn() && !boss) geodeHeartBurst(); }; }
 // (game slot: Amethyst Geode, island level 16)
+// ---------- the Fossil Bonepit (island level 21): its look, traps, amber mosquitoes, bone dust, buried bones and sounds ----------
+// The stage's shaft and traps are laid out by createFossilLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'fossil': a vast dig in the sandstone under the island, warm dusty light falling from the roof. Its
+// walls are a cut through the strata: bands of sand, ochre, rust and umber earth lying level (each section its own
+// colours), packed with fossils (bones, vertebrae, ammonites, shells, trilobites, a fish skeleton) and chunks of amber
+// glowing like honey; their edge is a crumbly sandstone lip (a lit top, a shaded underside, chips and little ledges
+// with dust on them) and the dig has left its stakes, strings and tag flags on them. Behind the shaft the cavern's far
+// cliffs stand in a warm haze, a giant skeleton half out of the rock, with scaffolds, ladders and lanterns on ledges
+// nearer; dust drifts and sparkles in the light shafts. Art as the rest of the game: cartoony, 2-3 stop gradients lit
+// from the top left, every edge a darker shade of its own colour (never black), detail as line pairs (a dark furrow
+// over a lit ridge), sheen strokes and soft glows; the backdrop stays calm and pushed back so the traps and pickups
+// read first. Performance: everything that never moves (the wall rock, the backdrop's layers, the traps' bones, the
+// finish chamber) is painted once into offscreen canvases at the screen's pixel scale and blitted each frame (see
+// fossilTile, fossilSprite); only what moves or glows is drawn live.
+const FOSP = {
+  pal: { bgTop: [168, 124, 84], bgBot: [86, 60, 40], far: [150, 112, 78], far2: [128, 94, 64], wall: [96, 66, 44], wallIn: [52, 34, 24], rim: [255, 206, 140] },
+  bone: ['#fff6e2', '#ecd6aa', '#c4a272', '#8e6a44'], boneEdge: '#6e4c2c', boneDk: 'rgba(110,74,40,', boneLt: 'rgba(255,250,236,',
+  amber: ['#fff4b8', '#ffc850', '#e8841a', '#9a4608'], amberEdge: '#7a3606', amberGlow: [255, 172, 60],
+  earth: ['#b48a5c', '#7e5a3a', '#4e3424'], earthEdge: '#4a3020',
+  dust: [238, 214, 176], warm: [255, 210, 140], eye: [255, 184, 60], eyeHot: [255, 72, 40],
+};
+const fossilOn = () => !!(G && G.theme === 'fossil');
+{ const base = pal; pal = function (key, a) { return fossilOn() && FOSP.pal[key] ? FOSP.pal[key].slice() : base(key, a); }; }
+// a soft warm twinkle (additive), from a cached sprite: x, y, radius r, alpha a
+let fossilTwCv = null;
+function fossilTwinkle(c, x, y, r, a) {
+  if (a <= 0.03 || r < 0.4) return;
+  if (!fossilTwCv) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 32, 32, 24, [gCol([255, 252, 236], 0.9), gCol([255, 214, 140], 0.35), gCol([255, 214, 140], 0)]); q.fillRect(0, 0, 64, 64);
+    q.fillStyle = '#fffbea'; q.beginPath(); q.moveTo(32, 2); q.quadraticCurveTo(32, 32, 62, 32); q.quadraticCurveTo(32, 32, 32, 62); q.quadraticCurveTo(32, 32, 2, 32); q.quadraticCurveTo(32, 32, 32, 2); q.fill();
+    fossilTwCv = cv;
+  }
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(fossilTwCv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+// a soft puff of dust (normal blending), from a cached sprite
+let fossilPuffCv = null;
+function fossilPuff(c, x, y, r, a, col = FOSP.dust) {
+  if (a <= 0.02 || r < 0.5) return;
+  if (!fossilPuffCv) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 28, 26, 30, ['rgba(255,244,222,.95)', 'rgba(236,208,166,.7)', 'rgba(196,160,116,.28)', 'rgba(170,130,90,0)']); q.beginPath(); q.arc(32, 32, 31, 0, TWO_PI); q.fill();
+    fossilPuffCv = cv;
+  }
+  void col;
+  c.save(); c.globalAlpha = Math.min(1, a); c.drawImage(fossilPuffCv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps' bones and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const FOSC = { key: '', tiles: new Map(), sprites: new Map() };
+function fossilCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== FOSC.key) { FOSC.key = key; FOSC.tiles.clear(); FOSC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function fossilTile(id, x0, x1, a0, a1, paint) {
+  let T = FOSC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    FOSC.tiles.set(id, T);
+    if (FOSC.tiles.size > 70) { for (const kk of FOSC.tiles.keys()) { FOSC.tiles.delete(kk); if (FOSC.tiles.size <= 56) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function fossilSprite(id, w, h, ax, ay, paint) {
+  let S = FOSC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; FOSC.sprites.set(id, S);
+    if (FOSC.sprites.size > 160) { for (const kk of FOSC.sprites.keys()) { FOSC.sprites.delete(kk); if (FOSC.sprites.size <= 130) break; } }
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt)
+function fossilBlit(S, x, alt, alpha = 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; }
+// blit a sprite with its anchor at screen (X, Y), turned by ang and mirrored when flip
+function fossilBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1) {
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+
+// ---- sounds ----
+const FOSSIL_SFX = {
+  // a skull rearing back: a dry rattling growl through bone, a creak of the hinge
+  fgrowl: (t, B, v) => { vTone(B, t, 70, { f2: 95, glide: 0.9, type: 'sawtooth', lp: 520, q: 6, v: 0.07 * v, dur: 1.0, a: 0.25, vib: [17, 9], vibAt: 0 }); vNoise(B, t, { f: 700, q: 4, v: 0.03 * v, dur: 0.95, a: 0.3 }); for (let i = 0; i < 7; i++) vNoise(B, t + 0.1 + i * 0.12, { f: 1600 + Math.random() * 900, q: 7, v: 0.03 * v, dur: 0.03 }); },
+  // ...and its jaws slamming shut: a hard bone clack and a thud
+  fsnap: (t, B, v) => { vNoise(B, t, { f: 2600, q: 2.5, v: 0.16 * v, dur: 0.05 }); vTone(B, t, 520, { f2: 160, glide: 0.05, type: 'square', lp: 1800, v: 0.06 * v, dur: 0.07 }); vTone(B, t, 110, { f2: 50, glide: 0.18, v: 0.12 * v, dur: 0.24 }); vNoise(B, t + 0.02, { type: 'lowpass', f: 600, v: 0.08 * v, dur: 0.35, a: 0.01 }); },
+  // ribs rattling in their sockets: quick dry clicks
+  frattle: (t, B, v) => { for (let i = 0; i < 9; i++) { vNoise(B, t + i * 0.055, { f: 1200 + (i % 3) * 500, q: 8, v: 0.045 * v, dur: 0.025 }); vTone(B, t + i * 0.055, 300 + (i % 4) * 60, { type: 'triangle', v: 0.012 * v, dur: 0.04 }); } },
+  // ...slamming shut one after the other: a ripple of hollow bone knocks
+  fslam: (t, B, v) => { for (let i = 0; i < 6; i++) { vTone(B, t + i * 0.035, 240 - i * 18, { f2: 120, glide: 0.08, type: 'triangle', v: 0.05 * v, dur: 0.12 }); vNoise(B, t + i * 0.035, { f: 1800 - i * 120, q: 3, v: 0.07 * v, dur: 0.04 }); } vTone(B, t + 0.05, 70, { f2: 45, glide: 0.2, v: 0.1 * v, dur: 0.3 }); },
+  // ...and scraping back into the walls
+  fscrape: (t, B, v) => { vNoise(B, t, { f: 900, f2: 500, q: 2, v: 0.035 * v, dur: 0.42, a: 0.05 }); },
+  // a serpent stirring in its burrow: a dusty hiss and a trickle of pebbles
+  fhiss: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 3400, v: 0.05 * v, dur: 0.95, a: 0.4 }); vTone(B, t, 160, { f2: 120, glide: 0.9, type: 'sawtooth', lp: 400, v: 0.025 * v, dur: 0.9, a: 0.3 }); for (let i = 0; i < 6; i++) vNoise(B, t + 0.15 + i * 0.13 + Math.random() * 0.05, { f: 2400 + Math.random() * 1500, q: 9, v: 0.04 * v, dur: 0.02 }); },
+  // ...swimming out: a whoosh through dust and the clatter of its vertebrae
+  fswim: (t, B, v) => { vNoise(B, t, { f: 500, f2: 1400, q: 1.2, v: 0.06 * v, dur: 0.9, a: 0.1 }); for (let i = 0; i < 10; i++) vNoise(B, t + 0.08 + i * 0.09, { f: 1500 + (i % 3) * 400, q: 6, v: 0.03 * v, dur: 0.03 }); vTone(B, t, 90, { f2: 70, glide: 0.8, type: 'sawtooth', lp: 300, v: 0.04 * v, dur: 0.8, a: 0.05 }); },
+  // dusted: a soft puff and a little cough
+  fdust: (t, B) => { vNoise(B, t, { type: 'lowpass', f: 1400, v: 0.12, dur: 0.3, a: 0.01 }); vTone(B, t + 0.08, 330, { f2: 220, glide: 0.1, type: 'triangle', v: 0.03, dur: 0.1 }); vTone(B, t + 0.22, 300, { f2: 200, glide: 0.1, type: 'triangle', v: 0.025, dur: 0.1 }); },
+  // an amber mosquito: a warm glassy arpeggio and a tiny whine
+  famber: (t, B) => { [72, 76, 79, 84, 88, 91].forEach((m, i) => vTone(B, t + i * 0.05, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.07, dur: 0.6, send: 0.25 })); vTone(B, t, mf(60), { type: 'sine', v: 0.06, dur: 1.1, a: 0.15 }); vTone(B, t + 0.1, 1100, { f2: 1250, glide: 0.5, type: 'sawtooth', lp: 3000, v: 0.008, dur: 0.6, vib: [30, 40], vibAt: 0 }); },
+  // the dachshund digging up a bone: a scrabble of dirt, a happy bark and a coin chime
+  fdig: (t, B) => { for (let i = 0; i < 5; i++) vNoise(B, t + i * 0.05, { f: 900 + i * 200, q: 2, v: 0.06, dur: 0.04 }); vTone(B, t + 0.26, 620, { f2: 380, glide: 0.09, type: 'sawtooth', lp: 1800, q: 3, v: 0.07, dur: 0.12 }); vTone(B, t + 0.27, 900, { f2: 520, glide: 0.08, type: 'square', lp: 2200, v: 0.02, dur: 0.1 }); [84, 88, 91].forEach((m, i) => vTone(B, t + 0.4 + i * 0.05, mf(m), { type: 'triangle', v: 0.05, dur: 0.3 })); },
+  // the Great Amber waking on the clear: a warm golden chord
+  ffinish: (t, B) => { [60, 67, 72, 76, 79, 84].forEach((m, i) => vTone(B, t + i * 0.08, mf(m), { type: 'triangle', v: 0.05, dur: 1.8, a: 0.05, send: 0.4 })); vTone(B, t, mf(48), { type: 'sine', v: 0.08, dur: 2, a: 0.1 }); vNoise(B, t, { type: 'highpass', f: 6000, v: 0.03, dur: 1.4, a: 0.3 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = FOSSIL_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const fossilVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.fossilSkull = 'Chomped by a skull snapper';
+CAUSES.fossilRib = 'Caught in a ribcage gate';
+CAUSES.fossilSerpent = 'Rammed by a bone serpent';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'fossilSkull' ? [255, 200, 120] : cause === 'fossilRib' ? [255, 226, 170] : cause === 'fossilSerpent' ? [255, 180, 90] : base(cause); }; }
+// the lethal shapes: the bones (their dust only dusts you)
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!FOSSIL_TYPES.has(h.type)) return base(h);
+  return fossilShapes(h, G.t, [], 'body').map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.fossil) updateFossilTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.fossil) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && FOSSIL_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// bone chips flying (world space, drawn by the fossil particle wrapper): k 0 bone, 1 sandstone, 2 amber
+function fossilChips(x, a, n, v, k = 0, up = 60) {
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.35 + 0.65 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp * 0.8 + up, 0.6 + Math.random() * 0.4, 1.8 + Math.random() * 2.2, 'rock', { fb: k === 2 ? 2 : k === 1 ? 1 : 0, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 14, c: [220, 190, 140], l: [255, 248, 230] }); }
+}
+// a burst of dust (soft puffs drifting and spreading)
+function fossilDustBurst(x, a, n, v, sz = 6, life = 0.9) {
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x + (Math.random() - 0.5) * 10, a + (Math.random() - 0.5) * 10, Math.cos(an) * sp, Math.sin(an) * sp * 0.7 + 20, life * (0.7 + 0.6 * Math.random()), sz * (0.7 + 0.6 * Math.random()), 'fdust'); }
+}
+function updateFossilTraps(dt) {
+  const play = G.state === 'play', top = G.camAlt + viewH;
+  let dusted = false;
+  for (const h of G.hazards) {
+    if (!FOSSIL_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80, d = h.side;
+    if (h.type === 'fossilSkull') {
+      const st = fossilSkullAt(h, G.t), was = h.st || st;
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('fgrowl', { v: fossilVol(h.alt) });
+      if (vis && st.tell > 0.3 && Math.random() < dt * 10) puff(h.base + d * 6, h.alt + 20 + Math.random() * 20, d * 20, -30, 0.8, 1.6, 'rock', { fb: 1, rot: 0, spin: 4, c: [200, 160, 110], l: [250, 230, 200] });
+      if (st.shut && !was.shut && vis) {
+        sfx('fsnap', { v: fossilVol(h.alt) });
+        const [tx, ta] = fossilSkullPt(h, st, 150, 0, false);
+        fossilDustBurst(tx, ta, 14, 170, 7, 0.9); fossilChips(tx, ta, 5, 160, 0);
+        for (let k = 0; k < 6; k++) { const [x, a] = fossilSkullPt(h, st, 60 + k * 16, 0, false); fossilDustBurst(x, a, 1, 90, 6, 0.8); }
+        if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 2.4);
+      }
+      if (play && st.dust > 0.05 && Math.abs(h.alt - G.p.alt) < 300 && fossilShapes(h, G.t, [], 'dust').map(shrinkShape).some(shapeHits)) dusted = true;
+      h.st = st;
+    } else if (h.type === 'fossilRib') {
+      const st = fossilRibAt(h, G.t), was = h.st || st;
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('frattle', { v: fossilVol(h.alt) });
+      if (vis && st.tell > 0.2 && Math.random() < dt * 14) { const R = h.ribs[(Math.random() * h.ribs.length) | 0]; puff(R.base + R.d * 3, R.y - 6, R.d * 30, -20, 0.7, 1.4, 'rock', { fb: 1, rot: 0, spin: 5, c: [200, 160, 110], l: [250, 230, 200] }); }
+      if (st.dust > 0.9 && !(was.dust > 0.9) && vis) {
+        sfx('fslam', { v: fossilVol(h.alt) });
+        for (const R of h.ribs) fossilDustBurst(h.cx + (R.y - h.alt) * 0.4 * R.d, R.y + 4, 3, 130, 6.5, 0.9);
+        fossilChips(h.cx, (h.blo + h.bhi) / 2, 6, 180, 0);
+        if (Math.abs(h.alt - G.p.alt) < viewH * 0.6) G.shake = Math.max(G.shake, 2);
+      }
+      { const X = FOSSIL.rib, o = X.tell + X.close + X.hold; if (was.u < o && st.u >= o && vis) sfx('fscrape', { v: fossilVol(h.alt) * 0.8 }); }
+      if (play && st.dust > 0.05 && Math.abs(h.alt - G.p.alt) < 300 && fossilShapes(h, G.t, [], 'dust').map(shrinkShape).some(shapeHits)) dusted = true;
+      h.st = st;
+    } else if (h.type === 'fossilSerpent') {
+      const st = fossilSerpentAt(h, G.t), was = h.st || st;
+      if (st.tell > 0 && !(was.tell > 0) && vis) sfx('fhiss', { v: fossilVol(h.alt) });
+      if (vis && st.tell > 0.2 && Math.random() < dt * 12) puff(h.x0 + d * 4, h.alt + 14, d * (20 + Math.random() * 40), -40, 0.9, 1.5, 'rock', { fb: 1, rot: 0, spin: 5, c: [200, 160, 110], l: [250, 230, 200] });
+      if (st.d != null && was.d == null && vis) { sfx('fswim', { v: fossilVol(h.alt) }); fossilDustBurst(h.x0 + d * 10, h.alt, 10, 140, 6, 0.8); fossilChips(h.x0 + d * 6, h.alt, 6, 150, 1); }
+      if (st.d != null && vis) {
+        // dust kicked off the walls as it leaves its burrow and dives into the far one
+        if (st.d > 0 && st.d - FOSSIL.serpent.n * FOSSIL.serpent.sp < 40 && Math.random() < dt * 14) fossilDustBurst(h.x0 + d * 6, h.alt + (Math.random() - 0.5) * 20, 1, 60, 5, 0.7);
+        if (st.d > h.span - 10 && Math.random() < dt * 16) fossilDustBurst(h.x1 - d * 6, h.alt - FOSSIL.serpent.drop + (Math.random() - 0.5) * 20, 1, 70, 5, 0.7);
+        if (st.d > h.span - 10 && (was.d == null || was.d <= h.span - 10)) fossilChips(h.x1 - d * 6, h.alt - FOSSIL.serpent.drop, 6, 160, 1);
+      }
+      h.st = st;
+    }
+  }
+  fossilDust(dt, dusted);
+  fossilDig();
+}
+// ---- dusting: brushing the bone dust of a slamming skull or ribcage dusts you (counted for the "never dusted"
+// mission: a puff, a cough and a dusty coat for a moment, nothing worse)
+function fossilDust(dt, dusted) {
+  const p = G.p;
+  if (dusted && G.state === 'play') {
+    if (!G.fosTouch) {
+      G.stats.dusted = (G.stats.dusted || 0) + 1;
+      sfx('fdust'); vibrate(12); p.squash = Math.max(p.squash, 0.35);
+      chainEvent(G.stats.dusted === 1 && advGoalHas('fossilDustless') ? 'Dusted!' : 'Achoo!', '#f4dcb0', 1.1);
+      fossilDustBurst(p.x, p.alt, 10, 120, 7, 0.9);
+    }
+    G.fosTouch = true; G.fosDust = 1;
+  } else G.fosTouch = false;
+  if (G.fosDust > 0) {
+    G.fosDust = Math.max(0, G.fosDust - dt / 1.3);
+    if (Math.random() < dt * 14 * G.fosDust) puff(p.x + (Math.random() - 0.5) * 28, p.alt - 8, (Math.random() - 0.5) * 30, -20 - Math.random() * 30, 0.7, 3 + Math.random() * 3, 'fdust');
+  }
+}
+// ---- the perk: Frankie the dachshund digs up the bones buried along the walls as he flies close past them, each worth
+// a handful of coins (any other pilot just flies past the bone ends poking out of the rock)
+const FOSSIL_DIG = { reach: 74, band: 56, worth: 5 };
+const fossilDigger = () => settings.character === 'dachshund';
+function fossilDig() {
+  const L = G.level; if (!L || !L.digs || G.state !== 'play' || !fossilDigger()) return;
+  const p = G.p;
+  for (const g of L.digs) {
+    if (g.dug || Math.abs(g.alt - p.alt) > FOSSIL_DIG.band) continue;
+    const wx = walls(g.alt)[g.side];
+    if (Math.abs(p.x - wx) > FOSSIL_DIG.reach) continue;
+    g.dug = G.t; G.stats.coconuts += FOSSIL_DIG.worth; G.stats.fosBones = (G.stats.fosBones || 0) + 1; G.fruitBump = 1;
+    const out = g.side ? -1 : 1;
+    puff(wx + out * 6, g.alt, out * 160, 220, 1.0, 9, 'rock', { fb: 3, rot: 0, spin: out * 9, c: [240, 220, 180], l: [255, 250, 236] });
+    fossilChips(wx + out * 4, g.alt, 7, 140, 1); fossilDustBurst(wx + out * 6, g.alt, 6, 80, 6, 0.7);
+    addPop(`+${FOSSIL_DIG.worth}`, wx + out * 40, g.alt + 16, { col: '#fff0c8', sub: 'dug up a bone' });
+    if (!G.fosWoofT || G.t - G.fosWoofT > 2.5) { G.fosWoofT = G.t; chainEvent('Woof! A bone!', '#ffe6b0', 1.1); }
+    sfx('fdig'); vibrate(16);
+  }
+}
+
+// ---- amber mosquitoes: drops of glowing amber with a mosquito sealed inside, in risky spots, worth a big coin each,
+// and the stage's amber mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'amber') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.fossilAmber = (st.fossilAmber || 0) + 1, of = advGoalN('fossilAmber');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Amber mosquito ${n}/${of}!` : 'Amber mosquito!', '#ffd27a', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 190, 90];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 190, Math.sin(a) * 190, 0.55, 2.4, k % 3 ? 'ember' : 'sparkle', [[255, 190, 80], [255, 150, 40], [255, 236, 180]][k % 3]); }
+  fossilChips(f.x, f.alt, 8, 200, 2);
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffd27a', big: true, sub: 'amber mosquito' });
+  vibrate([20, 30, 20]); sfx('famber');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'amber')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'amber');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'amber') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawFossilAmberArt(ctx, G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the amber found, and a puff of dust (crossed out
+// once you got dusted)
+ADV_GOALS.fossilAmber = { text: g => `Find all ${g.n} amber mosquitoes`, done: (r, g) => (r.stats.fossilAmber || 0) >= g.n, any: true, prog: (g, st) => `${st.fossilAmber || 0}/${g.n}` };
+ADV_GOALS.fossilDustless = { text: () => 'Never get caught in bone dust', done: r => r.clear && !r.stats.dusted, prog: (g, st) => st.dusted ? `dusted ${st.dusted}×` : '' };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'fossilAmber' || g.k === 'fossilDustless')) return;
+  const st = G.stats, T = G.t, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    ctx.save(); ctx.translate(xr - tw - 13, y); icon(); ctx.restore();
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'fossilAmber') { const n = st.fossilAmber || 0, got = n >= g.n; line(`${n}/${g.n}`, got ? '#ffd27a' : '#ffe7b8', () => { ctx.translate(0, 1); ctx.scale(0.6, 0.6); drawFossilAmberArt(ctx, T, 0, true); }); }
+    else if (g.k === 'fossilDustless') {
+      const bad = (st.dusted || 0) > 0;
+      line(bad ? 'dusted' : 'dustless', bad ? '#ff9a7a' : '#ffe7b8', () => {
+        // a little bone with a puff of dust
+        ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(30,14,4,.85)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-7, 4); ctx.lineTo(5, -4); ctx.stroke();
+        ctx.strokeStyle = bad ? '#b8a48a' : '#fff0d0'; ctx.lineWidth = 3.4; ctx.stroke();
+        for (const [x, y2] of [[-8, 2], [-6, 6], [4, -6], [7, -2]]) { ctx.fillStyle = 'rgba(30,14,4,.85)'; ctx.beginPath(); ctx.arc(x, y2, 3.4, 0, TWO_PI); ctx.fill(); ctx.fillStyle = bad ? '#b8a48a' : '#fff0d0'; ctx.beginPath(); ctx.arc(x, y2, 2.2, 0, TWO_PI); ctx.fill(); }
+        if (bad) { ctx.strokeStyle = '#c0361c'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(-7, 7); ctx.lineTo(7, -7); ctx.stroke(); }
+      });
+    }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 21 plays it (its own shaft replaces the one advStart lays out, as the geode's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'fossil' || (G.level && G.level.fossil)) return;
+  G.level = createFossilLevel(G.seed, st); G.fosDust = 0; G.fosTouch = false;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Great Amber ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the fossil traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRFOS = { FOSSIL, FOSSIL_STAGE, fossilShapes, fossilSkullAt, fossilRibAt, fossilSerpentAt, fossilPathAt, fossilSkullPt, fossilRibPt, fossilDanger, createFossilLevel, FOSC, FOSSIL_DIG, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the traps' art ----
+// Fossil bone on any context c: a smooth outline P filled ivory to tan from the top (lit from the top left), its edge in
+// the bone's own deep brown; inside it, a stain toward its underside, hairline cracks (a furrow over a lit ridge), pits,
+// and a sheen along its top.
+const FB = FOSP.bone;
+function fossilSmooth(c, P, close = true) {
+  c.beginPath();
+  if (!close) { c.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length - 1; i++) c.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); c.lineTo(P[P.length - 1][0], P[P.length - 1][1]); return; }
+  const n = P.length, m = i => [(P[i % n][0] + P[(i + 1) % n][0]) / 2, (P[i % n][1] + P[(i + 1) % n][1]) / 2];
+  c.moveTo(...m(0)); for (let i = 1; i <= n; i++) { const q = P[i % n], e = m(i); c.quadraticCurveTo(q[0], q[1], e[0], e[1]); }
+  c.closePath();
+}
+function fossilBone(c, P, y0, y1, o = {}) {
+  const lw = o.lw ?? 1;
+  fossilSmooth(c, P); c.fillStyle = gLG(c, 0, y0, 0, y1, o.cols || [FB[0], FB[1], FB[2]]); c.fill();
+  c.save(); fossilSmooth(c, P); c.clip();
+  // the stain on the underside, and a soft lit band on top
+  c.fillStyle = gLG(c, 0, lerp(y0, y1, 0.55), 0, y1 + 2, ['rgba(140,96,52,0)', 'rgba(140,96,52,.42)']); c.fillRect(-400, lerp(y0, y1, 0.55), 900, y1 - y0 + 8);
+  if (o.inner) o.inner(c);
+  c.restore();
+  fossilSmooth(c, P); c.strokeStyle = o.edge || FOSP.boneEdge; c.lineWidth = 1.3 * lw; c.lineJoin = 'round'; c.stroke();
+}
+const fossilCrack = (c, P, w = 0.9) => gPair(c, P, 'rgba(110,74,40,.62)', 'rgba(255,248,230,.55)', w, 0.8);
+const fossilSheen = (c, P, w = 1.6, a = 0.75) => { c.strokeStyle = `rgba(255,252,240,${a})`; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; fossilSmooth(c, P, false); c.stroke(); };
+function fossilPits(c, x, y, w, h, n, sd) { for (let k = 0; k < n; k++) { const px = x + w * hash2(k, sd), py = y + h * hash2(k, sd + 1), r = 0.6 + 0.6 * hash2(k, sd + 2); c.fillStyle = 'rgba(120,84,50,.45)'; c.beginPath(); c.arc(px, py, r, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,250,236,.4)'; c.beginPath(); c.arc(px + 0.4, py + 0.5, r * 0.6, 0, Math.PI); c.fill(); } }
+// a lump of packed earth (radius r round x, y): a rounded clod with grit, its rim lit, a darker edge
+function fossilClod(c, x, y, rx, ry, sd, cols = FOSP.earth) {
+  const P = []; for (let k = 0; k < 12; k++) { const a = k / 12 * TWO_PI, q = 0.86 + 0.14 * hash2(k, sd); P.push([x + Math.cos(a) * rx * q, y + Math.sin(a) * ry * q]); }
+  fossilSmooth(c, P); c.fillStyle = gLG(c, x - rx * 0.4, y - ry, x + rx * 0.3, y + ry, cols); c.fill();
+  c.save(); fossilSmooth(c, P); c.clip();
+  for (let k = 0; k < Math.round(rx * ry / 18); k++) { const px = x + (hash2(k, sd + 3) - 0.5) * rx * 2, py = y + (hash2(k, sd + 4) - 0.5) * ry * 2, r = 0.6 + 1.2 * hash2(k, sd + 5); c.fillStyle = hash2(k, sd + 6) < 0.5 ? 'rgba(60,36,20,.35)' : 'rgba(240,210,160,.35)'; c.beginPath(); c.arc(px, py, r, 0, TWO_PI); c.fill(); }
+  c.fillStyle = gLG(c, 0, y + ry * 0.2, 0, y + ry, ['rgba(50,30,18,0)', 'rgba(50,30,18,.35)']); c.fillRect(x - rx * 1.2, y, rx * 2.4, ry * 1.2);
+  c.restore();
+  fossilSmooth(c, P); c.strokeStyle = FOSP.earthEdge; c.lineWidth = 1; c.stroke();
+  c.strokeStyle = 'rgba(255,226,180,.5)'; c.lineWidth = 1.2; c.lineCap = 'round'; c.beginPath(); c.ellipse(x, y, rx * 0.84, ry * 0.84, 0, 3.6, 4.9); c.stroke();
+}
+// a chunk of amber (in the wall art or on the traps): a rounded faceted lump glowing from within
+function fossilAmberChunk(c, x, y, r, rot, glow = 0.3, sd = 1) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  if (glow > 0) { c.globalCompositeOperation = 'lighter'; c.fillStyle = gRG(c, 0, 0, r * 3.2, [`rgba(255,170,60,${glow})`, `rgba(255,150,40,${glow * 0.3})`, 'rgba(255,150,40,0)']); c.beginPath(); c.arc(0, 0, r * 3.2, 0, TWO_PI); c.fill(); c.globalCompositeOperation = 'source-over'; }
+  const P = []; for (let k = 0; k < 7; k++) { const a = k / 7 * TWO_PI + 0.3, q = r * (0.8 + 0.25 * hash2(k, sd)); P.push([Math.cos(a) * q, Math.sin(a) * q * 0.86]); }
+  gPoly(c, P); c.fillStyle = gLG(c, -r, -r, r, r, FOSP.amber); c.fill();
+  gPoly(c, [P[3], P[4], P[5], [r * 0.1, r * 0.1]]); c.fillStyle = 'rgba(140,60,8,.35)'; c.fill();
+  gPoly(c, [P[5], P[6], P[0], [r * 0.1, r * 0.1]]); c.fillStyle = 'rgba(255,240,180,.3)'; c.fill();
+  c.fillStyle = gRG(c, r * 0.1, r * 0.15, r * 0.7, ['rgba(255,250,200,.65)', 'rgba(255,220,120,0)']); c.beginPath(); c.arc(r * 0.1, r * 0.15, r * 0.7, 0, TWO_PI); c.fill();
+  gPoly(c, P); c.strokeStyle = FOSP.amberEdge; c.lineWidth = Math.max(0.6, r * 0.12); c.lineJoin = 'round'; c.stroke();
+  c.fillStyle = 'rgba(255,255,240,.9)'; c.beginPath(); c.ellipse(-r * 0.35, -r * 0.35, r * 0.22, r * 0.13, -0.6, 0, TWO_PI); c.fill();
+  c.restore();
+}
+
+// ---- the Skull Snapper ----
+// Drawn facing right in the skull's own frame (x out of the wall, y down, so y = -v of the shapes); mirrored for the
+// right wall. Its parts are sprites: the packed-earth socket in the wall (never moves), a neck vertebra (repeated along
+// the neck as it lunges), the lower jaw with its teeth (lunges), and the upper skull with its teeth, brow and holes
+// (hinged at its back; its eye is drawn live). Each fits its hitbox in fossilShapes.
+const FSK_CRAN = [[4, -2], [-6, -20], [-2, -40], [14, -52], [34, -56], [54, -52], [70, -44], [96, -36], [122, -27], [144, -19], [158, -13], [163, -6], [157, -1], [146, 1], [110, -1], [70, -2], [40, -2], [22, 0], [10, 1]];
+const FSK_JAW = [[6, 2], [30, 3], [80, 5], [130, 8], [146, 9], [151, 13], [146, 18], [128, 21], [90, 22], [52, 25], [26, 26], [8, 20], [2, 9]];
+function fossilSkullTooth(c, x, y, len, dir, w = 3.6) {   // dir 1 points down, -1 up
+  const tip = y + dir * len;
+  c.beginPath(); c.moveTo(x - w, y); c.quadraticCurveTo(x - w * 0.55, y + dir * len * 0.6, x + w * 0.15, tip); c.quadraticCurveTo(x + w * 0.5, y + dir * len * 0.5, x + w * 0.95, y); c.closePath();
+  c.fillStyle = gLG(c, x - w, y, x + w, tip, ['#d9c49c', '#fff4dc', '#fffaf0']); c.fill(); c.strokeStyle = '#7a5836'; c.lineWidth = 0.75; c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x - w * 0.5, y + dir * 1); c.lineTo(x - w * 0.1, y + dir * len * 0.7); c.stroke();
+}
+function fossilSkullCran() {
+  // anchored at the hinge (u 22, v 6 → x 22, y -6)
+  return fossilSprite('skc', 180, 80, 30, 58, c => {
+    c.translate(-22, 6);
+    // upper teeth first (their roots hide under the bone)
+    for (let k = 0; k < 10; k++) { const x = 50 + k * 9.6, len = 8.5 + (k % 3 === 0 ? 3.5 : 0) - k * 0.25; fossilSkullTooth(c, x, -1, len, 1, 3.4); }
+    fossilBone(c, FSK_CRAN, -56, 2, { lw: 1.2, inner: c => {
+      // the holes: the temporal window by the hinge, the big antorbital window, the nostril (deep earth brown inside)
+      const hole = f => { c.beginPath(); f(); c.fillStyle = gLG(c, 0, -40, 0, -6, ['#3a2414', '#5a3a20']); c.fill(); c.strokeStyle = 'rgba(255,240,210,.5)'; c.lineWidth = 1; c.stroke(); };
+      hole(() => { c.moveTo(62, -32); c.quadraticCurveTo(80, -33, 92, -22); c.quadraticCurveTo(80, -14, 64, -16); c.quadraticCurveTo(56, -24, 62, -32); });
+      hole(() => { c.ellipse(140, -14, 4.4, 2.8, -0.35, 0, TWO_PI); });
+      hole(() => { c.ellipse(8, -28, 6, 9, 0.2, 0, TWO_PI); });
+      // sutures and cracks
+      fossilCrack(c, [[54, -50], [57, -43], [52, -37], [56, -31]]);
+      fossilCrack(c, [[100, -33], [104, -24], [100, -14]], 0.8);
+      fossilCrack(c, [[20, -51], [24, -43], [21, -37]], 0.8);
+      fossilCrack(c, [[118, -26], [126, -18], [134, -16]], 0.7);
+      fossilPits(c, 104, -26, 40, 10, 14, 801);
+      fossilPits(c, 20, -48, 30, 10, 6, 805);
+      // the cheek bone's ridge over the jaw line and the snout's ridge
+      fossilCrack(c, [[24, -8], [60, -10], [104, -6], [140, -5]], 1.1);
+      fossilSheen(c, [[-2, -44], [14, -54], [40, -54]], 2.2);
+      fossilSheen(c, [[74, -41], [100, -33], [124, -25], [146, -17]], 1.5, 0.65);
+    } });
+    // the brow ridge over the eye
+    const brow = [[22, -45], [36, -58], [56, -46], [40, -49]];
+    fossilBone(c, brow, -58, -44, { lw: 1 });
+    fossilSheen(c, [[26, -48], [38, -56], [50, -48]], 1.2, 0.8);
+    // the eye socket (the eye itself is drawn live)
+    c.fillStyle = gRG(c, 38, -30, 15, ['#3e2616', '#24140a']); c.beginPath(); c.ellipse(38, -31, 14, 12.5, -0.1, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,240,210,.55)'; c.lineWidth = 1.1; c.beginPath(); c.ellipse(38, -31, 14, 12.5, -0.1, 0.2, 2.6); c.stroke();
+    c.strokeStyle = FOSP.boneEdge; c.lineWidth = 1; c.beginPath(); c.ellipse(38, -31, 14, 12.5, -0.1, 0, TWO_PI); c.stroke();
+    // amber set in the bone over the hinge (glowing, baked)
+    fossilAmberChunk(c, 4, -12, 4.2, 0.4, 0.25, 7);
+  });
+}
+function fossilSkullJaw() {
+  // anchored at the wall end of the jaw (u 0, v 0)
+  return fossilSprite('skj', 160, 36, 4, 8, c => {
+    for (let k = 0; k < 9; k++) { const x = 34 + k * 11.5, len = 8 + (k % 3 === 1 ? 3 : 0) - k * 0.3; fossilSkullTooth(c, x, 5 + k * 0.32, len, -1, 3.3); }
+    fossilBone(c, FSK_JAW, 2, 26, { lw: 1.2, inner: c => {
+      c.fillStyle = '#3a2414'; c.beginPath(); c.ellipse(46, 14, 11, 3.8, -0.04, 0, TWO_PI); c.fill();   // the jaw's window
+      c.strokeStyle = 'rgba(255,240,210,.5)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(46, 14, 11, 3.8, -0.04, 3.3, 6); c.stroke();
+      fossilCrack(c, [[64, 16], [84, 13], [104, 14], [122, 13]], 0.9);
+      fossilPits(c, 70, 10, 60, 6, 10, 811);
+      fossilSheen(c, [[6, 5], [50, 6], [100, 8], [140, 10]], 1.5, 0.7);
+    } });
+  });
+}
+function fossilSkullSocket() {
+  // the packed earth round the neck where it leaves the wall (anchored on the wall at the skull's height, u 0 v 0)
+  return fossilSprite('sks', 70, 76, 34, 50, c => {
+    fossilClod(c, -2, -10, 26, 34, 821);
+    fossilClod(c, 8, 14, 13, 9, 823);
+    fossilClod(c, 10, -38, 11, 8, 825);
+    // the dark hole the neck comes out of
+    c.fillStyle = gRG(c, 4, -10, 16, ['#24140a', '#3e2614', 'rgba(62,38,20,0)']); c.beginPath(); c.ellipse(5, -10, 11, 15, 0, 0, TWO_PI); c.fill();
+    // pebbles and a bone chip in the earth
+    for (const [x, y, r] of [[-14, -30, 2.2], [-10, 8, 1.8], [16, 2, 2], [-16, -2, 1.6]]) { c.fillStyle = gLG(c, x - r, y - r, x + r, y + r, ['#e6c89a', '#9a7450']); c.beginPath(); c.ellipse(x, y, r * 1.2, r, 0.4, 0, TWO_PI); c.fill(); c.strokeStyle = '#6a4a2c'; c.lineWidth = 0.6; c.stroke(); }
+  });
+}
+function fossilVertebra() {
+  // a neck vertebra seen side on: a spool-shaped body, a spine up and a process down
+  return fossilSprite('skv', 26, 34, 13, 18, c => {
+    fossilBone(c, [[-4, -16], [4, -16], [3, -8], [8, -6], [8, 6], [3, 8], [2, 13], [-3, 13], [-3, 8], [-8, 6], [-8, -6], [-3, -8]], -16, 13, { lw: 1 });
+    fossilCrack(c, [[-6, 0], [6, 0]], 0.7);
+    fossilSheen(c, [[-6, -5], [0, -6], [6, -5]], 1, 0.7);
+  });
+}
+function drawFossilSkull(h) {
+  const d = h.side, T = G.t, st = h.st || fossilSkullAt(h, T), tell = st.tell;
+  const shake = st.tell > 0 ? tell * 1.4 : 0, jx = Math.sin(T * 71) * shake, ja = Math.cos(T * 63) * shake * 0.6;
+  const hot = Math.max(tell, st.moving ? 1 : 0, st.shut ? 1 - smooth(0, 0.3, st.u - FOSSIL.skull.tell - FOSSIL.skull.snap) : 0);
+  // a warm danger glow where its jaws will reach while it rears
+  if (tell > 0.02) { const [gx, ga] = fossilSkullPt(h, { th: 0, e: h.lunge }, 120, 4, false); gGlow(ctx, sx(gx), sy(ga), (70 + 30 * tell) * s, [255, 130, 60], 0.2 * tell); }
+  ctx.save();
+  ctx.translate(jx * s, -ja * s);
+  fossilBlit(fossilSkullSocket(), h.base, h.alt + 10);
+  // the neck, out of the socket to the back of the skull
+  if (st.e > 2) { const S = fossilVertebra(); for (let u = 2; u < st.e + 12; u += 12) fossilBlitAt(S, sx(h.base + d * u), sy(h.alt + 10), 0, d); }
+  const [jxw, jaw] = fossilSkullPt(h, st, 0, 0, false);
+  fossilBlitAt(fossilSkullJaw(), sx(jxw), sy(jaw), 0, d);
+  const [hx, ha] = fossilSkullPt(h, st, 22, 6, true);
+  fossilBlitAt(fossilSkullCran(), sx(hx), sy(ha), -d * st.th, d);
+  // the eye: a big cartoon eye glowing in the socket, amber at rest, flaring red as it rears, its lid dropping angrily
+  const [ex, ea] = fossilSkullPt(h, st, 38, 31, true), X = sx(ex), Y = sy(ea), eyeC = gMix(FOSP.eye, FOSP.eyeHot, hot), R = s;
+  gGlow(ctx, X, Y, (20 + 10 * hot) * R, eyeC, 0.35 + 0.4 * hot);
+  ctx.save(); ctx.translate(X, Y); ctx.scale(d, 1); ctx.rotate(-st.th * d * d);
+  ctx.fillStyle = gRG(ctx, -2 * R, -3 * R, 11 * R, ['#ffffff', '#f2e6d8', '#c9b49e']); ctx.beginPath(); ctx.ellipse(1 * R, 0.5 * R, 8.4 * R, 9 * R, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = '#8e6a44'; ctx.lineWidth = 0.9 * R; ctx.stroke();
+  const look = 1.4 + 1.2 * hot;
+  ctx.fillStyle = gCol(eyeC); ctx.beginPath(); ctx.arc((1 + look) * R, 1 * R, (5.4 - hot) * R, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#2a1408'; ctx.beginPath(); ctx.ellipse((1 + look * 1.25) * R, 1.2 * R, (2.6 - hot * 0.9) * R, 3.4 * R, 0, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-1.2 * R, -2.4 * R, 1.6 * R, 0, TWO_PI); ctx.fill();
+  // the lid (bone), dropping over the eye as it gets angry
+  ctx.fillStyle = gLG(ctx, 0, -10 * R, 0, 0, [FB[0], FB[1], FB[2]]);
+  ctx.beginPath(); ctx.moveTo(-10 * R, -9.5 * R); ctx.quadraticCurveTo(1 * R, -12 * R, 11 * R, (-6 + 6 * hot) * R); ctx.lineTo(11 * R, (-4.5 + 5 * hot) * R); ctx.quadraticCurveTo(1 * R, (-6 + 3.5 * hot) * R, -9 * R, (-6 + 2 * hot) * R); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = FOSP.boneEdge; ctx.lineWidth = 0.9 * R; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+  // the bone dust round its jaws as they slam (soft puffs)
+  if (st.dust > 0.03) {
+    const k = st.dust, sp = 1 - k;
+    for (let i = 0; i < 7; i++) { const [x, a] = fossilSkullPt(h, st, 64 + i * 16 + sp * 8, 2 + (i % 2 ? 8 : -6) * (0.6 + sp), false); fossilPuff(ctx, sx(x), sy(a), (12 + 14 * sp + (i % 3) * 3) * s, 0.75 * k); }
+    const [tx, ta] = fossilSkullPt(h, st, 166 + sp * 10, 2, false); fossilPuff(ctx, sx(tx), sy(ta), (18 + 20 * sp) * s, 0.8 * k);
+  }
+}
+
+// ---- the Ribcage Gate ----
+// A rib: a long curved bone tapering from its head (deep in the wall) to a knobbly tip, top-lit ivory, a stained
+// underside and a furrow along it, cracks; one sprite per length, anchored at its root, drawn facing right (mirrored on
+// the right wall) and clipped to the shaft so it slides out of the rock. Each wall shows a stretch of the giant's spine
+// in the rock (vertebrae half out of the lip), the ribs leaving it through their sockets.
+function fossilRibSprite(len) {
+  const L = Math.round(len / 4) * 4, X = FOSSIL.rib;
+  return fossilSprite('rib' + L, L + 18, X.bend + 40, 4, X.bend + 18, c => {
+    const N = 30, top = [], bot = [], mid = [], nor = [], P = q => [q * L, -fossilRibY(q)];
+    for (let i = 0; i <= N; i++) {
+      const q = i / N, [px, py] = P(q), [qx, qy] = P(Math.min(1, q + 0.01)), [ox2, oy2] = P(Math.max(0, q - 0.01));
+      let nx = -(qy - oy2), ny = qx - ox2; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+      const r = fossilRibR(q) * (1 + 0.05 * Math.sin(q * 19));
+      top.push([px - nx * r, py - ny * r]); bot.push([px + nx * r, py + ny * r]); mid.push([px, py]); nor.push([nx, ny, r]);
+    }
+    const tip = P(1), off = (k, dd = 0) => mid.map(([x, y], i) => [x - nor[i][0] * nor[i][2] * k, y - nor[i][1] * nor[i][2] * k + dd]);
+    const path = () => { c.beginPath(); c.moveTo(...top[0]); for (let i = 1; i <= N; i++) c.lineTo(...top[i]); for (let i = N; i >= 0; i--) c.lineTo(...bot[i]); c.closePath(); };
+    const line = (pts, i0 = 0, i1 = N) => { c.beginPath(); for (let i = i0; i <= i1; i++) i === i0 ? c.moveTo(...pts[i]) : c.lineTo(...pts[i]); };
+    path(); c.fillStyle = FB[1]; c.fill();
+    c.save(); path(); c.clip(); c.lineCap = 'round'; c.lineJoin = 'round';
+    // its round section: shade under, light over (lit from the top left), a lit ridge along the top
+    line(off(-0.75)); c.strokeStyle = 'rgba(150,104,60,.55)'; c.lineWidth = 7; c.stroke();
+    line(off(-1.05)); c.strokeStyle = 'rgba(110,72,40,.6)'; c.lineWidth = 3; c.stroke();
+    line(off(0.55)); c.strokeStyle = 'rgba(255,248,230,.75)'; c.lineWidth = 4; c.stroke();
+    line(off(0.62), 2, N - 2); c.strokeStyle = 'rgba(255,255,250,.85)'; c.lineWidth = 1.3; c.stroke();
+    // the rib's groove along its underside: a dark furrow with a lit edge
+    gPair(c, off(-0.38).slice(3, N - 3), 'rgba(110,70,36,.55)', 'rgba(255,246,222,.5)', 1.1, 0.8);
+    // bone grain: fine broken lines along its length
+    for (const [k, sd] of [[0.15, 1], [-0.15, 2], [0.32, 3]]) { c.setLineDash([6 + 5 * hash2(sd, L), 4 + 3 * hash2(sd, L + 1)]); line(off(k)); c.strokeStyle = 'rgba(140,96,56,.28)'; c.lineWidth = 0.6; c.stroke(); }
+    c.setLineDash([]);
+    for (const q of [0.33, 0.55, 0.78]) { const [x, y] = P(q); fossilCrack(c, [[x - 2, y - 4], [x + 1, y - 0.5], [x + 2.5, y + 3]], 0.7); }
+    fossilPits(c, L * 0.3, -X.bend, L * 0.7, 8, 10, 831 + L);
+    c.restore();
+    path(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 1.2; c.lineJoin = 'round'; c.stroke();
+    // little chips bitten out of its edges
+    for (let k = 0; k < 4; k++) { const i = 6 + Math.floor(hash2(k, L + 7) * (N - 10)), up = k % 2 === 0, E = up ? top[i] : bot[i], n = nor[i], dd = up ? 1 : -1, w = 1.8 + hash2(k, L + 9);
+      const a = [E[0] - w, E[1] + (up ? 0.3 : -0.3)], b = [E[0] + n[0] * dd * 2.2, E[1] + n[1] * dd * 2.2], e = [E[0] + w, E[1]];
+      gPoly(c, [a, b, e]); c.fillStyle = up ? 'rgba(170,124,78,1)' : 'rgba(130,90,52,1)'; c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 0.7; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.lineTo(...e); c.stroke(); }
+    // the knobbly tip
+    c.fillStyle = gRG(c, tip[0] - 2, tip[1] - 3, 8, [FB[0], FB[1], FB[2]]); c.beginPath(); c.ellipse(tip[0] + 1, tip[1], 6.4, 7, 0.2, 0, TWO_PI); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 1.1; c.stroke();
+    c.fillStyle = gRG(c, tip[0] + 2, tip[1] + 3, 4, [FB[1], FB[2]]); c.beginPath(); c.arc(tip[0] + 2.6, tip[1] + 3.4, 2.6, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(110,74,40,.7)'; c.lineWidth = 0.7; c.stroke();
+    fossilSheen(c, [[tip[0] - 3, tip[1] - 4.6], [tip[0] + 1, tip[1] - 6], [tip[0] + 5, tip[1] - 3]], 1.2, 0.85);
+  });
+}
+// the spine in a wall over a ribcage's height (anchored on the wall at the cage's foot), facing right (mirrored on the right)
+function fossilSpineSprite(h, d) {
+  const n = h.ribs.length, top = h.bhi - h.alt + 22, bot = 26;
+  return fossilSprite(`spine${h.alt | 0}_${d}`, 56, top + bot, 30, top, c => {
+    const flip = d > 0 ? 1 : -1;
+    c.scale(flip, 1);
+    // packed earth round it
+    fossilClod(c, -8, -top / 2 + 10, 22, (top + bot) / 2 - 4, 840 + (h.alt | 0) % 97);
+    // the vertebrae up the wall: a spool body each, the gaps between dark
+    for (let y = -top + 8; y < bot - 6; y += 15) {
+      fossilBone(c, [[-16, y - 6], [-2, y - 7], [3, y - 5], [3, y + 5], [-2, y + 7], [-16, y + 6], [-20, y]], y - 7, y + 7, { lw: 1 });
+      fossilSheen(c, [[-14, y - 4], [-3, y - 5], [1, y - 3]], 1, 0.65);
+    }
+    // the sockets the ribs leave by (each rib's head, a knob round the hole)
+    for (const R of h.ribs) {
+      if (R.d !== d) continue;
+      const y = -(R.y - h.alt) - 2;
+      c.fillStyle = gRG(c, -1, y - 4, 12, [FB[1], FB[2], FB[3]]); c.beginPath(); c.ellipse(0, y, 7.5, 11, 0, 0, TWO_PI); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 1.1; c.stroke();
+      c.fillStyle = '#3a2414'; c.beginPath(); c.ellipse(2.4, y, 3.4, 7.4, 0, 0, TWO_PI); c.fill();
+      // the rib's knobbly head sitting in its socket: a big round head and a smaller knuckle beside it
+      for (const [hx, hy, hr] of [[4.5, y - 5.5, 5.4], [5.5, y + 5.5, 4]]) { c.fillStyle = gRG(c, hx - hr * 0.4, hy - hr * 0.5, hr * 1.3, [FB[0], FB[1], FB[2]]); c.beginPath(); c.arc(hx, hy, hr, 0, TWO_PI); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 0.9; c.stroke();
+        c.strokeStyle = 'rgba(255,255,248,.8)'; c.lineWidth = 1; c.beginPath(); c.arc(hx, hy, hr * 0.62, 3.6, 4.9); c.stroke(); }
+      c.strokeStyle = 'rgba(255,250,235,.65)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, y, 5.6, 9.4, 0, 3.4, 4.6); c.stroke();
+    }
+    void n;
+  });
+}
+function drawFossilRib(h) {
+  const T = G.t, st = h.st || fossilRibAt(h, T), X = FOSSIL.rib;
+  const [L, R] = walls(h.alt + X.gap);
+  // the cage's heart glows warm while it rattles, and a dashed seam shows where the ribs will meet
+  if (st.tell > 0.02) {
+    gGlow(ctx, sx(h.cx), sy((h.blo + h.bhi) / 2), (80 + 40 * st.tell) * s, [255, 150, 70], 0.18 * st.tell);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.setLineDash([5 * s, 6 * s]); ctx.lineDashOffset = -T * 40 * s; ctx.strokeStyle = `rgba(255,200,120,${0.45 * st.tell})`; ctx.lineWidth = 1.6 * s;
+    ctx.beginPath(); ctx.moveTo(sx(h.cx), sy(h.blo - 4)); ctx.lineTo(sx(h.cx), sy(h.bhi + 4)); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+  ctx.save();
+  h.ribs.forEach((Rb, i) => {
+    const k = st.ks[i] + (st.tell ? 0.012 * Math.sin(T * 70 + i) : 0), [rx, ra] = fossilRibPt(h, i, k, 0), S = fossilRibSprite(Rb.len);
+    ctx.save(); ctx.beginPath();
+    if (Rb.d > 0) ctx.rect(sx(Rb.base) + 1, sy(Rb.y + 40), sx(R + 40) - sx(Rb.base), 80 * s); else ctx.rect(sx(L - 40), sy(Rb.y + 40), sx(Rb.base) - 1 - sx(L - 40), 80 * s);
+    ctx.clip();
+    fossilBlitAt(S, sx(rx), sy(ra), 0, Rb.d);
+    ctx.restore();
+    // its tip glowing amber while it rattles
+    if (st.tell > 0.02) { const [tx, ta] = fossilRibPt(h, i, k, 1); gGlow(ctx, sx(tx), sy(ta), 16 * s, FOSP.amberGlow, 0.5 * st.tell); }
+  });
+  ctx.restore();
+  for (const d of [1, -1]) { const base = d > 0 ? Math.min(...h.ribs.filter(q => q.d > 0).map(q => q.base)) : Math.max(...h.ribs.filter(q => q.d < 0).map(q => q.base)); fossilBlit(fossilSpineSprite(h, d), base, h.alt); }
+  if (st.tell > 0.02) for (const Rb of h.ribs) gGlow(ctx, sx(Rb.base), sy(Rb.y), 14 * s, FOSP.amberGlow, 0.45 * st.tell);
+  // the dust knocked out as they slam shut
+  if (st.dust > 0.03) {
+    const k = st.dust, sp = 1 - k;
+    for (let i = 0; i < 9; i++) { const u = (i / 8 - 0.5) * 2, x = h.cx + u * (60 + 30 * sp), a = i % 2 ? h.blo - 4 - 10 * sp : h.bhi + 4 + 10 * sp; fossilPuff(ctx, sx(x), sy(a), (12 + 12 * sp) * s, 0.7 * k * (1 - 0.4 * Math.abs(u))); }
+  }
+}
+
+// ---- the Bone Serpent ----
+// A sea serpent's skeleton: a long-snouted skull with a great bony eye ring (lit amber), a chain of vertebrae each with
+// a spine up and a pair of little ribs down, two pairs of paddle flippers, and a tail of tapering bones. Sprites facing
+// right, turned along the path (mirrored for the right-wall burrows), clipped to the shaft between its two burrows.
+function fossilSerpHead() {
+  return fossilSprite('serh2', 86, 56, 16, 28, c => {
+    // the lower jaw: a long bony beak under the skull, its teeth up
+    const J = [[-6, 4], [10, 6], [30, 6.5], [50, 4.5], [60, 3.2], [58, 6.4], [44, 10], [24, 12.5], [6, 13], [-6, 9]];
+    for (let k = 0; k < 9; k++) fossilSkullTooth(c, 20 + k * 4.4, 5.6, 3.4, -1, 1.5);
+    fossilBone(c, J, 3, 13, { lw: 1, inner: c => { gPair(c, [[4, 10], [24, 10.4], [46, 7.6]], 'rgba(110,72,40,.5)', 'rgba(255,248,226,.5)', 0.9, 0.7); } });
+    // the skull: a domed braincase tapering into a long snout, teeth down
+    for (let k = 0; k < 9; k++) fossilSkullTooth(c, 18 + k * 4.6, 2.6, 3.8, 1, 1.6);
+    const P = [[-14, -2], [-12, -12], [-2, -18.5], [12, -18], [24, -12], [38, -7], [52, -3.6], [62, -1.2], [63, 1.4], [52, 3.2], [36, 3.6], [20, 4], [6, 5], [-8, 5.5], [-14, 3]];
+    fossilBone(c, P, -18.5, 5.5, { lw: 1.2, inner: c => {
+      // its volume: shade under the dome and along the snout's underside, a strong highlight across the top
+      c.fillStyle = gRG(c, 6, -2, 22, ['rgba(140,96,56,0)', 'rgba(140,96,56,0)', 'rgba(120,80,44,.4)']); c.fillRect(-16, -20, 82, 28);
+      c.strokeStyle = 'rgba(130,88,50,.45)'; c.lineWidth = 3; c.beginPath(); c.moveTo(-10, 3); c.lineTo(20, 2.6); c.lineTo(56, 1.4); c.stroke();
+      fossilSheen(c, [[-9, -10], [0, -16], [14, -15.5], [28, -9.5], [46, -5], [58, -2.4]], 1.8, 0.85);
+      // the sutures of the braincase and the nostril pit on the snout
+      gPair(c, [[-4, -16], [-1, -9], [-6, -2]], 'rgba(110,72,40,.6)', 'rgba(255,248,226,.6)', 0.8, 0.6);
+      gPair(c, [[14, -16], [18, -8], [24, -2]], 'rgba(110,72,40,.5)', 'rgba(255,248,226,.5)', 0.7, 0.5);
+      c.fillStyle = gRG(c, 49, -2.2, 3, ['#2a160a', '#5a3a20']); c.beginPath(); c.ellipse(49, -2, 3, 1.5, -0.2, 0, TWO_PI); c.fill();
+      fossilPits(c, 28, -8, 46, 1, 7, 853);
+      fossilCrack(c, [[30, -6], [38, -4.6], [44, -3.2]], 0.7);
+    } });
+    // the eye: a deep socket under a heavy bony brow (the glow is live), a cheek bone below it
+    c.fillStyle = gRG(c, 5, -6, 8, ['#140a04', '#3a2414', '#6a4a2c']); c.beginPath(); c.ellipse(4, -6, 7.4, 6.2, -0.1, 0, TWO_PI); c.fill();
+    c.strokeStyle = FOSP.boneEdge; c.lineWidth = 1; c.stroke();
+    c.fillStyle = gLG(c, 0, -18, 0, -9, [FB[0], FB[1]]); c.beginPath(); c.moveTo(-5, -10); c.quadraticCurveTo(4, -18, 15, -11.5); c.quadraticCurveTo(5, -12.6, -5, -10); c.closePath(); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 0.9; c.stroke();
+    fossilSheen(c, [[-3, -11.6], [5, -15], [12, -12]], 1, 0.9);
+    fossilBone(c, [[-6, 0.5], [6, -0.5], [14, 0.6], [6, 2.6], [-6, 2.8]], -0.5, 2.8, { lw: 0.8 });
+  });
+}
+function fossilSerpVert(i) {
+  const k = 1 - 0.46 * i / FOSSIL.serpent.n, id = 'serv2' + Math.round(k * 20);
+  return fossilSprite(id, 30, 42, 15, 21, c => {
+    c.scale(k * 1.15, k * 1.15);
+    // the spine up (a blade leaning back), then the spool of the body, its two ends knobbed where it meets the spine cord
+    fossilBone(c, [[-3, -18], [1, -18.5], [3.5, -8], [0.5, -6], [-3.5, -6], [-5, -8]], -18.5, -6, { lw: 0.9 });
+    fossilBone(c, [[-6, -6.5], [6, -6.5], [7.5, 0], [6, 6.5], [-6, 6.5], [-7.5, 0]], -6.5, 6.5, { lw: 1 });
+    fossilSheen(c, [[-5, -4], [0, -5.2], [5, -4]], 1.1, 0.85);
+    c.strokeStyle = 'rgba(130,90,52,.5)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-5, 4.2); c.lineTo(5, 4.2); c.stroke();
+    fossilCrack(c, [[-3, 1], [3, 0.6]], 0.6);
+  });
+}
+// a pair of ribs hanging under one of the front vertebrae, curving back toward the tail (f: size)
+function fossilSerpRib(f) {
+  return fossilSprite('serr' + Math.round(f * 10), 34, 34, 22, 4, c => {
+    c.scale(f, f); c.lineCap = 'round';
+    for (const [dx, al] of [[3, 0.75], [0, 1]]) {
+      const path = () => { c.beginPath(); c.moveTo(dx, 4); c.bezierCurveTo(dx - 2, 14, dx - 8, 22, dx - 17, 25); };
+      c.globalAlpha = al; path(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 4; c.stroke(); path(); c.strokeStyle = FB[1]; c.lineWidth = 2.6; c.stroke();
+      c.save(); c.translate(-0.6, -0.4); path(); c.strokeStyle = 'rgba(255,252,240,.85)'; c.lineWidth = 0.8; c.stroke(); c.restore(); c.globalAlpha = 1;
+    }
+  });
+}
+// the tail: a fan of fin rays with a thin membrane of fossil skin between them, pointing back
+function fossilSerpTail() {
+  return fossilSprite('sert', 40, 40, 36, 20, c => {
+    const rays = [-0.62, -0.38, -0.15, 0.08, 0.3, 0.52];
+    c.beginPath(); c.moveTo(0, 0); for (const an of rays) { const L = 30 - Math.abs(an) * 10; c.lineTo(-Math.cos(an) * L, Math.sin(an) * L); } c.closePath();
+    c.fillStyle = gLG(c, 0, -16, 0, 16, ['rgba(240,220,180,.55)', 'rgba(200,170,120,.45)']); c.fill(); c.strokeStyle = 'rgba(110,74,40,.55)'; c.lineWidth = 0.8; c.stroke();
+    c.lineCap = 'round';
+    for (const an of rays) { const L = 30 - Math.abs(an) * 10, ex = -Math.cos(an) * L, ey = Math.sin(an) * L;
+      c.strokeStyle = FOSP.boneEdge; c.lineWidth = 2.6; c.beginPath(); c.moveTo(0, 0); c.lineTo(ex, ey); c.stroke(); c.strokeStyle = FB[1]; c.lineWidth = 1.5; c.stroke();
+      c.fillStyle = FB[0]; c.beginPath(); c.arc(ex, ey, 1.4, 0, TWO_PI); c.fill(); }
+    fossilBone(c, [[-4, -4], [4, -3.5], [5, 0], [4, 3.5], [-4, 4], [-5.5, 0]], -4, 4, { lw: 0.8 });
+  });
+}
+function fossilSerpFlip(f) {
+  return fossilSprite('serf' + f, 36, 22, 4, 6, c => {
+    c.scale(f, f);
+    const P = [[0, -3], [10, -2], [24, 2], [30, 8], [26, 12], [14, 10], [2, 4]];
+    fossilBone(c, P, -3, 12, { lw: 1, inner: c => { for (const [x0, y0, x1, y1] of [[4, 0, 26, 8], [6, 3, 22, 10], [8, -1, 28, 5]]) fossilCrack(c, [[x0, y0], [x1, y1]], 0.6); } });
+  });
+}
+function fossilBurrow(d, exit) {
+  // a burrow in the wall: a dark hole ringed with crumbled earth and a broken bone or two (anchored on the wall)
+  return fossilSprite(`bur${d}_${exit ? 1 : 0}`, 60, 64, 30, 34, c => {
+    c.scale(d, 1);
+    fossilClod(c, -6, -2, 20, 26, 861 + (exit ? 5 : 0));
+    c.fillStyle = gRG(c, 4, 0, 18, ['#1e1008', '#3a2414', 'rgba(58,36,20,0)']); c.beginPath(); c.ellipse(3, 0, 12, 17, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,226,180,.45)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(3, 0, 12, 17, 0, 3.6, 5.1); c.stroke();
+    fossilClod(c, 6, 20, 10, 7, 867 + (exit ? 3 : 0));
+    fossilClod(c, 8, -22, 9, 6, 869 + (exit ? 3 : 0));
+    fossilBone(c, [[10, -26], [24, -30], [27, -27], [24, -24], [12, -22]], -30, -22, { lw: 0.9 });
+  });
+}
+function drawFossilSerpent(h) {
+  const T = G.t, st = h.st || fossilSerpentAt(h, T), X = FOSSIL.serpent, d = h.side;
+  const bE = fossilBurrow(d, false), bX = fossilBurrow(-d, true);
+  fossilBlit(bE, h.x0, h.alt + 2); fossilBlit(bX, h.x1, h.alt - X.drop + 2);
+  // its eyes lit in the dark of the burrow while it stirs
+  if (st.tell > 0.02) {
+    const fl = 0.6 + 0.4 * Math.sin(T * 9);
+    for (const dy of [-4, 4]) { const x = sx(h.x0 - d * 2), y = sy(h.alt + 4 + dy * 0.6); gGlow(ctx, x, y, 10 * s, FOSP.amberGlow, 0.7 * st.tell * fl); ctx.fillStyle = `rgba(255,236,170,${st.tell})`; ctx.beginPath(); ctx.arc(x + d * dy * 0.4 * s, y, 1.8 * s, 0, TWO_PI); ctx.fill(); }
+    gGlow(ctx, sx(h.x1 + d * 4), sy(h.alt - X.drop), 30 * s, [255, 190, 110], 0.15 * st.tell);
+  }
+  if (st.d != null) {
+    ctx.save(); ctx.beginPath(); ctx.rect(Math.min(sx(h.x0), sx(h.x1)) + 1, sy(h.alt + 60), Math.abs(sx(h.x1) - sx(h.x0)) - 2, (X.drop + 120) * s); ctx.clip();
+    const D = st.d;
+    // the spinal cord threading the vertebrae (a bone rod: its edge, its body, a lit ridge along its top)
+    { const pts = []; for (let dd = Math.max(-20, D - X.n * X.sp - 6); dd <= Math.min(h.span + 20, D); dd += 6) { const [x, a] = fossilPathAt(h, dd); pts.push([sx(x), sy(a)]); }
+      if (pts.length > 1) { ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const line = () => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); };
+        line(); ctx.strokeStyle = FOSP.boneEdge; ctx.lineWidth = 7.5 * s; ctx.stroke(); ctx.strokeStyle = FB[1]; ctx.lineWidth = 5.6 * s; ctx.stroke();
+        ctx.save(); ctx.translate(0, 1.2 * s); line(); ctx.strokeStyle = 'rgba(140,96,56,.6)'; ctx.lineWidth = 2 * s; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.translate(0, -1.5 * s); line(); ctx.strokeStyle = 'rgba(255,252,240,.9)'; ctx.lineWidth = 1.4 * s; ctx.stroke(); ctx.restore(); } }
+    // tail first: the vertebrae, then the flippers, then the head on top
+    for (let i = X.n; i >= 1; i--) {
+      const dd = D - i * X.sp; if (dd < -20 || dd > h.span + 20) continue;
+      const [x, a, sl] = fossilPathAt(h, dd), A = Math.atan2(-sl, 1);
+      if (i === 2 || i === 6) { const f = i === 2 ? 1 : 0.8, F = fossilSerpFlip(f), sw = Math.sin(T * 6 + i) * 0.25; fossilBlitAt(F, sx(x - d * 5), sy(a), d * (A - 0.15 - sw * 0.5), -d, 0.8); fossilBlitAt(F, sx(x - d * 5), sy(a), d * (A - 0.65 - sw), -d); }
+      if (i <= 4) fossilBlitAt(fossilSerpRib(1 - 0.12 * (i - 1)), sx(x), sy(a), d > 0 ? A : -A, d);
+      if (i === X.n) fossilBlitAt(fossilSerpTail(), sx(x - d * 3), sy(a), d > 0 ? A : -A, d);
+      fossilBlitAt(fossilSerpVert(i), sx(x), sy(a), d > 0 ? A : -A, d);
+    }
+    { const [x, a, sl] = fossilPathAt(h, D), A = Math.atan2(-sl, 1); fossilBlitAt(fossilSerpHead(), sx(x), sy(a), d > 0 ? A : -A, d);
+      const ex = x + d * 4, ea = a + 2; gGlow(ctx, sx(ex), sy(ea), 12 * s, FOSP.amberGlow, 0.55); ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(sx(ex), sy(ea), 2.6 * s, 0, TWO_PI); ctx.fill(); ctx.fillStyle = '#fff6d8'; ctx.beginPath(); ctx.arc(sx(ex) - 0.8 * s, sy(ea) - 0.9 * s, 1 * s, 0, TWO_PI); ctx.fill(); }
+    ctx.restore();
+  }
+}
+DRAW.fossilSkull = drawFossilSkull; DRAW.fossilRib = drawFossilRib; DRAW.fossilSerpent = drawFossilSerpent;
+
+// dust puffs and flying chips (bone, sandstone, amber, a whole dug-up bone), drawn from cached sprites
+let fossilChipCv = null;
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles; if (additive || !fossilOn() || !ps.some(q => q.kind === 'fdust' || (q.ex && q.ex.fb != null))) return base(additive);
+  G.particles = ps.filter(q => !(q.kind === 'fdust' || (q.ex && q.ex.fb != null))); try { base(additive); } finally { G.particles = ps; }
+  if (!fossilChipCv) fossilChipCv = [0, 1, 2, 3].map(k => {
+    const cv = document.createElement('canvas'); cv.width = 48; cv.height = 32; const c = cv.getContext('2d'); c.scale(2, 2); c.translate(12, 8);
+    if (k === 0) fossilBone(c, [[-6, -3], [4, -4], [7, 0], [3, 4], [-5, 3]], -4, 4, { lw: 0.8 });
+    else if (k === 1) fossilClod(c, 0, 0, 6, 4.5, 871, ['#d8b07c', '#a07448', '#6a4a2c']);
+    else if (k === 2) fossilAmberChunk(c, 0, 0, 5, 0.3, 0, 3);
+    else { fossilBone(c, [[-9, -1.6], [9, -1.6], [9, 1.6], [-9, 1.6]], -2, 2, { lw: 0.7 }); for (const [x, y] of [[-9, -2.2], [-9, 2.2], [9, -2.2], [9, 2.2]]) { c.fillStyle = gRG(c, x - 0.6, y - 0.8, 3, [FB[0], FB[2]]); c.beginPath(); c.arc(x, y, 2.6, 0, TWO_PI); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 0.6; c.stroke(); } }
+    return cv;
+  });
+  for (const q of ps) {
+    const t = clamp(q.life / q.max, 0, 1);
+    if (q.kind === 'fdust') { fossilPuff(ctx, sx(q.x), sy(q.alt), q.size * s * (1.7 - t * 0.9), t * 0.55); continue; }
+    if (!(q.ex && q.ex.fb != null)) continue;
+    const r = q.size * s, k = q.ex.fb;
+    ctx.save(); ctx.globalAlpha = Math.min(1, t * 3); ctx.translate(sx(q.x), sy(q.alt)); ctx.rotate(q.ex.rot || 0);
+    const w = k === 3 ? r * 2.6 : r * 2.4; ctx.drawImage(fossilChipCv[k], -w / 2, -w / 3, w, w * 2 / 3); ctx.restore();
+  }
+}; }
+
+// The amber mosquito (inside its pickup circle): a drop of honey-gold amber, faceted and glowing from within, a mosquito
+// sealed in it (body, wings, legs) with a few bubbles; it bobs, and a glint slides over it. hud: no bob, no glow.
+function drawFossilAmberArt(c, t, ph, hud) {
+  const bob = hud ? 0 : Math.sin(t * 2.2 + ph) * 1.6, pulse = 0.5 + 0.5 * Math.sin(t * 3 + ph);
+  c.save(); c.translate(0, bob);
+  if (!hud) gGlow(c, 0, 0, 28, FOSP.amberGlow, 0.3 + 0.15 * pulse);
+  const drop = () => { c.beginPath(); c.moveTo(0, -15); c.bezierCurveTo(6, -10, 13, -2, 12.5, 4.5); c.bezierCurveTo(12, 11, 6, 14, 0, 14); c.bezierCurveTo(-6, 14, -12, 11, -12.5, 4.5); c.bezierCurveTo(-13, -2, -6, -10, 0, -15); c.closePath(); };
+  drop(); c.fillStyle = gLG(c, -10, -14, 10, 14, ['#fff2a8', '#ffc248', '#e5801a', '#a24a0a']); c.fill();
+  c.save(); drop(); c.clip();
+  // facets: a lit face to the top left, a deep one to the bottom right
+  gPoly(c, [[0, -15], [-13, 2], [-4, 0]]); c.fillStyle = 'rgba(255,246,200,.35)'; c.fill();
+  gPoly(c, [[13, 2], [4, 14], [3, 2]]); c.fillStyle = 'rgba(130,50,6,.3)'; c.fill();
+  c.fillStyle = gRG(c, 1, 3, 9, ['rgba(255,240,170,.6)', 'rgba(255,200,90,0)']); c.beginPath(); c.arc(1, 3, 9, 0, TWO_PI); c.fill();
+  // the mosquito: wings (pale, veined), legs, a striped body, its head and proboscis
+  c.save(); c.translate(0.5, 3); c.rotate(-0.35);
+  for (const s2 of [-1, 1]) { c.fillStyle = 'rgba(255,248,220,.45)'; c.beginPath(); c.ellipse(1.5, s2 * 4.2, 6, 2.2, s2 * 0.4, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(110,50,10,.45)'; c.lineWidth = 0.4; c.stroke(); c.beginPath(); c.moveTo(-1, s2 * 1.5); c.lineTo(5, s2 * 5.5); c.stroke(); }
+  c.strokeStyle = 'rgba(80,32,6,.8)'; c.lineWidth = 0.55; c.lineCap = 'round';
+  for (const [x, a] of [[-1, 0.9], [0.5, 1.4], [2, 2]]) for (const s2 of [-1, 1]) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x - 2 + a, s2 * 3.6); c.lineTo(x - 4 + a * 1.5, s2 * 6.4); c.stroke(); }
+  c.fillStyle = '#6a2a06'; c.beginPath(); c.ellipse(-3.4, 0, 4.4, 1.6, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(255,200,110,.6)'; c.lineWidth = 0.45; for (const x of [-5.6, -4, -2.4]) { c.beginPath(); c.moveTo(x, -1.4); c.lineTo(x, 1.4); c.stroke(); }
+  c.fillStyle = '#7a3208'; c.beginPath(); c.ellipse(1.6, 0, 2, 1.7, 0, 0, TWO_PI); c.fill();
+  c.beginPath(); c.arc(4.2, 0, 1.2, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#6a2a06'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(5, 0); c.lineTo(8.6, 0.6); c.stroke();
+  c.restore();
+  // bubbles
+  for (const [x, y, r] of [[-6, -4, 1.1], [6, 8, 0.8], [-3, 9, 0.7]]) { c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 0.5; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.stroke(); }
+  c.restore();
+  drop(); c.strokeStyle = FOSP.amberEdge; c.lineWidth = 1.1; c.stroke();
+  if (!hud) { c.save(); c.globalCompositeOperation = 'lighter'; drop(); c.fillStyle = `rgba(255,180,70,${0.1 + 0.2 * pulse})`; c.fill(); c.restore(); }
+  c.strokeStyle = 'rgba(255,255,240,.9)'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.moveTo(-8, -1); c.quadraticCurveTo(-7, -7, -3, -10.5); c.stroke();
+  c.restore();
+  if (!hud) { const g = Math.pow(Math.max(0, Math.sin(t * 1.7 + ph)), 6); if (g > 0.05) fossilTwinkle(c, 5, -8 + bob, 8 * g, g); }
+}
+
+// ---- the dig's scene ----
+// blit a tile at its place (f: its parallax; y and x snapped to device pixels so stacked tiles never show a seam)
+function fossilTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+let fossilMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+const fossilNeed = id => !FOSC.tiles.has(id);
+// The strata's colours section by section (six earths each, light to dark) and how thick its beds lie: blended across
+// each section's join so the wall changes as you climb.
+const FOS_SECPAL = {
+  'Dig Site': [[[244, 222, 182], [226, 194, 146], [204, 164, 114], [178, 136, 92], [150, 110, 74], [120, 86, 58]], 22],
+  'Skull Gallery': [[[240, 206, 156], [222, 172, 112], [196, 140, 86], [168, 112, 70], [136, 88, 56], [106, 70, 46]], 20],
+  'Ribcage Hall': [[[246, 214, 186], [230, 180, 146], [206, 146, 112], [176, 116, 88], [142, 92, 70], [110, 72, 56]], 24],
+  'Serpent Strata': [[[226, 214, 186], [196, 182, 150], [166, 150, 120], [140, 124, 98], [112, 98, 78], [88, 76, 62]], 16],
+  'Amber Seam': [[[250, 226, 168], [238, 196, 116], [218, 160, 74], [188, 124, 54], [150, 94, 44], [116, 72, 36]], 22],
+  'Boneyard': [[[248, 236, 212], [230, 210, 176], [206, 180, 140], [178, 150, 112], [146, 118, 88], [114, 90, 68]], 26],
+  'Rex Gauntlet': [[[232, 182, 140], [210, 146, 104], [184, 114, 78], [154, 88, 60], [124, 66, 46], [96, 50, 36]], 18],
+  'The Great Amber': [[[252, 230, 176], [240, 200, 128], [222, 164, 88], [192, 128, 64], [156, 96, 50], [120, 72, 40]], 22],
+};
+function fossilSecAt(a) {
+  const ss = G.level.sections || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++;
+  const me = FOS_SECPAL[ss[i] && ss[i].name] || FOS_SECPAL['Dig Site'];
+  let k = 0, other = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 160) { k = 0.5 * smooth(ss[i + 1].a0 - 160, ss[i + 1].a0, a); other = FOS_SECPAL[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 160) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 160, a)); other = FOS_SECPAL[ss[i - 1].name]; }
+  return { cols: other ? me[0].map((q, j) => gMix(q, other[0][j], k)) : me[0], bed: other ? lerp(me[1], other[1], k) : me[1], name: ss[i] && ss[i].name };
+}
+const FOS_WB = 160;   // wall tile height
+// the strata beds: bed i's floor height (beds are 12..34 thick, the section's own thickness on average)
+const fossilBedA = i => i * 22 + 9 * (hash2(i, 0xFB1) - 0.5);
+const fossilBedWave = (x, i) => 2.6 * Math.sin(x / 29 + i * 1.3) + 1.3 * Math.sin(x / 9.3 + i * 2.1);
+
+// ---- the fossils in the rock (each drawn at x, y in the tile's units, size r, turned rot) ----
+function fossilFemur(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  const L = r * 1.6, w = r * 0.24;
+  const P = [[-L, -w * 1.9], [-L * 0.82, -w * 1.2], [-L * 0.5, -w], [L * 0.5, -w], [L * 0.82, -w * 1.3], [L, -w * 2.1], [L * 1.08, -w * 0.2], [L, w * 1.9], [L * 0.82, w * 1.2], [L * 0.5, w], [-L * 0.5, w], [-L * 0.82, w * 1.4], [-L, w * 2], [-L * 1.1, 0]];
+  fossilBone(c, P, -w * 2, w * 2, { lw: 0.8, inner: c => { fossilCrack(c, [[-L * 0.2, -w * 0.4], [L * 0.05, w * 0.2], [L * 0.25, -w * 0.1]], 0.6); } });
+  fossilSheen(c, [[-L * 0.8, -w * 1.2], [0, -w * 0.7], [L * 0.8, -w * 1.2]], Math.max(0.6, w * 0.4), 0.6);
+  c.restore();
+}
+function fossilAmmonite(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.fillStyle = gRG(c, -r * 0.3, -r * 0.3, r * 1.3, ['#f4dcae', '#cfa46c', '#8e6236']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+  // the ribs round the whorl, then the spiral seam (a furrow and a lit ridge)
+  c.strokeStyle = 'rgba(110,70,36,.55)'; c.lineWidth = Math.max(0.5, r * 0.07);
+  for (let k = 0; k < 22; k++) { const a = k * 0.6, q0 = r * (1 - a / 14), q1 = r * (1 - (a + 6.283) / 14); if (q1 < r * 0.12) break; c.beginPath(); c.moveTo(Math.cos(a) * q0, Math.sin(a) * q0); c.lineTo(Math.cos(a) * Math.max(q1, 0) * 1.02, Math.sin(a) * Math.max(q1, 0) * 1.02); c.stroke(); }
+  const sp = []; for (let a = 0; a < 13; a += 0.25) { const q = r * (1 - a / 14); sp.push([Math.cos(a) * q, Math.sin(a) * q]); }
+  gPair(c, sp, 'rgba(90,54,24,.8)', 'rgba(255,240,206,.55)', Math.max(0.6, r * 0.1), Math.max(0.4, r * 0.08));
+  c.strokeStyle = '#6e4a26'; c.lineWidth = Math.max(0.6, r * 0.09); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
+  c.strokeStyle = 'rgba(255,246,220,.65)'; c.lineWidth = Math.max(0.6, r * 0.12); c.beginPath(); c.arc(0, 0, r * 0.88, 3.5, 4.7); c.stroke();
+  c.restore();
+}
+function fossilTrilobite(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  const P = [[0, -r], [r * 0.62, -r * 0.7], [r * 0.7, 0], [r * 0.45, r * 0.8], [0, r * 1.05], [-r * 0.45, r * 0.8], [-r * 0.7, 0], [-r * 0.62, -r * 0.7]];
+  fossilSmooth(c, P); c.fillStyle = gLG(c, -r, -r, r, r, ['#cdb08a', '#94704c', '#5e4228']); c.fill();
+  c.save(); fossilSmooth(c, P); c.clip();
+  for (let k = 0; k < 7; k++) { const yy = -r * 0.35 + k * r * 0.2; gPair(c, [[-r, yy + 1], [0, yy - 0.5], [r, yy + 1]], 'rgba(60,38,20,.6)', 'rgba(250,230,196,.45)', Math.max(0.5, r * 0.08), Math.max(0.4, r * 0.06)); }
+  c.fillStyle = gLG(c, 0, -r, 0, r, ['#e2c8a0', '#a07a52']); c.beginPath(); c.ellipse(0, -r * 0.1, r * 0.2, r * 0.95, 0, 0, TWO_PI); c.fill();
+  c.restore();
+  fossilSmooth(c, P); c.strokeStyle = '#4e3420'; c.lineWidth = Math.max(0.5, r * 0.08); c.stroke();
+  c.restore();
+}
+function fossilShell(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.beginPath(); c.moveTo(0, r * 0.6); c.quadraticCurveTo(-r * 1.1, -r * 0.2, -r * 0.6, -r * 0.8); c.quadraticCurveTo(0, -r * 1.15, r * 0.6, -r * 0.8); c.quadraticCurveTo(r * 1.1, -r * 0.2, 0, r * 0.6); c.closePath();
+  c.fillStyle = gLG(c, 0, -r, 0, r, ['#f6e2bc', '#d2ae7c', '#9a764c']); c.fill(); c.strokeStyle = '#6e5030'; c.lineWidth = Math.max(0.5, r * 0.08); c.stroke();
+  c.strokeStyle = 'rgba(110,76,44,.55)'; c.lineWidth = Math.max(0.4, r * 0.06);
+  for (let k = -3; k <= 3; k++) { c.beginPath(); c.moveTo(0, r * 0.55); c.lineTo(k * r * 0.24, -r * 0.92 + Math.abs(k) * r * 0.08); c.stroke(); }
+  c.restore();
+}
+function fossilFish(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.strokeStyle = '#efdcb4'; c.lineCap = 'round'; c.lineWidth = Math.max(0.6, r * 0.09);
+  c.beginPath(); c.moveTo(-r * 1.3, 0); c.quadraticCurveTo(0, -r * 0.12, r * 0.9, 0); c.stroke();
+  for (let k = 0; k < 8; k++) { const xx = -r + k * r * 0.24, h = r * (0.55 - Math.abs(k - 3.5) * 0.06); c.lineWidth = Math.max(0.4, r * 0.05); c.beginPath(); c.moveTo(xx, -h); c.quadraticCurveTo(xx + r * 0.08, 0, xx, h); c.stroke(); }
+  c.fillStyle = gLG(c, r * 0.8, -r * 0.4, r * 1.4, r * 0.4, ['#f6e6c4', '#c4a272']); c.beginPath(); c.moveTo(r * 0.8, -r * 0.42); c.quadraticCurveTo(r * 1.5, -r * 0.2, r * 1.55, r * 0.05); c.quadraticCurveTo(r * 1.3, r * 0.4, r * 0.8, r * 0.38); c.closePath(); c.fill(); c.strokeStyle = '#8e6a44'; c.lineWidth = Math.max(0.4, r * 0.06); c.stroke();
+  c.fillStyle = '#5a3a20'; c.beginPath(); c.arc(r * 1.1, -r * 0.05, r * 0.1, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#efdcb4'; c.lineWidth = Math.max(0.4, r * 0.06); c.beginPath(); c.moveTo(-r * 1.3, 0); c.lineTo(-r * 1.65, -r * 0.4); c.moveTo(-r * 1.3, 0); c.lineTo(-r * 1.65, r * 0.4); c.stroke();
+  c.restore();
+}
+function fossilVerts(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  for (let k = 0; k < 4; k++) { const xx = (k - 1.5) * r * 0.62, rr = r * (0.32 - k * 0.025); fossilBone(c, [[xx - rr, -rr * 1.1], [xx + rr, -rr * 1.1], [xx + rr * 1.2, 0], [xx + rr, rr * 1.1], [xx - rr, rr * 1.1], [xx - rr * 1.2, 0]], -rr, rr, { lw: 0.6 }); c.fillStyle = FB[2]; c.fillRect(xx - rr * 0.2, -rr * 2, rr * 0.4, rr); }
+  c.restore();
+}
+function fossilTooth(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.beginPath(); c.moveTo(-r * 0.4, r * 0.6); c.quadraticCurveTo(-r * 0.45, -r * 0.3, r * 0.1, -r); c.quadraticCurveTo(r * 0.3, -r * 0.2, r * 0.42, r * 0.6); c.closePath();
+  c.fillStyle = gLG(c, -r * 0.4, -r, r * 0.4, r, ['#fffaf0', '#ecd6aa', '#a8865a']); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = Math.max(0.5, r * 0.08); c.stroke();
+  c.fillStyle = '#8e6a44'; c.fillRect(-r * 0.42, r * 0.45, r * 0.84, r * 0.2);
+  c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = Math.max(0.4, r * 0.08); c.beginPath(); c.moveTo(-r * 0.25, r * 0.3); c.quadraticCurveTo(-r * 0.25, -r * 0.3, r * 0.05, -r * 0.8); c.stroke();
+  c.restore();
+}
+const FOS_KINDS = [fossilFemur, fossilAmmonite, fossilTrilobite, fossilShell, fossilFish, fossilVerts, fossilTooth];
+
+// The wall rock of one tile (world units, y = -alt): a cut through the strata. A soft warm shadow cast into the shaft;
+// the beds lying level (each its own earth, a gradient lit from above, laminae, grit or pebbles in it, its top a furrow
+// over a lit ridge), darkening deeper in; fossils and amber packed in them near the face; then the sandstone lip along the
+// shaft: lit where it faces up, shaded where it faces down, chipped, with crumbly little ledges dusted on top.
+function fossilWallPaint(c, side, a0, a1, x0, x1) {
+  const into = side ? 1 : -1, wx = a => walls(a)[side], A0 = a0 - 10, A1 = a1 + 10, sd = side * 131 + 7;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  const P = (dd, a) => [wx(a) + into * dd, -a];
+  const outer = side ? x1 + 4 : x0 - 4, midA = (a0 + a1) / 2, X0 = Math.min(x0, x1) - 8, XW = Math.abs(x1 - x0) + 16;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the shadow on the shaft side (soft, no line)
+  for (const [lw, al] of [[26, 0.05], [13, 0.07], [5, 0.1]]) { c.strokeStyle = `rgba(60,34,16,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  // the beds
+  const S0 = fossilSecAt(midA), cols = S0.cols;
+  for (let i = Math.floor(A0 / 22) - 2; fossilBedA(i) < A1 + 30; i++) {
+    const b0 = fossilBedA(i), b1 = fossilBedA(i + 1), ci = Math.floor(hash2(i, 0xFB2) * 5.99), col = cols[ci], kind = hash2(i, 0xFB3);
+    const top = [], bot = []; for (let x = X0; x <= X0 + XW + 6; x += 6) { top.push([x, -(b1 + fossilBedWave(x, i + 1))]); bot.push([x, -(b0 + fossilBedWave(x, i))]); }
+    gPoly(c, top.concat(bot.reverse())); c.fillStyle = gLG(c, 0, -b1, 0, -b0, [gCol(gMix(col, [255, 246, 226], 0.16)), gCol(col), gCol(gMix(col, [70, 40, 20], 0.18))]); c.fill();
+    // what is in the bed: laminae (thin level lines), grit, or a layer of pebbles
+    if (kind < 0.35) { for (let q = 1; q < 3; q++) { const yy = lerp(b0, b1, q / 3); c.strokeStyle = `rgba(${q % 2 ? '255,240,210' : '90,56,30'},.2)`; c.lineWidth = 0.6; c.beginPath(); for (let x = X0; x <= X0 + XW; x += 8) { const y = -(yy + fossilBedWave(x, i) * 0.7); x === X0 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke(); } }
+    else if (kind < 0.7) { for (let k = 0; k < XW * (b1 - b0) / 60; k++) { const x = X0 + XW * hash2(k, i * 7 + 0xFB4), y = -lerp(b0, b1, hash2(k, i * 7 + 0xFB5)), r = 0.5 + 0.7 * hash2(k, i * 7 + 0xFB6); c.fillStyle = hash2(k, i * 7 + 0xFB7) < 0.5 ? 'rgba(80,50,26,.3)' : 'rgba(255,240,206,.32)'; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); } }
+    else { for (let k = 0; k < XW / 9; k++) { const x = X0 + XW * hash2(k, i * 5 + 0xFB8), y = -lerp(b0 + 2, b1 - 2, hash2(k, i * 5 + 0xFB9)), r = 1.3 + 2.2 * hash2(k, i * 5 + 0xFBA), pc = gMix(col, hash2(k, 0xFBB) < 0.5 ? [255, 236, 200] : [110, 74, 46], 0.4); c.fillStyle = gLG(c, x - r, y - r, x + r, y + r, [gCol(gMix(pc, [255, 250, 236], 0.35)), gCol(pc), gCol(gMix(pc, [60, 36, 20], 0.35))]); c.beginPath(); c.ellipse(x, y, r * 1.25, r, hash2(k, 0xFBC) * 3, 0, TWO_PI); c.fill(); c.strokeStyle = gCol(gMix(pc, [60, 36, 20], 0.5), 0.6); c.lineWidth = 0.5; c.stroke(); } }
+    // the bed's top: a furrow over a lit ridge
+    gPair(c, top.map(([x, y]) => [x, y]), gCol(gMix(col, [70, 40, 20], 0.55), 0.55), 'rgba(255,246,222,.35)', 0.9, 0.9);
+  }
+  // deeper in, the rock sinks into warm umber (it meets the plain fill drawn past the tile)
+  c.fillStyle = gLG(c, P(46, midA)[0], 0, P(250, midA)[0], 0, ['rgba(62,40,26,0)', 'rgba(62,40,26,.55)', 'rgba(62,40,26,1)']); c.fillRect(X0, -A1 - 8, XW, A1 - A0 + 16);
+  // the fossils and amber near the face (a few per tile, sized to show in the strip of wall a phone sees)
+  for (let r = Math.floor(A0 / 34) - 1; r * 34 < A1 + 34; r++) {
+    const hh = hash2(r, 0xFC1 + sd); if (hh < 0.18) continue;
+    const fa = r * 34 + 30 * hash2(r, 0xFC2 + sd), dep = 7 + 26 * hash2(r, 0xFC3 + sd), [fx, fy] = P(dep, fa), sz = 4.5 + 5 * hash2(r, 0xFC4 + sd), rot = hash2(r, 0xFC5 + sd) * 6.283;
+    const kind = hash2(r, 0xFC6 + sd);
+    c.save(); c.globalAlpha = clamp(1.2 - dep / 60, 0.55, 1);
+    if (kind < 0.16) fossilAmberChunk(c, fx, fy, sz * 0.62, rot, 0.32, r);
+    else FOS_KINDS[Math.floor(hash2(r, 0xFC7 + sd) * FOS_KINDS.length)](c, fx, fy, sz, rot);
+    c.restore();
+  }
+  // a big fossil now and then deeper in the cut (a long bone or a huge ammonite), half out of the rock
+  for (let r = Math.floor(A0 / 210) - 1; r * 210 < A1 + 210; r++) {
+    if (hash2(r, 0xFD1 + sd) < 0.45) continue;
+    const fa = r * 210 + 150 * hash2(r, 0xFD2 + sd), [fx, fy] = P(20 + 14 * hash2(r, 0xFD3 + sd), fa);
+    if (hash2(r, 0xFD4 + sd) < 0.5) fossilFemur(c, fx, fy, 14 + 6 * hash2(r, 0xFD5 + sd), (hash2(r, 0xFD6 + sd) - 0.5) * 1.2 + Math.PI / 2 * 0.3);
+    else fossilAmmonite(c, fx, fy, 10 + 5 * hash2(r, 0xFD5 + sd), hash2(r, 0xFD6 + sd) * 6);
+  }
+  c.restore();
+  // the lip: the sandstone's edge, lit where it faces up, shaded where it faces down, chips bitten out of it, and little
+  // crumbly ledges with dust on top
+  c.save(); body(); c.clip();
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [xa, ya] = pts[i], [xb, yb] = pts[i + 1], up = (xb - xa) * into;   // >0: going up, the wall steps out into the shaft (faces down)
+    c.strokeStyle = up > 0.15 ? 'rgba(90,56,30,.55)' : up < -0.15 ? 'rgba(255,240,206,.75)' : 'rgba(255,232,196,.5)';
+    c.lineWidth = 3.2; c.beginPath(); c.moveTo(xa + into * 1.5, ya); c.lineTo(xb + into * 1.5, yb); c.stroke();
+  }
+  c.strokeStyle = gCol(gMix(cols[3], [70, 40, 20], 0.5)); c.lineWidth = 1.1; c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+  for (let r = Math.floor(A0 / 13); r * 13 < A1 + 13; r++) {
+    const hh = hash2(r, 0xFE1 + sd); if (hh < 0.45) continue;
+    const ca = r * 13 + 8 * hash2(r, 0xFE2 + sd), [cx, cy] = P(0, ca), w = 2 + 3 * hash2(r, 0xFE3 + sd), dd = 1.5 + 2.5 * hash2(r, 0xFE4 + sd);
+    gPoly(c, [[cx, cy - w], [cx + into * dd, cy - w * 0.2], [cx, cy + w * 0.7]]); c.fillStyle = gCol(gMix(cols[4], [60, 36, 20], 0.3)); c.fill();
+    c.strokeStyle = 'rgba(255,240,206,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(cx + into * dd, cy - w * 0.2); c.lineTo(cx, cy + w * 0.7); c.stroke();
+  }
+  c.restore();
+  // crumbly little shelves bulging out of the lip (rounded, in the wall's own earth), dust piled on them
+  for (let r = Math.floor(A0 / 80) - 1; r * 80 < A1 + 80; r++) {
+    if (hash2(r, 0xFF1 + sd) < 0.6) continue;
+    const la = r * 80 + 50 * hash2(r, 0xFF2 + sd), [lx, ly] = P(0, la), w = 4 + 3 * hash2(r, 0xFF3 + sd), o = -into, hh = 5 + 3 * hash2(r, 0xFF4 + sd);
+    c.beginPath(); c.moveTo(lx + into * 3, ly - hh * 0.5); c.bezierCurveTo(lx + o * w * 0.8, ly - hh * 0.6, lx + o * w * 1.1, ly + hh * 0.1, lx + o * w * 0.5, ly + hh * 0.5); c.quadraticCurveTo(lx, ly + hh * 0.75, lx + into * 3, ly + hh * 0.7); c.closePath();
+    c.fillStyle = gLG(c, 0, ly - hh * 0.6, 0, ly + hh * 0.7, [gCol(cols[1]), gCol(cols[3]), gCol(cols[5])]); c.fill(); c.strokeStyle = gCol(gMix(cols[5], [60, 36, 20], 0.35)); c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = gLG(c, 0, ly - hh * 0.9, 0, ly - hh * 0.4, ['#fff2d6', gCol(cols[1])]); c.beginPath(); c.moveTo(lx + into * 2, ly - hh * 0.48); c.quadraticCurveTo(lx + o * w * 0.5, ly - hh * 0.95, lx + o * w * 0.95, ly - hh * 0.3); c.closePath(); c.fill();
+  }
+  // the dig's marks: a wooden stake driven into the lip, a string to the next and a tag flag (mostly at the dig site)
+  const S = fossilSecAt(midA), stakeEvery = S.name === 'Dig Site' ? 90 : 300;
+  for (let r = Math.floor(A0 / stakeEvery) - 1; r * stakeEvery < A1 + stakeEvery; r++) {
+    if (S.name !== 'Dig Site' && hash2(r, 0xFF5 + sd) < 0.5) continue;
+    const sa = r * stakeEvery + 30 * hash2(r, 0xFF6 + sd), [sx0, sy0] = P(-1, sa), o = -into, L = 9;
+    c.strokeStyle = '#6a4424'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(sx0 + into * 3, sy0 + 1); c.lineTo(sx0 + o * L, sy0 - 1.5); c.stroke();
+    c.strokeStyle = '#c08a52'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(sx0 + into * 2, sy0 + 0.4); c.lineTo(sx0 + o * L, sy0 - 2); c.stroke();
+    c.fillStyle = '#e8b878'; c.beginPath(); c.arc(sx0 + o * L, sy0 - 1.6, 1.4, 0, TWO_PI); c.fill();
+    // the tag: a little red and white flag on a pin
+    const fx = sx0 + o * (L - 2), fy = sy0 - 2;
+    c.strokeStyle = '#8a6a4a'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx, fy - 8); c.stroke();
+    gPoly(c, [[fx, fy - 8], [fx + o * 6, fy - 6.5], [fx, fy - 5]]); c.fillStyle = hash2(r, 0xFF7) < 0.5 ? '#e0543c' : '#f4ead6'; c.fill(); c.strokeStyle = 'rgba(120,40,20,.6)'; c.lineWidth = 0.5; c.stroke();
+    // the string sagging down the wall to the next stake (hidden mostly in the lip)
+    if (S.name === 'Dig Site') { c.strokeStyle = 'rgba(250,240,220,.6)'; c.lineWidth = 0.5; const [nx2, ny2] = P(-1, sa + stakeEvery * 0.5); c.beginPath(); c.moveTo(sx0 + o * (L - 1), sy0 - 1.5); c.quadraticCurveTo(sx0 + o * 4, (sy0 + ny2) / 2 + 4, nx2 + o * 2, ny2); c.stroke(); }
+  }
+}
+// a buried bone in the lip (for the dachshund to dig up): a mound of dark earth on the wall with a bone's knobbly end
+// poking out (anchored on the wall), and the hole left once it's dug
+function fossilDigSprite(side, dug) {
+  return fossilSprite(`dig${side}${dug ? 1 : 0}`, 44, 36, 22, 18, c => {
+    const o = side ? -1 : 1; c.scale(o, 1);
+    if (dug) { c.fillStyle = gRG(c, 2, 1, 9, ['#2a180c', '#4a3020', 'rgba(74,48,32,0)']); c.beginPath(); c.ellipse(1, 1, 8, 7, 0, 0, TWO_PI); c.fill(); fossilClod(c, 9, 6, 5, 3.5, 891, ['#a07448', '#6e4c2e', '#4a3020']); return; }
+    fossilClod(c, 0, 1, 11, 9, 887, ['#9a6e44', '#6a4a2c', '#40281a']);
+    // the bone's end: a double knob on a short shaft, angled out of the earth
+    c.save(); c.translate(6, -2); c.rotate(-0.5);
+    fossilBone(c, [[-2, -2.2], [8, -2.2], [8, 2.2], [-2, 2.2]], -2.2, 2.2, { lw: 0.8 });
+    for (const y of [-2.6, 2.6]) { c.fillStyle = gRG(c, 9, y - 1, 3.6, [FB[0], FB[1], FB[2]]); c.beginPath(); c.arc(9.4, y, 3.1, 0, TWO_PI); c.fill(); c.strokeStyle = FOSP.boneEdge; c.lineWidth = 0.7; c.stroke(); }
+    fossilSheen(c, [[0, -1.4], [8, -1.4]], 0.8, 0.7);
+    c.restore();
+    for (const [x, y, r] of [[-6, 6, 1.6], [3, 8, 1.2], [-8, -3, 1.3]]) { c.fillStyle = '#c8a06c'; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); }
+  });
+}
+function drawFossilWalls() {
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = G.t, P = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / FOS_WB), j1 = Math.floor(top / FOS_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const id = `w${side}_${j}`, need = j <= j1;
+      if (!need && (fossilMade || !fossilNeed(id))) continue;
+      if (fossilNeed(id)) fossilMade++;
+      const a0 = j * FOS_WB, a1 = a0 + FOS_WB;
+      let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+      const x0 = side ? lo - 30 : lo - 300, x1 = side ? hi + 300 : hi + 30;
+      const Tl = fossilTile(id, x0, x1, a0, a1, c => fossilWallPaint(c, side, a0, a1, x0, x1));
+      if (!need) continue;
+      fossilTileBlit(Tl);
+      // past the tile, the deep rock in plain colour out to the screen's edge
+      const y0 = sy(a1) - 1, hh = FOS_WB * s + 2;
+      ctx.fillStyle = '#3e281a';
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + P) ctx.fillRect(xe, y0, cssW + 30 + P - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - P) ctx.fillRect(-30 - P, y0, xe + 30 + P, hh); }
+    }
+    // the amber in the wall breathing (a soft glow on some of the chunks near the face)
+    for (let r = Math.floor(bot / 34) - 1; r * 34 < top + 34; r++) {
+      const sd = side * 131 + 7; if (hash2(r, 0xFC1 + sd) < 0.18 || hash2(r, 0xFC6 + sd) >= 0.16) continue;
+      const fa = r * 34 + 30 * hash2(r, 0xFC2 + sd), dep = 7 + 26 * hash2(r, 0xFC3 + sd), x = walls(fa)[side] + (side ? dep : -dep), p = 0.5 + 0.5 * Math.sin(T * 1.6 + r * 1.7);
+      gGlow(ctx, sx(x), sy(fa), 16 * s, FOSP.amberGlow, 0.12 + 0.12 * p);
+    }
+  }
+  // buried bones on the lip (the dachshund sniffs them out: they glint for him)
+  const L = G.level;
+  if (L && L.digs) for (const g of L.digs) {
+    if (g.alt < bot - 30 || g.alt > top + 30) continue;
+    const wx = walls(g.alt)[g.side];
+    fossilBlit(fossilDigSprite(g.side, !!g.dug), wx, g.alt);
+    if (!g.dug && fossilDigger()) { const tw = Math.pow(Math.max(0, Math.sin(T * 2.2 + g.n)), 6); fossilTwinkle(ctx, sx(wx + (g.side ? -8 : 8)), sy(g.alt + 3), (4 + 6 * tw) * s, 0.4 + 0.6 * tw); }
+  }
+}
+
+// ---- the backdrop: calm and pushed back ----
+// far (0.12): the cavern's back cliffs in a warm haze: level strata, eroded hoodoos rising, and a giant sauropod's
+// skeleton half out of the rock now and then; mid (0.32): earth ledges jutting from behind the walls with the dig's
+// scaffolds, ladders, crates and lanterns, a huge bone being dug out; dusty light falling between; dust.
+const FOS_DEEP = 0.06, FOS_FAR = 0.13, FOS_MID = 0.32, FOS_BB = 320;
+function fossilXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+// ---- the backdrop's layers (each painted once per tile, in world units with y = -alt at its own parallax) ----
+// The section a parallax height belongs to (a layer at factor f shows world height ~ a / f)
+const fossilSecF = (a, f) => fossilSecAt(Math.max(0, a / f));
+// a band's colour: the section's earth pushed back into the cave's warm haze (k: how far back)
+const fossilHaze = (col, k) => gMix(col, [104, 70, 44], k);
+// strata bands across a back wall: each its own earth, lit on top, a furrow and a lit ridge on its top line, laminae
+function fossilBands(c, A0, A1, x0, x1, f, step, amp, haze, sd) {
+  const bedA = i => i * step + step * 0.32 * (hash2(i, sd) - 0.5);
+  for (let i = Math.floor(A0 / step) - 2; bedA(i) < A1 + step; i++) {
+    const b0 = bedA(i), b1 = bedA(i + 1), S = fossilSecF(b0, f), col = fossilHaze(S.cols[1 + Math.floor(hash2(i, sd + 1) * 4.99)], haze);
+    const wv = (x, j) => amp * Math.sin(x / (53 + 9 * hash2(j, sd + 2)) + j * 1.7) + amp * 0.45 * Math.sin(x / 19 + j * 2.9);
+    const top = [], bot = []; for (let x = x0 - 6; x <= x1 + 6; x += 8) { top.push([x, -(b1 + wv(x, i + 1))]); bot.push([x, -(b0 + wv(x, i))]); }
+    gPoly(c, top.concat(bot.slice().reverse()));
+    c.fillStyle = gLG(c, 0, -b1, 0, -b0, [gCol(gMix(col, [255, 236, 200], 0.1)), gCol(col), gCol(gMix(col, [50, 30, 18], 0.14))]); c.fill();
+    gPair(c, top, gCol(gMix(col, [50, 30, 18], 0.5), 0.45), gCol(gMix(col, [255, 236, 200], 0.4), 0.4), 1.1, 0.9);
+    if (hash2(i, sd + 3) < 0.5) { c.strokeStyle = gCol(gMix(col, [50, 30, 18], 0.35), 0.3); c.lineWidth = 0.6; c.setLineDash([10 + 20 * hash2(i, sd + 4), 6]); c.beginPath(); top.forEach(([x, y], k) => k ? c.lineTo(x, y + (b1 - b0) * 0.45) : c.moveTo(x, y + (b1 - b0) * 0.45)); c.stroke(); c.setLineDash([]); }
+  }
+}
+// a fossil in relief in a back wall: a soft shadow under it, the fossil itself faded toward the wall's colour (k: 0 crisp .. 1 gone)
+function fossilRelief(c, x, y, r, fade, draw) {
+  c.save();
+  c.fillStyle = gRG(c, x + r * 0.15, y + r * 0.2, r * 1.5, ['rgba(40,22,10,.32)', 'rgba(40,22,10,0)']); c.beginPath(); c.arc(x + r * 0.15, y + r * 0.2, r * 1.5, 0, TWO_PI); c.fill();
+  c.globalAlpha = 1 - fade; draw(); c.restore();
+}
+// a fern frond pressed into the rock: a curling stem, paired leaflets, printed dark with a lit edge
+function fossilFern(c, x, y, r, rot) {
+  c.save(); c.translate(x, y); c.rotate(rot); c.lineCap = 'round';
+  const stem = []; for (let q = 0; q <= 1.0001; q += 0.08) stem.push([q * r * 2 - r, -Math.sin(q * 2.4) * r * 0.35]);
+  for (const [col, dy, lw] of [['rgba(255,236,200,.5)', -0.6, 1], ['rgba(70,40,20,.7)', 0, 1]]) {
+    c.strokeStyle = col; c.lineWidth = lw * Math.max(0.8, r * 0.05); c.beginPath(); stem.forEach(([sx2, sy2], i) => i ? c.lineTo(sx2, sy2 + dy) : c.moveTo(sx2, sy2 + dy)); c.stroke();
+    for (let i = 1; i < stem.length - 1; i++) { const [px, py] = stem[i], L = r * 0.42 * (1 - i / stem.length * 0.7); for (const sgn of [-1, 1]) { c.beginPath(); c.moveTo(px, py + dy); c.quadraticCurveTo(px + L * 0.3, py + sgn * L * 0.5 + dy, px + L * 0.55, py + sgn * L + dy); c.stroke(); } }
+  }
+  c.restore();
+}
+// a giant's rib arc in a back wall (a fan of curved ribs off a short spine)
+function fossilRibFan(c, x, y, r, d) {
+  c.save(); c.translate(x, y); c.scale(d, 1); c.lineCap = 'round';
+  for (let k = 0; k < 6; k++) {
+    const y0 = -r * 0.8 + k * r * 0.3, L = r * (1.5 - Math.abs(k - 2.5) * 0.12);
+    const path = () => { c.beginPath(); c.moveTo(0, y0); c.bezierCurveTo(L * 0.5, y0 - r * 0.25, L * 0.9, y0 + r * 0.1, L, y0 + r * 0.55); };
+    path(); c.strokeStyle = 'rgba(96,62,36,.9)'; c.lineWidth = r * 0.16; c.stroke();
+    path(); c.strokeStyle = FB[1]; c.lineWidth = r * 0.11; c.stroke();
+    c.save(); c.translate(-r * 0.015, -r * 0.03); path(); c.strokeStyle = 'rgba(255,250,236,.7)'; c.lineWidth = r * 0.035; c.stroke(); c.restore();
+  }
+  for (let k = 0; k < 7; k++) { const yy = -r * 0.95 + k * r * 0.3; fossilBone(c, [[-r * 0.12, yy - r * 0.11], [r * 0.12, yy - r * 0.11], [r * 0.14, yy + r * 0.11], [-r * 0.14, yy + r * 0.11]], yy - r * 0.11, yy + r * 0.11, { lw: 0.8 }); }
+  c.restore();
+}
+// the skull sprite pressed into the wall
+function fossilSkullRelief(c, x, y, k, d) { const S = fossilSkullCran(); c.save(); c.translate(x, y); c.scale(d * k, k); c.drawImage(S.cv, -S.ax, -S.ay, S.w, S.h); c.restore(); }
+// which fossils each section shows in its walls (weights over: ammonite, fern, ribs, skull, fish, femur, trilobite)
+const FOS_RELIEF = {
+  'Dig Site': [3, 3, 1, 0, 1, 2, 2], 'Skull Gallery': [2, 1, 1, 4, 0, 1, 1], 'Ribcage Hall': [1, 1, 5, 1, 0, 2, 1], 'Serpent Strata': [3, 1, 1, 0, 4, 0, 3],
+  'Amber Seam': [3, 4, 0, 0, 1, 1, 1], 'Boneyard': [1, 0, 3, 2, 0, 4, 1], 'Rex Gauntlet': [1, 0, 2, 5, 0, 2, 0], 'The Great Amber': [3, 2, 2, 1, 1, 1, 1],
+};
+function fossilPickRelief(name, h) { const w = FOS_RELIEF[name] || FOS_RELIEF['Dig Site'], tot = w.reduce((a, b) => a + b, 0); let v = h * tot; for (let k = 0; k < w.length; k++) { v -= w[k]; if (v < 0) return k; } return 0; }
+function fossilDrawRelief(c, kind, x, y, r, rot, d) {
+  if (kind === 0) fossilAmmonite(c, x, y, r, rot);
+  else if (kind === 1) fossilFern(c, x, y, r * 1.6, rot);
+  else if (kind === 2) fossilRibFan(c, x, y, r * 1.3, d);
+  else if (kind === 3) fossilSkullRelief(c, x - d * r * 0.8, y, r / 36, d);
+  else if (kind === 4) fossilFish(c, x, y, r * 0.9, rot * 0.3);
+  else if (kind === 5) fossilFemur(c, x, y, r * 0.9, rot);
+  else fossilTrilobite(c, x, y, r * 0.7, rot);
+}
+// the recesses of the far wall: dug-out pockets, darker inside, a lit lip under them; some hold a dig lantern
+function fossilRecesses(a0, a1, x0, x1, out) {
+  for (let j = Math.floor((a0 - 60) / 110); j * 110 < a1 + 60; j++) {
+    const S = fossilSecF(j * 110, FOS_FAR), dense = S.name === 'Serpent Strata' || S.name === 'Ribcage Hall' ? 0.15 : 0.4;
+    if (hash2(j, 0xA61) < dense) continue;
+    const x = x0 + (x1 - x0) * hash2(j, 0xA62), a = j * 110 + 90 * hash2(j, 0xA63), rx = 22 + 30 * hash2(j, 0xA64), ry = 12 + 14 * hash2(j, 0xA65);
+    out.push({ j, x, a, rx, ry, lamp: hash2(j, 0xA66) < 0.4 });
+  }
+  return out;
+}
+function fossilFarPaint(c, a0, a1, x0, x1) {
+  const A0 = a0 - 10, A1 = a1 + 10;
+  fossilBands(c, A0, A1, x0, x1, FOS_FAR, 26, 3.4, 0.5, 0xA31);
+  // fossils in relief at two depths: small ones far back (faint) and bigger ones nearer the face (crisper)
+  for (let j = Math.floor((A0 - 80) / 70); j * 70 < A1 + 80; j++) {
+    if (hash2(j, 0xA71) < 0.3) continue;
+    const a = j * 70 + 60 * hash2(j, 0xA72), S = fossilSecF(a, FOS_FAR), kind = fossilPickRelief(S.name, hash2(j, 0xA73)), deep = hash2(j, 0xA74);
+    const x = x0 + (x1 - x0) * hash2(j, 0xA75), r = (9 + 9 * (1 - deep)) * (kind === 3 ? 1.6 : 1), d = hash2(j, 0xA76) < 0.5 ? 1 : -1;
+    fossilRelief(c, x, -a, r, 0.42 + 0.3 * deep, () => fossilDrawRelief(c, kind, x, -a, r, hash2(j, 0xA77) * 6.28, d));
+  }
+  // the recesses: a dark pocket, a lit lip under it and a shadowed brow over it
+  for (const R of fossilRecesses(A0, A1, x0, x1, [])) {
+    const P = []; for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI, q = 0.8 + 0.3 * hash2(R.j * 10 + k, 0xA67); P.push([R.x + Math.cos(an) * R.rx * q, -R.a + Math.sin(an) * R.ry * q]); }
+    fossilSmooth(c, P); c.fillStyle = gRG(c, R.x, -R.a - R.ry * 0.3, R.rx * 1.1, ['rgba(34,18,8,.85)', 'rgba(54,32,18,.75)', 'rgba(80,52,32,.5)']); c.fill();
+    c.strokeStyle = 'rgba(255,226,180,.32)'; c.lineWidth = 2.2; c.beginPath(); c.ellipse(R.x, -R.a + R.ry * 0.15, R.rx * 0.95, R.ry * 0.95, 0, 0.3, Math.PI - 0.3); c.stroke();
+    c.strokeStyle = 'rgba(40,22,10,.4)'; c.lineWidth = 3; c.beginPath(); c.ellipse(R.x, -R.a - R.ry * 0.1, R.rx * 0.95, R.ry, 0, Math.PI + 0.3, TWO_PI - 0.3); c.stroke();
+    if (R.lamp) { const lx = R.x, ly = -R.a + R.ry * 0.25; c.fillStyle = '#4a3020'; c.fillRect(lx - 2.6, ly - 9, 5.2, 1.6); c.fillStyle = gLG(c, 0, ly - 8, 0, ly - 2, ['#fff2c8', '#ffb850']); c.fillRect(lx - 2, ly - 7.6, 4, 5.6); c.fillStyle = '#4a3020'; c.fillRect(lx - 2.6, ly - 2, 5.2, 1.6); }
+    else if (hash2(R.j, 0xA68) < 0.5) fossilRelief(c, R.x, -R.a + 2, R.ry * 0.6, 0.35, () => fossilDrawRelief(c, 0, R.x, -R.a + 2, R.ry * 0.6, R.j, 1));
+  }
+}
+// the deepest layer: the cave's far reaches, broad soft bands and the silhouettes of whole skeletons in the haze
+function fossilDeepPaint(c, a0, a1, x0, x1) {
+  const A0 = a0 - 10, A1 = a1 + 10;
+  fossilBands(c, A0, A1, x0, x1, FOS_DEEP, 44, 6, 0.72, 0xA81);
+  for (let i = Math.floor((A0 - 260) / 520); i * 520 < A1 + 260; i++) {
+    if (hash2(i, 0xA82) < 0.35) continue;
+    const S = fossilSecF(i * 520, FOS_DEEP), x = x0 + (x1 - x0) * (0.2 + 0.6 * hash2(i, 0xA83)), y = -(i * 520 + 300 * hash2(i, 0xA84)), d = hash2(i, 0xA85) < 0.5 ? 1 : -1;
+    const kind = S.name === 'Serpent Strata' ? 4 : S.name === 'Ribcage Hall' || S.name === 'Boneyard' ? 2 : S.name === 'Skull Gallery' || S.name === 'Rex Gauntlet' ? 3 : hash2(i, 0xA86) < 0.5 ? 0 : 2;
+    fossilRelief(c, x, y, 40, 0.72, () => fossilDrawRelief(c, kind, x, y, 34, hash2(i, 0xA87) * 6, d));
+  }
+}
+function fossilMidPaint(c, a0, a1) {
+  const A0 = a0 - 10, A1 = a1 + 10;
+  // rock buttresses standing out of the back wall at the sides (nearer than the far wall: crisper strata, fossils in
+  // them, a lit rim on their inner face, a soft shadow cast inward)
+  for (let i = Math.floor((A0 - 320) / 340); i * 340 < A1 + 320; i++) {
+    if (hash2(i, 0xA91) < 0.25) continue;
+    const side = hash2(i, 0xA92) < 0.5 ? 0 : 1, d = side ? -1 : 1, ex = side ? WORLD_W + 40 : -40, y0 = -(i * 340 + 120 * hash2(i, 0xA93)), ht = 170 + 150 * hash2(i, 0xA94), dp = 70 + 60 * hash2(i, 0xA95);
+    const P = []; for (let k = 0; k <= 12; k++) { const q = k / 12, bulge = Math.sin(q * Math.PI) * (0.75 + 0.25 * Math.sin(q * 9 + i)) + 0.12 * hash2(i * 13 + k, 0xA96); P.push([ex + d * dp * bulge, y0 - q * ht]); }
+    const shape = () => { c.beginPath(); c.moveTo(ex - d * 20, y0 + 10); P.forEach(([x, y]) => c.lineTo(x, y)); c.lineTo(ex - d * 20, y0 - ht - 10); c.closePath(); };
+    c.save(); c.globalAlpha = 0.5; c.translate(d * 8, 6); shape(); c.fillStyle = 'rgba(46,28,16,.6)'; c.fill(); c.restore();
+    c.save(); shape(); c.clip();
+    const S0 = fossilSecF(-y0, FOS_MID), xa = Math.min(ex, ex + d * dp) - 30, xb = Math.max(ex, ex + d * dp) + 30;
+    fossilBands(c, -y0 - 10, -y0 + ht + 10, xa, xb, FOS_MID, 16, 2, 0.32, 0xA97 + i);
+    c.fillStyle = gLG(c, ex + d * dp, 0, ex, 0, ['rgba(60,36,20,0)', 'rgba(60,36,20,.45)']); c.fillRect(xa, y0 - ht - 10, xb - xa, ht + 20);
+    for (let k = 0; k < 3; k++) { if (hash2(i * 3 + k, 0xA98) < 0.3) continue; const fy = y0 - ht * (0.2 + 0.3 * k), fx = ex + d * dp * (0.35 + 0.2 * hash2(i * 3 + k, 0xA99)), kind = fossilPickRelief(S0.name, hash2(i * 3 + k, 0xA9A)), r = 9 + 5 * hash2(i * 3 + k, 0xA9B);
+      fossilRelief(c, fx, fy, r, 0.3, () => fossilDrawRelief(c, kind === 3 ? 0 : kind, fx, fy, r, hash2(i * 3 + k, 0xA9C) * 6, d)); }
+    c.restore();
+    // the rim: lit where the face turns up and left, shaded below
+    c.lineJoin = 'round'; c.strokeStyle = 'rgba(70,42,24,.7)'; c.lineWidth = 1.6; c.beginPath(); P.forEach(([x, y], k) => k ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+    c.strokeStyle = 'rgba(255,226,180,.45)'; c.lineWidth = 1.6; c.beginPath(); P.forEach(([x, y], k) => k ? c.lineTo(x - d * 2, y - 1) : c.moveTo(x - d * 2, y - 1)); c.stroke();
+  }
+  for (let i = Math.floor((A0 - 140) / 150); i * 150 < A1 + 140; i++) {
+    if (hash2(i, 0xA41) < 0.3) continue;
+    const side = hash2(i, 0xA42) < 0.5 ? 0 : 1, d = side ? -1 : 1, ex = side ? WORLD_W + 30 : -30, y = -(i * 150 + 110 * hash2(i, 0xA43)), w = 110 + 60 * hash2(i, 0xA44);
+    // the ledge: an earth shelf out of the back wall (a lit top, its face in shade, beds showing in it)
+    const top = y, L = [[ex - d * 20, top - 2], [ex + d * w * 0.6, top - 4], [ex + d * w, top - 1], [ex + d * w * 0.94, top + 10], [ex + d * w * 0.6, top + 22], [ex + d * w * 0.2, top + 34], [ex - d * 20, top + 40]];
+    fossilSmooth(c, L); c.fillStyle = gLG(c, 0, top - 4, 0, top + 40, ['#b6865a', '#8a6040', '#5e4028']); c.fill();
+    c.strokeStyle = 'rgba(255,226,180,.4)'; c.lineWidth = 2; c.beginPath(); c.moveTo(ex, top - 3); c.lineTo(ex + d * w * 0.95, top - 1.5); c.stroke();
+    c.strokeStyle = 'rgba(80,50,30,.4)'; c.lineWidth = 1; for (const q of [12, 22]) { c.beginPath(); c.moveTo(ex, top + q); c.lineTo(ex + d * w * (0.9 - q / 60), top + q - 1); c.stroke(); }
+    const what = hash2(i, 0xA45);
+    if (what < 0.4) {
+      // a scaffold: posts, a plank deck, a cross brace and a ladder down
+      const px = ex + d * w * 0.3, ph = 46;
+      c.strokeStyle = '#7a5434'; c.lineWidth = 3.2; c.beginPath(); c.moveTo(px, top - 2); c.lineTo(px, top - ph); c.moveTo(px + d * 34, top - 2); c.lineTo(px + d * 34, top - ph); c.stroke();
+      c.strokeStyle = '#5e3e24'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(px, top - 4); c.lineTo(px + d * 34, top - ph + 6); c.stroke();
+      c.fillStyle = gLG(c, 0, top - ph - 4, 0, top - ph + 2, ['#d8a870', '#9a6c42']); c.fillRect(Math.min(px, px + d * 40) - 4, top - ph - 4, 48, 5);
+      c.strokeStyle = '#a07448'; c.lineWidth = 1.4; const lx = px + d * 16; c.beginPath(); c.moveTo(lx, top - ph); c.lineTo(lx + d * 4, top + 30); c.moveTo(lx + d * 9, top - ph); c.lineTo(lx + d * 13, top + 30); c.stroke();
+      for (let k = 0; k < 7; k++) { const yy = top - ph + 6 + k * 11; c.beginPath(); c.moveTo(lx + d * (k * 0.5), yy); c.lineTo(lx + d * (9 + k * 0.5), yy); c.stroke(); }
+      // a lantern hanging off the deck (its glow is live)
+      c.strokeStyle = '#4a3020'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(px + d * 38, top - ph - 2); c.lineTo(px + d * 38, top - ph + 12); c.stroke();
+      c.fillStyle = '#5a3c24'; c.fillRect(px + d * 38 - 3, top - ph + 12, 6, 2); c.fillStyle = '#ffd890'; c.fillRect(px + d * 38 - 2.4, top - ph + 14, 4.8, 6); c.fillStyle = '#5a3c24'; c.fillRect(px + d * 38 - 3, top - ph + 20, 6, 1.6);
+    } else if (what < 0.75) {
+      // a giant bone being dug out of the ledge, a brush and a bucket by it
+      fossilFemur(c, ex + d * w * 0.5, top - 6, 22 + 8 * hash2(i, 0xA46), d * -0.08);
+      c.fillStyle = gLG(c, 0, top - 14, 0, top - 2, ['#a08a6a', '#6a5a44']); c.beginPath(); c.moveTo(ex + d * w * 0.12 - 6, top - 14); c.lineTo(ex + d * w * 0.12 + 6, top - 14); c.lineTo(ex + d * w * 0.12 + 5, top - 2); c.lineTo(ex + d * w * 0.12 - 5, top - 2); c.closePath(); c.fill(); c.strokeStyle = '#4a3c2c'; c.lineWidth = 0.8; c.stroke();
+    } else {
+      // crates and a sack of finds
+      for (const [u, ww, hh2] of [[0.2, 16, 14], [0.42, 12, 11]]) { const x = ex + d * w * u; c.fillStyle = gLG(c, 0, top - hh2 - 2, 0, top - 2, ['#d0a06a', '#8e6640']); c.fillRect(x - ww / 2, top - hh2 - 2, ww, hh2); c.strokeStyle = '#5e4028'; c.lineWidth = 1; c.strokeRect(x - ww / 2, top - hh2 - 2, ww, hh2); c.beginPath(); c.moveTo(x - ww / 2, top - hh2 - 2); c.lineTo(x + ww / 2, top - 2); c.stroke(); }
+      c.fillStyle = gLG(c, 0, top - 16, 0, top - 2, ['#dcb47c', '#9a6e40']); c.beginPath(); c.ellipse(ex + d * w * 0.66, top - 8, 8, 8, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#6e5e44'; c.lineWidth = 0.8; c.stroke();
+    }
+  }
+}
+// the lanterns on the scaffolds (their positions, from the same hashes as fossilMidPaint)
+function fossilLanterns(a0, a1, out) {
+  for (let i = Math.floor((a0 - 140) / 150); i * 150 < a1 + 140; i++) {
+    if (hash2(i, 0xA41) < 0.3 || hash2(i, 0xA45) >= 0.4) continue;
+    const side = hash2(i, 0xA42) < 0.5 ? 0 : 1, d = side ? -1 : 1, ex = side ? WORLD_W + 30 : -30, y = i * 150 + 110 * hash2(i, 0xA43), w = 110 + 60 * hash2(i, 0xA44);
+    out.push([ex + d * w * 0.3 + d * 38, y + 46 - 17, i]);
+  }
+  return out;
+}
+const fossilShafts = [];
+function drawFossilBackground() {
+  fossilCacheCheck(); fossilMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = fossilXSpan();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, ['#b4855a', '#90643f', '#5e3e28']); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  gGlow(ctx, ox + playW * 0.35, -H * 0.1, H * 0.9, [255, 214, 150], 0.14);
+  const layer = (f, tag, paint, B) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${j}`, need = j <= Math.floor(pa1 / B);
+      if (!need && (fossilMade || !fossilNeed(id))) continue;
+      if (fossilNeed(id)) fossilMade++;
+      const Tl = fossilTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1));
+      if (need) fossilTileBlit(Tl, f);
+    }
+  };
+  layer(FOS_DEEP, 'd', fossilDeepPaint, FOS_BB);
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, ['rgba(200,150,100,.22)', 'rgba(130,88,56,.18)', 'rgba(70,46,30,.22)']); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  layer(FOS_FAR, 'f', fossilFarPaint, FOS_BB);
+  // each section's own light in the haze (the strata's colour of the section in view)
+  { const S = fossilSecAt(G.camAlt + viewH / 2), q = S.cols[1]; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = gLG(ctx, 0, Y0, 0, Y1, [gCol(q, 0.08), gCol(q, 0.02), gCol(q, 0)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore(); }
+  // the haze between the layers
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, ['rgba(214,170,120,.16)', 'rgba(150,104,66,.2)', 'rgba(90,60,38,.26)']); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  // the far wall's dig lanterns: warm pools of light in their recesses
+  { const rs = fossilRecesses(G.camAlt * FOS_FAR - 80, G.camAlt * FOS_FAR + viewH + 80, u0, u1, []);
+    for (const R of rs) { if (!R.lamp) continue; const X = ox + R.x * s, Y = H - (R.a - R.ry * 0.25 + 5 - G.camAlt * FOS_FAR) * s, fl = 0.85 + 0.15 * Math.sin(T * 6 + R.j * 2.3) * Math.sin(T * 2.7 + R.j);
+      gGlow(ctx, X, Y, 90 * s, [255, 170, 80], 0.32 * fl); gGlow(ctx, X, Y, 34 * s, [255, 200, 120], 0.3 * fl); gGlow(ctx, X, Y, 9 * s, [255, 240, 190], 0.75 * fl); } }
+  // dusty light falling from the roof at a slant
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const cx = ox + playW * (0.1 + 0.36 * i) + Math.sin(T * 0.09 + i * 2.1) * 22 * s, w0 = (22 + 12 * i) * s, w1 = (96 + 26 * (i % 2)) * s, sl = H * 0.3;
+    const al = 0.05 + 0.018 * Math.sin(T * 0.37 + i * 1.7);
+    fossilShafts[i] = [cx, w0, w1, sl, Y0, Y1];
+    gPoly(ctx, [[cx - w0, Y0], [cx + w0, Y0], [cx + w1 + sl, Y1], [cx - w1 + sl, Y1]]);
+    ctx.fillStyle = gLG(ctx, 0, Y0, 0, Y1, [`rgba(255,230,180,${al})`, `rgba(255,200,130,${al * 0.45})`, 'rgba(255,190,120,0)']); ctx.fill();
+  }
+  ctx.restore();
+  layer(FOS_MID, 'm', (c, a0, a1) => fossilMidPaint(c, a0, a1), 300);
+  // the lanterns' warm glow on the scaffolds
+  { const la = []; fossilLanterns(G.camAlt * FOS_MID - 60, G.camAlt * FOS_MID + viewH + 60, la);
+    for (const [x, a, i] of la) { const X = ox + x * s, Y = H - (a - G.camAlt * FOS_MID) * s, fl = 0.8 + 0.2 * Math.sin(T * 7 + i * 3) * Math.sin(T * 3.1 + i); gGlow(ctx, X, Y, 46 * s, [255, 190, 100], 0.3 * fl); gGlow(ctx, X, Y, 9 * s, [255, 236, 180], 0.6 * fl); } }
+  ctx.fillStyle = 'rgba(110,74,46,.12)'; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  drawFossilMotes();
+}
+// dust in the air: warm specks drifting, some catching the light and sparkling; streaking when you fly flat out
+MOTE_DRIFT.fdust = [-3, 7];
+{ const base = moteKind; moteKind = function (m, a) { return fossilOn() ? 'fdust' : base(m, a); }; }
+function drawFossilMotes() {
+  ctx.save(); ctx.lineCap = 'round';
+  const streak = G.state === 'play' ? clamp(Math.abs(G.p.vy) - 220, 0, 400) * 0.04 * s : 0, T = G.t;
+  for (const m of motes) {
+    const col = m.r < 0.5 ? [255, 236, 200] : m.r < 0.8 ? [236, 200, 150] : [255, 214, 140];
+    const mx = ox + m.x * playW + Math.sin(T * 0.3 + m.ph) * 12 * s, y = m.y, r = m.sz * 0.7 * s, len = streak * m.depth;
+    let inS = 0; for (const q of fossilShafts) { const t = (y - q[4]) / (q[5] - q[4]), hw = lerp(q[1], q[2], t); inS = Math.max(inS, clamp(1 - Math.abs(mx - (q[0] + q[3] * t)) / hw, 0, 1)); }
+    const a = (0.16 + 0.3 * m.depth) * (1 + 1.4 * inS);
+    if (len > 2) { ctx.strokeStyle = gCol(col, a * 0.6); ctx.lineWidth = r; ctx.beginPath(); ctx.moveTo(mx, y); ctx.lineTo(mx, y - len); ctx.stroke(); continue; }
+    ctx.fillStyle = gCol(col, a); ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill();
+    if (m.r > 0.86 - 0.3 * inS) { const tw = Math.pow(Math.max(0, Math.sin(T * (0.8 + 0.9 * m.r) + m.ph * 3)), 10); if (tw > 0.2) fossilTwinkle(ctx, mx, y, r * (2 + 4 * tw), tw * m.depth * 0.7); }
+  }
+  // dust hanging in the light shafts: slow specks drifting down each beam, glinting
+  if (!len0()) for (let i = 0; i < fossilShafts.length; i++) { const q = fossilShafts[i];
+    for (let k = 0; k < 9; k++) { const t = pmod(hash2(k, 0xD21 + i) + T * (0.012 + 0.01 * hash2(k, 0xD22 + i)), 1), hw = lerp(q[1], q[2], t), y = lerp(q[4], q[5], t), x = q[0] + q[3] * t + (hash2(k, 0xD23 + i) - 0.5) * 1.6 * hw + Math.sin(T * 0.5 + k) * 6 * s;
+      const fade = Math.sin(t * Math.PI), tw = Math.pow(Math.max(0, Math.sin(T * 1.3 + k * 2.1 + i)), 8);
+      ctx.fillStyle = `rgba(255,240,206,${0.45 * fade})`; ctx.beginPath(); ctx.arc(x, y, (0.8 + 0.8 * hash2(k, 0xD24)) * s, 0, TWO_PI); ctx.fill();
+      if (tw > 0.3) fossilTwinkle(ctx, x, y, (3 + 4 * tw) * s, tw * fade * 0.6); } }
+  ctx.restore();
+  function len0() { return streak > 6; }
+}
+
+// ---- the Great Amber: the finish's chamber ----
+// Over the landing the shaft opens into a hollow in the back wall framed by a giant's ribcage: its spine arching over the
+// top, great ribs curving down both sides, strata rims round the hollow. Inside, on a pedestal of stacked bones and a
+// clod of earth, stands the Great Amber itself: a huge faceted drop of honey-gold amber glowing from within, a baby
+// dinosaur's skeleton curled up asleep inside it, a sheen sweeping its facets; dig lanterns hang from the ribs. On the
+// clear it blazes and throws rays of warm light.
+const FOS_AMBER = { y: 300, R: 66 };   // its centre above the landing, and its half width
+function fossilGemPts(R) { return [[0, -R * 1.32], [R * 0.62, -R * 0.92], [R * 0.98, -R * 0.12], [R * 0.86, R * 0.62], [R * 0.36, R * 1.02], [-R * 0.36, R * 1.02], [-R * 0.86, R * 0.62], [-R * 0.98, -R * 0.12], [-R * 0.62, -R * 0.92]]; }
+function fossilChamberSprite() {
+  return fossilSprite('chamber', 440, 660, 220, 600, c => {
+    const cy = -FOS_AMBER.y + 10, RX = 186, RY = 250;
+    // the strata rims round the hollow
+    const ring = [['#c89a68', '#8a603e'], ['#e6c08a', '#a8784a'], ['#d4a070', '#946440'], ['#f2d6a4', '#b88a58'], ['#c08458', '#84542e'], ['#ead0a0', '#ae8256']];
+    ring.forEach(([lt, dk], k) => { const q = 1 - k * 0.035; c.fillStyle = gLG(c, -RX, cy - RY, RX, cy + RY, [lt, dk]); c.beginPath(); c.ellipse(0, cy, RX * q, RY * q, 0, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(90,56,30,.35)'; c.lineWidth = 1; c.stroke(); });
+    c.strokeStyle = 'rgba(255,240,206,.4)'; c.lineWidth = 1.6; for (const q of [0.93, 0.86]) { c.beginPath(); c.ellipse(0, cy, RX * q, RY * q, 0, 3.4, 4.7); c.stroke(); }
+    // the hollow: warm and deep, brighter toward the Amber
+    const hx = RX * 0.78, hy = RY * 0.78;
+    c.fillStyle = gRG(c, 0, cy - 20, hy, ['#a8642c', '#6e3e1c', '#3e2414']); c.beginPath(); c.ellipse(0, cy, hx, hy, 0, 0, TWO_PI); c.fill();
+    // fossils in the hollow's back wall
+    for (let k = 0; k < 14; k++) { const an = k / 14 * TWO_PI, rr = 0.72 + 0.18 * hash2(k, 0xC01), x = Math.cos(an) * hx * rr, y = cy + Math.sin(an) * hy * rr; c.save(); c.globalAlpha = 0.5; FOS_KINDS[k % FOS_KINDS.length](c, x, y, 7 + 4 * hash2(k, 0xC02), an); c.restore(); }
+    // the giant's ribs curving down both sides, its spine arching over the top
+    for (const d of [-1, 1]) for (let k = 0; k < 5; k++) {
+      const y0 = cy - RY * 0.72 + k * 46, x0 = d * (30 + k * 6), L = 150 - k * 8, P = [];
+      for (let q = 0; q <= 1.0001; q += 0.1) P.push([x0 + d * Math.sin(q * 1.9) * L * 0.78, y0 + q * L * 0.9 - Math.sin(q * 3) * 8]);
+      const top = [], bot = []; P.forEach(([x, y], i) => { const r = 9 * (1 - 0.4 * i / 10); top.push([x - d * r * 0.6, y - r * 0.4]); bot.push([x + d * r * 0.6, y + r * 0.6]); });
+      const outline = top.concat(bot.reverse());
+      fossilBone(c, outline, y0 - 10, y0 + L, { lw: 1.2 });
+      fossilSheen(c, top.slice(1, 9), 1.4, 0.6);
+    }
+    for (let k = -6; k <= 6; k++) { const x = k * 18, y = cy - RY * 0.78 + Math.abs(k) * Math.abs(k) * 1.6; fossilBone(c, [[x - 9, y - 8], [x + 9, y - 8], [x + 11, y], [x + 9, y + 8], [x - 9, y + 8], [x - 11, y]], y - 8, y + 8, { lw: 1 }); fossilBone(c, [[x - 3, y - 20], [x + 3, y - 20], [x + 4, y - 8], [x - 4, y - 8]], y - 20, y - 8, { lw: 0.9 }); }
+    // the pedestal: a clod of earth and stacked bones under the Amber
+    const ped = -FOS_AMBER.y + FOS_AMBER.R * 1.02;
+    fossilClod(c, 0, ped + 40, 92, 34, 0xC11);
+    fossilFemur(c, -34, ped + 12, 30, 0.12); fossilFemur(c, 36, ped + 14, 28, -0.1); fossilFemur(c, 0, ped + 22, 36, 0.02);
+    fossilAmmonite(c, -70, ped + 30, 14, 0.4); fossilAmmonite(c, 72, ped + 34, 11, 2);
+    // the Great Amber: faceted honey-gold
+    const R = FOS_AMBER.R, hc = -FOS_AMBER.y, G2 = fossilGemPts(R).map(([x, y]) => [x, y + hc]), cx0 = -R * 0.12, cy0 = hc - R * 0.15;
+    gPoly(c, G2); c.fillStyle = gLG(c, -R, hc - R * 1.3, R, hc + R, ['#ffe08a', '#ffaa2a', '#d8620e', '#7a3004']); c.fill();
+    gPoly(c, G2); c.fillStyle = gRG(c, -R * 0.15, hc - R * 0.1, R * 0.9, ['rgba(255,236,150,.55)', 'rgba(255,190,80,.15)', 'rgba(255,190,80,0)']); c.fill();
+    // the baby dinosaur curled up asleep inside (a dark warm silhouette of bone): its spine curling round, ribs, a skull
+    c.save(); gPoly(c, G2); c.clip();
+    c.strokeStyle = 'rgba(110,40,4,.72)'; c.lineCap = 'round'; c.lineWidth = 5;
+    c.beginPath(); for (let a = 0.4; a < 5.6; a += 0.2) { const r = 34 - a * 3.4, x = Math.cos(a) * r, y = hc + 6 + Math.sin(a) * r * 0.9; a === 0.4 ? c.moveTo(x, y) : c.lineTo(x, y); } c.stroke();
+    c.lineWidth = 2.4; for (let a = 0.8; a < 3.6; a += 0.4) { const r = 34 - a * 3.4, x = Math.cos(a) * r, y = hc + 6 + Math.sin(a) * r * 0.9; c.beginPath(); c.moveTo(x, y); c.lineTo(x * 0.6, y - (y - hc - 6) * 0.4 + 8); c.stroke(); }
+    c.fillStyle = 'rgba(110,40,4,.72)'; c.beginPath(); c.ellipse(26, hc - 6, 16, 10, 0.5, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,220,140,.5)'; c.beginPath(); c.arc(30, hc - 9, 3.4, 0, TWO_PI); c.fill();
+    c.lineWidth = 3; c.beginPath(); c.moveTo(-8, hc + 30); c.lineTo(-18, hc + 46); c.lineTo(-10, hc + 52); c.moveTo(12, hc + 32); c.lineTo(8, hc + 50); c.lineTo(16, hc + 54); c.stroke();
+    // bubbles in the resin
+    for (let k = 0; k < 9; k++) { const x = (hash2(k, 0xC21) - 0.5) * R * 1.4, y = hc + (hash2(k, 0xC22) - 0.5) * R * 1.8, r = 1.2 + 2 * hash2(k, 0xC23); c.strokeStyle = 'rgba(255,250,220,.6)'; c.lineWidth = 0.8; c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.stroke(); }
+    c.restore();
+    // the facets: each edge's wedge to an inner table, lit or shaded by which way it faces
+    for (let k = 0; k < G2.length; k++) {
+      const a = G2[k], b = G2[(k + 1) % G2.length], nx = b[1] - a[1], ny = a[0] - b[0], L = Math.hypot(nx, ny) || 1, f = (-nx * 0.6 - ny * 0.8) / L;
+      gPoly(c, [a, b, [lerp(b[0], cx0, 0.4), lerp(b[1], cy0, 0.4)], [lerp(a[0], cx0, 0.4), lerp(a[1], cy0, 0.4)]]);
+      c.fillStyle = f > 0 ? `rgba(255,246,200,${0.28 * f})` : `rgba(110,40,4,${-0.5 * f})`; c.fill();
+    }
+    const tb = G2.map(([x, y]) => [lerp(x, cx0, 0.4), lerp(y, cy0, 0.4)]);
+    gPoly(c, tb); c.fillStyle = 'rgba(255,230,150,.18)'; c.fill(); c.strokeStyle = 'rgba(255,252,230,.5)'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(140,60,8,.35)'; c.beginPath(); G2.forEach(([x, y], k) => { c.moveTo(x, y); c.lineTo(tb[k][0], tb[k][1]); }); c.stroke();
+    gPoly(c, G2); c.strokeStyle = FOSP.amberEdge; c.lineWidth = 2.2; c.lineJoin = 'round'; c.stroke();
+    c.strokeStyle = 'rgba(255,255,240,.85)'; c.lineWidth = 3.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(-R * 0.7, hc - R * 0.3); c.quadraticCurveTo(-R * 0.62, hc - R * 0.8, -R * 0.3, hc - R * 1.05); c.stroke();
+    // little amber chunks round its foot
+    for (const [x, r, a] of [[-58, 9, 0.3], [62, 8, 1.2], [-30, 6, 2], [34, 7, 0.8]]) fossilAmberChunk(c, x, ped + 2 + r * 0.3, r, a, 0, 9);
+  });
+}
+function drawFossilChamber() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'fossil')) return;
+  const E = a.end; if (sy(E + 620) > H + 40 || sy(E - 70) < -40) return;
+  const T = G.t, pay = a.clearT >= 0 ? smooth(0, 1.2, a.clearT) : 0, hx = sx(WORLD_W / 2), hy = sy(E + FOS_AMBER.y), R = FOS_AMBER.R * s;
+  const pulse = 0.5 + 0.5 * Math.sin(T * 2);
+  gGlow(ctx, hx, hy, (230 + 90 * pay) * s, [255, 170, 70], 0.25 + 0.2 * pay);
+  fossilBlit(fossilChamberSprite(), WORLD_W / 2, E);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  // the Amber glowing from within, a sheen sweeping its facets
+  ctx.save(); ctx.translate(hx, hy); gPoly(ctx, fossilGemPts(R)); ctx.clip();
+  ctx.fillStyle = gRG(ctx, -R * 0.1, 0, R * 1.3, [`rgba(255,220,140,${0.06 + 0.06 * pulse + 0.22 * pay})`, `rgba(255,160,60,${0.06 + 0.1 * pay})`, 'rgba(255,160,60,0)']); ctx.fillRect(-R * 1.3, -R * 1.4, R * 2.6, R * 2.6);
+  const sw = ((T * 0.33) % 1.6 - 0.3) * R * 3 - R * 1.5;
+  ctx.fillStyle = gLG(ctx, sw - R * 0.4, -R, sw + R * 0.4, R, ['rgba(255,255,240,0)', 'rgba(255,255,240,.38)', 'rgba(255,255,240,0)']); ctx.fillRect(-R * 1.3, -R * 1.4, R * 2.6, R * 2.6);
+  ctx.restore();
+  if (pay > 0.01) {
+    const fade = pay * (1 - 0.6 * smooth(3, 7, a.clearT));
+    for (let k = 0; k < 14; k++) {
+      const an = k / 14 * TWO_PI + T * 0.22, L = (260 + 60 * Math.sin(k * 2.3 + T)) * s, w = 0.07;
+      gPoly(ctx, [[hx, hy], [hx + Math.cos(an - w) * L, hy + Math.sin(an - w) * L], [hx + Math.cos(an + w) * L, hy + Math.sin(an + w) * L]]);
+      ctx.fillStyle = gRG(ctx, hx, hy, L, [`rgba(255,220,140,${0.28 * fade})`, `rgba(255,180,80,${0.1 * fade})`, 'rgba(255,180,80,0)']); ctx.fill();
+    }
+  }
+  ctx.restore();
+  gGlow(ctx, hx, hy, (110 + 20 * pulse + 60 * pay) * s, [255, 180, 70], 0.16 + 0.08 * pulse + 0.18 * pay);
+  for (let k = 0; k < 7; k++) { const an = T * 0.5 + k / 7 * TWO_PI, rr = (R / s * 1.4 + 8 * Math.sin(T * 1.3 + k)) * s, tw = 0.5 + 0.5 * Math.sin(T * 3 + k * 2); fossilTwinkle(ctx, hx + Math.cos(an) * rr, hy + Math.sin(an) * rr * 1.1, (4 + 5 * tw) * s, 0.35 + 0.5 * tw); }
+  // the lanterns hanging from the ribs
+  for (const d of [-1, 1]) { const x = hx + d * 104 * s, y = sy(E + FOS_AMBER.y + 140), fl = 0.85 + 0.15 * Math.sin(T * 6 + d) * Math.sin(T * 2.3); gGlow(ctx, x, y, 40 * s, [255, 190, 100], 0.35 * fl); gGlow(ctx, x, y, 8 * s, [255, 240, 190], 0.7 * fl); }
+}
+function drawFossilMidground() { drawFossilChamber(); }
+
+// ---- the landing: two great fossil thigh bones slide out of the walls to meet under you (their knobbly heads at the
+// walls, packed earth brackets under them), and a dig lantern on a stake at each wall over the landing. (Decoration
+// only: nothing here has a hitbox.)
+function fossilLantern(d) {
+  return fossilSprite('lamp' + d, 50, 70, d > 0 ? 8 : 42, 50, c => {
+    const X = u => d * u;
+    // the stake out of the wall and the hook
+    c.strokeStyle = '#5e3e24'; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.moveTo(X(-4), 4); c.lineTo(X(22), -2); c.stroke();
+    c.strokeStyle = '#b08050'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(X(-3), 3); c.lineTo(X(22), -3); c.stroke();
+    c.strokeStyle = '#4a3a30'; c.lineWidth = 1; c.beginPath(); c.moveTo(X(20), -2); c.lineTo(X(20), 8); c.stroke();
+    // the tin lantern: a cap, a glass with the flame (lit live), a base
+    c.fillStyle = gLG(c, X(14), 8, X(26), 8, ['#a89070', '#5e4c38']); c.beginPath(); c.moveTo(X(15), 12); c.lineTo(X(20), 7); c.lineTo(X(25), 12); c.closePath(); c.fill();
+    c.fillStyle = gLG(c, 0, 12, 0, 26, ['#fff0c0', '#ffc860', '#e88a20']); c.fillRect(Math.min(X(15.5), X(24.5)), 12, 9, 13);
+    c.strokeStyle = '#5e4c38'; c.lineWidth = 1.2; c.strokeRect(Math.min(X(15.5), X(24.5)), 12, 9, 13); c.beginPath(); c.moveTo(X(20), 12); c.lineTo(X(20), 25); c.stroke();
+    c.fillStyle = '#6e5a44'; c.fillRect(Math.min(X(14.5), X(25.5)), 25, 11, 3);
+    fossilClod(c, X(-4), 4, 9, 11, 0xC31 + d);
+  });
+}
+function drawFossilDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0;
+  const th = 23 * s;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, root = w + side * 16, tip = lerp(w - side * 6, meet - side * 0.5, e), X0 = sx(root), Xt = sx(tip), dir = -side;
+    // the slot in the wall (a dark socket in the rock), the bone sliding out of it
+    ctx.fillStyle = gRG(ctx, sx(w), y + th / 2, th, ['rgba(30,16,8,.95)', 'rgba(46,28,16,.7)', 'rgba(46,28,16,0)']); ctx.beginPath(); ctx.ellipse(sx(w), y + th / 2, 9 * s, th * 0.75, 0, 0, TWO_PI); ctx.fill();
+    if (e < 0.04) { ctx.save(); ctx.translate(sx(w), y + th); ctx.scale(s, s); fossilClod(ctx, -side * 6, 8, 14, 12, 0xC41 + side); ctx.restore(); }
+    if (e < 0.04 || Math.abs(Xt - X0) < 2) continue;
+    // the thigh bone: a shaft swelling to a rounded knuckle at its tip
+    const len = Math.abs(Xt - X0), mid = y + th / 2, P = [];
+    P.push([X0, mid - th * 0.36], [Xt - dir * th * 0.9, mid - th * 0.32], [Xt - dir * th * 0.5, mid - th * 0.58], [Xt + dir * th * 0.05, mid - th * 0.42], [Xt + dir * th * 0.12, mid + th * 0.08], [Xt - dir * th * 0.1, mid + th * 0.5], [Xt - dir * th * 0.6, mid + th * 0.46], [Xt - dir * th * 0.95, mid + th * 0.36], [X0, mid + th * 0.4]);
+    void len;
+    ctx.save(); ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0], P[i][1]); ctx.closePath();
+    ctx.fillStyle = gLG(ctx, 0, mid - th * 0.6, 0, mid + th * 0.5, [FB[0], FB[1], FB[2]]); ctx.fill();
+    ctx.strokeStyle = FOSP.boneEdge; ctx.lineWidth = 1.3 * s; ctx.stroke(); ctx.clip();
+    ctx.fillStyle = 'rgba(140,96,52,.35)'; ctx.fillRect(Math.min(X0, Xt) - th, mid + th * 0.12, Math.abs(Xt - X0) + 2 * th, th);
+    ctx.strokeStyle = 'rgba(110,74,40,.5)'; ctx.lineWidth = 0.9 * s; for (let k = 1; k < 5; k++) { const x = lerp(X0, Xt, k / 5); ctx.beginPath(); ctx.moveTo(x - 2 * s, mid - th * 0.2); ctx.lineTo(x + 2 * s, mid + th * 0.1); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,252,240,.8)'; ctx.lineWidth = 1.5 * s; ctx.beginPath(); ctx.moveTo(X0, mid - th * 0.24); ctx.lineTo(Xt - dir * th * 0.9, mid - th * 0.2); ctx.stroke();
+    for (let k = 0; k < 2; k++) { const u = (T * 0.22 + k / 2 + (side + 1) * 0.15) % 1, g = Math.sin(u * Math.PI); fossilTwinkle(ctx, lerp(X0, Xt, u), mid - th * 0.25, (3 + 3 * g) * s, g * (0.35 + 0.5 * pay)); }
+    // the earth bracket under it at the wall
+    ctx.save(); ctx.translate(sx(w), y + th); ctx.scale(s, s); fossilClod(ctx, -side * 6, 8, 14, 12, 0xC41 + side); ctx.restore();
+    // the dig lantern over the landing
+    const lx = w, la = E + 52, fl = 0.85 + 0.15 * Math.sin(T * 6.6 + side) * Math.sin(T * 2.2);
+    gGlow(ctx, sx(lx - side * 20), sy(la + 4), 90 * s, [255, 196, 110], (0.22 + 0.25 * pay) * fl);
+    fossilBlit(fossilLantern(-side), lx, la);
+    gGlow(ctx, sx(lx - side * 20), sy(la - 18), 16 * s, [255, 240, 190], (0.5 + 0.4 * pay) * fl);
+  }
+  ctx.restore();
+}
+// the clear: the Amber blazes, dust and sparks burst out of it
+function fossilAmberBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  const hx = WORLD_W / 2, ha = a.end + FOS_AMBER.y;
+  for (let k = 0; k < 36; k++) { const an = Math.random() * TWO_PI, v = 90 + Math.random() * 240; puff(hx + Math.cos(an) * 30, ha + Math.sin(an) * 30, Math.cos(an) * v, Math.sin(an) * v, 0.9 + Math.random() * 0.8, 1.6 + Math.random() * 1.6, k % 3 ? 'ember' : 'sparkle', [[255, 190, 80], [255, 150, 40], [255, 236, 180]][k % 3]); }
+  fossilDustBurst(hx, ha - 80, 16, 200, 8, 1.2);
+  sfx('ffinish');
+}
+
+// ---- light, speed and the foreground ----
+// The dig's light: a warm umber vignette (never black), warm dusty light from above, and the Amber's glow rising as you
+// near the finish
+function drawFossilLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.52, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.52, Math.max(cssW, H) * 0.78);
+  vg.addColorStop(0, 'rgba(60,32,14,0)'); vg.addColorStop(1, 'rgba(60,32,14,.4)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const topG = ctx.createLinearGradient(0, 0, 0, H * 0.45); topG.addColorStop(0, 'rgba(255,214,150,.07)'); topG.addColorStop(1, 'rgba(255,214,150,0)'); ctx.fillStyle = topG; ctx.fillRect(X0, Y0, WW, H * 0.45 - Y0);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'fossil') {
+    const ha = a.end + FOS_AMBER.y, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,180,80,${(0.12 + 0.12 * pay) * k})`); g.addColorStop(0.5, `rgba(255,150,60,${0.05 * k})`); g.addColorStop(1, 'rgba(255,150,60,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: sandy wisps streaming past along the walls and through the shaft
+function drawFossilSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 6 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 0xD01), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xD02) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol(j < 0.5 ? [255, 220, 170] : [240, 196, 140], (0.05 + 0.15 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(18 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xD03)), len = (14 + 46 * hash2(i, 0xD04)) * (0.5 + 1.4 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xD05)) + hash2(i, 0xD06) * H * 2) % (H + 200)) - 100;
+    ctx.strokeStyle = gCol([255, 236, 206], 0.04 + 0.13 * k * hash2(i, 0xD07)); ctx.lineWidth = 1 + 1.4 * hash2(i, 0xD08) * k;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: big bones and clods of earth close to the camera at the screen's edges (in shade, lit rims), fading back
+// whenever a trap or you are near them so they never hide anything
+function fossilFgSprite(side, v) {
+  return fossilSprite(`fg${side}_${v}`, 120, 170, side ? 110 : 10, 85, c => {
+    const d = side ? -1 : 1, X = u => d * u, dark = ['#a88a64', '#6e5438', '#40301e'];
+    fossilClod(c, X(-6), 0, 28, 74, 0xE01 + v, ['#7e5c3c', '#523a26', '#2e2016']);
+    if (v === 0) { c.save(); c.translate(X(20), -10); c.rotate(d * -0.5); fossilBone(c, [[-40, -9], [-30, -6], [30, -6], [40, -10], [46, 0], [40, 10], [30, 6], [-30, 6], [-40, 10], [-46, 0]], -10, 10, { lw: 1.4, cols: dark, edge: '#3a2a1a' }); c.restore(); }
+    else if (v === 1) { c.save(); c.translate(X(6), -20); fossilAmmonite(c, X(14), 10, 26, 0.5); c.restore(); }
+    else { for (let k = 0; k < 4; k++) { c.save(); c.translate(X(12 + k * 4), -50 + k * 30); c.rotate(d * (0.2 + k * 0.1)); fossilBone(c, [[-6, -16], [6, -16], [8, 0], [6, 16], [-6, 16], [-8, 0]], -16, 16, { lw: 1.2, cols: dark, edge: '#3a2a1a' }); c.restore(); } }
+  });
+}
+function drawFossilForeground() {
+  const f = 1.35, slot = 330, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xE11) < 0.5) continue;
+    const side = hash2(i, 0xE12) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xE13) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.2 + 0.72 * smooth(40, 220, dist);
+    const S = fossilFgSprite(side, Math.floor(hash2(i, 0xE14) * 3));
+    const x = side ? ox + playW + 10 * s : ox - 10 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (fossilOn()) drawFossilBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (fossilOn()) drawFossilMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (fossilOn()) drawFossilWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (fossilOn()) drawFossilLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (fossilOn()) drawFossilDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (fossilOn()) drawFossilSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (fossilOn()) drawFossilForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (fossilOn() && !boss) fossilAmberBurst(); }; }
 // (game slot: Fossil Bonepit, island level 21)
 // (game slot: Shipwreck Hold, island level 22)
 // (game slot: Cursed Treasure Vault, island level 23)
