@@ -17482,6 +17482,371 @@ const ADV_GEODEKING = { name: 'Geode King', theme: 'geodeking', boss: true, seed
   goals: [{ k: 'boss', text: 'Beat the Geode King' }, { k: 'geodekingJewels', n: 3 }, { k: 'geodekingGong', n: 5 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Geode King, island level 15)
+/* LEVELGEN:BEGIN */
+// ---------- Magma Core (island level 19): the stage, its traps' shapes and its layout ----------
+// An authored stage like Anthill Underworks (see createAnthillLevel): the volcano's molten heart, climbed up a shaft of
+// hot crimson rock veined with glowing cracks, lit from below by the magma, from the Caldera Gate to the Molten Heart
+// where the Phoenix nests. One trap at a time, each taught alone and slow before it is combined (the Lavafall Steps,
+// the Tide Bridges, the Blister Crust), a breather (the Obsidian Grotto), the Sprite Hollow, the Core Gauntlet mixing
+// them all, then the Molten Heart and its landing. Its own shaft, its own traps and its own look (G.theme 'magmacore').
+// The traps (every one leaves a way through on its own clock that the widest pilot fits; nothing ever rises at you):
+// - magmacoreFall (Lava Fall): a crust spout on a wall pours a thin trickle of lava down the wall. For `tell` s it
+//   gurgles and glows, then it SURGES: a thick sheet of lava gushes out and arcs across the shaft (the surge's front
+//   falling down the sheet at vF), holds, and ebbs back to a trickle. Spout and sheet are lethal; the far lane stays.
+// - magmacoreTide (Magma Tide): an obsidian trough bridge spans the shaft with a round hole in its middle. The magma in
+//   its two halves sloshes: as one side's tide rises the other's falls, and the high side spills over its lip in a
+//   pouring gush down into one half of the hole. Fly up through the half of the hole away from the spilling side (or
+//   all of it while the tide is level). The bridge and the gushes are lethal.
+// - magmacoreBurst (Crust Blister, this stage's own): a blister of cracked glowing crust swells on a wall. For `tell` s
+//   its cracks blaze and it throbs, then it bursts and flings a fan of lava splashes out across the shaft, every one
+//   falling (never rising) until it fizzles out `drop` below. The blister and the splashes are lethal, except that the
+//   splashes do nothing to Ember the dragon (fireproof: his perk).
+// - magmacoreRing (Sprite Ring): a ring of ember sprites dances round in a wide circle across the shaft, too wide to
+//   fly round; it has gaps (one or two slots missing on opposite sides). Thread the ring: in through a gap at its foot,
+//   out through the gap at its head as it turns. The sprites are lethal.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const MAGMACORE = {
+  step: { every: [150, 270], D: [0, 14] },   // wall relief: crust plates bulging between cooling seams
+  fall: { lip: 30, L: 280, base: 36, reach: 166, vF: 760, tell: 1.05, rise: 0.35, hold: 1.1, ebb: 0.6, th0: 20, th1: 46, ease: 440 },
+  tide: { hole: 206, th: 16, Ls: 176, reach: 72, on: 0.5, vF: 700, ease: 420 },
+  ring: { n: 10, rs: 13, side: 70, ease: 440 },
+  burst: { rb: 24, tell: 1.15, fly: 1.1, g: 560, n: 7, gr: 10, drop: 270, ease: 480 },
+  chiliGap: 470, end: 420,
+};
+const MAGMACORE_TYPES = new Set(['magmacoreFall', 'magmacoreTide', 'magmacoreRing', 'magmacoreBurst']);
+// The stage, bottom to top (as ANTHILL_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). drop: this beat holds one of the 3 phoenix feathers.
+const MAGMACORE_STAGE = [
+  { name: 'Caldera Gate', w: 380, len: 900, calm: true },
+  { name: 'Lavafall Steps', w: 380, beats: [[760, 'magmacoreFall', { side: 1, P: 5.6 }], [560, 'magmacoreFall', { side: -1, P: 5.4, ph: 0.45 }], [600, 'fallPair', { P: 5.3 }],
+    [760, 'magmacoreFall', { side: 1, P: 5.2, drop: true }], [600, 'fallPair', { P: 5.1 }],
+    [840, 'magmacoreFall', { side: -1, P: 5.0 }], [580, 'fallPair', { P: 4.9 }]], tail: 520 },
+  { name: 'Tide Bridges', w: 384, beats: [[640, 'magmacoreTide', { P: 5.4 }], [520, 'magmacoreTide', { P: 5.2 }], [520, 'tidePair', { P: 5.2 }],
+    [700, 'tideFall', { P: 5.1 }], [660, 'tidePair', { P: 5.0 }],
+    [640, 'magmacoreTide', { P: 4.9 }], [720, 'tideFall', { P: 4.9 }]], tail: 560 },
+  { name: 'Blister Crust', w: 380, beats: [[700, 'magmacoreBurst', { side: -1, P: 4.9 }], [620, 'magmacoreBurst', { side: 1, P: 4.8, ph: 0.4 }], [640, 'burstPair', { P: 4.8 }],
+    [800, 'magmacoreBurst', { side: -1, P: 4.7, drop: true }], [700, 'burstTide', { P: 4.8 }], [720, 'burstFall', { P: 4.8 }], [760, 'burstPair', { P: 4.6 }]], tail: 600 },
+  { name: 'Obsidian Grotto', w: 384, len: 1200, calm: true },
+  { name: 'Sprite Hollow', w: 380, beats: [[640, 'magmacoreRing', { w: 0.7, wide: true }], [560, 'magmacoreRing', { w: -0.75, wide: true }], [580, 'magmacoreRing', { w: 0.8, drop: true }],
+    [700, 'ringFall', { w: -0.85, P: 5.0 }], [840, 'ringBurst', { w: 0.85, P: 4.7 }], [760, 'ringPair', { w: 0.85 }], [720, 'ringFall', { w: 0.9, P: 4.9 }]], tail: 640 },
+  { name: 'Core Gauntlet', w: 376, beats: [[700, 'burstFall', { P: 4.6 }], [700, 'tideFall', { P: 4.9 }], [720, 'ringBurst', { w: 0.9, P: 4.6 }],
+    [900, 'fallPair', { P: 5.0 }], [760, 'burstTide', { P: 4.6 }], [700, 'ringFall', { w: -0.9, P: 4.9 }], [960, 'burstPair', { P: 4.6 }], [680, 'tidePair', { P: 4.9 }],
+    [760, 'ringBurst', { w: -0.9, P: 4.6 }], [900, 'fallPair', { P: 4.8 }], [780, 'burstTide', { P: 4.5 }]], tail: 700 },
+  { name: 'The Molten Heart', w: 384, len: 900, calm: true, finish: true },
+];
+const magmacoreLen = sec => sec.calm || !sec.beats ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const magmacoreEnd = () => { let y = 0; for (const sec of MAGMACORE_STAGE) { if (sec.finish) return y + MAGMACORE.end; y += magmacoreLen(sec); } return y; };
+
+// ---- the traps' clocks and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a lava fall's flow at its lip at time t: f 0 (a trickle) .. 1 (the full surge), its phase, tell 0..1, k progress
+function magmacoreFallAt(h, t) {
+  const X = MAGMACORE.fall, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.rise - X.hold - X.ebb;
+  if (u < I) return { ph: 'rest', f: 0, tell: 0, k: u / I, u };
+  let v = u - I;
+  if (v < X.tell) { const k = v / X.tell; return { ph: 'tell', f: 0.1 * smooth(0, 1, k), tell: k, k, u }; }
+  v -= X.tell;
+  if (v < X.rise) { const k = v / X.rise; return { ph: 'rise', f: lerp(0.1, 1, smooth(0, 1, k)), tell: 0, k, u }; }
+  v -= X.rise;
+  if (v < X.hold) return { ph: 'hold', f: 1, tell: 0, k: v / X.hold, u };
+  v -= X.hold;
+  const k = clamp(v / X.ebb, 0, 1);
+  return { ph: 'ebb', f: 1 - smooth(0, 1, k), tell: 0, k, u };
+}
+// the sheet's centreline from the lip down: n points [x, alt, half-thickness, flow]; the flow at a drop dd below the
+// lip is the lip's flow dd / vF seconds earlier (the surge's front falls down the sheet)
+function magmacoreFallPts(h, t, n = 9) {
+  const X = MAGMACORE.fall, d = h.side, out = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), dd = u * X.L, f = magmacoreFallAt(h, t - dd / X.vF).f, off = X.lip + (X.base + X.reach * f) * Math.sqrt(u);
+    out.push([h.base + d * off, h.alt - dd, (X.th0 + (X.th1 - X.th0) * f) / 2, f]);
+  }
+  return out;
+}
+// a tide bridge's slosh: q -1..1 (+1: the right half's tide high, -1: the left's), and each side's spill 0..1
+const magmacoreTideQ = (h, t) => Math.sin((2 * Math.PI) * (t / h.P + h.ph));
+const magmacoreSpill = (h, t, s) => clamp((s * magmacoreTideQ(h, t) - MAGMACORE.tide.on) / 0.4, 0, 1);
+// one side's gush (s +1 the right half, -1 the left): points [x, alt, half, spill] down from its lip into the hole
+function magmacoreGushPts(h, t, s, n = 8) {
+  const X = MAGMACORE.tide, xe = h.cx + s * X.hole / 2, out = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), dd = u * X.Ls, k = magmacoreSpill(h, t - dd / X.vF, s);
+    out.push([xe - s * (5 + X.reach * k * Math.sqrt(u)), h.alt + 6 - dd, 4 + 8 * k, k]);
+  }
+  return out;
+}
+// a sprite ring's sprites at time t: [x, alt, angle] for every slot that is not a gap
+function magmacoreRingPos(h, t, out = []) {
+  const X = MAGMACORE.ring, th0 = h.w * t + h.ph * (2 * Math.PI);
+  for (let i = 0; i < X.n; i++) {
+    if (h.gaps.includes(i)) continue;
+    const an = th0 + i * (2 * Math.PI) / X.n;
+    out.push([h.cx + h.rr * Math.cos(an), h.alt + h.rr * Math.sin(an), an, i]);
+  }
+  return out;
+}
+// a blister's clock: rest (k), tell 0..1 (blazing and throbbing), fly (tau s since it burst)
+function magmacoreBurstAt(h, t) {
+  const X = MAGMACORE.burst, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.fly;
+  if (u < I) return { ph: 'rest', tell: 0, k: u / I, u };
+  if (u < I + X.tell) return { ph: 'tell', tell: (u - I) / X.tell, u };
+  const tau = u - I - X.tell;
+  return { ph: 'fly', tau, k: tau / X.fly, u };
+}
+// one splash's launch: speed and angle below the level (every splash leaves level or downward and only falls)
+function magmacoreGlob(h, i) {
+  const X = MAGMACORE.burst, u = i / (X.n - 1), r1 = hash2(i, (h.alt | 0) + 31), r2 = hash2(i, (h.alt | 0) + 57);
+  return { v: 290 + 240 * (1 - u) * (0.75 + 0.25 * r1), th: 0.06 + 0.98 * u + 0.08 * (r2 - 0.5) };
+}
+// where splash i is tau s after the burst (null once it has hit the far wall or fizzled out below)
+function magmacoreGlobAt(h, i, tau) {
+  const X = MAGMACORE.burst, G0 = magmacoreGlob(h, i), d = h.side, x0 = h.base + d * 18;
+  const x = x0 + d * G0.v * Math.cos(G0.th) * tau, a = h.alt - G0.v * Math.sin(G0.th) * tau - 0.5 * X.g * tau * tau;
+  if (tau < 0 || d * (h.far - x) < X.gr + 1 || a < h.alt - X.drop) return null;
+  return [x, a];
+}
+// Every collision shape of a magma core trap at time t, fitted to its drawing. kind: undefined or 'body' for every
+// lethal one, 'still' only the lethal parts that never move. fp: the pilot is fireproof (the splashes do nothing).
+function magmacoreShapes(h, t, S = [], kind, fp) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, moving = kind !== 'still';
+  if (h.type === 'magmacoreFall') {
+    const X = MAGMACORE.fall;
+    cap(b - d * 4, A + 4, b + d * (X.lip - 6), A + 4, 11);   // the crust spout
+    if (moving) { const P = magmacoreFallPts(h, t); for (let i = 1; i < P.length; i++) cap(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1], (P[i - 1][2] + P[i][2]) / 2); }
+  } else if (h.type === 'magmacoreTide') {
+    const X = MAGMACORE.tide, xl = h.cx - X.hole / 2, xr = h.cx + X.hole / 2;
+    cap(h.L - 6, A, xl - X.th, A, X.th); cap(xr + X.th, A, h.R + 6, A, X.th);   // the trough's two halves
+    if (moving) for (const s of [-1, 1]) {
+      if (magmacoreSpill(h, t, s) <= 0.02 && magmacoreSpill(h, t - X.Ls / X.vF, s) <= 0.02) { let any = false; for (let q = 1; q < 5 && !any; q++) any = magmacoreSpill(h, t - q * X.Ls / X.vF / 4, s) > 0.02; if (!any) continue; }
+      const P = magmacoreGushPts(h, t, s);
+      for (let i = 1; i < P.length; i++) if (P[i - 1][3] > 0.02 || P[i][3] > 0.02) cap(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1], (P[i - 1][2] + P[i][2]) / 2);
+    }
+  } else if (h.type === 'magmacoreRing') {
+    if (moving) for (const [x, a] of magmacoreRingPos(h, t)) c(x, a, MAGMACORE.ring.rs);
+  } else if (h.type === 'magmacoreBurst') {
+    const X = MAGMACORE.burst;
+    c(b + d * 6, A, X.rb);   // the blister
+    if (moving && !fp) {
+      const st = magmacoreBurstAt(h, t);
+      if (st.ph === 'fly') for (let i = 0; i < X.n; i++) { const P = magmacoreGlobAt(h, i, st.tau); if (P) c(P[0], P[1], X.gr); }
+    }
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): its shapes over a whole cycle.
+function magmacoreDanger(h) {
+  const S = []; magmacoreShapes(h, 0, S, 'still');
+  const P = h.type === 'magmacoreRing' ? (2 * Math.PI) / Math.abs(h.w) : h.P;
+  for (let t = 0; t < P; t += 0.04) magmacoreShapes(h, t, S);
+  return S;
+}
+
+// Magma Core's shaft, laid out in full from MAGMACORE_STAGE (the seed only nudges looks and phases). It answers the
+// same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createMagmacoreLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x3A63C0) >>> 0), Q = MAGMACORE;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of MAGMACORE_STAGE) { const len = magmacoreLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = magmacoreEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the walls' relief on a side: crust plates bulging out between cooling seams (each its own depth), eased flat where
+  // a trap is mounted or reaches and over the launch. Never steeper than RULES.maxWallSlope.
+  let fIdx = null, fN = -1; const fNone = [];
+  const flatsNear = a => { if (fN !== flats.length) { fIdx = new Map(); for (const f of flats) for (let q = Math.floor((f.a0 - 70) / 256); q <= Math.floor((f.a1 + 70) / 256); q++) { let B = fIdx.get(q); if (!B) fIdx.set(q, B = []); B.push(f); } fN = flats.length; } return fIdx.get(Math.floor(a / 256)) || fNone; };
+  const SP = Q.step, flatK = (a, side) => { let k = 0; for (const f of flatsNear(a)) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knots = [[], []];
+  for (const side of [0, 1]) { let a = -60, i = 0; while (a < topA + 400) { knots[side].push({ a, d: lerp(SP.D[0], SP.D[1], hash2(i, (seed & 0xffff) + 811 + side * 17)), t: Math.floor(hash2(i, (seed & 0xffff) + 819 + side * 17) * 4) }); a += lerp(SP.every[0], SP.every[1], hash2(i, (seed & 0xffff) + 813 + side * 17)); i++; } }
+  const knotAt = (a, side) => { const K = knots[side]; let lo = 0, hi = K.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m].a <= a) lo = m; else hi = m; } return lo; };
+  const panelAt = (a, side) => { const K = knots[side], i = knotAt(a, side), k0 = K[i], k1 = K[i + 1] || k0, u = clamp((a - k0.a) / Math.max(1, k1.a - k0.a), 0, 1); return k0.d * Math.sin(Math.PI * u) ** 1.3; };
+  const reliefAt = (a, side) => Math.max(0, panelAt(a, side)) * smooth(380, 620, a) * (1 - flatK(a, side));
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1) => { flats.push({ a0, a1, side: 1 }); flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSide = 0;
+  const one = (type, A, o, ease, ex = {}) => { lastSide = o.side; return [{ type, side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease, ...ex }]; };
+  const X = Q;
+  const make = {
+    magmacoreFall(A, o) { flat(A - X.fall.L - 30, A + 40); return one('magmacoreFall', A, o, X.fall.ease); },
+    fallPair(A, o) {   // spouts in facing walls 330 apart, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.magmacoreFall(A, { side: d, P: o.P, ph: p0 }), ...make.magmacoreFall(A + 330, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    magmacoreTide(A, o) { flat(A - X.tide.Ls - 30, A + 40); lastSide = lastSide || 1; return [{ type: 'magmacoreTide', side: 1, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease: X.tide.ease }]; },
+    tidePair(A, o) {   // two bridges 300 apart, sloshing a quarter cycle apart
+      const p0 = o.ph ?? ph();
+      return [...make.magmacoreTide(A, { P: o.P, ph: p0, drop: o.drop }), ...make.magmacoreTide(A + 300, { P: o.P, ph: p0 + 0.3 })];
+    },
+    tideFall(A, o) {   // a bridge, then a lava fall above it
+      const d = -(lastSide || pick());
+      return [...make.magmacoreTide(A, { P: o.P }), ...make.magmacoreFall(A + 90 + X.fall.L, { side: d, P: o.P + 0.2, ph: ph() })];
+    },
+    magmacoreBurst(A, o) { flat(A - X.burst.drop - 20, A + 50); return one('magmacoreBurst', A, o, X.burst.ease); },
+    burstPair(A, o) {   // blisters in facing walls 300 apart, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.magmacoreBurst(A, { side: d, P: o.P, ph: p0 }), ...make.magmacoreBurst(A + 330, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    burstTide(A, o) {   // a blister, then a bridge above it
+      const d = -(lastSide || pick());
+      return [...make.magmacoreBurst(A, { side: d, P: o.P, ph: ph() }), ...make.magmacoreTide(A + 90 + X.tide.Ls, { P: o.P + 0.4 })];
+    },
+    burstFall(A, o) {   // a blister, then a lava fall above it from the far wall
+      const d = -(lastSide || pick());
+      return [...make.magmacoreBurst(A, { side: d, P: o.P, ph: ph() }), ...make.magmacoreFall(A + 100 + X.fall.L, { side: -d, P: o.P + 0.5, ph: ph() })];
+    },
+    magmacoreRing(A, o) {
+      const R0 = 190 - X.ring.side;
+      flat(A - R0 - 60, A + R0 + 60);
+      return [{ type: 'magmacoreRing', side: 1, alt: A, w: o.w, ph: o.ph ?? ph(), gaps: o.wide ? [0, 1, 5, 6] : [0, 5], drop: !!o.drop, ease: X.ring.ease, P: 1 }];
+    },
+    ringPair(A, o) {   // two rings 330 apart turning opposite ways
+      return [...make.magmacoreRing(A, { w: o.w, wide: true }), ...make.magmacoreRing(A + 330, { w: -o.w * 0.94, wide: true })];
+    },
+    ringFall(A, o) {   // a ring, then a lava fall above it
+      const d = -(lastSide || pick());
+      return [...make.magmacoreRing(A, { w: o.w, wide: true }), ...make.magmacoreFall(A + 280 + X.fall.L, { side: d, P: o.P, ph: ph() })];
+    },
+    ringBurst(A, o) {   // a ring, then a blister above it
+      const d = -(lastSide || pick());
+      return [...make.magmacoreRing(A, { w: o.w, wide: true }), ...make.magmacoreBurst(A + 200 + X.burst.drop, { side: d, P: o.P, ph: ph() })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, magmacore: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (!sc.beats) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const h of beats.flatMap(b => b.hs)) {
+    const d = h.side;
+    if (h.type === 'magmacoreFall') {
+      const F = Q.fall, [L, R] = lOpening(h.alt - F.L - 20, h.alt + 30);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      h.lo = h.alt - F.L - F.th1 / 2 - 4; h.hi = h.alt + 20;
+    } else if (h.type === 'magmacoreTide') {
+      const T = Q.tide, [L, R] = lOpening(h.alt - 30, h.alt + 30);
+      h.L = L; h.R = R; h.base = L; h.far = R; h.cx = (L + R) / 2; h.x = h.cx; h.wd = R - L;
+      h.lo = h.alt + 6 - T.Ls - 14; h.hi = h.alt + T.th + 4;
+    } else if (h.type === 'magmacoreRing') {
+      const Rg = Q.ring, [L, R] = lOpening(h.alt - 150, h.alt + 150);
+      h.L = L; h.R = R; h.cx = (L + R) / 2; h.x = h.cx; h.wd = R - L; h.rr = h.wd / 2 - Rg.side; h.base = L; h.far = R;
+      h.lo = h.alt - h.rr - Rg.rs - 2; h.hi = h.alt + h.rr + Rg.rs + 2;
+    } else if (h.type === 'magmacoreBurst') {
+      const B = Q.burst, [L, R] = lOpening(h.alt - B.drop - 10, h.alt + 40);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      h.lo = h.alt - B.drop - B.gr - 2; h.hi = h.alt + B.rb + 8;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, magmacoreDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  let feathers = 0;
+  const feather = (x, a) => { if (feathers < 3 && add(x, a, 'feather', { feather: true, clear: -Infinity })) feathers++; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  for (const sc of secs) {
+    if (!sc.calm) continue;
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.5);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Obsidian Grotto: a ring of coconuts round a big coin, then a weave
+      const cA = sc.a0 + 560, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 84, cA + Math.sin(an) * 84, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 720, sc.a1 - 90, 0.6, 3);
+    }
+  }
+  // each trap's coconuts show the way: a column up a lava fall's far lane, a pair under each half of a tide bridge's
+  // hole, a column up through a sprite ring's middle, a line under a blister's far lane; each phoenix feather a dare
+  // (in the pocket a lava fall's surge sweeps through, in the fan of a blister's splashes, in the heart of a sprite ring)
+  for (const b of beats) {
+    for (const h of b.hs) {
+      const d = h.side;
+      if (h.type === 'magmacoreFall') {
+        const x = h.far - d * 62;
+        for (let k = 0; k < 4; k++) add(x, h.alt - Q.fall.L + 10 + k * 60, 'coco', { clear: 22 });
+        if (h.drop) feather(h.base + d * 118, h.alt - Q.fall.L * 0.55);
+      } else if (h.type === 'magmacoreTide') {
+        for (const s of [-1, 1]) add(h.cx + s * 50, h.lo - 44, 'coco', { clear: 18 });
+        add(h.cx, h.hi + 50, 'coco', { clear: 18 });
+      } else if (h.type === 'magmacoreRing') {
+        if (h.drop) feather(h.cx, h.alt);
+        for (const da of h.drop ? [-56, 56] : [-50, 0, 50]) add(h.cx, h.alt + da, 'coco', { clear: 22 });
+      } else if (h.type === 'magmacoreBurst') {
+        for (let k = 0; k < 3; k++) add(h.far - d * 56, h.lo - 30 - k * 46, 'coco', { clear: 22 });
+        if (h.drop) feather(h.base + d * 150, h.alt - 120);
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(q => q.hi)) + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the carnival's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, magmacore: true, sections: secs, beats, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, knots, panelAt,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 19): its own shaft (createMagmacoreLevel), the magma core look (G.theme), its missions
+// (the Molten Heart, 3 phoenix feathers, 5 lava falls skimmed past mid-surge) and its length in metres.
+const ADV_MAGMACORE = { name: 'Magma Core', theme: 'magmacore', seed: 'isl-19-magmacore', reward: 240, target: 0, len: magmacoreEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Molten Heart' }, { k: 'magmacoreFeathers', n: 3 }, { k: 'magmacoreSkim', n: 5 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Magma Core, island level 19)
 /* LEVELGEN:BEGIN */
 // ---------- Bellows Drake (island level 20): the stage, its traps' shapes and its layout ----------
@@ -46642,7 +47007,7 @@ const ISLAND = {
     { id: 16, name: 'Amethyst Geode',    region: 'crystal', pilot: 'hamster',   perk: 'Lasers glance off the turbo ball', stage: 'geode' },
     { id: 17, name: 'Frost Hollow',      region: 'frost',   pilot: 'bear',      perk: 'Ice block never freezes up', stage: 'frost' },
     { id: 18, name: 'Thunder Rift',      region: 'storm',   pilot: 'robot',     perk: 'Tin tub soaks up one shock', stage: 'storm' },
-    { id: 19, name: 'Magma Core',        region: 'magma',   pilot: 'ember',     perk: 'Fireproof: lava splashes do nothing' },
+    { id: 19, name: 'Magma Core',        region: 'magma',   pilot: 'ember',     perk: 'Fireproof: lava splashes do nothing', stage: 'magmacore' },
     { id: 20, name: 'Bellows Drake',     region: 'magma',   pilot: 'penguin',   perk: 'Fizz shots cool the dragon boss', boss: 'dragon', stage: 'drake' },
   ],
   // more: levels beyond the map's twenty (round-2 concepts, concepts/level-ideas, plus the Fossil Bonepit from round 1).
@@ -46756,6 +47121,7 @@ ADV_STAGES.idols = ADV_IDOLS;   // (island level 6, Idol's Climb: see createIdol
 ADV_STAGES.geodeking = ADV_GEODEKING;   // (island level 15, Geode King: see createGeodekingLevel)
 ADV_STAGES.drake = ADV_DRAKE;   // (island level 20, Bellows Drake: see createDrakeLevel)
 ADV_STAGES.jelly = ADV_JELLY;   // (island level 12, Jelly Drift: see createJellyLevel)
+ADV_STAGES.magmacore = ADV_MAGMACORE;   // (island level 19, Magma Core: see createMagmacoreLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -108724,6 +109090,1579 @@ function geodekingDrawForeground() {
 { const base = drawSpeedLines; drawSpeedLines = function () { if (geodekingOn()) geodekingDrawSpeed(); else base(); }; }
 { const base = drawForeground; drawForeground = function () { if (geodekingOn()) geodekingDrawForeground(); else base(); }; }
 // (game slot: Geode King, island level 15)
+// ---------- Magma Core (island level 19): its look, traps, phoenix feathers, the fireproof perk and sounds ----------
+// The stage's shaft and traps are laid out by createMagmacoreLevel (LEVELGEN); here they come alive and get drawn.
+// While it runs G.theme is 'magmacore': the volcano's molten heart, a shaft of hot crimson rock split into crust plates
+// by cracks that glow with the magma behind them, lit from BELOW by the lava (every form takes its warm rim light on its
+// lower edge and falls into cool violet shade above), obsidian glinting violet everywhere, embers and ash rising on the
+// heat. Behind the shaft the magma chamber recedes in calm parallax layers, different in every section (the caldera's
+// lava river, the stepped lava falls, the obsidian bridges over glowing canals, the steaming blister fields, the cool
+// obsidian grotto, the sprites' hearths, the core's great molten veins, the Molten Heart). Art as the rest of the game:
+// cartoony, 2-3 stop gradients lit by the scene's light, every edge a darker shade of its own colour (never black),
+// detail as line pairs (a dark furrow by a lit ridge), sheen strokes and soft glows; the backdrop stays calm and pushed
+// back so the traps and pickups read first. Performance: everything that never moves (the walls, the backdrop's layers,
+// the traps' mounts, every sprite pose, the finish) is painted once into offscreen canvases at the screen's pixel scale
+// and blitted each frame (see magmacoreTile, magmacoreSprite); only what moves or glows is drawn live, every glow one
+// cached sprite, every sprite key quantised.
+const MAGMACOREP = {
+  pal: { bgTop: [70, 24, 40], bgBot: [120, 34, 20], far: [96, 34, 36], far2: [80, 28, 34], wall: [120, 44, 36], wallIn: [44, 14, 20], rim: [255, 170, 90] },
+  rock: ['#d8705a', '#a03c2e', '#6a2220', '#46141a'], rockEdge: '#4a1418',
+  crust: ['#9a6a78', '#6a3e52', '#45243a', '#2e1628'], crustEdge: '#3a1a30',
+  obs: ['#c8b4ff', '#6c56b0', '#33286a', '#1e1844'], obsEdge: '#2c2160',
+  lava: ['#fffbd6', '#ffd844', '#ff9420', '#e04412', '#9a1c0a'], lavaEdge: '#b02a0c',
+  flame: ['#fffbe6', '#ffe470', '#ffa030', '#f0521c', '#b02410'],
+  gold: ['#fff6c0', '#ffd24a', '#d8901a', '#7a4a08'], goldEdge: '#8a5208',
+  plume: ['#fff2b0', '#ffb838', '#f4621e', '#b4260e', '#6e1408'], plumeEdge: '#8a1c0a',
+};
+const magmacoreOn = () => !!(G && G.theme === 'magmacore');
+{ const base = pal; pal = function (key, a) { return magmacoreOn() && MAGMACOREP.pal[key] ? MAGMACOREP.pal[key].slice() : base(key, a); }; }
+const magmacoreHex = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const MAGMACOREC = { key: '', tiles: new Map(), sprites: new Map(), glows: new Map() };
+function magmacoreCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== MAGMACOREC.key) { MAGMACOREC.key = key; MAGMACOREC.tiles.clear(); MAGMACOREC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function magmacoreTile(id, x0, x1, a0, a1, paint) {
+  let T = MAGMACOREC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    MAGMACOREC.tiles.set(id, T);
+    if (MAGMACOREC.tiles.size > 72) { for (const kk of MAGMACOREC.tiles.keys()) { MAGMACOREC.tiles.delete(kk); if (MAGMACOREC.tiles.size <= 58) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function magmacoreSprite(id, w, h, ax, ay, paint) {
+  let S = MAGMACOREC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; MAGMACOREC.sprites.set(id, S);
+    if (MAGMACOREC.sprites.size > 260) { for (const kk of MAGMACOREC.sprites.keys()) { MAGMACOREC.sprites.delete(kk); if (MAGMACOREC.sprites.size <= 210) break; } }
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt), mirrored when flip < 0
+function magmacoreBlit(S, x, alt, alpha = 1, flip = 1) {
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  if (flip < 0) { ctx.save(); ctx.translate(sx(x), sy(alt)); ctx.scale(-1, 1); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore(); }
+  else ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+// blit a sprite with its anchor at screen (X, Y), turned by ang, mirrored when flip < 0, scaled by k (kx, ky)
+function magmacoreBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1, k = 1, ky = k) {
+  if (!ang && flip > 0 && k === 1 && ky === 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, X - S.ax * s, Y - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; return; }
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (k !== 1 || ky !== 1) ctx.scale(k, ky); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+// a soft additive glow: one cached radial sprite per colour (no gradient built per frame)
+function magmacoreGlowCv(col) {
+  col = col.map(v => Math.min(255, Math.round(v / 16) * 16));   // quantised, so blended colours share a few sprites
+  const key = col.join(',');
+  let cv = MAGMACOREC.glows.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 48, 48, 47, [gCol(col, 1), gCol(col, 0.42), gCol(col, 0.12), gCol(col, 0)]); q.fillRect(0, 0, 96, 96);
+    MAGMACOREC.glows.set(key, cv); if (MAGMACOREC.glows.size > 64) MAGMACOREC.glows.delete(MAGMACOREC.glows.keys().next().value);
+  }
+  return cv;
+}
+function magmacoreGlow(c, x, y, r, col, a) {
+  if (a < 0.01 || r < 0.6) return;
+  const cv = magmacoreGlowCv(col);
+  const op = c.globalCompositeOperation, ga = c.globalAlpha; c.globalCompositeOperation = 'lighter'; c.globalAlpha = ga * Math.min(1, a); c.drawImage(cv, x - r, y - r, r * 2, r * 2); c.globalCompositeOperation = op; c.globalAlpha = ga;
+}
+// ---- shared painters (any context, world units, y down) ----
+// a glossy ball lit by the lava from below: a body gradient from its lit underside, an edge of its own darker colour,
+// a warm rim light along its lower edge, a cool sheen and a glint on top
+function magmacoreBall(c, x, y, r, P, edge, rim = 0.7) {
+  c.fillStyle = gRG(c, x - r * 0.25, y - r * 0.4, r * 1.45, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, r * 0.08); c.stroke();
+  if (rim > 0) { c.strokeStyle = `rgba(255,170,80,${rim})`; c.lineWidth = Math.max(0.6, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.8, 0.35, Math.PI - 0.35); c.stroke(); }
+  c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.ellipse(x - r * 0.38, y - r * 0.5, r * 0.18, r * 0.1, -0.6, 0, TWO_PI); c.fill();
+}
+function magmacoreRR(c, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r); c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h); c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r); c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath(); }
+// a glowing crack (any context): a dark scorched furrow, the lava glowing in it, a hot core line
+function magmacoreCrack(c, P, w, hot = 1) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = `rgba(60,10,10,${0.55})`; c.lineWidth = w + 1.6; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = `rgba(255,${Math.round(90 + 40 * hot)},30,${0.75 * hot + 0.15})`; c.lineWidth = w; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = `rgba(255,236,150,${0.8 * hot})`; c.lineWidth = Math.max(0.5, w * 0.36); gPoly(c, P, false); c.stroke();
+}
+// a jagged crack polyline from (x0, y0) to (x1, y1) with seeded kinks
+function magmacoreCrackPts(x0, y0, x1, y1, n, sd, amp = 4) {
+  const P = [], dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+  for (let i = 0; i <= n; i++) { const u = i / n, j = i && i < n ? (hash2(i, sd) - 0.5) * 2 * amp : 0; P.push([x0 + dx * u + nx * j, y0 + dy * u + ny * j]); }
+  return P;
+}
+// cartoon eyes (any context) at x, y, radius r; look -1..1 sideways; iris colour
+function magmacoreEyes(c, x, y, r, look = 0, iris = '#ff7a1a', gap = 1.1, ry = 1.15, happy = false) {
+  for (const e of [-1, 1]) {
+    const ex = x + e * r * gap, hy = r * ry;
+    if (happy) { c.strokeStyle = '#7a1e0a'; c.lineWidth = Math.max(0.6, r * 0.32); c.lineCap = 'round'; c.beginPath(); c.arc(ex, y + r * 0.2, r * 0.62, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); continue; }
+    c.fillStyle = gRG(c, ex - r * 0.3, y - r * 0.3, r * 1.3, ['#ffffff', '#fff4e6', '#f0d6c0']); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(140,40,20,.75)'; c.lineWidth = Math.max(0.4, r * 0.13); c.stroke();
+    c.save(); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.clip();
+    c.fillStyle = iris; c.beginPath(); c.arc(ex + look * r * 0.38, y + r * 0.1, r * 0.64, 0, TWO_PI); c.fill();
+    c.fillStyle = '#4a1206'; c.beginPath(); c.arc(ex + look * r * 0.44, y + r * 0.12, r * 0.33, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + look * r * 0.38 - r * 0.22, y - r * 0.2, r * 0.2, 0, TWO_PI); c.fill();
+    c.restore();
+  }
+}
+
+// ---- sounds ----
+const MAGMACORE_SFX = {
+  // a lava fall's spout gurgling before it surges: thick glugs and a rising hiss
+  mcgurgle: (t, B, v) => { for (let i = 0; i < 5; i++) vTone(B, t + i * 0.16 + Math.random() * 0.04, 110 + i * 22, { f2: 70, glide: 0.08, type: 'sine', v: 0.08 * v, dur: 0.12 }); vNoise(B, t, { type: 'bandpass', f: 900, f2: 2600, q: 1.2, v: 0.05 * v, dur: 1.0, a: 0.3 }); },
+  // ...the surge: a deep molten roar pouring down
+  mcsurge: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 700, f2: 300, v: 0.16 * v, dur: 1.4, a: 0.05 }); vTone(B, t, 55, { f2: 42, glide: 1.2, type: 'triangle', v: 0.09 * v, dur: 1.4, a: 0.06 }); vNoise(B, t, { type: 'bandpass', f: 2400, q: 0.8, v: 0.04 * v, dur: 1.2, a: 0.1 }); },
+  // a tide bridge's magma spilling over its lip: a heavy slosh and a sizzling pour
+  mcslosh: (t, B, v) => { vTone(B, t, 90, { f2: 140, glide: 0.25, type: 'sine', v: 0.1 * v, dur: 0.35 }); vNoise(B, t + 0.05, { type: 'lowpass', f: 900, v: 0.1 * v, dur: 0.5, a: 0.06 }); vNoise(B, t + 0.2, { type: 'highpass', f: 3200, v: 0.04 * v, dur: 0.9, a: 0.1 }); },
+  // a blister swelling: crackling crust and a low throbbing rumble
+  mccrackle: (t, B, v) => { for (let i = 0; i < 10; i++) vNoise(B, t + i * 0.1 + Math.random() * 0.05, { type: 'highpass', f: 2000 + Math.random() * 2000, v: 0.05 * v, dur: 0.02, a: 0.001 }); for (let i = 0; i < 3; i++) vTone(B, t + i * 0.36, 70, { f2: 50, glide: 0.2, type: 'sine', v: 0.1 * v, dur: 0.3 }); },
+  // ...bursting: a thick pop and a spray of splats
+  mcburst: (t, B, v) => { vTone(B, t, 180, { f2: 60, glide: 0.12, type: 'sine', v: 0.2 * v, dur: 0.2 }); vNoise(B, t, { type: 'lowpass', f: 1600, v: 0.18 * v, dur: 0.18, a: 0.002 }); for (let i = 0; i < 5; i++) vNoise(B, t + 0.12 + i * 0.07, { type: 'bandpass', f: 1200 + i * 300, q: 2, v: 0.05 * v, dur: 0.05 }); },
+  // a splash hitting the far wall: a short hiss
+  mcsplat: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 2600, v: 0.06 * v, dur: 0.2, a: 0.004 }); },
+  // Ember shrugging off a splash: a cheery sizzle and a little puff
+  mcsizzle: (t, B) => { vNoise(B, t, { type: 'highpass', f: 3600, v: 0.08, dur: 0.3, a: 0.004 }); vTone(B, t + 0.05, mf(84), { type: 'triangle', v: 0.04, dur: 0.14 }); vTone(B, t + 0.12, mf(91), { type: 'sine', v: 0.035, dur: 0.2, send: 0.3 }); },
+  // a sprite ring coming into view: a whirl of crackly little giggles
+  mcsprites: (t, B, v) => { for (let i = 0; i < 6; i++) vTone(B, t + i * 0.07, 1100 + (i % 3) * 260, { f2: 1600 + (i % 2) * 300, glide: 0.05, type: 'triangle', v: 0.025 * v, dur: 0.06 }); vNoise(B, t, { type: 'bandpass', f: 1800, q: 1, v: 0.03 * v, dur: 0.6, a: 0.1 }); },
+  // skimming past a surging lava fall: a hot whoosh and a bright two-note sting
+  mcskim: (t, B) => { vNoise(B, t, { type: 'bandpass', f: 1200, f2: 3600, q: 1, v: 0.08, dur: 0.3, a: 0.02 }); [[79, 0], [86, 0.09]].forEach(([m, d]) => vTone(B, t + d, mf(m), { type: 'triangle', v: 0.05, dur: 0.25, send: 0.3 })); },
+  // a phoenix feather: a warm rising flute arpeggio and a shimmer
+  mcfeather: (t, B) => { [74, 78, 81, 86, 90, 93].forEach((m, i) => vTone(B, t + i * 0.055, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.055, dur: 0.6, send: 0.35, vib: [5, 6], vibAt: 0.1 })); vTone(B, t + 0.33, mf(98), { type: 'sine', v: 0.03, dur: 0.9, send: 0.4 }); },
+  // the Molten Heart on the clear: the Phoenix's rising call over a warm brass chord and a whoosh of flame
+  mcfinish: (t, B) => { vNoise(B, t, { type: 'lowpass', f: 600, f2: 2400, v: 0.1, dur: 0.9, a: 0.2 }); [[67, 0.4], [71, 0.52], [74, 0.64], [79, 0.76], [83, 0.9], [86, 1.04]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sawtooth', lp: 2400, v: 0.035, dur: d > 1 ? 1.4 : 0.22, send: 0.35 }); vTone(B, t + d, mf(m + 12), { type: 'sine', v: 0.02, dur: 0.18 }); }); [55, 62, 67, 71].forEach(m => vTone(B, t + 1.04, mf(m), { type: 'triangle', lp: 1600, v: 0.04, dur: 1.8, a: 0.05, send: 0.4 })); vTone(B, t + 1.2, mf(91), { f2: mf(98), glide: 0.3, type: 'sine', v: 0.04, dur: 0.8, vib: [6, 8], vibAt: 0.2, send: 0.4 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = MAGMACORE_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const magmacoreVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.magmacoreFall = 'Swept away by a lava fall';
+CAUSES.magmacoreTide = 'Scorched by the magma tide';
+CAUSES.magmacoreRing = 'Singed by the ember sprites';
+CAUSES.magmacoreBurst = 'Splashed by a lava blister';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'magmacoreFall' || cause === 'magmacoreTide' ? [255, 150, 60] : cause === 'magmacoreRing' ? [255, 210, 90] : cause === 'magmacoreBurst' ? [255, 110, 70] : base(cause); }; }
+// Ember the dragon is fireproof: the blisters' splashes do nothing to him (his perk)
+const magmacoreFireproof = () => settings.character === 'ember';
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!MAGMACORE_TYPES.has(h.type)) return base(h);
+  return magmacoreShapes(h, G.t, [], 'body', magmacoreFireproof()).map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.magmacore) magmacoreUpdateTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.magmacore) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && MAGMACORE_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// cinders and droplets: world-space particles drawn by the magma core particle wrapper (capped on top of puff's own cap)
+function magmacoreCinders(x, a, n, v, up = 40, col = 0) {
+  let have = 0; for (const q of G.particles) if (q.kind === 'mccinder') have++;
+  n = Math.min(n, Math.max(0, 80 - have));
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp * 0.7 + up, 0.6 + Math.random() * 0.6, 1.4 + Math.random() * 1.8, 'mccinder', { col: col || Math.floor(Math.random() * 3) + 1, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 10 }); }
+}
+// the distance from the pilot's hitbox to a shape (negative when they touch)
+function magmacorePilotGap(q) {
+  let best = Infinity;
+  for (const c of pCaps) {
+    let d;
+    if (q.k === 'c') d = ptSeg(q.x, q.a, c.x0, c.a0, c.x1, c.a1) - q.r - c.r;
+    else d = segSeg(q.x0, q.a0, q.x1, q.a1, c.x0, c.a0, c.x1, c.a1) - q.r - c.r;
+    if (d < best) best = d;
+  }
+  return best;
+}
+function magmacoreUpdateTraps(dt) {
+  const top = G.camAlt + viewH, X = MAGMACORE, p = G.p, play = G.state === 'play';
+  const pLo = play ? pilotLow() : 0, pHi = play ? pilotHigh() : 0;
+  for (const h of G.hazards) {
+    if (!MAGMACORE_TYPES.has(h.type)) continue;
+    const d = h.side, vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'magmacoreFall') {
+      const st = magmacoreFallAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('mcgurgle', { v: magmacoreVol(h.alt) });
+      if (st.ph === 'rise' && was.ph !== 'rise' && vis) { sfx('mcsurge', { v: magmacoreVol(h.alt - X.fall.L / 2) }); magmacoreCinders(h.base + d * X.fall.lip, h.alt + 4, 6, 90, 40); }
+      h.st = st;
+      // steam where the sheet lands, while it pours hard
+      if (vis && st.f > 0.5 && Math.random() < dt * 5) { const P = magmacoreFallPts(h, G.t, 3), q = P[2]; puff(q[0], q[1] - 6, (Math.random() - 0.5) * 30, 20 + Math.random() * 20, 0.9, 5 + Math.random() * 4, 'smoke'); }
+      // the skim mission: through the fall's band from below to above while its sheet is surging right by you
+      if (play) {
+        if (pHi < h.lo - 4) { h.inB = false; h.near = false; }
+        else if (!h.inB && pHi >= h.lo && pLo < h.lo + 40) h.inB = true;
+        if (h.inB && !h.done) {
+          if (!h.near && pHi > h.lo && pLo < h.alt) {
+            const P = magmacoreFallPts(h, G.t);
+            for (let i = 1; i < P.length && !h.near; i++) if (P[i][3] > 0.4 && P[i][1] < pHi + 20 && P[i][1] > pLo - 40) { const g = magmacorePilotGap({ k: 's', x0: P[i - 1][0], a0: P[i - 1][1], x1: P[i][0], a1: P[i][1], r: (P[i - 1][2] + P[i][2]) / 2 }); if (g < 64) h.near = true; }
+          }
+          if (pLo > h.hi + 2) {
+            h.done = true; h.inB = false;
+            if (h.near) {
+              const n = G.stats.mcSkim = (G.stats.mcSkim || 0) + 1, of = advGoalN('magmacoreSkim');
+              sfx('mcskim');
+              for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; puff(p.x + Math.cos(an) * 30, p.alt + Math.sin(an) * 10 - 20, Math.cos(an) * 70, 30 + Math.random() * 50, 0.5, 1.8, 'sparkle', [255, 220, 120]); }
+              chainEvent(of && n <= of ? (n >= of ? `Lava skims ${n}/${of}!` : `Skimmed the lava! ${n}/${of}`) : 'Skimmed the lava!', '#ffd27a', 1.0);
+            }
+          }
+        }
+      }
+    } else if (h.type === 'magmacoreTide') {
+      for (const s2 of [-1, 1]) {
+        const on = magmacoreSpill(h, G.t, s2) > 0.02, key = s2 > 0 ? 'spR' : 'spL';
+        if (on && !h[key] && vis) { sfx('mcslosh', { v: magmacoreVol(h.alt) }); magmacoreCinders(h.cx + s2 * X.tide.hole / 2, h.alt + 10, 5, 70, 60); }
+        h[key] = on;
+      }
+    } else if (h.type === 'magmacoreRing') {
+      const onScr = h.hi > G.camAlt && h.lo < top;
+      if (onScr && !h.seen) sfx('mcsprites', { v: 0.8 });
+      h.seen = onScr;
+    } else if (h.type === 'magmacoreBurst') {
+      const st = magmacoreBurstAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('mccrackle', { v: magmacoreVol(h.alt) });
+      if (st.ph === 'fly' && was.ph !== 'fly') {
+        h.burstN = (h.burstN || 0) + 1; h.splat = 0;
+        if (vis) {
+          sfx('mcburst', { v: magmacoreVol(h.alt) }); magmacoreCinders(h.base + d * 14, h.alt, 10, 160, 30, 4);
+          if (Math.abs(h.alt - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.8);
+        }
+      }
+      if (st.ph === 'fly') {
+        // splashes hitting the far wall sizzle there; Ember shrugs off any that hit him
+        for (let i = 0; i < X.burst.n; i++) {
+          const bit = 1 << i;
+          if (!(h.splat & bit) && !magmacoreGlobAt(h, i, st.tau) && magmacoreGlobAt(h, i, Math.max(0, st.tau - 0.06))) { h.splat |= bit; const P = magmacoreGlobAt(h, i, Math.max(0, st.tau - 0.06)); if (vis && P && Math.abs(P[0] - h.far) < 30) { sfx('mcsplat', { v: magmacoreVol(P[1]) * 0.7 }); magmacoreCinders(h.far - d * 4, P[1], 4, 60, 20, 4); } }
+        }
+        if (play && magmacoreFireproof() && h.lo < pHi && h.hi > pLo && !(h.shrug === h.burstN)) {
+          for (let i = 0; i < X.burst.n; i++) { const P = magmacoreGlobAt(h, i, st.tau); if (P && magmacorePilotGap({ k: 'c', x: P[0], a: P[1], r: X.burst.gr }) < 0) { h.shrug = h.burstN; magmacoreShrug(P[0], P[1]); break; } }
+        }
+      }
+      h.st = st;
+    }
+  }
+}
+// Ember shrugging off a lava splash: a puff of steam, a sizzle, the perk named the first time
+function magmacoreShrug(x, a) {
+  sfx('mcsizzle'); vibrate(8);
+  for (let k = 0; k < 7; k++) puff(x + (Math.random() - 0.5) * 14, a, (Math.random() - 0.5) * 60, 40 + Math.random() * 60, 0.7, 4 + Math.random() * 4, 'smoke');
+  for (let k = 0; k < 5; k++) { const an = Math.random() * TWO_PI; puff(x, a, Math.cos(an) * 90, Math.sin(an) * 90, 0.4, 1.6, 'sparkle', [255, 200, 110]); }
+  G.stats.mcShrug = (G.stats.mcShrug || 0) + 1;
+  if (G.stats.mcShrug === 1) addPop('Fireproof!', G.p.x, G.p.alt + 60, { col: '#ffd27a', sub: 'lava splashes do nothing to Ember' });
+}
+
+// ---- phoenix feathers: a glowing flame-plumed feather in risky spots, worth a big coin each, and the feather mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'feather') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.mcFeathers = (st.mcFeathers || 0) + 1, of = advGoalN('magmacoreFeathers');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Phoenix feather ${n}/${of}!` : 'Phoenix feather!', '#ffd27a', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 190, 110];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 180, Math.sin(a) * 180, 0.6, 2.4, 'sparkle', k % 2 ? [255, 220, 120] : [255, 140, 60]); }
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffd27a', big: true, sub: 'phoenix feather' });
+  vibrate([20, 30, 20]); sfx('mcfeather');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  // (only when a feather is on screen is the list split; most frames just draw the base pickups)
+  const all = G.fruit, lo = G.camAlt - 100, hi = G.camAlt + viewH + 100; let any = false;
+  for (let i = 0; i < all.length; i++) { const f = all[i]; if (f.kind === 'feather' && f.alt > lo && f.alt < hi) { any = true; break; } }
+  if (!any) return base();
+  G.fruit = all.filter(f => f.kind !== 'feather');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'feather') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    magmacoreDrawFeather(sx(f.x), y, G.t, f.alt * 0.05 + f.x * 0.01);
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the feathers found, the lava falls skimmed
+ADV_GOALS.magmacoreFeathers = { text: g => `Find all ${g.n} phoenix feathers`, done: (r, g) => (r.stats.mcFeathers || 0) >= g.n, any: true, prog: (g, st) => `${st.mcFeathers || 0}/${g.n}` };
+ADV_GOALS.magmacoreSkim = { text: g => `Skim past ${g.n} lava falls mid-surge`, done: (r, g) => (r.stats.mcSkim || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.mcSkim || 0)}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'magmacoreFeathers' || g.k === 'magmacoreSkim')) return;
+  const st = G.stats, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(60,14,16,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    icon(xr - tw - 13, y);
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'magmacoreFeathers') { const n = st.mcFeathers || 0; line(`${n}/${g.n}`, n >= g.n ? '#ffd27a' : '#fff2ea', (x, yy) => { const S = magmacoreFeatherSprite(); magmacoreBlitAt(S, x, yy, 0.5, 1, 1, 20 / (S.h * s)); }); }
+    else if (g.k === 'magmacoreSkim') { const n = Math.min(g.n, st.mcSkim || 0); line(`${n}/${g.n}`, n >= g.n ? '#ffd27a' : '#fff2ea', (x, yy) => { const S = magmacoreDropSprite(); magmacoreBlitAt(S, x, yy, 0, 1, 1, 18 / (S.h * s)); }); }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 19 plays it (its own shaft replaces the one advStart lays out, as the anthill's)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'magmacore' || (G.level && G.level.magmacore)) return;
+  G.level = createMagmacoreLevel(G.seed, st);
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Molten Heart ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the magma core traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRMAGMA = { MAGMACORE, MAGMACORE_STAGE, magmacoreShapes, magmacoreFallAt, magmacoreFallPts, magmacoreSpill, magmacoreRingPos, magmacoreBurstAt, magmacoreGlobAt, magmacoreDanger, createMagmacoreLevel, MAGMACOREC, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the Lava Fall ----
+// the spout (anchored on the wall line at the lip's height, jutting +x): a chunky beak of crimson rock bound in plates
+// of cooled crust, a glowing mouth at its tip, its underside lit hot by the lava, drips of cooled lava hanging off it
+function magmacoreSpoutSprite() {
+  return magmacoreSprite('spout', 78, 74, 26, 34, c => {
+    const R = MAGMACOREP.rock, L = MAGMACORE.fall.lip;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // the root: a boss of rock swelling out of the wall
+    c.fillStyle = gLG(c, 0, -30, 0, 30, [R[3], R[2], R[1]]); c.beginPath(); c.moveTo(-24, -30); c.quadraticCurveTo(-2, -32, 8, -18); c.quadraticCurveTo(14, -6, 12, 8); c.quadraticCurveTo(8, 26, -24, 32); c.closePath(); c.fill();
+    c.strokeStyle = MAGMACOREP.rockEdge; c.lineWidth = 1; c.stroke();
+    // the beak: rock in a crust sleeve, its top in cool shade, its belly lit hot
+    const beak = () => { c.beginPath(); c.moveTo(-4, -14); c.quadraticCurveTo(L * 0.5, -16, L + 2, -8); c.quadraticCurveTo(L + 8, -3, L + 6, 4); c.quadraticCurveTo(L * 0.6, 14, -4, 14); c.closePath(); };
+    c.fillStyle = gLG(c, 0, -16, 0, 14, ['#4a2038', '#7a3a3a', '#c85a34']); beak(); c.fill();
+    c.strokeStyle = '#5a1a20'; c.lineWidth = 1.1; beak(); c.stroke();
+    // crust plates on the beak: seams as line pairs, the lava glowing faintly in them
+    for (const x of [6, 15, 23]) gPair(c, [[x, -13], [x + 2, -2], [x - 1, 12]], 'rgba(40,10,16,.6)', 'rgba(255,190,140,.35)', 1.1, 0.9);
+    magmacoreCrack(c, [[2, 6], [10, 9], [18, 7], [26, 9]], 1.3, 0.8);
+    // the hot rim light along its belly and the cool sheen on its top
+    c.strokeStyle = 'rgba(255,190,110,.85)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-2, 13); c.quadraticCurveTo(L * 0.6, 13, L + 5, 4); c.stroke();
+    c.strokeStyle = 'rgba(210,180,255,.4)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(0, -12.5); c.quadraticCurveTo(L * 0.5, -14.5, L, -7.5); c.stroke();
+    // the mouth: a glowing slot of molten rock at the tip, a cooled crust rim round it
+    c.fillStyle = gRG(c, L + 2, 0, 9, ['#fffbd6', '#ffd844', '#ff8a1a', '#c0360e']); c.beginPath(); c.ellipse(L + 1, 0, 5.5, 7.5, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#7a2412'; c.lineWidth = 1.6; c.stroke();
+    c.strokeStyle = 'rgba(255,240,180,.8)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(L + 1, 0, 3.6, 5.6, 0, 1.2, 2.4); c.stroke();
+    // cooled drips hanging from its belly (they never reach the sheet)
+    for (const [x, len] of [[6, 7], [13, 10], [20, 6]]) { c.fillStyle = gLG(c, 0, 13, 0, 13 + len, ['#c85a34', '#7a2a2a', '#4a1a26']); c.beginPath(); c.moveTo(x - 2.4, 13); c.quadraticCurveTo(x - 1.6, 13 + len * 0.7, x, 13 + len); c.quadraticCurveTo(x + 1.6, 13 + len * 0.7, x + 2.4, 13); c.closePath(); c.fill(); c.fillStyle = 'rgba(255,200,120,.7)'; c.beginPath(); c.arc(x, 13 + len - 1.2, 0.9, 0, TWO_PI); c.fill(); }
+    // rock chips round the root, lit from below
+    for (const [x, y, r] of [[-14, -24, 4], [-8, 24, 5], [-18, 14, 3.4], [2, -24, 3]]) magmacoreBall(c, x, y, r, MAGMACOREP.rock, MAGMACOREP.rockEdge, 0.5);
+  });
+}
+// a lava sheet or gush as a ribbon along points [x, alt, half, flow]: a hot gradient body, darker molten edges, a
+// bright core and flow streaks running down it, droplets breaking off its foot
+function magmacoreDrawRibbon(P, T, glowEvery = 3, seed = 0, alpha = 1) {
+  const n = P.length; if (n < 2) return;
+  const Lx = [], Rx = [], Y = [];
+  for (const [x, a, hw] of P) { Lx.push(sx(x - hw)); Rx.push(sx(x + hw)); Y.push(sy(a)); }
+  // the foot tapers away into droplets
+  const y0 = Y[0], y1 = Y[n - 1];
+  ctx.save(); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.beginPath(); ctx.moveTo(Lx[0], Y[0]);
+  for (let i = 1; i < n; i++) { const k = i === n - 1 ? 0.35 : 1, cx2 = (Lx[i] + Rx[i]) / 2; ctx.lineTo(cx2 + (Lx[i] - cx2) * k, Y[i]); }
+  for (let i = n - 1; i >= 0; i--) { const k = i === n - 1 ? 0.35 : 1, cx2 = (Lx[i] + Rx[i]) / 2; ctx.lineTo(cx2 + (Rx[i] - cx2) * k, Y[i]); }
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, '#ffe066'); g.addColorStop(0.2, '#ffb02a'); g.addColorStop(0.65, '#f2621a'); g.addColorStop(1, 'rgba(196,46,14,.85)');
+  ctx.fillStyle = g; ctx.fill();
+  // molten edges: a deep red crust skin down each side, darker on the shadow side
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const edge = (X, col, w) => { ctx.beginPath(); for (let i = 0; i < n - 1; i++) i ? ctx.lineTo(X[i], Y[i]) : ctx.moveTo(X[i], Y[i]); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
+  edge(Lx, 'rgba(150,30,10,.95)', 2.4 * s); edge(Rx, 'rgba(176,40,12,.9)', 1.8 * s);
+  const band = (f, col, wk) => { ctx.beginPath(); for (let i = 0; i < n - 1; i++) { const x = Lx[i] + (Rx[i] - Lx[i]) * f; i ? ctx.lineTo(x, Y[i]) : ctx.moveTo(x, Y[i]); } ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, (Rx[0] - Lx[0]) * wk); ctx.stroke(); };
+  band(0.16, 'rgba(196,52,14,.5)', 0.16);          // the cooler skin
+  band(0.55, 'rgba(255,214,90,.75)', 0.42);        // the molten core
+  band(0.55, 'rgba(255,252,214,.95)', 0.16);       // its white-hot heart
+  band(0.8, 'rgba(255,255,240,.55)', 0.07);        // a gloss streak on the lit side
+  // crust flecks: little dark plates of cooled skin riding down the flow
+  for (let q = 0; q < 5; q++) {
+    const u = pmod(T * 0.9 + q * 0.21 + seed * 1.7, 1), fi = u * (n - 1), i = Math.floor(fi), v = fi - i; if (i >= n - 2) continue;
+    const lane = 0.2 + 0.6 * hash2(q, seed * 13 | 0), xa = lerp(Lx[i] + (Rx[i] - Lx[i]) * lane, Lx[i + 1] + (Rx[i + 1] - Lx[i + 1]) * lane, v), ya = lerp(Y[i], Y[i + 1], v), r = (1.6 + 1.4 * hash2(q, 7)) * s;
+    ctx.fillStyle = 'rgba(120,30,20,.75)'; ctx.beginPath(); ctx.ellipse(xa, ya, r * 1.4, r, 0.4, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,220,140,.6)'; ctx.lineWidth = 0.7 * s; ctx.beginPath(); ctx.ellipse(xa, ya, r * 1.4, r, 0.4, 0.2, 2.2); ctx.stroke();
+  }
+  // flow streaks: short pale dashes sliding down the sheet
+  ctx.strokeStyle = 'rgba(255,246,190,.7)'; ctx.lineWidth = 1.2 * s;
+  for (let q = 0; q < 3; q++) {
+    const lane = 0.3 + q * 0.2, off = pmod(T * 1.6 + q * 0.37 + seed, 1);
+    for (let rep = 0; rep < 2; rep++) {
+      const u = (off + rep * 0.5) % 1, fi = u * (n - 1), i = Math.floor(fi), v = fi - i; if (i >= n - 2) continue;
+      const xa = lerp(Lx[i] + (Rx[i] - Lx[i]) * lane, Lx[i + 1] + (Rx[i + 1] - Lx[i + 1]) * lane, v), ya = lerp(Y[i], Y[i + 1], v);
+      const xb = Lx[i + 1] + (Rx[i + 1] - Lx[i + 1]) * lane, yb = Y[i + 1];
+      ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(lerp(xa, xb, 0.6), lerp(ya, yb, 0.6)); ctx.stroke();
+    }
+  }
+  // where it lands: a fan of hot droplets splashing out of the foot (only while the flow there is strong)
+  const fx = (Lx[n - 1] + Rx[n - 1]) / 2, fw = Rx[n - 1] - Lx[n - 1], ff = P[n - 1][3] ?? 1;
+  if (ff > 0.25) for (let q = 0; q < 7; q++) {
+    const u = pmod(T * 2.2 + q * 0.143 + seed, 1), an = -Math.PI / 2 + (q - 3) * 0.32, sp = (fw * 0.5 + 16 * s) * u, X = fx + Math.cos(an + Math.PI) * sp * 0.9, Yd = Y[n - 1] + Math.abs(Math.sin(an)) * sp * 0.5 + u * u * 16 * s, r = (2.6 - 1.4 * u) * s * Math.min(1, ff * 1.5);
+    ctx.fillStyle = `rgba(255,${200 - 90 * u | 0},60,${0.95 * (1 - u)})`; ctx.beginPath(); ctx.arc(X, Yd, r, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = `rgba(255,255,230,${0.8 * (1 - u)})`; ctx.beginPath(); ctx.arc(X - r * 0.3, Yd - r * 0.3, r * 0.35, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+  // the glow it throws
+  const gl = magmacoreGlowCv([255, 140, 50]); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < n; i += glowEvery) { const r = (P[i][2] * 2.2 + 18) * s; ctx.globalAlpha = 0.22 * alpha; ctx.drawImage(gl, (Lx[i] + Rx[i]) / 2 - r, Y[i] - r, r * 2, r * 2); }
+  ctx.restore();
+}
+function magmacoreDrawFall(h) {
+  const X = MAGMACORE.fall, d = h.side, T = G.t, st = h.st || magmacoreFallAt(h, T);
+  // the tell: the full surge's path glows faintly where it will gush, the spout's mouth flares
+  if (st.ph === 'tell' || st.ph === 'rise') {
+    const k = st.ph === 'tell' ? smooth(0, 0.6, st.tell) : 1 - st.k;
+    const G0 = []; for (let i = 0; i <= 8; i++) { const u = i / 8; G0.push([sx(h.base + d * (X.lip + (X.base + X.reach) * Math.sqrt(u))), sy(h.alt - u * X.L)]); }
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash([5 * s, 7 * s]); ctx.lineDashOffset = -T * 40 * s; ctx.strokeStyle = `rgba(255,120,60,${0.3 * k})`; ctx.lineWidth = 2.2 * s; ctx.beginPath(); G0.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore();
+    magmacoreGlow(ctx, sx(h.base + d * X.lip), sy(h.alt + 2), (30 + 26 * k) * s, [255, 150, 60], 0.35 + 0.35 * k * (0.7 + 0.3 * Math.sin(T * 24)));
+  }
+  magmacoreDrawRibbon(magmacoreFallPts(h, T, 14), T, 3, h.alt * 0.013);
+  magmacoreBlit(magmacoreSpoutSprite(), h.base, h.alt + 4, 1, d);
+  // the tell's glugs: blobs of lava swelling out of the mouth
+  if (st.ph === 'tell') {
+    for (let k = 0; k < 3; k++) { const u = pmod(T * 2.2 + k / 3, 1), r = (2.5 + 3 * Math.sin(u * Math.PI)) * s; ctx.fillStyle = k % 2 ? '#ffd844' : '#ff9420'; ctx.beginPath(); ctx.arc(sx(h.base + d * (X.lip + 3 + 6 * u)), sy(h.alt + 4 - 4 * u * u), r, 0, TWO_PI); ctx.fill(); }
+  }
+}
+
+// ---- the Magma Tide ----
+// a tide bridge (anchored at the hole's middle at the bridge's height): two obsidian troughs built out of the walls
+// across the shaft, their ends shaped into spillway lips round the hole; a channel along each holds the magma (live).
+// Obsidian lit from below: violet glass with a hot rim along its belly, glassy facets, cooling cracks, stalactites.
+function magmacoreBridgeSprite(wd) {
+  const W2 = Math.round(wd), hole = MAGMACORE.tide.hole, th = MAGMACORE.tide.th;
+  return magmacoreSprite(`bridge${W2}`, W2 + 24, 70, W2 / 2 + 12, 34, c => {
+    const O = MAGMACOREP.obs, half = W2 / 2;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    for (const s2 of [-1, 1]) {
+      const xi = s2 * hole / 2, xo = s2 * (half + 10);   // the inner lip, the wall end
+      const x0 = Math.min(xi, xo), x1 = Math.max(xi, xo);
+      // the trough's body: a thick slab of obsidian with a rounded spillway lip at the hole, its belly bulging down
+      const body = () => { c.beginPath(); c.moveTo(xo, -th - 2); c.lineTo(xi + s2 * 4, -th - 2); c.quadraticCurveTo(xi - s2 * 3, -th, xi - s2 * 2, -th + 6); c.quadraticCurveTo(xi - s2 * 1, th, xi + s2 * 10, th + 1); c.quadraticCurveTo((xi + xo) / 2, th + 4, xo, th + 2); c.closePath(); };
+      c.fillStyle = gLG(c, 0, -th - 2, 0, th + 4, [O[3], O[2], O[1], '#c86a7a']); body(); c.fill();
+      c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 1.2; body(); c.stroke();
+      // glassy facets: a few big flat planes as lit edges with dark creases
+      for (let q = 0; q < Math.floor((x1 - x0) / 26); q++) { const fx = x0 + 14 + q * 26 + (hash2(q, s2 + 4) - 0.5) * 6; gPair(c, [[fx, -th + 3], [fx + 5, 2], [fx - 2, th + 4]], 'rgba(20,12,50,.55)', 'rgba(210,190,255,.4)', 1.1, 1); }
+      // the channel's walls: a lit violet top rim with the magma's glow on its inner face
+      c.strokeStyle = 'rgba(220,200,255,.65)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(xo, -th - 1.6); c.lineTo(xi + s2 * 3, -th - 1.6); c.stroke();
+      // the hot rim light along its belly (the lava glow from below) and a crack glowing through it
+      c.strokeStyle = 'rgba(255,170,90,.85)'; c.lineWidth = 2; c.beginPath(); c.moveTo(xi + s2 * 10, th); c.quadraticCurveTo((xi + xo) / 2, th + 2.6, xo, th + 1); c.stroke();
+      magmacoreCrack(c, magmacoreCrackPts(xi + s2 * 16, th - 4, xi + s2 * (16 + (x1 - x0) * 0.4), th - 2, 5, s2 * 7 + 3, 2), 1.1, 0.7);
+      // obsidian stalactites hanging under it (short, never reaching a pilot's lane)
+      for (let q = 0; q < 4; q++) { const sx2 = xi + s2 * (22 + q * (x1 - x0 - 40) / 4), len = 3 + 3 * hash2(q, s2 + 9), yb = th + 1 + 2 * Math.sin(Math.PI * clamp(Math.abs(sx2 - xi) / (x1 - x0), 0, 1)); c.fillStyle = gLG(c, 0, yb, 0, yb + len, [O[2], O[1], '#e08a7a']); c.beginPath(); c.moveTo(sx2 - 3, yb - 1); c.lineTo(sx2 + 3, yb - 1); c.lineTo(sx2 + 0.5, yb + len); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 0.6; c.stroke(); }
+      // glints on the glass
+      c.fillStyle = 'rgba(255,255,255,.75)'; for (let q = 0; q < 3; q++) { const gx = xi + s2 * (18 + q * 30 + 10 * hash2(q, s2)); c.beginPath(); c.ellipse(gx, -th + 4, 2.4, 1, -0.3, 0, TWO_PI); c.fill(); }
+      // where it is built into the wall: a boss of crimson rock
+      c.fillStyle = gLG(c, 0, -th - 10, 0, th + 14, [MAGMACOREP.rock[3], MAGMACOREP.rock[2], MAGMACOREP.rock[1]]); c.beginPath(); c.ellipse(xo, 0, 12, th + 12, 0, 0, TWO_PI); c.fill(); c.strokeStyle = MAGMACOREP.rockEdge; c.lineWidth = 1; c.stroke();
+      c.strokeStyle = 'rgba(255,170,100,.6)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(xo, 0, 11, th + 11, 0, 0.3, 1.4); c.stroke();
+    }
+  });
+}
+// the magma in one trough half, live: its surface at level lv (0 low .. 1 brimming), a slosh wave, bubbles
+function magmacoreDrawTrough(h, s2, lv, T) {
+  const X = MAGMACORE.tide, xi = h.cx + s2 * X.hole / 2, xo = s2 > 0 ? h.R : h.L, th = X.th;
+  const top = h.alt + th - 1, floor = h.alt - th + 8, sl = floor + 6 + (top + 2 - floor - 6) * lv;
+  const N = 10, P = [];
+  for (let i = 0; i <= N; i++) { const u = i / N, x = lerp(xo, xi, u); P.push([sx(x), sy(sl + 1.6 * Math.sin(T * 5 + u * 7 + s2) + (u - 0.5) * 2 * (lv - 0.5) * 2)]); }
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(sx(xo), sy(floor)); P.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.lineTo(sx(xi), sy(floor)); ctx.closePath();
+  const g = ctx.createLinearGradient(0, sy(sl + 2), 0, sy(floor)); g.addColorStop(0, '#fff2a0'); g.addColorStop(0.35, '#ffb22a'); g.addColorStop(1, '#d04012');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,252,220,.9)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  // bubbles popping on the surface, more as it rises
+  for (let q = 0; q < 3; q++) { const u = pmod(T * (0.8 + lv) + q * 0.33 + s2 * 0.2, 1), bx = lerp(xo, xi, 0.2 + 0.6 * hash2(q, (T * 0.8 + q * 0.33 + s2 * 0.2) | 0)), r = (1 + 2.4 * Math.sin(u * Math.PI)) * s * (0.5 + lv); ctx.strokeStyle = 'rgba(255,240,170,.85)'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.arc(sx(bx), sy(sl + 0.5), r, Math.PI, TWO_PI); ctx.stroke(); }
+  // rafts of cooled crust riding the slosh, cracked and lit at their edges
+  for (let q = 0; q < 3; q++) { const u = 0.15 + 0.3 * q + 0.05 * Math.sin(T * 0.9 + q + s2), bx = lerp(xo, xi, u), by = sl + 1.6 * Math.sin(T * 5 + u * 7 + s2) - 1.2, w = (5 + 3 * hash2(q, 3)) * s; ctx.fillStyle = 'rgba(110,30,30,.8)'; ctx.beginPath(); ctx.ellipse(sx(bx), sy(by), w, w * 0.32, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = 'rgba(255,220,140,.7)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.ellipse(sx(bx), sy(by), w, w * 0.32, 0, 0.1, Math.PI - 0.1); ctx.stroke(); }
+  // the molten body glowing through the glass below the surface
+  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,120,40,${0.12 + 0.15 * lv})`; ctx.fillRect(Math.min(sx(xo), sx(xi)), sy(sl), Math.abs(sx(xi) - sx(xo)), (sl - floor) * s + 6 * s);
+  ctx.restore();
+  magmacoreGlow(ctx, sx((xi + xo) / 2), sy(sl), (Math.abs(xi - xo) * 0.6 + 10) * s, [255, 140, 50], 0.12 + 0.25 * lv);
+}
+function magmacoreDrawTide(h) {
+  const X = MAGMACORE.tide, T = G.t, q = magmacoreTideQ(h, T);
+  // the gushes pour first (they fall from behind the lips)
+  for (const s2 of [-1, 1]) {
+    const k0 = magmacoreSpill(h, T, s2), any = k0 > 0.02 || magmacoreSpill(h, T - X.Ls / X.vF, s2) > 0.02 || magmacoreSpill(h, T - X.Ls / X.vF / 2, s2) > 0.02;
+    // the telegraph: as a side's tide rises toward its lip, its half of the hole glows a warning below it
+    const rising = clamp((s2 * q - 0.15) / 0.35, 0, 1);
+    if (rising > 0.02 && k0 < 0.5) { ctx.save(); ctx.setLineDash([5 * s, 7 * s]); ctx.lineDashOffset = -T * 40 * s; ctx.strokeStyle = `rgba(255,120,60,${0.32 * rising})`; ctx.lineWidth = 2.2 * s; ctx.lineCap = 'round'; ctx.beginPath(); for (let i = 0; i <= 8; i++) { const u = i / 8, x = h.cx + s2 * X.hole / 2 - s2 * (5 + X.reach * Math.sqrt(u)), y = h.alt + 6 - u * X.Ls; i ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y)); } ctx.stroke(); ctx.restore(); }
+    if (!any) continue;
+    const P = magmacoreGushPts(h, T, s2, 12).filter(p => p[3] > 0.02);
+    if (P.length >= 2) magmacoreDrawRibbon(P, T, 4, s2 * 0.3 + h.alt * 0.01);
+  }
+  magmacoreBlit(magmacoreBridgeSprite(h.wd), h.cx, h.alt, 1, 1);
+  for (const s2 of [-1, 1]) magmacoreDrawTrough(h, s2, clamp(0.5 + 0.55 * s2 * q, 0, 1), T);
+}
+
+// ---- the Sprite Ring ----
+// an ember sprite (anchored at its body's middle): a plump little flame with a round face, big glowing eyes and a grin,
+// stubby arms, its flame tip licking up and back; pose g (0..3) flickers its tip, blink shuts its eyes
+const MAGMACORE_SPR = MAGMACORE.ring.rs;
+function magmacoreSpriteBody(g, blink) {
+  return magmacoreSprite(`spr${g}${blink ? 'b' : ''}`, 44, 56, 22, 32, c => {
+    const r = MAGMACORE_SPR + 0.5, F = MAGMACOREP.flame, w = [0, 2.5, -1.5, 1.2][g], hgt = [16, 19, 15, 18][g];
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // the flame: an outer orange tongue, an inner yellow tongue
+    const tongue = (k, dx) => { c.beginPath(); c.moveTo(-r * k, 0); c.bezierCurveTo(-r * k, -r * 0.9 * k, -r * 0.3 * k + dx * 0.4, -r * k - hgt * 0.4 * k, dx, -r * k - hgt * k); c.bezierCurveTo(r * 0.5 * k + dx * 0.3, -r * k - hgt * 0.3 * k, r * k, -r * 0.8 * k, r * k, 0); c.arc(0, 0, r * k, 0, Math.PI); c.closePath(); };
+    c.fillStyle = gLG(c, 0, -r - hgt, 0, r, [F[3], F[2], F[1]]); tongue(1, w); c.fill();
+    c.strokeStyle = '#b8300e'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = gLG(c, 0, -r - hgt * 0.7, 0, r, [F[2], F[1], F[0]]); tongue(0.74, w * 0.7); c.fill();
+    // the face: a round hot-white glow in the body's middle
+    c.fillStyle = gRG(c, 0, 1, r * 0.8, ['#fffef0', '#fff4b0', 'rgba(255,230,120,0)']); c.beginPath(); c.arc(0, 1, r * 0.82, 0, TWO_PI); c.fill();
+    // eyes: two big dark-amber ovals with white glints (shut: happy arcs)
+    if (blink) { c.strokeStyle = '#8a2a08'; c.lineWidth = 1.5; for (const e of [-1, 1]) { c.beginPath(); c.arc(e * 4.4, -0.5, 2.6, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); } }
+    else for (const e of [-1, 1]) { c.fillStyle = '#7a2208'; c.beginPath(); c.ellipse(e * 4.4, -1, 2.5, 3.4, 0, 0, TWO_PI); c.fill(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(e * 4.4 - 0.8, -2.4, 1, 0, TWO_PI); c.fill(); }
+    // a cheeky grin and rosy cheeks
+    c.strokeStyle = '#9a2a08'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 2.6, 3.4, 0.25, Math.PI - 0.25); c.stroke();
+    c.fillStyle = 'rgba(255,120,60,.45)'; for (const e of [-1, 1]) { c.beginPath(); c.ellipse(e * 7.2, 3.4, 2, 1.3, 0, 0, TWO_PI); c.fill(); }
+    // stubby arms waving out of its sides
+    for (const e of [-1, 1]) { c.strokeStyle = '#e0601a'; c.lineWidth = 3; c.beginPath(); c.moveTo(e * r * 0.85, 2); c.quadraticCurveTo(e * (r + 4), 0, e * (r + 5), -4 - g * e); c.stroke(); c.strokeStyle = '#ffd860'; c.lineWidth = 1.3; c.stroke(); }
+    // the warm rim along its belly
+    c.strokeStyle = 'rgba(255,250,210,.8)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, r - 1.2, 0.5, Math.PI - 0.5); c.stroke();
+  });
+}
+function magmacoreDrawRing(h) {
+  const X = MAGMACORE.ring, T = G.t, cx = sx(h.cx), cy = sy(h.alt);
+  // the ring's path: a faint swirl of heat where the sprites dance, so the gaps read before you reach them
+  ctx.save(); ctx.strokeStyle = 'rgba(255,170,90,.16)'; ctx.lineWidth = 9 * s; ctx.beginPath(); ctx.arc(cx, cy, h.rr * s, 0, TWO_PI); ctx.stroke();
+  ctx.setLineDash([3 * s, 9 * s]); ctx.lineDashOffset = -h.w * T * h.rr * s; ctx.strokeStyle = 'rgba(255,220,150,.3)'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.arc(cx, cy, h.rr * s, 0, TWO_PI); ctx.stroke(); ctx.restore();
+  const P = magmacoreRingPos(h, T), gl = magmacoreGlowCv([255, 160, 60]), dir = Math.sign(h.w);
+  // their trails of sparks, then their glows (one composite switch), then the sprites
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const [x, a, an] of P) {
+    for (let k = 1; k <= 3; k++) { const b = an - dir * k * 0.09, X2 = cx + Math.cos(b) * h.rr * s, Y2 = cy - Math.sin(b) * h.rr * s, r = (7 - k * 1.6) * s; ctx.globalAlpha = 0.5 - k * 0.12; ctx.drawImage(gl, X2 - r * 2, Y2 - r * 2, r * 4, r * 4); }
+    const r = 26 * s; ctx.globalAlpha = 0.4; ctx.drawImage(gl, sx(x) - r, sy(a) - r, r * 2, r * 2);
+  }
+  ctx.restore();
+  for (const [x, a, an, i] of P) {
+    const g = Math.floor(pmod(T * 10 + i * 1.7, 4)), blink = pmod(T * 0.7 + i * 0.37, 3) < 0.1, vx = -Math.sin(an) * dir;
+    magmacoreBlitAt(magmacoreSpriteBody(g, blink), sx(x), sy(a), clamp(-vx * 0.25, -0.3, 0.3), 1);
+  }
+}
+
+// ---- the Crust Blister ----
+// the blister (anchored on the wall line at its middle, bulging +x): a dome of cooled crust plates seamed with glowing
+// cracks on a collar of crimson rock. hot: its cracks blazing (crossfaded in through the tell). open: burst, a crater
+// of raw molten rock with shards of crust standing round it
+function magmacoreBlisterSprite(state) {
+  return magmacoreSprite(`blis${state}`, 70, 76, 20, 38, c => {
+    const C = MAGMACOREP.crust, rb = MAGMACORE.burst.rb, cx = 6;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // the collar of rock it swells from
+    c.fillStyle = gLG(c, 0, -34, 0, 34, [MAGMACOREP.rock[3], MAGMACOREP.rock[2], MAGMACOREP.rock[1]]); c.beginPath(); c.ellipse(-4, 0, 18, 34, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = MAGMACOREP.rockEdge; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,170,100,.6)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(-4, 0, 17, 33, 0, 0.2, 1.3); c.stroke();
+    if (state === 2) {
+      // burst: a crater of molten rock, jagged crust shards round its rim
+      c.fillStyle = gRG(c, cx, 2, rb, ['#fffbd6', '#ffd844', '#ff8a1a', '#a8280c']); c.beginPath(); c.ellipse(cx - 2, 0, rb * 0.7, rb * 0.9, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#8a1c0a'; c.lineWidth = 1.2; c.stroke();
+      for (let q = 0; q < 7; q++) { const an = -1.4 + q * 0.47, x = cx - 2 + Math.cos(an) * rb * 0.78, y = Math.sin(an) * rb * 0.95, tx = cx - 2 + Math.cos(an) * rb * 1.08, ty = Math.sin(an) * rb * 1.2; c.fillStyle = gLG(c, 0, y - 5, 0, y + 5, [C[3], C[2], '#b0543a']); c.beginPath(); c.moveTo(x - Math.sin(an) * 5, y + Math.cos(an) * 5); c.lineTo(tx, ty); c.lineTo(x + Math.sin(an) * 5, y - Math.cos(an) * 5); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.crustEdge; c.lineWidth = 0.8; c.stroke(); }
+      return;
+    }
+    // the dome: crust plates (each its own shade) with the cracks between them
+    const dome = () => { c.beginPath(); c.ellipse(cx - 4, 0, rb + 2, rb + 4, 0, -Math.PI / 2, Math.PI / 2); c.lineTo(-6, rb + 4); c.lineTo(-6, -rb - 4); c.closePath(); };
+    c.fillStyle = gRG(c, cx + 4, 6, rb * 1.4, state ? ['#c86a5a', '#7a3446', '#4a2034'] : [C[0], C[1], C[2], C[3]]); dome(); c.fill();
+    c.save(); dome(); c.clip();
+    const cracks = [[[cx - 6, -rb], [cx + 4, -10], [cx + 12, -2], [cx + rb, 2]], [[cx - 4, rb + 2], [cx + 2, 12], [cx + 12, -2]], [[cx + 4, -10], [cx - 4, -2], [cx - 6, 10]], [[cx + 2, 12], [cx + 16, 14]]];
+    for (const P of cracks) magmacoreCrack(c, P, state ? 2.4 : 1.4, state ? 1 : 0.55);
+    // plate rims raised as line pairs
+    for (const [x, y] of [[cx + 14, -12], [cx + 6, 6], [cx + 16, 8]]) gPair(c, [[x - 5, y - 4], [x, y - 6], [x + 5, y - 3]], 'rgba(40,14,30,.5)', 'rgba(255,200,180,.35)', 1, 0.9);
+    c.restore();
+    c.strokeStyle = MAGMACOREP.crustEdge; c.lineWidth = 1.2; dome(); c.stroke();
+    // the hot rim along its underside and a cool sheen on its crown
+    c.strokeStyle = state ? 'rgba(255,220,140,.95)' : 'rgba(255,160,90,.75)'; c.lineWidth = 1.8; c.beginPath(); c.ellipse(cx - 4, 0, rb + 1, rb + 3, 0, 0.35, 1.45); c.stroke();
+    c.strokeStyle = 'rgba(220,200,255,.45)'; c.lineWidth = 1.6; c.beginPath(); c.ellipse(cx - 4, 0, rb - 1, rb + 1, 0, -1.4, -0.6); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.6)'; c.beginPath(); c.ellipse(cx + 6, -rb * 0.62, 3, 1.4, 0.5, 0, TWO_PI); c.fill();
+  });
+}
+// a lava splash (anchored at its middle): a glossy molten blob
+function magmacoreGlobSprite() {
+  return magmacoreSprite('glob', 30, 30, 15, 15, c => {
+    const r = MAGMACORE.burst.gr + 0.4;
+    c.fillStyle = gRG(c, -r * 0.25, -r * 0.3, r * 1.35, ['#fffbe0', '#ffe060', '#ff9a24', '#e0501a', '#a8280c']); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#9a240c'; c.lineWidth = 1; c.stroke();
+    // a crust fleck, the hot rim below, the glossy highlight and a pinpoint glint
+    c.fillStyle = 'rgba(150,40,20,.55)'; c.beginPath(); c.ellipse(r * 0.3, r * 0.35, r * 0.28, r * 0.16, 0.5, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,240,180,.8)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, r - 1.6, 0.5, Math.PI - 0.5); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.ellipse(-r * 0.32, -r * 0.4, r * 0.34, r * 0.18, -0.6, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(-r * 0.5, -r * 0.48, r * 0.09, 0, TWO_PI); c.fill();
+  });
+}
+function magmacoreDrawBurst(h) {
+  const X = MAGMACORE.burst, d = h.side, T = G.t, st = h.st || magmacoreBurstAt(h, T);
+  // the tell: the splashes' fan, faintly scored in the heat where they will fly
+  if (st.ph === 'tell') {
+    const k = smooth(0.1, 0.7, st.tell);
+    ctx.save(); ctx.setLineDash([3 * s, 8 * s]); ctx.lineCap = 'round'; ctx.strokeStyle = `rgba(255,120,60,${0.26 * k})`; ctx.lineWidth = 2 * s;
+    for (let i = 0; i < X.n; i += 2) { ctx.beginPath(); let first = true; for (let tau = 0; tau <= X.fly; tau += 0.06) { const P = magmacoreGlobAt(h, i, tau); if (!P) break; first ? ctx.moveTo(sx(P[0]), sy(P[1])) : ctx.lineTo(sx(P[0]), sy(P[1])); first = false; } ctx.stroke(); }
+    ctx.restore();
+    magmacoreGlow(ctx, sx(h.base + d * 10), sy(h.alt), (34 + 24 * st.tell) * s, [255, 130, 50], 0.25 + 0.4 * st.tell * (0.7 + 0.3 * Math.sin(T * 26)));
+  }
+  if (st.ph === 'fly') {
+    // burst open, the crust slowly re-forming over the crater
+    const k = smooth(0.4, 1, st.k);
+    magmacoreGlow(ctx, sx(h.base + d * 8), sy(h.alt), 40 * s, [255, 140, 50], 0.5 * (1 - k));
+    magmacoreBlit(magmacoreBlisterSprite(2), h.base, h.alt, 1, d);
+    if (k > 0) magmacoreBlit(magmacoreBlisterSprite(1), h.base, h.alt, k, d);
+  } else if (st.ph === 'tell') {
+    const sw = 1 + 0.1 * smooth(0, 1, st.tell) + 0.03 * Math.sin(T * 30) * st.tell, X0 = sx(h.base), Y0 = sy(h.alt);
+    magmacoreBlitAt(magmacoreBlisterSprite(0), X0, Y0, 0, d, 1, sw, sw);
+    magmacoreBlitAt(magmacoreBlisterSprite(1), X0, Y0, 0, d, smooth(0, 0.8, st.tell), sw, sw);
+    // steam hissing from its cracks
+    if (Math.random() < 0.3) puff(h.base + d * (14 + Math.random() * 14), h.alt + (Math.random() - 0.5) * 30, d * 20, 30 + Math.random() * 30, 0.6, 3 + Math.random() * 3, 'smoke');
+  } else {
+    // at rest the crust cools from hot to dull over the first part of the rest
+    const k = 1 - smooth(0, 0.35, st.k);
+    magmacoreBlit(magmacoreBlisterSprite(0), h.base, h.alt, 1, d);
+    if (k > 0.01) magmacoreBlit(magmacoreBlisterSprite(1), h.base, h.alt, k, d);
+  }
+  // the splashes flying: each a glossy blob with a short hot streak behind it, fizzling out low down
+  if (st.ph === 'fly') {
+    const S = magmacoreGlobSprite();
+    for (let i = 0; i < X.n; i++) {
+      const P = magmacoreGlobAt(h, i, st.tau); if (!P) continue;
+      const Q = magmacoreGlobAt(h, i, Math.max(0, st.tau - 0.1)) || P, fade = 1 - smooth(h.alt - X.drop + 60, h.alt - X.drop, P[1]);
+      // a tapering tail of flame streaming back from the blob
+      { const px = sx(P[0]), py = sy(P[1]), qx = sx(Q[0]), qy = sy(Q[1]), dx = px - qx, dy = py - qy, ln = Math.hypot(dx, dy);
+        if (ln > 2) { const nx = -dy / ln * X.gr * 0.9 * s, ny = dx / ln * X.gr * 0.9 * s, g = ctx.createLinearGradient(px, py, qx, qy); g.addColorStop(0, `rgba(255,200,80,${0.85 * fade})`); g.addColorStop(0.5, `rgba(255,120,40,${0.5 * fade})`); g.addColorStop(1, 'rgba(220,60,20,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(px + nx, py + ny); ctx.quadraticCurveTo(qx + nx * 0.3 + (px - qx) * 0.3, qy + ny * 0.3 + (py - qy) * 0.3, qx, qy); ctx.quadraticCurveTo(qx - nx * 0.3 + (px - qx) * 0.3, qy - ny * 0.3 + (py - qy) * 0.3, px - nx, py - ny); ctx.closePath(); ctx.fill(); } }
+      magmacoreGlow(ctx, sx(P[0]), sy(P[1]), 18 * s, [255, 140, 50], 0.45 * fade);
+      magmacoreBlitAt(S, sx(P[0]), sy(P[1]), 0, 1, Math.max(0.15, fade));
+    }
+  }
+}
+
+// ---- the phoenix feather: a long flame-plumed feather, a gold quill, glowing from within ----
+function magmacoreFeatherSprite() {
+  return magmacoreSprite('feather', 30, 52, 15, 26, c => {
+    const P = MAGMACOREP.plume;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // the vane: a long leaf of plume, its tip flicking like a flame, its edge notched into barbs
+    const vane = () => { c.beginPath(); c.moveTo(0, 18); c.bezierCurveTo(-11, 10, -11, -10, -3, -20); c.quadraticCurveTo(0, -26, 3, -24); c.quadraticCurveTo(0, -20, 2, -18); c.bezierCurveTo(11, -8, 10, 10, 0, 18); c.closePath(); };
+    c.fillStyle = gLG(c, 0, -24, 0, 18, [P[0], P[1], P[2], P[3]]); vane(); c.fill();
+    c.strokeStyle = MAGMACOREP.plumeEdge; c.lineWidth = 0.9; vane(); c.stroke();
+    // barbs as line pairs fanning off the shaft
+    for (let i = 0; i < 6; i++) { const y = -14 + i * 5.2; for (const e of [-1, 1]) gPair(c, [[0, y + 1], [e * 5, y - 1.5], [e * 8.5, y - 4.5]], 'rgba(150,30,10,.5)', 'rgba(255,240,170,.5)', 0.8, 0.7); }
+    // its glowing heart: a flame-shaped eye mark of gold near the top
+    c.fillStyle = gRG(c, 0, -10, 6, ['#fffbe0', '#ffe066', 'rgba(255,170,40,0)']); c.beginPath(); c.ellipse(0, -10, 4.4, 6, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ff6a1a'; c.beginPath(); c.ellipse(0, -9, 1.7, 2.6, 0, 0, TWO_PI); c.fill();
+    // the quill: gold, lit along one side
+    c.strokeStyle = MAGMACOREP.goldEdge; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, 24); c.quadraticCurveTo(0.6, 4, 0, -18); c.stroke();
+    c.strokeStyle = '#ffd24a'; c.lineWidth = 1.5; c.stroke();
+    c.strokeStyle = 'rgba(255,255,230,.9)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-0.4, 22); c.quadraticCurveTo(0.2, 4, -0.4, -16); c.stroke();
+    // a sheen down the vane
+    c.strokeStyle = 'rgba(255,255,230,.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-6, 6); c.quadraticCurveTo(-7, -6, -3, -16); c.stroke();
+  });
+}
+function magmacoreDrawFeather(X, Y, t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2.2 * s, pulse = 0.8 + 0.2 * Math.sin(t * 3.1 + ph);
+  magmacoreGlow(ctx, X, Y + bob, 36 * s, [255, 140, 50], 0.45 * pulse);
+  magmacoreGlow(ctx, X, Y + bob, 16 * s, [255, 230, 150], 0.45 * pulse);
+  // little flames licking up off its tip
+  for (let k = 0; k < 3; k++) { const u = pmod(t * 1.6 + k / 3 + ph, 1), x = X + Math.sin(t * 3 + k * 2) * 4 * s, y = Y + bob - (20 + 22 * u) * s; ctx.fillStyle = `rgba(255,${200 - 100 * u | 0},60,${0.75 * (1 - u)})`; ctx.beginPath(); ctx.ellipse(x, y, (2.6 - 1.6 * u) * s, (4 - 2 * u) * s, 0, 0, TWO_PI); ctx.fill(); }
+  magmacoreBlitAt(magmacoreFeatherSprite(), X, Y + bob, 0.35 + Math.sin(t * 1.7 + ph) * 0.12);
+  for (let k = 0; k < 3; k++) { const a = t * 1.8 + ph + k * 2.1, x = X + Math.cos(a) * 18 * s, y = Y + bob + Math.sin(a) * 22 * s, tw = 0.5 + 0.5 * Math.sin(t * 6 + k * 2); ctx.fillStyle = `rgba(255,236,170,${0.5 + 0.4 * tw})`; ctx.beginPath(); ctx.moveTo(x, y - 3 * s * tw); ctx.lineTo(x + 0.9 * s, y); ctx.lineTo(x, y + 3 * s * tw); ctx.lineTo(x - 0.9 * s, y); ctx.closePath(); ctx.fill(); }
+}
+// the HUD's skim icon: a fat drop of lava
+function magmacoreDropSprite() {
+  return magmacoreSprite('drop', 22, 28, 11, 16, c => {
+    c.fillStyle = gRG(c, -2, 2, 12, ['#fffbd6', '#ffd844', '#ff8a1a', '#c0360e']); c.beginPath(); c.moveTo(0, -13); c.bezierCurveTo(4, -6, 9, 0, 9, 4); c.arc(0, 4, 9, 0, Math.PI); c.bezierCurveTo(-9, 0, -4, -6, 0, -13); c.fill();
+    c.strokeStyle = '#a8280c'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(-3.5, 2, 1.6, 3, 0.3, 0, TWO_PI); c.fill();
+  });
+}
+DRAW.magmacoreFall = magmacoreDrawFall; DRAW.magmacoreTide = magmacoreDrawTide; DRAW.magmacoreRing = magmacoreDrawRing; DRAW.magmacoreBurst = magmacoreDrawBurst;
+
+// ---- the stage's particles: cinders, crust flakes, rock chips and droplets ----
+{ const base = updateParticles; updateParticles = function (dt) {
+  base(dt);
+  if (!magmacoreOn()) return;
+  for (const q of G.particles) if (q.kind === 'mccinder') { q.vy -= (q.ex.col === 1 ? -60 : 420) * dt; q.ex.rot += q.ex.spin * dt; }
+}; }
+const MAGMACORE_CINDER = [null, [255, 170, 60], [110, 54, 70], [170, 70, 52], [255, 210, 80]];
+const magmacorePartCv = new Map();
+function magmacoreCinderSprite(col) {
+  let cv = magmacorePartCv.get(col); if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = 20; const c = cv.getContext('2d'); c.translate(10, 10); c.scale(2, 2);
+  const q = MAGMACORE_CINDER[col];
+  if (col === 1 || col === 4) { c.fillStyle = gRG(c, 0, 0, 4, ['#fffbe0', gCol(q), gCol(q, 0)]); c.beginPath(); c.arc(0, 0, 4, 0, TWO_PI); c.fill(); }
+  else { c.fillStyle = gRG(c, -1, 1, 4, [gCol(gMix(q, [255, 180, 120], 0.4)), gCol(q), gCol(gMix(q, [40, 10, 20], 0.4))]); c.beginPath(); c.moveTo(-3, -1); c.lineTo(-1, -3); c.lineTo(2.6, -2); c.lineTo(3, 1.5); c.lineTo(0, 3); c.lineTo(-2.6, 2); c.closePath(); c.fill(); }
+  magmacorePartCv.set(col, cv); return cv;
+}
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles;
+  if (additive || !ps.some(q => q.kind === 'mccinder')) return base(additive);
+  G.particles = ps.filter(q => q.kind !== 'mccinder'); try { base(additive); } finally { G.particles = ps; }
+  for (const q of ps) {
+    if (q.kind !== 'mccinder') continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
+    if (y < -20 || y > H + 20) continue;
+    const r = q.size * s, cv = magmacoreCinderSprite(q.ex.col || 1);
+    ctx.globalAlpha = Math.min(1, t * 3);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(q.ex.rot); ctx.drawImage(cv, -r, -r, r * 2, r * 2); ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}; }
+
+// ---- the shaft's walls: hot rock split into crust plates ----
+// Each wall is the volcano's living rock: plates of crimson stone (each its own shade and size) split apart by cracks
+// with the magma glowing in them, the cracks hottest by the shaft and cooling deeper in. Every plate is lit from below
+// by the lava (a warm lower edge, cool violet shade at its top), pitted with pumice holes, studded with obsidian chips
+// and, by the hottest cracks, little crusts of yellow sulphur crystals. Each section is cut through its own rock
+// (crimson by the caldera, orange-red on the falls, maroon with obsidian veins by the bridges, plum crust in the
+// blister field, violet glassy rock in the grotto...), so the plates change as you climb. The edge is a real lip of
+// rock: rounded knuckles of stone along it, each with a warm rim on its underside and violet shade on top, a glowing
+// notch only where a crack runs out to the edge.
+const MAGMACORE_WB = 160;   // wall tile height
+const MAGMACORE_ROCK = {
+  'Caldera Gate': { p: [[150, 52, 44], [128, 42, 40], [168, 64, 50], [112, 36, 38]], deep: [44, 12, 20], rim: [210, 96, 70], hot: 0.8, obs: 0.2 },
+  'Lavafall Steps': { p: [[168, 66, 44], [146, 54, 40], [184, 80, 52], [128, 46, 36]], deep: [50, 16, 16], rim: [226, 120, 76], hot: 0.9, obs: 0.15 },
+  'Tide Bridges': { p: [[120, 40, 50], [100, 32, 46], [138, 52, 58], [88, 28, 44]], deep: [34, 10, 26], rim: [190, 90, 96], hot: 0.7, obs: 0.45 },
+  'Blister Crust': { p: [[118, 60, 78], [98, 48, 68], [136, 72, 88], [86, 40, 60]], deep: [34, 14, 30], rim: [196, 118, 120], hot: 0.85, obs: 0.2 },
+  'Obsidian Grotto': { p: [[96, 58, 104], [80, 46, 92], [112, 70, 120], [70, 40, 84]], deep: [26, 14, 40], rim: [170, 130, 200], hot: 0.45, obs: 0.7 },
+  'Sprite Hollow': { p: [[170, 76, 52], [148, 62, 46], [188, 92, 60], [130, 52, 40]], deep: [52, 18, 16], rim: [236, 140, 86], hot: 0.85, obs: 0.2 },
+  'Core Gauntlet': { p: [[136, 34, 34], [114, 26, 30], [154, 44, 40], [98, 22, 28]], deep: [40, 8, 14], rim: [214, 84, 64], hot: 1, obs: 0.3 },
+  'The Molten Heart': { p: [[176, 84, 52], [154, 70, 46], [196, 100, 62], [136, 58, 40]], deep: [54, 20, 16], rim: [240, 150, 90], hot: 0.9, obs: 0.25 },
+};
+function magmacoreSecIdx(a) { const ss = (G.level && G.level.sections) || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++; return i; }
+const magmacoreRock = a => { const ss = (G.level && G.level.sections) || [], i = magmacoreSecIdx(a); return MAGMACORE_ROCK[ss[i] && ss[i].name] || MAGMACORE_ROCK['Caldera Gate']; };
+// the plate grid's corners: a jittered lattice in world space (rows 38-56 high, columns 30-46 wide), so tiles join
+const MAGMACORE_RH = 46, MAGMACORE_CW = 38;
+function magmacoreCorner(i, j) {
+  return [j * MAGMACORE_CW + (hash2(i * 7 + 3, j * 13 + 1) - 0.5) * 22 + (i & 1) * MAGMACORE_CW * 0.5, i * MAGMACORE_RH + (hash2(i * 11 + 5, j * 3 + 9) - 0.5) * 20];
+}
+function magmacoreWallPaint(c, side, a0, a1, x0, x1) {
+  const WXM = new Map(), wx = a => { const q = Math.round(a); let v = WXM.get(q); if (v === undefined) { v = walls(q)[side]; WXM.set(q, v); } return v; };
+  const into = side ? 1 : -1, A0 = a0 - 12, A1 = a1 + 12, outer = side ? x1 + 4 : x0 - 4, X0 = Math.min(x0, x1) - 6, X1 = Math.max(x0, x1) + 6;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the wall's soft shadow into the shaft
+  for (const [lw, al] of [[24, 0.05], [12, 0.08], [5, 0.1]]) { c.strokeStyle = `rgba(40,8,20,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  const R0 = magmacoreRock((a0 + a1) / 2);
+  // the grout between the plates: scorched rock with the magma glowing deep in it
+  c.fillStyle = gCol(gMix(R0.deep, [255, 90, 30], 0.18)); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  const i0 = Math.floor(A0 / MAGMACORE_RH) - 1, i1 = Math.ceil(A1 / MAGMACORE_RH) + 1, j0 = Math.floor(X0 / MAGMACORE_CW) - 2, j1 = Math.ceil(X1 / MAGMACORE_CW) + 1;
+  const C = new Map(), cor = (i, j) => { const k = i * 1000 + j; let v = C.get(k); if (!v) { v = magmacoreCorner(i, j); C.set(k, v); } return v; };
+  // the cracks along every plate edge: hot near the shaft, cooling deeper in (and some edges are just cold seams)
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    const p0 = cor(i, j), pr = cor(i, j + 1), pu = cor(i + 1, j);
+    for (const q of [pr, pu]) {
+      const mx = (p0[0] + q[0]) / 2, ma = (p0[1] + q[1]) / 2, dIn = (mx - wx(ma)) * into;
+      if (dIn < -10) continue;
+      const heat = R0.hot * (1 - smooth(10, 110, dIn)) * (hash2(i * 31 + j, q === pr ? 0x9a1 : 0x9a2) < 0.75 ? 1 : 0.15);
+      magmacoreCrack(c, [[p0[0], -p0[1]], [(p0[0] + q[0]) / 2 + (hash2(i, j + 0x9a3) - 0.5) * 4, -ma], [q[0], -q[1]]], 3.6, heat);
+    }
+  }
+  // the plates: each inset from its corners, lit from below, its own shade; pits, chips, line pairs, sulphur
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    const P = [cor(i, j), cor(i, j + 1), cor(i + 1, j + 1), cor(i + 1, j)], cx = P.reduce((s2, p) => s2 + p[0], 0) / 4, ca = P.reduce((s2, p) => s2 + p[1], 0) / 4, dIn = (cx - wx(ca)) * into;
+    if (dIn < -30 || ca < A0 - 60 || ca > A1 + 60) continue;
+    const R = magmacoreRock(ca), base = R.p[((i * 3 + j) % 4 + 4) % 4], v = (hash2(i * 17 + j, 0x9b1) - 0.5) * 22, col = base.map(q => q + v);
+    const Q = P.map(([x, a]) => [lerp(x, cx, 0.09), -lerp(a, ca, 0.11)]);
+    const top = Math.min(...Q.map(q => q[1])), bot = Math.max(...Q.map(q => q[1]));
+    c.beginPath(); Q.forEach(([x, y], k) => k ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+    c.fillStyle = gLG(c, 0, top, 0, bot, [gCol(gMix(col, [70, 40, 110], 0.35)), gCol(col), gCol(gMix(col, [255, 150, 80], 0.32))]); c.fill();
+    c.strokeStyle = gCol(gMix(col, [40, 8, 16], 0.55), 0.8); c.lineWidth = 0.7; c.stroke();
+    // the warm rim along its lower edge (the glow from the crack below), a cool violet edge along its top
+    c.strokeStyle = gCol(gMix(col, [255, 200, 130], 0.6), 0.7); c.lineWidth = 1.1; c.beginPath(); c.moveTo(Q[3][0] + 1, Q[3][1] - 1.2); c.lineTo(Q[2][0] - 1, Q[2][1] - 1.2); c.stroke();
+    c.strokeStyle = gCol(gMix(col, [200, 170, 255], 0.45), 0.4); c.lineWidth = 0.9; c.beginPath(); c.moveTo(Q[0][0] + 1.5, Q[0][1] + 1.2); c.lineTo(Q[1][0] - 1.5, Q[1][1] + 1.2); c.stroke();
+    const sd = i * 131 + j;
+    // a fracture line pair across the plate, here and there
+    if (hash2(sd, 0x9b2) < 0.45) { const u = hash2(sd, 0x9b3); gPair(c, [[lerp(Q[0][0], Q[1][0], u), lerp(Q[0][1], Q[1][1], u) + 2], [cx + (u - 0.5) * 8, -ca], [lerp(Q[3][0], Q[2][0], 1 - u), lerp(Q[3][1], Q[2][1], 1 - u) - 2]], gCol(gMix(col, [30, 6, 14], 0.6), 0.55), gCol(gMix(col, [255, 190, 150], 0.4), 0.35), 0.9, 0.8); }
+    // pumice pits: dark holes with a lit lower lip
+    const nP = Math.floor(hash2(sd, 0x9b4) * 3);
+    for (let q = 0; q < nP; q++) { const px = cx + (hash2(sd + q, 0x9b5) - 0.5) * 20, py = -ca + (hash2(sd + q, 0x9b6) - 0.5) * 18, r = 1.2 + 1.6 * hash2(sd + q, 0x9b7); c.fillStyle = gCol(gMix(col, [30, 6, 14], 0.65)); c.beginPath(); c.ellipse(px, py, r * 1.2, r, 0, 0, TWO_PI); c.fill(); c.strokeStyle = gCol(gMix(col, [255, 190, 140], 0.5), 0.6); c.lineWidth = 0.6; c.beginPath(); c.ellipse(px, py, r * 1.2, r, 0, 0.3, Math.PI - 0.3); c.stroke(); }
+    // an obsidian chip glinting violet
+    if (hash2(sd, 0x9b8) < R.obs) { const px = cx + (hash2(sd, 0x9b9) - 0.5) * 16, py = -ca + (hash2(sd, 0x9ba) - 0.5) * 14, r = 2.4 + 2.4 * hash2(sd, 0x9bb), an = hash2(sd, 0x9bc) * 3; const O = MAGMACOREP.obs;
+      c.save(); c.translate(px, py); c.rotate(an); c.fillStyle = gLG(c, 0, -r, 0, r, [O[3], O[1], O[0]]); c.beginPath(); c.moveTo(-r, r * 0.4); c.lineTo(-r * 0.2, -r); c.lineTo(r, -r * 0.2); c.lineTo(r * 0.4, r * 0.8); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 0.5; c.stroke(); c.strokeStyle = 'rgba(240,230,255,.75)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-r * 0.2, -r); c.lineTo(r * 0.3, r * 0.3); c.stroke(); c.restore(); }
+    // sulphur crystals crusting the hot cracks near the shaft
+    if (dIn < 70 && hash2(sd, 0x9bd) < 0.22 * R.hot) { const px = Q[3][0] + (Q[2][0] - Q[3][0]) * 0.4, py = lerp(Q[3][1], Q[2][1], 0.4) - 2.5; for (let q = 0; q < 3; q++) { const qx = px + (q - 1) * 2.6, h2 = 2.6 + 1.6 * hash2(q, sd); c.fillStyle = gLG(c, 0, py - h2, 0, py, ['#fff6a8', '#f0d040', '#b08a10']); c.beginPath(); c.moveTo(qx - 1.3, py); c.lineTo(qx, py - h2); c.lineTo(qx + 1.3, py); c.closePath(); c.fill(); } }
+  }
+  // depth: the rock darkens and cools away from the shaft, a hot breath of light by the lip
+  const ex = wx((a0 + a1) / 2);
+  c.fillStyle = gLG(c, ex, 0, ex + into * 120, 0, ['rgba(255,140,70,.14)', 'rgba(255,140,70,0)', gCol(R0.deep, 0.22), gCol(R0.deep, 0.55)]); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  c.restore();
+  // the lip: a band of rock along the edge, then knuckles of stone (violet shade on top, a warm rim underneath)
+  const rim = R0.rim;
+  c.save(); body(); c.clip();
+  c.strokeStyle = gCol(gMix(rim, R0.p[1], 0.45)); c.lineWidth = 11; gPoly(c, pts, false); c.stroke();
+  c.strokeStyle = gCol(gMix(rim, [40, 8, 20], 0.5), 0.55); c.lineWidth = 1; gPoly(c, pts.map(([x, y]) => [x + into * 5.6, y]), false); c.stroke();
+  c.restore();
+  // knuckles: irregular lumps of crust half sunk in the lip (stepping 10-26 apart on a fixed lattice so tiles agree)
+  for (let a = Math.floor(A0 / 18) * 18 - 18; a <= A1 + 18; a += 18) {
+    const q = a / 18 | 0, hh = hash2(q, 0x9c1 + side); if (hh < 0.18) continue;
+    const ry = 4 + 6 * hash2(q, 0x9c3 + side), rx = 2.6 + 2.4 * hh, aa = a + (hash2(q, 0x9c4 + side) - 0.5) * 8, x = wx(aa) - into * (rx * 0.25), y = -aa, tilt = (hash2(q, 0x9c5 + side) - 0.5) * 0.5;
+    const col = gMix(rim, hh > 0.7 ? R0.p[1] : [120, 60, 70], 0.25 + 0.3 * hash2(q, 0x9c6 + side));
+    c.fillStyle = gLG(c, 0, y - ry, 0, y + ry, [gCol(gMix(col, [80, 50, 130], 0.45)), gCol(col), gCol(gMix(col, [255, 200, 130], 0.5))]); c.beginPath(); c.ellipse(x, y, rx, ry, tilt, 0, TWO_PI); c.fill();
+    c.strokeStyle = gCol(gMix(col, [40, 8, 20], 0.6), 0.6); c.lineWidth = 0.5; c.stroke();
+    c.strokeStyle = 'rgba(255,190,120,.55)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(x, y, rx - 0.5, ry - 0.5, tilt, 0.4, Math.PI - 0.4); c.stroke();
+    if (hh > 0.6) { c.strokeStyle = gCol(gMix(col, [40, 8, 20], 0.5), 0.5); c.lineWidth = 0.6; c.beginPath(); c.moveTo(x - rx * 0.6, y - ry * 0.2); c.lineTo(x + rx * 0.4, y + ry * 0.3); c.stroke(); }
+  }
+  // a glowing notch where a hot crack runs out to the edge, every so often
+  for (let a = Math.floor(A0 / 54) * 54; a <= A1; a += 54) {
+    if (hash2(a / 54 | 0, 0x9c2 + side) > 0.5 * R0.hot) continue;
+    const y = -a - 20 * hash2(a, side), x = wx(-y);
+    magmacoreCrack(c, [[x + into * 1, y], [x + into * 6, y + 2], [x + into * 12, y - 1]], 2.2, 0.95);
+  }
+}
+// the wall's x at a height, memoised per level (the live glows ask for the same heights every frame)
+function magmacoreWallX(a, side) {
+  const L = G.level, M = L._mcw || (L._mcw = new Map()), key = Math.round(a) * 2 + side;
+  let x = M.get(key); if (x === undefined) { x = walls(Math.round(a))[side]; M.set(key, x); if (M.size > 6000) M.clear(); }
+  return x;
+}
+let magmacoreMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+function magmacoreTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+// the hot vents along the walls (where the cracks breathe glow out at the lip): deterministic per level
+function magmacoreVents(side) {
+  const L = G.level; if (!L) return [];
+  const C = L._mcv || (L._mcv = [null, null]);
+  if (C[side]) return C[side];
+  const out = [];
+  for (let j = 0; j * 130 < L.end + 400; j++) { const a = j * 130 + 130 * hash2(j, 0x9d1 + side); if (a > 300 && hash2(j, 0x9d2 + side) < 0.55 && !L.all.hazards.some(h => h.lo - 40 < a && h.hi + 40 > a)) out.push({ a, sd: j * 3 + side }); }
+  return (C[side] = out);
+}
+function magmacoreDrawWalls() {
+  magmacoreCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, Pd = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / MAGMACORE_WB), j1 = Math.floor(top / MAGMACORE_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const wide = drawPad > 0 ? 1 : 0, id = `w${side}_${j}_${wide}`, need = j <= j1;
+      if (!need && (magmacoreMade || MAGMACOREC.tiles.has(id))) continue;
+      if (!MAGMACOREC.tiles.has(id)) magmacoreMade++;
+      const a0 = j * MAGMACORE_WB, a1 = a0 + MAGMACORE_WB;
+      let Tl = MAGMACOREC.tiles.get(id);
+      if (!Tl) {
+        let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+        const vis = ox / s + 30, x0 = side ? lo - 20 : wide ? lo - 210 : Math.max(lo - 210, -vis), x1 = side ? (wide ? hi + 210 : Math.min(hi + 210, WORLD_W + vis)) : hi + 20;
+        Tl = magmacoreTile(id, x0, x1, a0, a1, c => magmacoreWallPaint(c, side, a0, a1, x0, x1));
+      }
+      if (!need) continue;
+      magmacoreTileBlit(Tl);
+      const y0 = sy(a1) - 1, hh = MAGMACORE_WB * s + 2;
+      ctx.fillStyle = Tl.deep || (Tl.deep = gCol(gMix(magmacoreRock(a0 + 80).deep, [20, 4, 10], 0.25)));
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + Pd) ctx.fillRect(xe, y0, cssW + 30 + Pd - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - Pd) ctx.fillRect(-30 - Pd, y0, xe + 30 + Pd, hh); }
+    }
+  }
+  magmacoreMade = 0;
+  // live: the hot vents breathing their glow out over the lip, batched (one composite switch, the cached glow sprite)
+  const T = G.t, gw = magmacoreGlowCv([255, 120, 40]);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const side of [0, 1]) {
+    const into = side ? 1 : -1;
+    for (const V of magmacoreVents(side)) {
+      if (V.a < G.camAlt - 60 || V.a > G.camAlt + viewH + 60) continue;
+      const X = sx(magmacoreWallX(V.a, side) + into * 6), Y = sy(V.a), r = 34 * s;
+      ctx.globalAlpha = 0.22 + 0.12 * Math.sin(T * 1.8 + V.sd); ctx.drawImage(gw, X - r, Y - r, r * 2, r * 2);
+    }
+  }
+  ctx.restore();
+}
+// ---- the backdrop: the magma chamber receding behind the shaft ----
+// far (0.07): the volcano's heart opened up behind the shaft, a cavern of hot air glowing up from below: hazy ranges of
+// distant crags, and nearer, each section's own landmarks: the caldera's lava river between rocky banks, the stepped
+// terraces of the lava falls, obsidian arch bridges over glowing canals, the blister field's crust domes and steam,
+// the grotto's glassy obsidian crystals round a cool pool, the sprites' hearths glowing in the rock, the core's great
+// molten veins. near (0.2): dark crags with glowing seams leaning in at the edges, soft and dim. Depth is shown by easing
+// colour toward each section's haze; every section has its own light. Live: the far lava falls flow and the far lava
+// pools and veins breathe their glow (a handful of cheap blits).
+const MAGMACORE_FAR = 0.07, MAGMACORE_NEAR = 0.2, MAGMACORE_BB = 440, MAGMACORE_NB = 300;
+const MAGMACORE_LIGHT = {
+  'Caldera Gate': { top: [74, 26, 44], bot: [150, 50, 24], haze: [120, 46, 40], rock: [110, 40, 40], lava: [255, 150, 50], glow: [255, 140, 60] },
+  'Lavafall Steps': { top: [84, 30, 40], bot: [170, 64, 24], haze: [136, 56, 38], rock: [120, 46, 38], lava: [255, 170, 60], glow: [255, 160, 70] },
+  'Tide Bridges': { top: [56, 22, 56], bot: [130, 40, 40], haze: [100, 40, 60], rock: [86, 34, 52], lava: [255, 140, 60], glow: [255, 120, 80] },
+  'Blister Crust': { top: [64, 30, 58], bot: [140, 54, 44], haze: [112, 54, 64], rock: [96, 50, 66], lava: [255, 150, 70], glow: [255, 140, 90] },
+  'Obsidian Grotto': { top: [40, 26, 70], bot: [96, 46, 90], haze: [80, 52, 104], rock: [70, 48, 100], lava: [255, 140, 80], glow: [200, 150, 255] },
+  'Sprite Hollow': { top: [86, 34, 36], bot: [176, 76, 30], haze: [140, 64, 40], rock: [126, 54, 40], lava: [255, 180, 70], glow: [255, 180, 80] },
+  'Core Gauntlet': { top: [62, 14, 26], bot: [160, 36, 18], haze: [120, 32, 30], rock: [100, 28, 30], lava: [255, 130, 40], glow: [255, 110, 40] },
+  'The Molten Heart': { top: [96, 40, 36], bot: [190, 90, 36], haze: [156, 76, 46], rock: [136, 62, 44], lava: [255, 190, 80], glow: [255, 190, 100] },
+};
+function magmacoreLightAt(a) {
+  const ss = (G.level && G.level.sections) || [], i = magmacoreSecIdx(a), me = MAGMACORE_LIGHT[ss[i] && ss[i].name] || MAGMACORE_LIGHT['Caldera Gate'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 320) { k = 0.5 * smooth(ss[i + 1].a0 - 320, ss[i + 1].a0, a); o = MAGMACORE_LIGHT[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 320) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 320, a)); o = MAGMACORE_LIGHT[ss[i - 1].name]; }
+  if (!o) return me;
+  const out = {}; for (const key in me) out[key] = gMix(me[key], o[key], k); return out;
+}
+function magmacoreXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+const magmacoreC = (col, L, k, a = 1) => gCol(gMix(col, L.haze, k), a);
+const magmacoreV3 = (c, y0, y1, P, L, k) => gLG(c, 0, y0, 0, y1, P.map(q => magmacoreC(q, L, k)));
+const MAGMACORE_SET = {
+  'Caldera Gate': 'river', 'Lavafall Steps': 'falls', 'Tide Bridges': 'bridges', 'Blister Crust': 'blisters',
+  'Obsidian Grotto': 'grotto', 'Sprite Hollow': 'hearths', 'Core Gauntlet': 'veins', 'The Molten Heart': 'heart',
+};
+// ---- painters (any context, world units, y down; k eases into the haze) ----
+// a crag of rock (base at y, rising h): a lumpy mass lit from below (a warm foot, cool violet shade at its crown),
+// seams as line pairs, a glowing crack or two
+function magmacoreCrag(c, x, y, w, h, L, k, sd, cracks = true, foot = 0) {
+  const P = [], n = 9;
+  for (let i = 0; i <= n; i++) { const u = i / n, bump = Math.sin(u * Math.PI) ** 0.7, j = (hash2(i, sd) - 0.5) * 0.24; P.push([x - w / 2 + w * u + (hash2(i, sd + 1) - 0.5) * w * 0.06, y - h * (bump * (0.82 + j) + (i % 2 ? 0.06 : 0))]); }
+  c.beginPath(); c.moveTo(x - w / 2 - 4 - foot * 0.2, y + 2 + foot); c.lineTo(x - w / 2 - 4, y + 2); for (const [px, py] of P) c.lineTo(px, py); c.lineTo(x + w / 2 + 4, y + 2); c.lineTo(x + w / 2 + 4 + foot * 0.2, y + 2 + foot); c.closePath();
+  c.fillStyle = foot ? gLG(c, 0, y - h, 0, y + foot, [magmacoreC(gMix(L.rock, [60, 40, 110], 0.4), L, k), magmacoreC(L.rock, L, k), magmacoreC(gMix(L.rock, [255, 140, 70], 0.42), L, k), magmacoreC(gMix(L.rock, [255, 140, 70], 0.42), L, k, 0)]) : magmacoreV3(c, y - h, y, [gMix(L.rock, [60, 40, 110], 0.4), L.rock, gMix(L.rock, [255, 140, 70], 0.42)], L, k); c.fill();
+  c.strokeStyle = magmacoreC(gMix(L.rock, [30, 6, 18], 0.5), L, k, 0.7); c.lineWidth = 1; c.beginPath(); P.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py)); c.stroke();
+  // the crown's cool sheen, the seams, the warm glow at its foot
+  c.strokeStyle = magmacoreC([200, 170, 255], L, k, 0.3); c.lineWidth = 1.4; c.beginPath(); P.slice(2, n - 1).forEach(([px, py], i) => i ? c.lineTo(px, py + 2) : c.moveTo(px, py + 2)); c.stroke();
+  for (let q = 0; q < 3; q++) { const u = 0.25 + q * 0.25, sx2 = x - w / 2 + w * u; gPair(c, [[sx2, y - h * 0.75 * Math.sin(u * Math.PI) + 6], [sx2 + (hash2(q, sd) - 0.5) * 10, y - h * 0.4], [sx2 + (hash2(q, sd + 2) - 0.5) * 8, y]], magmacoreC([30, 6, 18], L, k, 0.5), magmacoreC([255, 190, 150], L, k, 0.25), 1.1, 1); }
+  if (cracks) { const cx2 = x + (hash2(sd, 5) - 0.5) * w * 0.4; c.save(); c.globalAlpha = 1 - k * 0.6; magmacoreCrack(c, magmacoreCrackPts(cx2, y, cx2 + (hash2(sd, 6) - 0.5) * 16, y - h * 0.55, 4, sd, 3), 1.6, 0.8); c.restore(); }
+}
+// a column of rock holding up a ledge (top centre x, yTop; width w at the top; h tall): flaring to its foot, which
+// fades into the haze below; lit warm on one flank, seamed, a glowing crack
+function magmacorePillar(c, x, yT, w, h, L, k, sd) {
+  const yB = yT + h, j = q => (hash2(q, sd) - 0.5) * 6;
+  c.fillStyle = gLG(c, 0, yT, 0, yB, [magmacoreC(gMix(L.rock, [30, 6, 18], 0.3), L, k), magmacoreC(L.rock, L, k), magmacoreC(L.rock, L, k, 0)]);
+  c.beginPath(); c.moveTo(x - w / 2, yT); for (let q = 1; q <= 4; q++) c.lineTo(x - w / 2 - q * w * 0.08 + j(q), yT + h * q / 4); c.lineTo(x + w / 2 + w * 0.32, yB); for (let q = 3; q >= 0; q--) c.lineTo(x + w / 2 + q * w * 0.08 + j(q + 9), yT + h * q / 4); c.closePath(); c.fill();
+  c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [magmacoreC([255, 160, 90], L, k, 0.18), magmacoreC([255, 160, 90], L, k, 0), magmacoreC([60, 30, 90], L, k, 0.2)]); c.fill();
+  for (let q = 0; q < 2; q++) { const sx2 = x + (q ? 0.22 : -0.18) * w; gPair(c, [[sx2, yT + 4], [sx2 + j(q + 20), yT + h * 0.4], [sx2 + j(q + 22) * 1.5, yT + h * 0.75]], magmacoreC([30, 6, 18], L, k, 0.45), magmacoreC([255, 190, 150], L, k, 0.22), 1.1, 1); }
+  c.save(); c.globalAlpha = 0.8 - k * 0.4; magmacoreCrack(c, magmacoreCrackPts(x + j(30), yT + h * 0.15, x + j(31), yT + h * 0.6, 4, sd, 3), 1.4, 0.7); c.restore();
+}
+// a glowing lava pool (centre x, y; half-width rx): molten rock with drifting crust islands, a dark rocky bank
+function magmacorePool(c, x, y, rx, L, k, sd) {
+  const ry = rx * 0.22;
+  c.fillStyle = magmacoreC(gMix(L.rock, [30, 6, 18], 0.4), L, k); c.beginPath(); c.ellipse(x, y + 1.5, rx + 5, ry + 4, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, x, y, rx, [magmacoreC([255, 250, 200], L, k * 0.4), magmacoreC(L.lava, L, k * 0.4), magmacoreC([200, 50, 16], L, k * 0.4)]); c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TWO_PI); c.fill();
+  for (let q = 0; q < 3; q++) { const ix = x + (hash2(q, sd) - 0.5) * rx * 1.3, iy = y + (hash2(q, sd + 1) - 0.5) * ry * 0.7, ir = 1.6 + 2 * hash2(q, sd + 2); c.strokeStyle = magmacoreC([255, 250, 210], L, k * 0.4, 0.7); c.lineWidth = 0.8; c.beginPath(); c.ellipse(ix, iy, ir, ir * 0.5, 0, 0, TWO_PI); c.stroke(); }
+  c.strokeStyle = magmacoreC(gMix(L.rock, [255, 180, 120], 0.4), L, k, 0.8); c.lineWidth = 1.2; c.beginPath(); c.ellipse(x, y + 1, rx + 3, ry + 2.5, 0, 0.1, Math.PI - 0.1); c.stroke();
+  c.strokeStyle = magmacoreC([255, 240, 190], L, k * 0.4, 0.6); c.lineWidth = 1; c.beginPath(); c.ellipse(x, y, rx * 0.8, ry * 0.6, 0, 3.6, 4.6); c.stroke();
+}
+// a distant lava fall from (x, y0) to (x, y1): a tapering ribbon of molten rock with a bright core, mist at its foot
+function magmacoreFallBg(c, x, y0, y1, w, L, k) {
+  c.fillStyle = gLG(c, 0, y0, 0, y1, [magmacoreC([255, 236, 140], L, k * 0.4), magmacoreC(L.lava, L, k * 0.4), magmacoreC([210, 70, 24], L, k * 0.5)]);
+  c.beginPath(); c.moveTo(x - w * 0.5, y0); c.quadraticCurveTo(x - w * 0.6, (y0 + y1) / 2, x - w * 0.75, y1); c.lineTo(x + w * 0.75, y1); c.quadraticCurveTo(x + w * 0.6, (y0 + y1) / 2, x + w * 0.5, y0); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC([255, 252, 220], L, k * 0.4, 0.7); c.lineWidth = Math.max(1, w * 0.18); c.beginPath(); c.moveTo(x - w * 0.1, y0); c.lineTo(x - w * 0.15, y1); c.stroke();
+  c.fillStyle = gRG(c, x, y1, w * 2.6, [magmacoreC([255, 200, 120], L, k * 0.4, 0.5), magmacoreC([255, 160, 80], L, k * 0.4, 0.15), magmacoreC([255, 160, 80], L, k, 0)]); c.beginPath(); c.arc(x, y1, w * 2.6, 0, TWO_PI); c.fill();
+}
+// a ledge of rock (its top at y from x0 to x1): a flat lit top, a rounded front, a lava pool held in its top
+function magmacoreLedge(c, x0, x1, y, d, L, k, sd) {
+  c.fillStyle = magmacoreV3(c, y - 4, y + d, [gMix(L.rock, [255, 170, 110], 0.25), L.rock, gMix(L.rock, [30, 6, 18], 0.45)], L, k);
+  c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.quadraticCurveTo(x1 + 8, y + d * 0.4, x1 - 4, y + d); c.quadraticCurveTo((x0 + x1) / 2, y + d + 10, x0 + 4, y + d); c.quadraticCurveTo(x0 - 8, y + d * 0.4, x0, y); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC(gMix(L.rock, [30, 6, 18], 0.5), L, k, 0.7); c.lineWidth = 1; c.stroke();
+  for (let q = 0; q < 2; q++) gPair(c, [[x0 + 6, y + d * (0.35 + q * 0.3)], [(x0 + x1) / 2, y + d * (0.3 + q * 0.3) + 3], [x1 - 6, y + d * (0.35 + q * 0.3)]], magmacoreC([30, 6, 18], L, k, 0.45), magmacoreC([255, 190, 150], L, k, 0.25), 1, 1);
+}
+// an obsidian spire or crystal (base at x, y; height h): faceted violet glass, a lit facet and a glint
+function magmacoreShard(c, x, y, h, w, lean, L, k) {
+  const O = [[200, 180, 255], [108, 86, 176], [51, 40, 106]];
+  const tip = [x + lean * h, y - h];
+  c.fillStyle = magmacoreV3(c, y - h, y, [O[0], O[1], O[2]], L, k); c.beginPath(); c.moveTo(x - w / 2, y); c.lineTo(tip[0], tip[1]); c.lineTo(x + w / 2, y); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC([44, 33, 96], L, k); c.lineWidth = 0.8; c.stroke();
+  c.fillStyle = magmacoreC([230, 220, 255], L, k, 0.35); c.beginPath(); c.moveTo(x - w * 0.1, y); c.lineTo(tip[0], tip[1]); c.lineTo(x + w * 0.22, y); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC([255, 170, 110], L, k, 0.6); c.lineWidth = 1; c.beginPath(); c.moveTo(x - w / 2 + 1, y - 1); c.lineTo(x + w / 2 - 1, y - 1); c.stroke();
+}
+// an obsidian arch bridge from x0 to x1 at deck height y: a thick glassy span, its underside lit hot by the canal below
+function magmacoreArch(c, x0, x1, y, L, k) {
+  const O = [[176, 156, 240], [96, 76, 160], [46, 36, 96]], mid = (x0 + x1) / 2, sp = x1 - x0, pw = 16, ay = x => y + 16 + 70 * (1 - Math.sqrt(Math.max(0, 1 - ((x - mid) / (sp / 2 - pw)) ** 2)));
+  // the piers and spandrels round an open arch, the piers running down out of sight into the glow
+  c.fillStyle = gLG(c, 0, y - 6, 0, y + 200, [magmacoreC(O[0], L, k), magmacoreC(O[1], L, k), magmacoreC(O[2], L, k), magmacoreC(O[2], L, k, 0)]);
+  c.beginPath(); c.moveTo(x0 - 6, y - 6); c.lineTo(x1 + 6, y - 6); c.lineTo(x1 + 4, y + 200); c.lineTo(x1 - pw, y + 200);
+  for (let q = 24; q >= 0; q--) { const x = mid - (sp / 2 - pw) + (sp - 2 * pw) * q / 24; c.lineTo(x, Math.min(y + 200, ay(x))); }
+  c.lineTo(x0 + pw, y + 200); c.lineTo(x0 - 4, y + 200); c.closePath(); c.fill();
+  // the arch's voussoirs, its hot-lit intrados, the deck's sheen and its little shard balusters
+  for (let q = 1; q < 10; q++) { const x = mid - (sp / 2 - pw) + (sp - 2 * pw) * q / 10, yy = ay(x); if (yy > y + 80) continue; gPair(c, [[x, yy - 1], [x + (x - mid) * 0.12, yy - 13]], magmacoreC([30, 20, 70], L, k, 0.55), magmacoreC([220, 210, 255], L, k, 0.35), 0.9, 0.8); }
+  c.strokeStyle = magmacoreC([255, 170, 110], L, k, 0.8); c.lineWidth = 1.6; c.beginPath(); for (let q = 0; q <= 24; q++) { const x = mid - (sp / 2 - pw) + (sp - 2 * pw) * q / 24, yy = ay(x); if (yy > y + 120) continue; c.lineTo(x, yy - 1); } c.stroke();
+  c.strokeStyle = magmacoreC([40, 30, 90], L, k); c.lineWidth = 1; c.beginPath(); c.moveTo(x0 - 6, y - 6); c.lineTo(x1 + 6, y - 6); c.stroke();
+  c.strokeStyle = magmacoreC([230, 220, 255], L, k, 0.55); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0 - 6, y - 5); c.lineTo(x1 + 6, y - 5); c.stroke();
+  gPair(c, [[x0 - 6, y + 8], [x1 + 6, y + 8]], magmacoreC([30, 20, 70], L, k, 0.5), magmacoreC([220, 210, 255], L, k, 0.3), 1, 0.8);
+  for (let q = 0; q <= 8; q++) magmacoreShard(c, x0 + sp * q / 8, y - 6, 9 + 3 * (q % 2), 5, 0, L, k);
+}
+// a crust blister dome (base centre x, y; radius r): plum crust plates seamed with glowing cracks, sometimes burst open
+function magmacoreDome(c, x, y, r, L, k, sd, open) {
+  const C = [[170, 110, 130], [110, 62, 86], [66, 34, 56]];
+  c.fillStyle = gRG(c, x - r * 0.2, y - r * 0.2, r * 1.3, [magmacoreC(gMix(C[0], [255, 160, 110], 0.2), L, k), magmacoreC(C[1], L, k), magmacoreC(C[2], L, k)]); c.beginPath(); c.ellipse(x, y, r, r * 0.8, 0, Math.PI, TWO_PI); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC([60, 24, 50], L, k); c.lineWidth = 0.9; c.stroke();
+  c.save(); c.globalAlpha = 1 - k * 0.5;
+  if (open) { c.fillStyle = gRG(c, x, y - r * 0.5, r * 0.5, ['#fffbd0', '#ffc040', 'rgba(230,80,20,.9)']); c.beginPath(); c.ellipse(x, y - r * 0.72, r * 0.4, r * 0.16, 0, 0, TWO_PI); c.fill(); }
+  for (let q = 0; q < 3; q++) { const an = Math.PI * (1.2 + q * 0.3), px = x + Math.cos(an) * r * 0.95, py = y + Math.sin(an) * r * 0.76; magmacoreCrack(c, magmacoreCrackPts(px, py, x + (hash2(q, sd) - 0.5) * r * 0.4, y - r * 0.5, 3, sd + q, 2), 1.2, 0.8); }
+  c.restore();
+  c.strokeStyle = magmacoreC([255, 180, 120], L, k, 0.7); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x - r, y - 0.5); c.lineTo(x + r, y - 0.5); c.stroke();
+}
+// a hearth niche in the rock (centre x, y): a round glowing hollow with tiny ember sprites dancing in it
+function magmacoreHearth(c, x, y, L, k, sd) {
+  c.fillStyle = magmacoreC(gMix(L.rock, [255, 170, 110], 0.2), L, k); c.beginPath(); c.ellipse(x, y, 30, 22, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, x, y + 6, 26, [magmacoreC([255, 230, 150], L, k * 0.3), magmacoreC([255, 140, 50], L, k * 0.3), magmacoreC([120, 30, 20], L, k * 0.4)]); c.beginPath(); c.ellipse(x, y, 25, 18, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = magmacoreC([60, 14, 20], L, k, 0.6); c.lineWidth = 1.2; c.beginPath(); c.ellipse(x, y, 25, 18, 0, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+  c.strokeStyle = magmacoreC([255, 210, 150], L, k, 0.6); c.lineWidth = 1.2; c.beginPath(); c.ellipse(x, y, 27, 20, 0, 0.2, Math.PI - 0.2); c.stroke();
+  for (let q = 0; q < 3; q++) { const fx = x + (q - 1) * 11, fy = y + 9 - (q === 1 ? 3 : 0), sc = 0.42 + 0.08 * (q === 1); c.save(); c.translate(fx, fy - 8 * sc); c.scale(sc, sc); c.globalAlpha = 1 - k * 0.3; const S = magmacoreSpriteBody(q % 4, (q + sd) % 3 === 0); c.drawImage(S.cv, -S.ax, -S.ay, S.w, S.h); c.restore(); }
+}
+// a molten vein winding through rock (points P, width w): a dark scorched channel with lava glowing along its middle
+function magmacoreVein(c, P, w, L, k) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = magmacoreC(gMix(L.rock, [30, 6, 18], 0.5), L, k); c.lineWidth = w + 6; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = magmacoreC([200, 60, 20], L, k * 0.5); c.lineWidth = w; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = magmacoreC([255, 170, 60], L, k * 0.4); c.lineWidth = w * 0.6; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = magmacoreC([255, 245, 190], L, k * 0.4, 0.8); c.lineWidth = Math.max(1, w * 0.22); gPoly(c, P, false); c.stroke();
+}
+// the far tile's layout (shared by the painter and the live glows): its landmarks' places, all inside the tile
+function magmacoreFarLayout(j, u0, u1) {
+  const W = u1 - u0, y0 = -(j + 1) * MAGMACORE_BB, y1 = -j * MAGMACORE_BB, sd = j * 13 + 7, rnd = q => hash2(j, sd + q), cx = WORLD_W / 2, flip = j % 2 ? 1 : -1;
+  return { W, y0, y1, sd, rnd, cx, flip };
+}
+// The far layer is built in two passes so things crossing a tile edge stay whole: every tile paints its own scene and
+// both neighbours' (same order everywhere), first their backs (distant ranges, the cliffs' rock), then their fronts
+// (ledges, basins, falls, landmarks). Value steps give the depth: the distant ranges are dark, cool and hazy; the
+// cliffs flanking the shaft are warmer, lit along their rims by the lava below; the ledges and landmarks warmest.
+function magmacoreFarPaint(c, sec, a0, a1, u0, u1) {
+  const j = Math.floor(a0 / MAGMACORE_BB), js = [j + 1, j, j - 1].filter(q => q >= -1);
+  for (const jj of js) magmacoreFarScene(c, sec, jj, u0, u1, 0);
+  for (const jj of js) magmacoreFarScene(c, sec, jj, u0, u1, 1);
+}
+const MAGMACORE_CLIFF = { river: 46, heart: 40, falls: 56, bridges: 40, blisters: 26, grotto: 50, hearths: 70, veins: 92 };
+// the cliffs' inner edge (x) at canvas height y on a side (0 left, 1 right): two octaves of smooth seeded noise
+function magmacoreCliffX(side, y, kind) {
+  const n = (P, sd) => { const q = y / P, i = Math.floor(q), f = q - i, e = f * f * (3 - 2 * f); return lerp(hash2(i, sd), hash2(i + 1, sd), e); };
+  const w = (MAGMACORE_CLIFF[kind] ?? 50) + 30 * n(150, 0x7c1 + side * 31) + 9 * n(46, 0x7c5 + side * 17);
+  return side ? WORLD_W + 20 - w : -20 + w;
+}
+function magmacoreDarkL(L, k) { return { ...L, rock: gMix(L.rock, [26, 12, 32], k), haze: gMix(L.haze, [44, 18, 44], 0.55) }; }
+// one side's cliff body between canvas heights ya < yb: obsidian-dark rock, warm toward its lit rim, strata as line
+// pairs, hot cracks glowing inside it (line pairs: a white-hot core in a dark crust edge)
+function magmacoreCliffBody(c, side, ya, yb, u0, u1, L, kind, sd) {
+  const e = side ? -1 : 1, xe = side ? u1 + 10 : u0 - 10, P = [];
+  for (let y = ya; y <= yb + 0.1; y += 12) P.push([magmacoreCliffX(side, Math.min(y, yb), kind), Math.min(y, yb)]);
+  const xin = P.reduce((m, p) => side ? Math.min(m, p[0]) : Math.max(m, p[0]), side ? 1e9 : -1e9);
+  const dark = gMix(L.rock, [24, 10, 26], 0.62), mid = gMix(L.rock, [40, 14, 28], 0.4), warm = gMix(L.rock, [255, 120, 60], 0.18);
+  c.fillStyle = gLG(c, xe, 0, xin, 0, [gCol(dark), gCol(dark), gCol(mid), gCol(warm)]);
+  c.beginPath(); c.moveTo(xe, ya); for (const [x, y] of P) c.lineTo(x, y); c.lineTo(xe, yb); c.closePath(); c.fill();
+  // strata following the face
+  c.save(); c.beginPath(); c.moveTo(xe, ya); for (const [x, y] of P) c.lineTo(x, y); c.lineTo(xe, yb); c.closePath(); c.clip();
+  for (let q = 1; q <= 3; q++) gPair(c, P.map(([x, y]) => [x - e * q * 17, y]), gCol(gMix(dark, [10, 4, 12], 0.4), 0.55), gCol([255, 170, 120], 0.12), 1.2, 1);
+  // hot cracks inside the rock, more of them in the core's veins
+  const nC = kind === 'veins' ? 5 : 2;
+  for (let q = 0; q < nC; q++) {
+    const yy = ya + (yb - ya) * hash2(q, sd + side * 5 + 401), x0 = magmacoreCliffX(side, yy, kind) - e * (6 + 10 * hash2(q, sd + 402)), len = (kind === 'veins' ? 70 : 40) + 50 * hash2(q, sd + 403);
+    const P2 = magmacoreCrackPts(x0, yy, x0 - e * len * 0.8, yy - len * (0.4 + 0.6 * hash2(q, sd + 404)), 5, sd + q * 7 + side, kind === 'veins' ? 7 : 4);
+    magmacoreCrack(c, P2, kind === 'veins' ? 2.6 : 1.6, kind === 'veins' ? 0.95 : 0.7);
+    if (kind === 'veins') { const [bx, by] = P2[2]; magmacoreCrack(c, magmacoreCrackPts(bx, by, bx - e * 26, by + 30 * (hash2(q, sd + 405) - 0.2), 3, sd + q * 11, 4), 1.4, 0.8); }
+  }
+  c.restore();
+  // the rim lit by the lava below: a soft warm bloom and a bright edge
+  c.lineCap = 'butt'; c.lineJoin = 'round';
+  c.strokeStyle = gCol(L.glow, 0.16); c.lineWidth = 9; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = gCol(gMix(L.lava, [255, 230, 170], 0.3), 0.75); c.lineWidth = 1.8; gPoly(c, P, false); c.stroke();
+}
+// a ledge of rock growing out of a cliff at canvas height y, reaching w in from the face: a lit top, a rounded belly
+// curving back into the rock; long ones hold a basin carved into their top, full of lava
+function magmacoreCliffLedge(c, side, y, w, L, kind, sd, basin) {
+  const e = side ? -1 : 1, xf = magmacoreCliffX(side, y, kind), xb = magmacoreCliffX(side, y + 30, kind), xt = xf + e * w, d = 20 + w * 0.08;
+  const rock = gMix(L.rock, [40, 14, 28], 0.3);
+  // only what stands out of the face shows: clip to the shaft side of the cliff's edge (its back is inside the rock)
+  c.save(); c.beginPath(); { const xo = side ? -400 : WORLD_W + 400; c.moveTo(xo, y - 30); for (let yy = y - 30; yy <= y + d + 60; yy += 8) c.lineTo(magmacoreCliffX(side, yy, kind) - e * 1.5, yy); c.lineTo(xo, y + d + 60); c.closePath(); } c.clip();
+  c.fillStyle = gLG(c, 0, y - 4, 0, y + d, [gCol(gMix(rock, [255, 170, 110], 0.28)), gCol(rock), gCol(gMix(rock, [20, 8, 20], 0.5))]);
+  c.beginPath(); c.moveTo(xf - e * 14, y - 3); c.lineTo(xt - e * 4, y - 3); c.quadraticCurveTo(xt + e * 4, y + 1, xt, y + d * 0.5); c.quadraticCurveTo(xt - e * w * 0.3, y + d + 4, xb - e * 10, y + d + 30); c.lineTo(xf - e * 14, y + d + 30); c.closePath(); c.fill();
+  c.strokeStyle = gCol(gMix(rock, [20, 6, 16], 0.5), 0.8); c.lineWidth = 1; c.stroke();
+  // the lit rim along its front, a crease along its belly
+  c.strokeStyle = gCol(gMix(L.lava, [255, 230, 170], 0.3), 0.7); c.lineWidth = 1.4; c.beginPath(); c.moveTo(xt, y + d * 0.5); c.quadraticCurveTo(xt - e * w * 0.3, y + d + 4, xb - e * 10, y + d + 30); c.stroke();
+  gPair(c, [[xf, y + 6], [xt - e * 10, y + 7]], gCol([30, 8, 20], 0.5), gCol([255, 190, 150], 0.25), 1, 1);
+  c.restore();
+  if (basin) {
+    // a basin carved into its top: a dark lip, lava inside, a hot glint, its glow on the rock
+    const bx = xf + e * w * 0.55, rx = w * 0.32, ry = 4.2;
+    c.fillStyle = gCol(gMix(rock, [20, 6, 16], 0.6)); c.beginPath(); c.ellipse(bx, y - 1, rx + 3, ry + 2.5, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = gRG(c, bx, y - 1, rx, ['#fff2b0', '#ffb030', '#e0501a']); c.beginPath(); c.ellipse(bx, y - 1, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,250,220,.8)'; c.lineWidth = 0.9; c.beginPath(); c.ellipse(bx, y - 1.5, rx * 0.7, ry * 0.5, 0, 3.5, 4.6); c.stroke();
+    c.strokeStyle = gCol(gMix(rock, [255, 190, 120], 0.5), 0.8); c.lineWidth = 1; c.beginPath(); c.ellipse(bx, y - 0.5, rx + 3, ry + 2.5, 0, 0.15, Math.PI - 0.15); c.stroke();
+    c.fillStyle = gRG(c, bx, y - 6, rx * 1.6, [gCol(L.glow, 0.25), gCol(L.glow, 0)]); c.beginPath(); c.ellipse(bx, y - 6, rx * 1.6, rx * 0.8, 0, 0, TWO_PI); c.fill();
+  }
+  return { xt, xbasin: xf + e * w * 0.55 };
+}
+// a fall of lava pouring over a ledge's lip and down the cliff into the basin below (x, y0 .. y1)
+function magmacoreCliffFall(c, x, y0, y1, w, L) {
+  c.fillStyle = gLG(c, 0, y0, 0, y1, ['#ffe680', gCol(L.lava), '#e0561a']);
+  c.beginPath(); c.moveTo(x - w * 0.5, y0); c.quadraticCurveTo(x - w * 0.55, (y0 + y1) / 2, x - w * 0.7, y1); c.lineTo(x + w * 0.7, y1); c.quadraticCurveTo(x + w * 0.55, (y0 + y1) / 2, x + w * 0.5, y0); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(170,40,14,.7)'; c.lineWidth = 1; c.stroke();
+  c.strokeStyle = 'rgba(255,252,220,.75)'; c.lineWidth = Math.max(1, w * 0.22); c.beginPath(); c.moveTo(x + w * 0.05, y0); c.lineTo(x + w * 0.08, y1); c.stroke();
+  c.fillStyle = gRG(c, x, y1 - 4, w * 2.4, ['rgba(255,220,150,.45)', 'rgba(255,150,80,.12)', 'rgba(255,150,80,0)']); c.beginPath(); c.ellipse(x, y1 - 4, w * 2.4, w * 1.2, 0, 0, TWO_PI); c.fill();
+}
+const MAGMACORE_LSTEP = 170;
+// the ledges on a side whose anchors fall in canvas heights [ya, yb): slot i sits at alt i*170 + jitter; long ledges
+// carry basins; a short ledge above a long one pours a fall into its basin
+function magmacoreLedgeSlot(side, i, kind) {
+  const h = q => hash2(i, 0x6d1 + side * 97 + q), alt = i * MAGMACORE_LSTEP + 40 * h(0), long = h(1) > 0.45;
+  return { alt, y: -alt, long, w: long ? 92 + 16 * h(2) : 30 + 10 * h(2), on: h(3) < (kind === 'falls' ? 0.95 : kind === 'veins' ? 0.35 : 0.7) };
+}
+function magmacoreFarScene(c, sec, j, u0, u1, pass) {
+  const L0 = MAGMACORE_LIGHT[sec] || MAGMACORE_LIGHT['Caldera Gate'], kind = MAGMACORE_SET[sec] || 'river';
+  const Ly = magmacoreFarLayout(j, u0, u1), { y0, y1, sd, rnd, cx, flip } = Ly, K = 0.3;
+  const L = L0, LF = magmacoreDarkL(L0, 0.55);
+  if (pass === 0) {
+    // the distant ranges: dark, cool silhouettes in two value steps (the farther row darker and hazier)
+    for (let row = 0; row < 2; row++) {
+      const LR = magmacoreDarkL(L0, row ? 0.45 : 0.62), kk = row ? 0.3 : 0.45, base = y0 + (row ? 300 : 150) + 40 * rnd(row + 1), n = 5;
+      for (let q = 0; q < n; q++) { const x = u0 + (q + 0.3 + 0.4 * hash2(q, sd + row * 9)) * (u1 - u0) / n, w = 90 + 60 * hash2(q, sd + row * 9 + 1), h = 110 + 80 * hash2(q, sd + row * 9 + 2); magmacoreCrag(c, x, base + 60 + 90 * hash2(q, sd + row * 9 + 3), w, h + 60, LR, kk, sd + q * 7 + row, false, 220); }
+    }
+    // the lava's glow welling up between them
+    for (let q = 0; q < 2; q++) { const x = u0 + (u1 - u0) * (0.3 + 0.4 * q + 0.1 * rnd(20 + q)), y = y0 + 160 + 200 * rnd(23 + q); c.fillStyle = gRG(c, x, y, 110, [gCol(L.glow, 0.14), gCol(L.glow, 0.04), gCol(L.glow, 0)]); c.beginPath(); c.arc(x, y, 110, 0, TWO_PI); c.fill(); }
+    if (kind === 'blisters') {
+      // a crust plain of blister domes far below the cliffs
+      const gy = y0 + 300 + 30 * rnd(3);
+      c.fillStyle = gLG(c, 0, gy - 10, 0, y1 + 160, [magmacoreC([96, 50, 74], LF, K), magmacoreC([64, 30, 52], LF, K), magmacoreC([50, 22, 42], LF, K, 0.6), magmacoreC([46, 20, 40], LF, K, 0)]); c.beginPath(); c.moveTo(u0 - 10, y1 + 160); c.lineTo(u0 - 10, gy); c.quadraticCurveTo(cx, gy - 20, u1 + 10, gy + 4); c.lineTo(u1 + 10, y1 + 160); c.closePath(); c.fill();
+      for (let q = 0; q < 5; q++) { const x = u0 + (u1 - u0) * (0.1 + 0.2 * q) + 10 * hash2(q, sd), r = 22 + 18 * hash2(q, sd + 1); magmacoreDome(c, x, gy - 6 + 6 * hash2(q, sd + 2), r, LF, K, sd + q, q === 2); }
+      for (let q = 0; q < 12; q++) { const x = u0 + (u1 - u0) * hash2(q, sd + 40), yy = gy + 24 + 190 * hash2(q, sd + 41), ln = 26 + 34 * hash2(q, sd + 42), an = (hash2(q, sd + 43) - 0.5) * 1.4; c.save(); c.globalAlpha = 0.6; magmacoreCrack(c, magmacoreCrackPts(x, yy, x + Math.cos(an) * ln, yy + Math.sin(an) * ln * 0.4, 3, sd + q, 4), 1.3, 0.6); c.restore(); }
+      for (let row = 1; row <= 2; row++) for (let q = 0; q < 4; q++) { const x = u0 + (u1 - u0) * (0.12 + 0.25 * q + 0.1 * (row & 1)) + 14 * hash2(q, sd + row * 5), r = 16 + 12 * hash2(q, sd + row * 5 + 1); magmacoreDome(c, x, gy + row * 80 + 10 * hash2(q, sd + row * 5 + 2), r, LF, K * (1 - row * 0.15), sd + q + row * 9, (q + row) % 3 === 0); }
+      for (let q = 0; q < 3; q++) { const x = u0 + (u1 - u0) * (0.2 + 0.3 * q), y = gy - 40; for (let p = 0; p < 4; p++) { c.fillStyle = `rgba(255,220,220,${0.1 - p * 0.02})`; c.beginPath(); c.arc(x + Math.sin(p * 1.3 + q) * 8, y - p * 34, 14 + p * 8, 0, TWO_PI); c.fill(); } }
+    }
+    if (kind === 'river' || kind === 'heart') {
+      // a lava river winding across between the cliffs' feet
+      const ry = y0 + 330 + 30 * rnd(3), P = [];
+      for (let x = u0 - 10; x <= u1 + 10; x += 20) P.push([x, ry + 10 * Math.sin(x * 0.02 + j)]);
+      const bc = gMix(L.rock, [24, 8, 20], 0.55); c.fillStyle = gLG(c, 0, ry, 0, y1 + 160, [gCol(bc), gCol(bc, 0.7), gCol(bc, 0)]); c.beginPath(); c.moveTo(u0 - 10, y1 + 160); P.forEach(([x, y]) => c.lineTo(x, y + 14)); c.lineTo(u1 + 10, y1 + 160); c.closePath(); c.fill();
+      magmacoreVein(c, P, 14, L, 0.15);
+    }
+    if (kind === 'grotto') {
+      // a cool cave: a glassy floor across the shaft below, shards rising from it round a glowing pool
+      const gy = y0 + 330 + 30 * rnd(3);
+      magmacoreLedge(c, u0 - 10, u1 + 10, gy, 60, LF, K, sd);
+      magmacorePool(c, cx + flip * 30, gy + 2, 60, L, 0.15, sd);
+      for (let q = 0; q < 7; q++) { const x = cx + (q - 3) * 50 + (hash2(q, sd) - 0.5) * 20, h = 40 + 60 * hash2(q, sd + 1); if (Math.abs(x - cx - flip * 30) < 70) continue; magmacoreShard(c, x, gy + 2, h, 16 + h * 0.18, (hash2(q, sd + 2) - 0.5) * 0.3, LF, K); }
+    }
+    // the cliffs flanking the shaft (each tile its own height band, so neighbours meet exactly)
+    for (const side of [0, 1]) magmacoreCliffBody(c, side, y0, y1, u0, u1, L, kind, sd + side * 3);
+    return;
+  }
+  // ---- the fronts: ledges with their basins and falls, then each section's landmark ----
+  for (const side of [0, 1]) {
+    const i0 = Math.floor((-y1) / MAGMACORE_LSTEP) - 1, i1 = Math.floor((-y0) / MAGMACORE_LSTEP) + 1;
+    for (let i = i0; i <= i1; i++) {
+      const S = magmacoreLedgeSlot(side, i, kind); if (!S.on || S.y < y0 || S.y >= y1) continue;
+      const B = magmacoreLedgeSlot(side, i - 1, kind), e = side ? -1 : 1;
+      // a short ledge pours into the long ledge's basin below it (the fall drawn first, behind the lower ledge)
+      if (!S.long && B.long && B.on) { const fx = magmacoreCliffX(side, S.y, kind) + e * (S.w - 6), bx = magmacoreCliffX(side, B.y, kind) + e * B.w * 0.55; if (Math.abs(fx - bx) < B.w * 0.3) magmacoreCliffFall(c, fx, S.y - 2, B.y - 2, 9 + 4 * hash2(i, side + 3), L); }
+      const R = magmacoreCliffLedge(c, side, S.y, S.w, L, kind, sd + i, S.long);
+      if (S.long && (kind === 'grotto' || kind === 'bridges')) for (let q = 0; q < 3; q++) magmacoreShard(c, R.xt - e * (10 + q * 16), S.y - 2, 16 + 10 * q, 8, -e * 0.15 * (q - 1), LF, 0.2);
+      if (kind === 'hearths' && !S.long) magmacoreHearth(c, magmacoreCliffX(side, S.y - 50, kind) - e * 34, S.y - 50, L, 0.15, sd + i);
+    }
+  }
+  if (kind === 'bridges') {
+    // an obsidian arch spanning cliff to cliff, its piers standing on the cliffs' ledges
+    const by = y0 + 170 + 40 * rnd(3), xl = magmacoreCliffX(0, by, kind) - 6, xr = magmacoreCliffX(1, by, kind) + 6;
+    magmacoreArch(c, xl, xr, by, LF, 0.5);
+  } else if (kind === 'heart' || kind === 'river') {
+    if (kind === 'heart') for (let q = 0; q < 3; q++) magmacoreShard(c, cx + flip * (20 + q * 26), y0 + 336, 40 + q * 14, 14, flip * 0.08, LF, 0.2);
+  }
+}
+// near: a dark crag with glowing seams leaning in from a side, or a spur of rock with a glowing pool on it; soft, dim
+function magmacoreNearPaint(c, a0, a1, u0, u1, sec) {
+  const L = MAGMACORE_LIGHT[sec] || MAGMACORE_LIGHT['Caldera Gate'], j = Math.floor(a0 / MAGMACORE_NB), k = 0.55;
+  if (hash2(j, 0xf21) < 0.3) return;
+  const side = hash2(j, 0xf22) < 0.5 ? 0 : 1, y0 = -a1 - 6, dd = side ? -1 : 1, x0 = side ? u1 + 10 : u0 - 10;
+  const oy = y0 + 70 + 140 * hash2(j, 0xf24), ow = 80 + 40 * hash2(j, 0xf27), oh = 30 + 14 * hash2(j, 0xf28);
+  // a spur of rock jutting in, lit from below, a glowing seam along it, a few obsidian shards on top
+  c.fillStyle = magmacoreV3(c, oy - oh * 1.4, oy + oh, [gMix(L.rock, [60, 40, 110], 0.3), L.rock, gMix(L.rock, [255, 150, 80], 0.35)], L, k);
+  c.beginPath(); c.moveTo(x0, oy - oh * 1.5); c.bezierCurveTo(x0 + dd * ow * 0.7, oy - oh * 1.2, x0 + dd * ow * 1.1, oy - oh * 0.2, x0 + dd * ow, oy + oh * 0.3); c.bezierCurveTo(x0 + dd * ow * 0.7, oy + oh * 0.9, x0 + dd * ow * 0.3, oy + oh * 0.6, x0, oy + oh * 1.1); c.closePath(); c.fill();
+  c.strokeStyle = magmacoreC(gMix(L.rock, [30, 6, 18], 0.5), L, k, 0.7); c.lineWidth = 1.2; c.stroke();
+  c.strokeStyle = magmacoreC([255, 170, 100], L, k, 0.7); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x0 + dd * ow * 0.98, oy + oh * 0.4); c.bezierCurveTo(x0 + dd * ow * 0.7, oy + oh * 0.85, x0 + dd * ow * 0.3, oy + oh * 0.58, x0, oy + oh * 1.06); c.stroke();
+  c.save(); c.globalAlpha = 0.75; magmacoreCrack(c, magmacoreCrackPts(x0, oy - oh * 0.2, x0 + dd * ow * 0.8, oy + oh * 0.1, 5, j, 3), 1.6, 0.7); c.restore();
+  for (let q = 0; q < 2; q++) gPair(c, [[x0 + dd * 4, oy - oh * (0.9 - q * 0.6)], [x0 + dd * ow * 0.5, oy - oh * (0.8 - q * 0.55)], [x0 + dd * ow * 0.8, oy - oh * (0.55 - q * 0.45)]], magmacoreC([30, 6, 18], L, k, 0.4), magmacoreC([255, 190, 150], L, k, 0.25), 1, 1);
+  for (let q = 0; q < 3; q++) { const sx2 = x0 + dd * ow * (0.2 + q * 0.2), top = oy - oh * (1.35 - q * 0.25); magmacoreShard(c, sx2, top + 4, 14 + 10 * hash2(q, j), 8, dd * 0.2 * (q - 1), L, k); }
+}
+function magmacoreRooms() {
+  const ss = (G.level && G.level.sections) || [], m = G.camAlt + viewH / 2, i = magmacoreSecIdx(m), W = 300, nm = q => (ss[q] && ss[q].name) || 'Caldera Gate';
+  if (ss[i + 1] && m > ss[i + 1].a0 - W) return { a: nm(i), b: nm(i + 1), k: smooth(ss[i + 1].a0 - W, ss[i + 1].a0 + W, m), nx: null };
+  if (i > 0 && m < ss[i].a0 + W) return { a: nm(i - 1), b: nm(i), k: smooth(ss[i].a0 - W, ss[i].a0 + W, m), nx: null };
+  return { a: nm(i), b: null, k: 0, nx: ss[i + 1] && m > ss[i + 1].a0 - W - 900 ? nm(i + 1) : null };
+}
+function magmacoreDrawBackground() {
+  magmacoreCacheCheck(); magmacoreMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = magmacoreXSpan();
+  const L = magmacoreLightAt(G.camAlt + viewH / 2), R = magmacoreRooms();
+  { const tp = gMix(L.top, [18, 8, 22], 0.35), bt = gMix(L.bot, [60, 16, 24], 0.3); ctx.fillStyle = gLG(ctx, 0, 0, 0, H, [gCol(tp), gCol(gMix(tp, bt, 0.55)), gCol(bt)]); } ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  const layer = (f, tag, paint, B, sec, al) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${sec}|${j}`, need = al > 0.01 && j <= Math.floor(pa1 / B);
+      if (!need && (magmacoreMade || MAGMACOREC.tiles.has(id))) continue;
+      if (!MAGMACOREC.tiles.has(id)) magmacoreMade++;
+      const Tl = magmacoreTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1, sec));
+      if (need) { ctx.globalAlpha = al; magmacoreTileBlit(Tl, f); ctx.globalAlpha = 1; }
+    }
+  };
+  const rooms = R.b ? [[R.a, 1 - R.k], [R.b, R.k]] : [[R.a, 1]];
+  if (R.nx) rooms.push([R.nx, 0]);
+  for (const [sec, al] of rooms) layer(MAGMACORE_FAR, 'f', (c, a0, a1, x0, x1, sc) => magmacoreFarPaint(c, sc, a0, a1, x0, x1), MAGMACORE_BB, sec, al);
+  // live: a slow breath of glow over the far lava (two cached blits per tile)
+  {
+    const f = MAGMACORE_FAR, pa0 = G.camAlt * f - 20, pa1 = G.camAlt * f + viewH + 20, gl = magmacoreGlowCv(L.glow);
+    const Y = a => H - (-a - G.camAlt * f) * s;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let j = Math.floor(pa0 / MAGMACORE_BB); j <= Math.floor(pa1 / MAGMACORE_BB); j++) {
+      const Ly = magmacoreFarLayout(j, u0, u1);
+      for (let q = 0; q < 2; q++) { const x = ox + (WORLD_W / 2 + (q ? 1 : -1) * Ly.flip * 90) * s, yy = Y(Ly.y0 + 200 + 140 * q), r = 130 * s; ctx.globalAlpha = 0.1 + 0.06 * Math.sin(T * 0.9 + j + q * 2); ctx.drawImage(gl, x - r, yy - r, r * 2, r * 2); }
+    }
+    ctx.restore();
+  }
+  for (const [sec, al] of rooms) layer(MAGMACORE_NEAR, 'n', magmacoreNearPaint, MAGMACORE_NB, sec, al);
+  magmacoreDrawMotes();
+  magmacoreMade = 0;
+}
+// embers and flakes of ash rising on the heat (motes)
+MOTE_DRIFT.mcmote = [-30, -80];
+{ const base = moteKind; moteKind = function (m, a) { return magmacoreOn() ? 'mcmote' : base(m, a); }; }
+function magmacoreDrawMotes() {
+  const T = G.t, gl = magmacoreGlowCv([255, 150, 60]);
+  for (const m of motes) {
+    const mx = ox + m.x * playW + Math.sin(T * 0.7 + m.ph) * 10 * s, y = m.y, r = (0.9 + m.sz * 0.5) * s * (0.6 + m.depth * 0.6);
+    if (m.r < 0.45) {   // a glowing ember
+      const tw = 0.55 + 0.45 * Math.sin(T * 3 + m.ph * 3);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.25 + 0.3 * m.depth) * tw; ctx.drawImage(gl, mx - r * 5, y - r * 5, r * 10, r * 10); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.55 + 0.4 * tw; ctx.fillStyle = '#ffd890'; ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill();
+    } else {   // a flake of ash
+      ctx.globalAlpha = 0.16 + 0.24 * m.depth; ctx.fillStyle = '#a89098'; ctx.beginPath(); ctx.ellipse(mx, y, r * 1.1, r * 0.6, m.ph + T * 0.5, 0, TWO_PI); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- The Molten Heart: the finish ----
+// At the top of the core the shaft opens into the volcano's heart: a tall domed cavern of hot rock, its back wall
+// dominated by the Heart itself, a great sphere of molten rock half sunk in the stone and beating slowly with light,
+// glowing veins running out from it through the walls. Obsidian columns flank the chamber. In front of the Heart, on a
+// pedestal of rock, sits the Phoenix's nest: a bowl of glossy obsidian shards lined with embers, and in it the Phoenix,
+// a plump fiery bird of gold and orange plumage with a crest of living flame and long flame-tipped tail plumes curling
+// over the nest's rim, smiling down. On the clear the Heart flares, the Phoenix spreads its great wings and calls, its
+// crest blazes and a fountain of sparks and embers fills the chamber.
+const MAGMACORE_FIN = { half: 176, wall: 330, dome: 170, ped: 58 };
+function magmacoreApse(c) { const F = MAGMACORE_FIN; c.beginPath(); c.moveTo(-F.half, 0); c.lineTo(-F.half, -F.wall); c.ellipse(0, -F.wall, F.half, F.dome, 0, Math.PI, TWO_PI); c.lineTo(F.half, 0); c.closePath(); }
+const MAGMACORE_HEART = { y: -326, r: 70 };
+function magmacoreChamberSprite() {
+  const F = MAGMACORE_FIN, HR = MAGMACORE_HEART;
+  return magmacoreSprite('chamber', 440, 600, 220, 560, c => {
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    c.save(); magmacoreApse(c); c.clip();
+    // the back wall: hot rock, darker and cooler up in the dome, glowing from the Heart
+    c.fillStyle = gLG(c, 0, -F.wall - F.dome, 0, 0, ['#4a1a36', '#7a2a30', '#a8442a']); c.fillRect(-190, -540, 380, 560);
+    // crust plates on it, seamed with glowing cracks
+    for (let i = 0; i < 9; i++) for (let j = 0; j < 7; j++) {
+      const x = -180 + j * 60 + (i & 1) * 30 + (hash2(i, j + 0xe1) - 0.5) * 16, y = -20 - i * 58 + (hash2(j, i + 0xe2) - 0.5) * 14;
+      if (Math.hypot(x, y - HR.y) < HR.r + 14) continue;
+      const hot = 1 - smooth(HR.r, HR.r + 200, Math.hypot(x, y - HR.y));
+      magmacoreCrack(c, magmacoreCrackPts(x - 28, y, x + 28, y + (hash2(i, j) - 0.5) * 10, 3, i * 9 + j, 3), 2.2, 0.3 + 0.6 * hot);
+      magmacoreCrack(c, magmacoreCrackPts(x, y, x + (hash2(j, i) - 0.5) * 14, y - 56, 3, i * 7 + j, 3), 2.2, 0.3 + 0.6 * hot);
+    }
+    // veins of magma running out from the Heart through the rock
+    for (let q = 0; q < 7; q++) { const an = -Math.PI + q * Math.PI / 6 + (hash2(q, 0xe3) - 0.5) * 0.3, P = []; for (let k = 0; k <= 6; k++) { const r = HR.r + k * 26; P.push([Math.cos(an + Math.sin(k + q) * 0.08) * r, HR.y + Math.sin(an + Math.sin(k + q) * 0.08) * r * 0.9 + (an > 0 ? 0 : 0)]); } magmacoreCrack(c, P, 6 - q % 3, 1); }
+    c.fillStyle = gRG(c, 0, HR.y, 260, ['rgba(255,190,90,.45)', 'rgba(255,120,50,.14)', 'rgba(255,120,50,0)']); c.fillRect(-190, -540, 380, 560);
+    // the Heart's socket: a rim of scorched rock round it
+    c.fillStyle = gRG(c, 0, HR.y, HR.r + 18, ['#2a0a14', '#5a1a20', '#8a3428']); c.beginPath(); c.arc(0, HR.y, HR.r + 16, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,170,100,.6)'; c.lineWidth = 2; c.beginPath(); c.arc(0, HR.y, HR.r + 15, 0.3, Math.PI - 0.3); c.stroke();
+    // the floor: rock worn smooth, a glowing seam along it
+    c.fillStyle = gLG(c, 0, -26, 0, 0, ['#b0503a', '#7a2a2a', '#4a1620']); c.beginPath(); c.moveTo(-190, 0); c.lineTo(-190, -18); c.quadraticCurveTo(0, -30, 190, -18); c.lineTo(190, 0); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,200,140,.6)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-176, -18.5); c.quadraticCurveTo(0, -30.5, 176, -18.5); c.stroke();
+    c.restore();
+    // the chamber's lip: a thick rim of rock round the apse, knuckled, lit from below
+    c.strokeStyle = '#4a1418'; c.lineWidth = 17; magmacoreApse(c); c.stroke();
+    c.strokeStyle = gLG(c, 0, -F.wall - F.dome, 0, 0, ['#5a2a50', '#8e3a32', '#d06a44']); c.lineWidth = 13; magmacoreApse(c); c.stroke();
+    for (let k = 0; k < 26; k++) { const u = k / 25, ang = Math.PI + u * Math.PI, x = Math.cos(ang) * (F.half + 1), y = -F.wall + Math.sin(ang) * (F.dome + 1), rr = 3 + 3 * hash2(k, 0xe4); magmacoreBall(c, x, y, rr, MAGMACOREP.rock, MAGMACOREP.rockEdge, 0.5); }
+    // obsidian columns flanking the chamber: tall faceted glass, lit hot along their inner edges, gold-bound
+    for (const e of [-1, 1]) {
+      const x = e * (F.half + 6), O = MAGMACOREP.obs;
+      c.fillStyle = gLG(c, x - 18, 0, x + 18, 0, e < 0 ? [O[2], O[1], O[3]] : [O[3], O[1], O[2]]); c.beginPath(); c.moveTo(x - 16, 0); c.lineTo(x - 13, -300); c.lineTo(x, -338); c.lineTo(x + 13, -300); c.lineTo(x + 16, 0); c.closePath(); c.fill();
+      c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 1.2; c.stroke();
+      c.strokeStyle = 'rgba(220,205,255,.55)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x - e * 4, -6); c.lineTo(x - e * 3, -300); c.lineTo(x, -334); c.stroke();
+      c.strokeStyle = 'rgba(255,170,100,.7)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - e * 14, -4); c.lineTo(x - e * 11.5, -296); c.stroke();
+      for (const y of [-60, -170, -280]) { c.fillStyle = gLG(c, 0, y - 5, 0, y + 5, MAGMACOREP.gold); magmacoreRR(c, x - 17, y - 5, 34, 10, 4); c.fill(); c.strokeStyle = MAGMACOREP.goldEdge; c.lineWidth = 0.8; c.stroke(); c.strokeStyle = 'rgba(255,255,220,.7)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x - 14, y - 3); c.lineTo(x + 14, y - 3); c.stroke(); }
+    }
+    // the pedestal: a drum of rock carved in tiers, a glowing seam round each, rock chips at its foot
+    const D = F.ped;
+    c.fillStyle = gLG(c, 0, -D - 10, 0, -12, ['#6a2a40', '#9a3a30', '#d06a3c']); c.beginPath(); c.moveTo(-96, -16); c.bezierCurveTo(-94, -D * 0.7, -84, -D - 8, -54, -D - 4); c.quadraticCurveTo(0, -D - 12, 54, -D - 4); c.bezierCurveTo(84, -D - 8, 94, -D * 0.7, 96, -16); c.quadraticCurveTo(0, -6, -96, -16); c.fill();
+    c.strokeStyle = '#4a1418'; c.lineWidth = 1.3; c.stroke();
+    for (const [w, y] of [[76, -D * 0.36], [88, -D * 0.68]]) magmacoreCrack(c, [[-w, y + 4], [-w * 0.5, y - 1], [0, y - 2], [w * 0.5, y - 1], [w, y + 4]], 2, 0.85);
+    for (const [x, y, rr] of [[-92, -20, 6], [-80, -14, 4], [86, -18, 5.5], [98, -12, 3.5], [-26, -10, 3], [40, -11, 3.6]]) magmacoreBall(c, x, y, rr, MAGMACOREP.rock, MAGMACOREP.rockEdge, 0.5);
+    // lava pools glowing in the floor either side, crusted at their edges
+    for (const e of [-1, 1]) { const x = e * 136, y = -22; c.fillStyle = '#4a1620'; c.beginPath(); c.ellipse(x, y, 30, 8, 0, 0, TWO_PI); c.fill(); c.fillStyle = gRG(c, x, y, 26, ['#fffbd6', '#ffc040', '#e05a18']); c.beginPath(); c.ellipse(x, y, 25, 6, 0, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(255,250,210,.7)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y, 18, 3.6, 0, 3.6, 4.6); c.stroke(); for (let q = 0; q < 3; q++) { c.fillStyle = '#6a2a40'; c.beginPath(); c.ellipse(x + (q - 1) * 14, y + (q % 2) * 2, 4, 1.6, 0, 0, TWO_PI); c.fill(); } }
+  });
+}
+// the nest (anchored at the middle of its rim): a bowl of obsidian shards, embers glowing in it
+function magmacoreNestSprite(front) {
+  return magmacoreSprite(`nest${front ? 1 : 0}`, 180, 70, 90, 40, c => {
+    const O = MAGMACOREP.obs;
+    c.lineJoin = 'round';
+    if (!front) {
+      // the bowl's inside: embers and ash, glowing
+      c.fillStyle = gRG(c, 0, 0, 70, ['#fff2a0', '#ff9a30', '#a8341a', '#4a1620']); c.beginPath(); c.ellipse(0, 0, 70, 14, 0, 0, TWO_PI); c.fill();
+      // the back shards rising behind the bird
+      for (let q = 0; q < 9; q++) { const u = q / 8, x = -66 + u * 132, h = 16 + 10 * Math.sin(u * Math.PI) + 6 * hash2(q, 0xe5), lean = (u - 0.5) * 0.6; c.fillStyle = gLG(c, 0, -h, 0, 0, [O[1], O[2], '#a84a3a']); c.beginPath(); c.moveTo(x - 8, 2); c.lineTo(x + lean * h, -h); c.lineTo(x + 8, 2); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 0.8; c.stroke(); }
+      return;
+    }
+    // the front: a rim of big glassy shards, lit hot from the embers inside and from below
+    const bowl = () => { c.beginPath(); c.moveTo(-80, -4); c.quadraticCurveTo(-78, 26, 0, 30); c.quadraticCurveTo(78, 26, 80, -4); c.quadraticCurveTo(0, 8, -80, -4); c.closePath(); };
+    c.fillStyle = gLG(c, 0, -4, 0, 30, [O[2], O[1], '#c86a6a']); bowl(); c.fill();
+    c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 1.2; bowl(); c.stroke();
+    for (let q = 0; q < 11; q++) { const u = q / 10, x = -76 + u * 152, y = 4 + 18 * Math.sin(u * Math.PI) * 0.5, h = 14 + 8 * hash2(q, 0xe6), lean = (u - 0.5) * 0.8;
+      c.fillStyle = gLG(c, 0, y - h, 0, y + 6, [O[0], O[1], O[2]]); c.beginPath(); c.moveTo(x - 9, y + 6); c.lineTo(x + lean * h, y - h); c.lineTo(x + 9, y + 6); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 0.8; c.stroke();
+      c.strokeStyle = 'rgba(240,230,255,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x - 3, y + 4); c.lineTo(x + lean * h * 0.9, y - h + 2); c.stroke(); }
+    c.strokeStyle = 'rgba(255,180,110,.8)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-70, 18); c.quadraticCurveTo(0, 34, 70, 18); c.stroke();
+  });
+}
+const MAGMACORE_PK = 1.25;
+// a flame feather (in the current transform: base at 0,0, pointing +y, length len, half-width w): a broad leaf of
+// plumage with a gradient from gold at the base to fire at the tip, its tip curling up into a flame, a shaft and sheen
+function magmacoreFlameFeather(c, len, w, curl, P, tipLight = true, soft = false) {
+  const f = () => { c.beginPath(); c.moveTo(-w * 0.55, 0); c.bezierCurveTo(-w * 1.1, len * 0.35, -w * 0.9, len * 0.75, curl * w * 0.8, len); c.bezierCurveTo(w * 0.7 + curl * w * 0.3, len * 0.72, w * 1.1, len * 0.35, w * 0.55, 0); c.closePath(); };
+  c.fillStyle = gLG(c, 0, 0, 0, len, [P[0], P[1], P[2], P[3]]); f(); c.fill();
+  c.strokeStyle = soft ? 'rgba(190,60,16,.35)' : MAGMACOREP.plumeEdge; c.lineWidth = soft ? 0.7 : 0.9; f(); c.stroke();
+  // the shaft and a soft sheen down the lit side
+  if (!soft) { c.strokeStyle = 'rgba(150,34,10,.45)'; c.lineWidth = 0.9; } else { c.strokeStyle = 'rgba(0,0,0,0)'; } c.beginPath(); c.moveTo(0, 1); c.quadraticCurveTo(-w * 0.1, len * 0.5, curl * w * 0.55, len * 0.92); c.stroke();
+  c.strokeStyle = 'rgba(255,252,225,.6)'; c.lineWidth = Math.max(1, w * 0.22); c.beginPath(); c.moveTo(-w * 0.45, len * 0.12); c.quadraticCurveTo(-w * 0.7, len * 0.45, -w * 0.25, len * 0.75); c.stroke();
+  // the tip flaring into a little tongue of flame
+  if (tipLight) { c.fillStyle = gLG(c, 0, len * 0.8, 0, len + w * 1.6, ['rgba(255,220,90,.95)', 'rgba(255,140,40,.8)', 'rgba(240,80,20,0)']); c.beginPath(); c.moveTo(curl * w * 0.8 - w * 0.4, len - w * 0.4); c.quadraticCurveTo(curl * w * 0.8 - w * 0.6, len + w * 0.9, curl * w * 1.4, len + w * 1.7); c.quadraticCurveTo(curl * w * 0.8 + w * 0.5, len + w * 0.6, curl * w * 0.8 + w * 0.45, len - w * 0.4); c.closePath(); c.fill(); }
+}
+// the Phoenix's body (anchored at the middle of its seat in the nest): a round belly swelling into a proud chest and
+// a slender neck, layered flame feathers over it, a ruff of plumes at the neck, the tail plumes drooping over the nest
+function magmacorePhoenixBody() {
+  const K = MAGMACORE_PK, P = MAGMACOREP.plume;
+  return magmacoreSprite('phoenix2', 220 * K, 190 * K, 110 * K, 128 * K, c => {
+    c.scale(K, K); c.lineCap = 'round'; c.lineJoin = 'round';
+    // the tail plumes behind: long flame feathers drooping out over the nest's rim either side
+    for (const [e, len, an, w] of [[-1, 70, 1.25, 11], [1, 70, -1.25, 11], [-1, 58, 0.85, 10], [1, 58, -0.85, 10], [-1, 52, 1.6, 8], [1, 52, -1.6, 8]]) { c.save(); c.translate(e * 18, -18); c.rotate(an); magmacoreFlameFeather(c, len, w, e * 0.5, [P[1], P[2], P[3], P[4]]); c.restore(); }
+    // the silhouette: belly, chest, neck
+    const body = () => { c.beginPath(); c.moveTo(-15, -96); c.bezierCurveTo(-17, -80, -36, -70, -40, -48); c.bezierCurveTo(-46, -24, -42, 4, 0, 6); c.bezierCurveTo(42, 4, 46, -24, 40, -48); c.bezierCurveTo(36, -70, 17, -80, 15, -96); c.closePath(); };
+    c.fillStyle = gRG(c, -8, -40, 80, [P[0], P[1], P[2], P[3]]); body(); c.fill();
+    c.strokeStyle = MAGMACOREP.plumeEdge; c.lineWidth = 1.3; body(); c.stroke();
+    c.save(); body(); c.clip();
+    // the chest: rows of overlapping flame feathers, small up the neck, broad on the breast (painted bottom up)
+    for (let row = 4; row >= 0; row--) {
+      const y = -84 + row * 19, half = row < 1 ? 12 : 16 + row * 6, n = Math.max(2, Math.round(half / 11)), w = row < 1 ? 6 : 9 + row;
+      for (let q = 0; q <= n; q++) { const x = -half + (2 * half) * q / n + (row & 1 ? 5 : 0); c.save(); c.translate(x, y); c.rotate((x / 60) * 0.3); magmacoreFlameFeather(c, 20 + row * 2.5, w, 0, row < 2 ? [P[0], P[0], P[1], P[2]] : [P[0], P[1], P[1], P[2]], false, true); c.restore(); }
+    }
+    // a glow on the breast and the shade at the flanks (lit from the Heart above and the lava below)
+    c.fillStyle = gRG(c, -6, -46, 34, ['rgba(255,252,220,.55)', 'rgba(255,230,150,.2)', 'rgba(255,230,150,0)']); c.fillRect(-50, -100, 100, 110);
+    c.fillStyle = gLG(c, -46, 0, 46, 0, ['rgba(150,30,10,.4)', 'rgba(150,30,10,0)', 'rgba(150,30,10,0)', 'rgba(150,30,10,.4)']); c.fillRect(-50, -100, 100, 110);
+    c.restore();
+    // the ruff: a collar of flame plumes round the base of the neck
+    for (let q = 0; q < 7; q++) { const u = q / 6, x = -24 + 48 * u, an = (u - 0.5) * 1.6; c.save(); c.translate(x * 0.9, -76 + Math.abs(u - 0.5) * 10); c.rotate(-an * 0.6); magmacoreFlameFeather(c, 16, 6.5, (u - 0.5) * 1.4, [P[0], P[1], P[2], P[3]]); c.restore(); }
+    // the sheen down its chest and the warm rim along its belly
+    c.strokeStyle = 'rgba(255,255,235,.7)'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(-30, -58); c.quadraticCurveTo(-38, -36, -34, -14); c.stroke();
+    c.strokeStyle = 'rgba(255,240,170,.85)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-30, 0); c.quadraticCurveTo(0, 9, 30, 0); c.stroke();
+  });
+}
+// one wing (anchored at the shoulder; folded down along the body when turned 1.5, raised and spread when turned
+// negative): broad layered flame feathers in three ranks (flight feathers, secondaries, coverts), each with a gradient,
+// a sheen and a curling flame tip
+function magmacorePhoenixWing() {
+  const K = MAGMACORE_PK, P = MAGMACOREP.plume;
+  return magmacoreSprite('pwing2', 150 * K, 150 * K, 16 * K, 16 * K, c => {
+    c.scale(K, K); c.lineCap = 'round'; c.lineJoin = 'round';
+    // primaries: long, broad, fanned
+    for (let q = 6; q >= 0; q--) { const an = 0.2 + q * 0.19, len = 70 + q * 6; c.save(); c.rotate(an - Math.PI / 2); magmacoreFlameFeather(c, len, 10, -0.4, [P[1], P[2], P[3], P[4]]); c.restore(); }
+    // secondaries: shorter, golder
+    for (let q = 5; q >= 0; q--) { const an = 0.35 + q * 0.2, len = 46 + q * 3; c.save(); c.translate(4, 2); c.rotate(an - Math.PI / 2); magmacoreFlameFeather(c, len, 9, -0.3, [P[0], P[1], P[2], P[3]]); c.restore(); }
+    // coverts: a rounded golden shoulder of small flame feathers
+    const cov = () => { c.beginPath(); c.moveTo(-8, -8); c.bezierCurveTo(30, -16, 54, 6, 48, 30); c.bezierCurveTo(32, 44, 4, 32, -6, 12); c.closePath(); };
+    c.fillStyle = gRG(c, 10, 4, 48, [P[0], P[1], P[2]]); cov(); c.fill();
+    c.strokeStyle = MAGMACOREP.plumeEdge; c.lineWidth = 1; cov(); c.stroke();
+    c.save(); cov(); c.clip();
+    for (let row = 0; row < 3; row++) for (let q = 0; q < 4 - row; q++) { c.save(); c.translate(2 + q * 12 + row * 8, -2 + row * 12 + q * 4); c.rotate(-0.5); magmacoreFlameFeather(c, 15, 6.5, 0, [P[0], P[0], P[1], P[2]], false, true); c.restore(); }
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,230,.75)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-2, -6); c.quadraticCurveTo(26, -12, 44, 4); c.stroke();
+  });
+}
+// the head (anchored at the neck): a round head of gold plumage, a curved golden beak, big friendly eyes, a crest of
+// flame plumes (flicker g 0..2); pose 0 idle, 1 blink, 2 calling (beak open, happy eyes)
+function magmacorePhoenixHead(pose, g) {
+  const K = MAGMACORE_PK * 1.1, P = MAGMACOREP.plume;
+  return magmacoreSprite(`phead${pose}${g}`, 90 * K, 110 * K, 45 * K, 80 * K, c => {
+    c.scale(K, K); c.lineCap = 'round'; c.lineJoin = 'round';
+    // the crest: five flame plumes fanning up and back
+    for (let q = 0; q < 5; q++) {
+      const an = -0.9 + q * 0.32 + [0, 0.05, -0.04][g] * (q - 2), len = 30 + 10 * Math.sin((q + 0.5) / 5 * Math.PI) + [0, 4, -3][g] * (q % 2 ? 1 : -1);
+      c.save(); c.translate(0, -36); c.rotate(an);
+      c.fillStyle = gLG(c, 0, 0, 0, -len, ['#ff6a1a', '#ffb030', '#ffe880']); c.beginPath(); c.moveTo(-5, 0); c.bezierCurveTo(-7, -len * 0.5, -2, -len * 0.8, 1, -len); c.bezierCurveTo(5, -len * 0.7, 6, -len * 0.4, 5, 0); c.closePath(); c.fill();
+      c.strokeStyle = '#c03a10'; c.lineWidth = 0.8; c.stroke();
+      c.fillStyle = 'rgba(255,255,220,.7)'; c.beginPath(); c.ellipse(-0.5, -len * 0.55, 1.2, len * 0.2, 0.05, 0, TWO_PI); c.fill();
+      c.restore();
+    }
+    // the head
+    c.fillStyle = gRG(c, -6, -26, 34, [P[0], P[1], P[2]]); c.beginPath(); c.arc(0, -18, 24, 0, TWO_PI); c.fill();
+    c.strokeStyle = MAGMACOREP.plumeEdge; c.lineWidth = 1.2; c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 2; c.beginPath(); c.arc(0, -18, 18, 3.6, 4.5); c.stroke();
+    // cheek tufts
+    for (const e of [-1, 1]) { c.fillStyle = gLG(c, e * 18, -10, e * 30, 0, [P[1], P[2]]); c.beginPath(); c.moveTo(e * 18, -16); c.quadraticCurveTo(e * 32, -10, e * 30, 2); c.quadraticCurveTo(e * 22, -2, e * 14, -4); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.plumeEdge; c.lineWidth = 0.8; c.stroke(); }
+    // the eyes
+    if (pose === 0) magmacoreEyes(c, 0, -22, 6.4, 0, '#7a3cd8', 1.2, 1.2);
+    else magmacoreEyes(c, 0, -22, 6.4, 0, '#7a3cd8', 1.2, 1.2, true);
+    // blush
+    c.fillStyle = 'rgba(255,90,80,.35)'; for (const e of [-1, 1]) { c.beginPath(); c.ellipse(e * 14, -11, 4.4, 2.6, 0, 0, TWO_PI); c.fill(); }
+    // the beak: a curved golden hook, open when calling
+    const G0 = MAGMACOREP.gold;
+    c.fillStyle = gLG(c, 0, -16, 0, -2, [G0[0], G0[1], G0[2]]); c.beginPath(); c.moveTo(-6, -14); c.quadraticCurveTo(0, -18, 6, -14); c.quadraticCurveTo(4, -6, 0, pose === 2 ? -8 : -3); c.quadraticCurveTo(-4, -6, -6, -14); c.closePath(); c.fill();
+    c.strokeStyle = MAGMACOREP.goldEdge; c.lineWidth = 0.9; c.stroke();
+    if (pose === 2) { c.fillStyle = '#9a2a14'; c.beginPath(); c.moveTo(-4, -7); c.quadraticCurveTo(0, -1, 4, -7); c.quadraticCurveTo(0, -5, -4, -7); c.fill(); c.fillStyle = gLG(c, 0, -6, 0, 0, [G0[1], G0[2]]); c.beginPath(); c.moveTo(-4, -6); c.quadraticCurveTo(0, 0, 4, -6); c.quadraticCurveTo(0, -3, -4, -6); c.fill(); }
+    c.fillStyle = 'rgba(255,255,240,.85)'; c.beginPath(); c.ellipse(-2.6, -14.5, 1.6, 0.8, -0.3, 0, TWO_PI); c.fill();
+  });
+}
+function magmacoreDrawHeart() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'magmacore')) return;
+  const E = a.end; if (sy(E + 600) > H + 40 || sy(E - 60) < -40) return;
+  const T = G.t, F = MAGMACORE_FIN, HR = MAGMACORE_HEART, won = a.clearT >= 0, pay = won ? smooth(0, 1, a.clearT) : 0, cx = sx(WORLD_W / 2);
+  magmacoreGlow(ctx, cx, sy(E - HR.y), (220 + 60 * pay) * s, [255, 150, 70], 0.2 + 0.12 * pay);
+  magmacoreBlit(magmacoreChamberSprite(), WORLD_W / 2, E);
+  // the Heart: a sphere of molten rock beating slowly (bigger and brighter on the clear)
+  {
+    const beat = Math.pow(Math.max(0, Math.sin(T * 2.4)), 6), R = (HR.r - 2 + 3 * beat + 4 * pay * (0.6 + 0.4 * Math.sin(T * 6))) * s, X = cx, Y = sy(E - HR.y);
+    const g = ctx.createRadialGradient(X - R * 0.25, Y + R * 0.3, R * 0.1, X, Y, R); g.addColorStop(0, '#fff2b0'); g.addColorStop(0.3, '#ffc040'); g.addColorStop(0.72, '#ff7a1a'); g.addColorStop(1, '#b02c10');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, R, 0, TWO_PI); ctx.fill();
+    // crust plates drifting over its surface (darker skin), its lit rim
+    ctx.save(); ctx.beginPath(); ctx.arc(X, Y, R, 0, TWO_PI); ctx.clip();
+    for (let q = 0; q < 6; q++) { const an = q * 1.05 + T * 0.08, rr = R * (0.45 + 0.4 * hash2(q, 0xe7)), px = X + Math.cos(an) * rr, py = Y + Math.sin(an) * rr * 0.9; ctx.fillStyle = `rgba(140,34,18,${0.5 - 0.15 * pay})`; ctx.beginPath(); ctx.ellipse(px, py, R * 0.2, R * 0.12, an, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = 'rgba(255,240,170,.5)'; ctx.lineWidth = 1 * s; ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,250,220,.8)'; ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.arc(X, Y, R * 0.78, 3.7, 4.6); ctx.stroke();
+    ctx.strokeStyle = 'rgba(170,40,14,.85)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.arc(X, Y, R, 0, TWO_PI); ctx.stroke();
+    magmacoreGlow(ctx, X, Y, R * 1.8, [255, 170, 80], 0.25 + 0.2 * beat + 0.15 * pay);
+    // rings of glow pulsing out from it with each beat (faster and brighter on the clear)
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let q = 0; q < 3; q++) { const u = pmod(T * (0.42 + 0.4 * pay) + q / 3, 1), rr = R * (1.02 + 0.9 * u); ctx.strokeStyle = `rgba(255,${190 - 60 * u | 0},90,${(0.32 + 0.25 * pay) * (1 - u) * (1 - u)})`; ctx.lineWidth = (5 - 3 * u) * s; ctx.beginPath(); ctx.arc(X, Y, rr, 0, TWO_PI); ctx.stroke(); }
+    ctx.restore();
+  }
+  // the lava pools' glow, the obsidian columns' glints
+  for (const e of [-1, 1]) magmacoreGlow(ctx, cx + e * 136 * s, sy(E + 22), (40 + 10 * pay) * s, [255, 160, 60], 0.4 + 0.1 * Math.sin(T * 2 + e));
+  // the Phoenix in its nest: idle it breathes, its crest flickers, it blinks; on the clear it spreads its wings and calls
+  const K = MAGMACORE_PK, spread = won ? smooth(0, 0.6, a.clearT) : 0, breathe = Math.sin(T * 1.5), qa = E + F.ped + 6, X0 = sx(WORLD_W / 2), Y0 = sy(qa);
+  magmacoreBlit(magmacoreNestSprite(false), WORLD_W / 2, qa);
+  magmacoreGlow(ctx, X0, Y0 - 30 * s, (80 + 30 * pay) * s, [255, 150, 60], 0.18 + 0.1 * pay);
+  // the wings behind the body when spread, folded alongside it otherwise
+  const flap = won ? Math.sin(T * 7) * 0.18 * (1 - smooth(3, 6, a.clearT) * 0.5) : 0;
+  for (const e of [-1, 1]) {
+    const ang = lerp(1.45, -0.75, spread) + flap - 0.04 * breathe, Sx = X0 + e * 28 * K * s, Sy = Y0 - 58 * K * s, ws = lerp(0.85, 1.2, spread);
+    ctx.save(); ctx.translate(Sx, Sy); ctx.scale(e * ws, ws); ctx.rotate(ang); const S = magmacorePhoenixWing(); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+  }
+  ctx.save(); ctx.translate(X0, Y0); ctx.scale(1, 1 + 0.012 * breathe); const PB = magmacorePhoenixBody(); ctx.drawImage(PB.cv, -PB.ax * s, -PB.ay * s, PB.w * s, PB.h * s); ctx.restore();
+  // the head on its neck, bobbing, thrown back a little as it calls
+  const hb = won ? 3 * Math.abs(Math.sin(T * 5)) * (1 - smooth(3, 5, a.clearT)) : 1.2 * breathe, HX = X0 + Math.sin(T * 0.8) * 2 * s, HY = Y0 - (90 * K + hb + 6 * spread) * s;
+  const blink = !won && pmod(T, 4.4) < 0.13, g = Math.floor(pmod(T * 8, 3));
+  magmacoreBlitAt(magmacorePhoenixHead(won ? 2 : blink ? 1 : 0, g), HX, HY, (won ? Math.sin(T * 6) * 0.06 : Math.sin(T * 0.9) * 0.05) - 0.08 * spread, 1, 1, 1);
+  magmacoreGlow(ctx, HX, HY - 60 * K * s, (36 + 20 * pay) * s, [255, 190, 90], 0.25 + 0.2 * pay);
+  magmacoreBlit(magmacoreNestSprite(true), WORLD_W / 2, qa);
+  if (pay > 0.01) magmacoreGlow(ctx, X0, Y0 - 80 * s, 150 * s, [255, 210, 140], 0.1 * pay * (1 - 0.6 * smooth(3, 7, a.clearT)));
+}
+function magmacoreDrawMidground() { magmacoreDrawHeart(); }
+
+// ---- the landing: shelves of obsidian grow out of the walls to meet under you, braziers of lava on rock posts ----
+function magmacoreDeckSeg() {
+  return magmacoreSprite('deckseg', 24, 18, 0, 6, c => {
+    const O = MAGMACOREP.obs;
+    c.fillStyle = gLG(c, 0, -6, 0, 8, [O[1], O[2], '#a84a40']); c.fillRect(0, -6, 24, 13);
+    c.fillStyle = 'rgba(220,205,255,.65)'; c.fillRect(0, -6, 24, 1.2);
+    gPair(c, [[6, -5], [8, 6]], 'rgba(20,12,50,.5)', 'rgba(220,210,255,.4)', 0.9, 0.8);
+    gPair(c, [[17, -5], [15, 6]], 'rgba(20,12,50,.5)', 'rgba(220,210,255,.4)', 0.9, 0.8);
+    c.strokeStyle = 'rgba(255,170,110,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(0, 6.5); c.lineTo(24, 6.5); c.stroke();
+    c.fillStyle = O[2]; for (let x = 2; x < 24; x += 6) { c.beginPath(); c.moveTo(x, 7); c.lineTo(x + 3, 7); c.lineTo(x + 1.5, 10.5); c.closePath(); c.fill(); }
+  });
+}
+function magmacoreDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, seg = magmacoreDeckSeg();
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, tip = lerp(w - side * 4, meet - side * 0.5, e), x0 = Math.min(w, tip), x1 = Math.max(w, tip);
+    if (e > 0.04 && x1 - x0 > 2) {
+      ctx.save(); ctx.beginPath(); ctx.rect(sx(x0), y - 10 * s, (x1 - x0) * s, 30 * s); ctx.clip();
+      for (let x = side < 0 ? tip - 24 * Math.ceil((tip - w) / 24) : tip; x < x1; x += 24) magmacoreBlitAt(seg, sx(x), y);
+      ctx.restore();
+      ctx.save(); ctx.translate(sx(tip), y); ctx.scale(s, s); magmacoreBall(ctx, 0, 0, 6, MAGMACOREP.obs, MAGMACOREP.obsEdge, 0.6); ctx.restore();
+    }
+    // a rock post at each wall holding a brazier of lava, flaring on the clear
+    const lx = w - side * 9, la = E + 30;
+    ctx.strokeStyle = '#6a2226'; ctx.lineWidth = 5 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx(w + side * 2), sy(E + 2)); ctx.quadraticCurveTo(sx(lx + side * 4), sy(E + 16), sx(lx), sy(la - 6)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,170,110,.6)'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    magmacoreGlow(ctx, sx(lx), sy(la + 4), (18 + 16 * pay) * s, [255, 150, 60], 0.55 + 0.15 * Math.sin(T * 3 + side) + 0.3 * pay);
+    ctx.save(); ctx.translate(sx(lx), sy(la)); ctx.scale(s, s);
+    ctx.fillStyle = gLG(ctx, 0, -2, 0, 6, ['#5a2a50', '#8e3a32']); ctx.beginPath(); ctx.moveTo(-7, -2); ctx.lineTo(7, -2); ctx.lineTo(4, 6); ctx.lineTo(-4, 6); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#4a1418'; ctx.lineWidth = 0.8; ctx.stroke();
+    const fl = 1 + 0.15 * Math.sin(T * 14 + side * 2) + 0.5 * pay;
+    ctx.fillStyle = gLG(ctx, 0, -2, 0, -14 * fl, ['#ff8a1a', '#ffd844', 'rgba(255,250,210,.2)']); ctx.beginPath(); ctx.moveTo(-6, -2); ctx.quadraticCurveTo(-5, -8 * fl, 0, -14 * fl); ctx.quadraticCurveTo(5, -8 * fl, 6, -2); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+function magmacoreBurstClear() {
+  const a = G.adv; if (!a || !a.end) return;
+  for (let k = 0; k < 30; k++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, v = 120 + Math.random() * 260; puff(WORLD_W / 2 + (Math.random() - 0.5) * 140, a.end + 160, Math.cos(an) * v, -Math.sin(an) * v, 0.9 + Math.random() * 0.9, 1.6 + Math.random() * 1.8, 'sparkle', [[255, 200, 90], [255, 140, 60], [255, 240, 180]][k % 3]); }
+  for (const e of [-1, 1]) magmacoreCinders(WORLD_W / 2 + e * 136, a.end + 30, 10, 160, 140, 1);
+  sfx('mcfinish');
+}
+
+// ---- light, speed and the foreground ----
+// the core's light: a warm maroon vignette at the edges (never black), the lava's glow rising from below, the Heart's
+// glow as you near the finish
+function magmacoreDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.8);
+  vg.addColorStop(0, 'rgba(70,14,30,0)'); vg.addColorStop(1, 'rgba(70,14,30,.34)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const L = magmacoreLightAt(G.camAlt + viewH / 2);
+  const sg = ctx.createLinearGradient(0, H, 0, H * 0.35); sg.addColorStop(0, gCol(L.glow, 0.16)); sg.addColorStop(1, gCol(L.glow, 0)); ctx.fillStyle = sg; ctx.fillRect(X0, Y0, WW, HH);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'magmacore') {
+    const ha = a.end + 300, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,180,90,${(0.06 + 0.06 * pay) * k})`); g.addColorStop(0.5, `rgba(255,120,60,${0.05 * k})`); g.addColorStop(1, 'rgba(255,120,60,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: heat streaks down the walls and embers whipping past through the shaft
+function magmacoreDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(5 * k); i++) {
+    const j = hash2(i + side * 31, 0xd61), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xd62) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(magmacoreWallX(a, side)) + (side ? -1 : 1) * (10 + 14 * j) * s, len = (24 + 100 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol([255, 170, 110], (0.05 + 0.14 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.4 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  const n = 4 + Math.round(12 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xd63)), len = (6 + 16 * hash2(i, 0xd64)) * (0.5 + 1.2 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xd65)) + hash2(i, 0xd66) * H * 2) % (H + 200)) - 100;
+    ctx.globalAlpha = 0.2 + 0.35 * k * hash2(i, 0xd67); ctx.strokeStyle = i % 3 ? '#ff9a40' : '#ffd890'; ctx.lineWidth = (1.6 + 1.2 * hash2(i, 0xd68)) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: a spur of dark rock with a glowing seam, or a cluster of obsidian shards, close to the camera at the
+// screen's edges (in warm shade with lit edges), fading back when a trap or you are near
+function magmacoreFgSprite(side, v) {
+  return magmacoreSprite(`fg${side}_${v}`, 90, 200, side ? 80 : 10, 100, c => {
+    const d = side ? -1 : 1;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (v === 0) {
+      // a spur of rock jutting in from the edge, a glowing seam along its underside
+      c.fillStyle = gLG(c, 0, -60, 0, 50, ['#3a1430', '#6a2228', '#a8442c']); c.beginPath(); c.moveTo(-10 * d, -90); c.bezierCurveTo(30 * d, -60, 64 * d, -10, 56 * d, 20); c.bezierCurveTo(40 * d, 40, 10 * d, 30, -10 * d, 60); c.closePath(); c.fill();
+      c.strokeStyle = '#3a1020'; c.lineWidth = 1.4; c.stroke();
+      magmacoreCrack(c, [[0, 40], [20 * d, 28], [40 * d, 26], [54 * d, 18]], 2.4, 0.9);
+      gPair(c, [[0, -60], [24 * d, -40], [44 * d, -10]], 'rgba(30,6,20,.6)', 'rgba(220,190,255,.3)', 1.4, 1.2);
+    } else {
+      // a cluster of obsidian shards growing in from the edge
+      const O = MAGMACOREP.obs;
+      for (const [y, len, an] of [[-40, 60, -0.3], [-10, 74, 0.05], [24, 54, 0.4]]) { c.save(); c.translate(-6 * d, y); c.rotate(an * d); c.fillStyle = gLG(c, 0, -8, 0, 8, [O[1], O[2], O[3]]); c.beginPath(); c.moveTo(0, -9); c.lineTo(len * d, 0); c.lineTo(0, 9); c.closePath(); c.fill(); c.strokeStyle = MAGMACOREP.obsEdge; c.lineWidth = 1; c.stroke(); c.strokeStyle = 'rgba(220,205,255,.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(0, -5); c.lineTo(len * 0.9 * d, -0.5); c.stroke(); c.strokeStyle = 'rgba(255,160,100,.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(0, 7); c.lineTo(len * 0.8 * d, 1.5); c.stroke(); c.restore(); }
+    }
+  });
+}
+function magmacoreDrawForeground() {
+  const f = 1.35, slot = 360, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xd71) < 0.55) continue;
+    const side = hash2(i, 0xd72) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xd73) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.15 + 0.7 * smooth(40, 220, dist);
+    const S = magmacoreFgSprite(side, Math.floor(hash2(i, 0xd74) * 2));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (magmacoreOn()) magmacoreDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (magmacoreOn()) magmacoreDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (magmacoreOn()) magmacoreDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (magmacoreOn()) magmacoreDrawLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (magmacoreOn()) magmacoreDrawDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (magmacoreOn()) magmacoreDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (magmacoreOn()) magmacoreDrawForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (magmacoreOn() && !boss) magmacoreBurstClear(); }; }
 // (game slot: Magma Core, island level 19)
 // ---------- Bellows Drake (island level 20): its look, traps, hoard crowns, the dragon boss and sounds ----------
 // The stage's shaft and traps are laid out by createDrakeLevel (LEVELGEN); here they come alive and get drawn. While
