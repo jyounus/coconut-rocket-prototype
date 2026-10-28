@@ -11778,6 +11778,401 @@ const ADV_TOYBOX = { name: 'Toybox Tower', theme: 'toybox', seed: 'isl-32-toybox
 /* LEVELGEN:END */
 // (LEVELGEN slot: Toybox Tower, island level 32)
 // (LEVELGEN slot: Monkey Carnival, island level 33)
+/* LEVELGEN:BEGIN */
+// ---------- Haunted Lighthouse (island level 34): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Cheddar Caverns (see createCheeseLevel): the Keeper's Door, then one new trap at a time,
+// each taught alone and slow before it is combined (the Thorn Stair, the Phantom Gallery, the Chain Locker, the Shadow
+// Stores), a breather (the Keeper's Quarters), the Storm Stair, then the Lantern Room at the top and its finish. Its own
+// shaft (the inside of a whitewashed brick tower that tapers as it climbs, pilaster ribs and window embrasures), its own
+// traps and its own look (G.theme 'lighthouse', see the lighthouse drawing). The traps' clocks read the tower's time
+// (G.lighthouseT in play).
+// The twist: light and dark. Every trap beat hangs a brass lens lamp on the tower's back wall (behind the flight: never
+// in the way) whose beam swings to and fro like a pendulum. Some things exist only in its light, one only in the dark.
+// The traps (every one leaves a lane or a timing that the widest pilot fits through; nothing ever moves up at you):
+// - lighthouseThorn (Ghost Thorns): a knot of bramble on a wall, four hooked stems reaching into the shaft. In the dark
+//   they are only a faint dashed ghost of themselves and you fly right through them; each stem the beam falls on is solid
+//   and sharp. A pair on facing walls under one lamp: the beam can only light one side at a time, so follow the dark.
+// - lighthousePhantom (Phantom): a sheet ghost drifting to and fro across the shaft, see-through and harmless in the
+//   dark (fly through it: a mission), solid, angry and deadly while the beam is on it.
+// - lighthouseLantern (Ghost Lantern): an iron lantern on a chain from a wall bracket, swaying by itself. Every P s it
+//   rattles and its ghost flame flares (`tell`), then it swings out across the shaft and back, trailing ghost fire
+//   (the last moments of its path burn too). Its swing never rises above its own pivot.
+// - lighthouseShadow (Shadow Hand, this stage's own): the inverse of the thorns. A long inky shadow arm reaches out of a
+//   wall, solid in the dark; when the beam falls on it the light burns it back to the wall, and only once the light has
+//   gone does it creep out again (at `grow`). Dash past while it is burnt back.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const LIGHTHOUSE = {
+  rib: 300, step: 6,                                           // the walls' pilaster ribs: pitch and how far each stands in
+  lamp: { ha: 0.17, len: 470, up: 250 },                     // the beam's half angle and reach, the lamp's height over its beat
+  thorn: { r: [7.5, 6.5, 5], ease: 320 },
+  phantom: { amp: 100, Pg: 4.6, sc: 1.3, ease: 300 },
+  lantern: { arm: 54, chain: 96, r: 14, max: 1.3, tell: 0.75, swing: 1.6, fire: [0.07, 0.14], fireR: 8, ease: 340 },
+  shadow: { reach: 145, min: 30, grow: 230, back: 760, hold: 0.22, ease: 320 },
+  moth: { r: 15 },
+  chiliGap: 470, end: 380,
+};
+const LIGHTHOUSE_TYPES = new Set(['lighthouseThorn', 'lighthousePhantom', 'lighthouseLantern', 'lighthouseShadow']);
+// The four bramble stems of a thorn knot (wall-local: u into the shaft, v up): [root height, length, angle up from
+// level, curl]. Stem i's points sweep a polar curve from the knot (as the concept's brambles).
+const LIGHTHOUSE_STEMS = [[20, 118, 0.6, -0.5], [7, 168, 0.08, 0.42], [-6, 142, -0.24, -0.46], [-20, 102, -0.68, 0.42]];
+function lighthouseStemPts(h, i) {
+  const [v0, L, ang, curl] = LIGHTHOUSE_STEMS[i], d = h.side, pts = [];
+  for (let k = 0; k <= 8; k++) { const w = k / 8, a = ang + curl * w * w; pts.push([h.base + d * (5 + Math.cos(a) * L * w), h.alt + v0 + Math.sin(a) * L * w]); }
+  return pts;
+}
+// The stage, bottom to top (as CHEESE_STAGE: each section's width w and its beats [rise, kind, options], then `tail` of
+// clear shaft; a calm section is `len` of open shaft). P (the lamp's swing, or the lantern's cycle) and ph in seconds.
+// moth: that trap guards a luna moth (3 in all, the stage's collectible).
+const LIGHTHOUSE_STAGE = [
+  { name: "The Keeper's Door", w: 384, len: 1000, calm: true },
+  { name: 'The Thorn Stair', w: 380, beats: [[560, 'thorn', { side: 1, P: 6 }], [640, 'thorn', { side: -1, P: 6, ph: 1.5 }], [700, 'thornPair', { P: 5.8 }], [700, 'thorn', { side: 1, P: 5.6, moth: true }],
+    [700, 'thorn', { side: -1, P: 5.4, ph: 3 }], [720, 'thornPair', { P: 5.4, ph: 2 }], [720, 'thornPair', { P: 5.4, ph: 0.6 }]], tail: 600 },
+  { name: 'The Phantom Gallery', w: 380, beats: [[620, 'phantom', { P: 6 }], [700, 'phantom', { P: 5.8, ph: 1.4 }], [780, 'phantomThorn', { P: 5.6 }], [760, 'phantom', { P: 5.6, moth: true }],
+    [740, 'phantom', { P: 5.4, ph: 2.6 }], [800, 'phantomPair', { P: 5.4 }], [780, 'phantomThorn', { P: 5.4, ph: 1 }]], tail: 620 },
+  { name: 'The Chain Locker', w: 376, beats: [[620, 'lantern', { side: 1, P: 5 }], [660, 'lantern', { side: -1, P: 5, ph: 2.2 }], [720, 'lanternPair', { P: 4.8 }], [800, 'lanternThorn', { P: 4.8, lp: 5.4 }],
+    [700, 'lantern', { side: 1, P: 4.6, ph: 0.6 }], [800, 'lanternPhantom', { P: 4.6, lp: 5.4 }], [700, 'lanternPair', { P: 4.6, ph: 1.2 }]], tail: 620 },
+  { name: 'The Shadow Stores', w: 380, beats: [[620, 'shadow', { side: 1, P: 6 }], [680, 'shadow', { side: -1, P: 5.8, ph: 1 }], [760, 'shadowThorn', { P: 5.6 }], [800, 'shadowLantern', { P: 5.6, lp: 4.6 }],
+    [740, 'shadow', { side: 1, P: 5.4, moth: true }], [760, 'shadowThorn', { P: 5.4, ph: 2.2 }], [780, 'shadowPhantom', { P: 5.4 }]], tail: 640 },
+  { name: "The Keeper's Quarters", w: 384, len: 1500, calm: true },
+  { name: 'The Storm Stair', w: 376, beats: [[560, 'thornPair', { P: 5.2 }], [800, 'lanternPhantom', { P: 4.4, lp: 5.2, ph: 1 }], [780, 'shadowThorn', { P: 5.2, ph: 1.2 }], [800, 'phantomPair', { P: 5.2, ph: 0.6 }],
+    [800, 'lanternThorn', { P: 4.4, lp: 5.2, ph: 0.4 }], [780, 'shadowPhantom', { P: 5.2, ph: 2 }], [760, 'lanternPair', { P: 4.4, ph: 1.4 }], [720, 'thornPair', { P: 5, ph: 1.6 }], [760, 'phantomPair', { P: 5, ph: 2.4 }],
+    [800, 'shadowLantern', { P: 5.2, lp: 4.4, ph: 0.8 }], [780, 'phantomThorn', { P: 5, ph: 2.6 }], [720, 'shadow', { side: -1, P: 5 }], [760, 'shadowThorn', { P: 5, ph: 0.3 }], [800, 'lanternPhantom', { P: 4.4, lp: 5, ph: 2.2 }]], tail: 760 },
+  { name: 'The Lantern Room', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height, from the layout alone
+const lighthouseSecLen = sec => sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const lighthouseEnd = () => { let y = 0; for (const sec of LIGHTHOUSE_STAGE) { if (sec.finish) return y + LIGHTHOUSE.end; y += lighthouseSecLen(sec); } return y; };
+const lighthouseEase = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const lighthouseU = (h, t, P) => pmod(t - (h.ph || 0), P);
+
+// ---- the lamps: where each beam points at time t, and how lit a point is ----
+// A lamp swings its beam like a pendulum: angle from straight down (+ toward the right wall) c + amp sin(2 pi u / P).
+const lighthouseBeamAng = (L, t) => L.c + L.amp * Math.sin(2 * Math.PI * pmod(t - L.ph, L.P) / L.P);
+// how far (in angle) a point is from the beam's middle (Infinity out of its reach)
+function lighthouseBeamOff(L, x, a, t) {
+  const dy = L.alt - a, dx = x - L.x; if (dy < 8 || dx * dx + dy * dy > L.len * L.len) return Infinity;
+  return Math.abs(Math.atan2(dx, dy) - lighthouseBeamAng(L, t));
+}
+// solid in the light: the middle of the beam out to its half angle (the light fades on beyond it, see the drawing)
+const lighthouseLit = (L, x, a, t) => lighthouseBeamOff(L, x, a, t) < L.ha;
+// how lit for the drawing (0..1): full to 0.8 of the half angle, gone by 1.3 (at the half angle itself 0.65)
+const lighthouseLitK = (L, x, a, t) => 1 - smooth(L.ha * 0.8, L.ha * 1.3, lighthouseBeamOff(L, x, a, t));
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// thorn stem i's middle (where the light decides whether that stem is there)
+const lighthouseStemMid = (h, i) => { const p = lighthouseStemPts(h, i); return p[4]; };
+function lighthouseThornShapes(S, h, t, kind) {
+  const R = LIGHTHOUSE.thorn.r;
+  S.push({ k: 'c', x: h.base + h.side * 2, a: h.alt, r: 9 });   // the root knot against the wall
+  if (kind === 'body') return S;
+  for (let i = 0; i < 4; i++) {
+    if (kind !== 'sweep') { const [mx, ma] = lighthouseStemMid(h, i); if (!lighthouseLit(h.lamp, mx, ma, t)) continue; }
+    const p = lighthouseStemPts(h, i);
+    S.push({ k: 's', x0: p[0][0], a0: p[0][1], x1: p[3][0], a1: p[3][1], r: R[0] }, { k: 's', x0: p[3][0], a0: p[3][1], x1: p[6][0], a1: p[6][1], r: R[1] }, { k: 's', x0: p[6][0], a0: p[6][1], x1: p[8][0], a1: p[8][1], r: R[2] });
+  }
+  return S;
+}
+// The phantom drifts to and fro across the shaft (and bobs); it is solid while the beam is on its middle.
+function lighthousePhantomState(h, t) {
+  const X = LIGHTHOUSE.phantom, u = pmod(t - (h.gph || 0), h.Pg);
+  const x = h.cx + h.amp * Math.sin(2 * Math.PI * u / h.Pg), a = h.alt + 7 * Math.sin(2 * Math.PI * t / 1.9 + h.alt * 0.01);
+  return { x, a, vx: h.amp * 2 * Math.PI / h.Pg * Math.cos(2 * Math.PI * u / h.Pg), lit: lighthouseLit(h.lamp, x, a, t), k: lighthouseLitK(h.lamp, x, a, t) };
+}
+// its body (art units x sc, y up): the hood, the sheet, the raised arms
+const lighthousePhantomBody = (S, x, a, k = LIGHTHOUSE.phantom.sc) => {
+  S.push({ k: 'c', x, a: a + 7 * k, r: 15.5 * k }, { k: 'c', x, a: a - 8 * k, r: 14 * k }, { k: 's', x0: x - 21 * k, a0: a + 6 * k, x1: x + 21 * k, a1: a + 6 * k, r: 4.5 * k });
+  return S;
+};
+function lighthousePhantomShapes(S, h, st, kind) {
+  if (kind === 'body' || (kind !== 'sweep' && !st.lit)) return S;
+  return lighthousePhantomBody(S, st.x, st.a);
+}
+// The ghost lantern's angle from hanging straight down (+ out over the shaft): idle sway, the rattle (tell), the big
+// swing out and back (eased both ends), on its own clock
+function lighthouseLanternState(h, t) {
+  const X = LIGHTHOUSE.lantern, u = lighthouseU(h, t, h.P), rest = h.P - X.tell - X.swing;
+  const sway = 0.1 * Math.sin(2 * Math.PI * t / 2.1 + h.alt * 0.01);
+  if (u < rest) return { th: sway, u };
+  let v = u - rest;
+  if (v < X.tell) { const k = v / X.tell; return { th: sway * (1 - k) + Math.sin(t * 55) * 0.05 * k, tell: k, u }; }
+  v -= X.tell;
+  const k = v / X.swing; return { th: X.max * (1 - Math.cos(2 * Math.PI * k)) / 2, swing: k, u };
+}
+const lighthouseLanternPivot = h => [h.base + h.side * LIGHTHOUSE.lantern.arm, h.alt];
+const lighthouseLanternAt = (h, th) => { const [px, pa] = lighthouseLanternPivot(h), L = LIGHTHOUSE.lantern.chain; return [px + h.side * Math.sin(th) * L, pa - Math.cos(th) * L]; };
+function lighthouseLanternShapes(S, h, t, kind) {
+  const X = LIGHTHOUSE.lantern, [px, pa] = lighthouseLanternPivot(h);
+  S.push({ k: 's', x0: h.base - h.side * 2, a0: h.alt, x1: px, a1: pa, r: 4 });                  // the iron bracket
+  if (kind === 'body') return S;
+  const body = (th, r) => { const [x, a] = lighthouseLanternAt(h, th), ux = h.side * Math.sin(th), ua = -Math.cos(th); S.push({ k: 's', x0: x - ux * 12, a0: a - ua * 12, x1: x + ux * 14, a1: a + ua * 14, r }); };
+  if (kind === 'sweep') { for (let i = 0; i <= 12; i++) body(-0.12 + (X.max + 0.12) * i / 12, X.r); return S; }
+  const st = lighthouseLanternState(h, t);
+  body(st.th, X.r);
+  // its ghost fire: where it was a moment ago still burns while it swings
+  if (st.swing != null) for (const dt of X.fire) { const q = lighthouseLanternState(h, t - dt); if (q.swing != null) { const [x, a] = lighthouseLanternAt(h, q.th); S.push({ k: 'c', x, a: a + 2, r: X.fireR }); } }
+  return S;
+}
+// The shadow hand's reach over its lamp's swing: burnt back (at `back`) while the beam is on its forearm, held back for
+// `hold` once the light has gone, then creeping out again (at `grow`). Periodic with the lamp, so it is worked out once
+// for a whole swing (lighthouseShadowTable) and read back.
+function lighthouseShadowTable(h) {
+  const X = LIGHTHOUSE.shadow, L = h.lamp, n = Math.ceil(L.P / 0.01), tbl = new Float32Array(n), mx = h.base + h.side * X.reach * 0.5;
+  let r = X.reach, since = 99;
+  for (let pass = 0; pass < 3; pass++) for (let i = 0; i < n; i++) {
+    const t = L.ph + i * 0.01, lit = lighthouseLit(L, mx, h.alt, t) || lighthouseLit(L, h.base + h.side * Math.max(X.min + 20, r - 20), h.alt, t);
+    if (lit) { since = 0; r = Math.max(X.min, r - X.back * 0.01); } else { since += 0.01; if (since > X.hold) r = Math.min(X.reach, r + X.grow * 0.01); }
+    if (pass === 2) tbl[i] = r;
+  }
+  return tbl;
+}
+function lighthouseShadowReach(h, t) {
+  if (!h.tbl) h.tbl = lighthouseShadowTable(h);
+  const n = h.tbl.length, f = pmod(t - h.lamp.ph, h.lamp.P) / 0.01, i = Math.floor(f) % n, j = (i + 1) % n, k = f - Math.floor(f);
+  const r = h.tbl[i] * (1 - k) + h.tbl[j] * k;
+  return h.cap != null ? Math.min(r, h.cap) : r;
+}
+// the arm: a wavering tapered line out of the wall to the palm at `reach`, three long fingers clawing on past it
+function lighthouseShadowArm(h, t, R) {
+  const d = h.side, pts = [];
+  for (let k = 0; k <= 6; k++) { const w = k / 6, x = h.base + d * R * w; pts.push([x, h.alt + 9 * Math.sin(w * 3.1 + t * 2.3) * w]); }
+  return pts;
+}
+function lighthouseShadowShapes(S, h, t, kind) {
+  if (kind === 'body') return S;
+  const X = LIGHTHOUSE.shadow, R = kind === 'sweep' ? X.reach : lighthouseShadowReach(h, t), pts = lighthouseShadowArm(h, t, R), d = h.side;
+  if (kind === 'sweep') { S.push({ k: 'b', x0: Math.min(h.base, h.base + d * (X.reach + 33)), x1: Math.max(h.base, h.base + d * (X.reach + 33)), a0: h.alt - 32, a1: h.alt + 32 }); return S; }
+  S.push({ k: 's', x0: pts[0][0], a0: pts[0][1], x1: pts[3][0], a1: pts[3][1], r: 12 }, { k: 's', x0: pts[3][0], a0: pts[3][1], x1: pts[6][0], a1: pts[6][1], r: 9.5 });
+  const [px, pa] = pts[6], sp = lighthouseEase((R - X.min) / (X.reach - X.min));
+  S.push({ k: 'c', x: px + d * 6, a: pa, r: 13 });
+  for (const f of [-1, 0, 1]) { const an = f * 0.5 * sp + Math.sin(t * 3 + f) * 0.08; S.push({ k: 's', x0: px + d * 12, a0: pa + f * 5, x1: px + d * (12 + 16 * sp * Math.cos(an)), a1: pa + f * 5 + Math.sin(an) * 18 * sp, r: 4.5 }); }
+  return S;
+}
+
+// Every collision shape of a lighthouse trap at time t (the tower's clock), fitted to its drawing. kind: undefined for
+// the lethal ones, 'body' the parts that never move (a thorn's knot, a lantern's bracket), 'sweep' everywhere it can
+// ever be (lit or not).
+function lighthouseShapes(h, t, S = [], kind) {
+  if (h.type === 'lighthouseThorn') lighthouseThornShapes(S, h, t, kind);
+  else if (h.type === 'lighthousePhantom') lighthousePhantomShapes(S, h, lighthousePhantomState(h, t), kind);
+  else if (h.type === 'lighthouseLantern') lighthouseLanternShapes(S, h, t, kind);
+  else if (h.type === 'lighthouseShadow') lighthouseShadowShapes(S, h, t, kind);
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear)
+function lighthouseDanger(h) {
+  const S = [];
+  if (h.type === 'lighthousePhantom') { for (let i = 0; i <= 16; i++) for (const b of [-7, 7]) lighthousePhantomBody(S, h.cx + h.amp * (i / 8 - 1), h.alt + b); return S; }
+  if (h.type === 'lighthouseLantern') { lighthouseLanternShapes(S, h, 0, 'sweep'); for (const q of S) q.r += 6; return S; }
+  return lighthouseShapes(h, 0, S, 'sweep');
+}
+// a pilaster rib in a wall (for the shaft's relief and its drawing): rib i on a side starts at `a0` and stands `d` in
+function lighthouseRib(i, side, seed) {
+  const C = LIGHTHOUSE, j = hash2(i, (seed & 0xffff) + 817 + side * 31);
+  return { a0: i * C.rib + (hash2(i, (seed & 0xffff) + 819 + side * 37) - 0.5) * 60, len: 90 + 70 * hash2(i, (seed & 0xffff) + 821 + side), d: j < 0.5 ? 0 : C.step * (j < 0.8 ? 1 : 2), j };
+}
+
+// The Haunted Lighthouse's shaft, laid out in full from LIGHTHOUSE_STAGE (the seed only nudges looks and sides). It
+// answers the same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all), plus its lamps.
+function createLighthouseLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x116A7E) >>> 0), C0 = LIGHTHOUSE;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [], lamps = [];
+  let y = 0;
+  for (const sec of LIGHTHOUSE_STAGE) { const len = lighthouseSecLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = lighthouseEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  // the tower tapers as it climbs (each section's width, blended over 240 at its joins)
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the ribs' relief on a side: a pilaster standing 0, one or two steps in, eased in and out over a soft shoulder; eased
+  // flat where a trap is set into the wall and over the launch
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 60 && a < f.a1 + 60) k = Math.max(k, smooth(f.a0 - 60, f.a0, a) * (1 - smooth(f.a1, f.a1 + 60, a))); return k; };
+  const reliefAt = (a, side) => {
+    const i0 = Math.floor(a / C0.rib);
+    let d = 0;
+    for (let i = i0 - 1; i <= i0 + 1; i++) { const R = lighthouseRib(i, side, seed); if (!R.d) continue; d = Math.max(d, R.d * smooth(R.a0 - 14, R.a0 + 14, a) * (1 - smooth(R.a0 + R.len - 14, R.a0 + R.len + 14, a))); }
+    return d * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps (each beat hangs one lamp on the back wall over it) ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const pick = () => (rng() < 0.5 ? 1 : -1);
+  const wallOf = d => d > 0 ? -1 : 1;   // (a trap on the left wall, d 1, flattens side 0)
+  const T0 = C0.thorn, P0 = C0.phantom, N0 = C0.lantern, S0 = C0.shadow;
+  const lamp = (alt, o, x = WORLD_W / 2) => { const L = { x, alt, P: o.P || 6, ph: o.ph || 0, c: 0, amp: 0.8, ha: C0.lamp.ha, len: C0.lamp.len }; lamps.push(L); return L; };
+  const make = {
+    thorn(A, o, L) {
+      const d = o.side || pick(); flat(A - 40, A + 40, wallOf(d));
+      L = L || lamp(A + C0.lamp.up, o);
+      return [{ type: 'lighthouseThorn', side: d, alt: A, lamp: L, lo: A - 90, hi: A + 90, ease: T0.ease, moth: !!o.moth }];
+    },
+    thornPair(A, o) {    // knots on facing walls at one height under one lamp: it can only light one side at a time
+      const L = lamp(A + C0.lamp.up, o), d = pick();
+      return [...make.thorn(A, { side: d, moth: o.moth }, L), ...make.thorn(A + 40, { side: -d }, L)];
+    },
+    phantom(A, o, L) {
+      L = L || lamp(A + C0.lamp.up, o);
+      return [{ type: 'lighthousePhantom', side: 0, alt: A, lamp: L, Pg: o.Pg || P0.Pg, gph: o.gph != null ? o.gph : rng() * P0.Pg, amp: P0.amp, lo: A - 40, hi: A + 52, ease: P0.ease, moth: !!o.moth }];
+    },
+    phantomPair(A, o) {  // two phantoms, one over the other, under one lamp, drifting out of step
+      const L = lamp(A + 300, o), g = rng() * P0.Pg;
+      return [...make.phantom(A, { gph: g, moth: o.moth }, L), ...make.phantom(A + 150, { gph: g + P0.Pg / 2, Pg: P0.Pg * 1.12 }, L)];
+    },
+    phantomThorn(A, o) { // a thorn knot low on a wall, a phantom drifting above it, one lamp over both
+      const L = lamp(A + 320, o);
+      return [...make.thorn(A, { side: pick() }, L), ...make.phantom(A + 170, {}, L)];
+    },
+    lantern(A, o) {
+      const d = o.side || pick(); flat(A - N0.chain - 30, A + 40, wallOf(d));
+      return [{ type: 'lighthouseLantern', side: d, alt: A, P: o.P || 5, ph: o.ph || 0, lo: A - N0.chain - N0.r - 14, hi: A + 24, ease: N0.ease, moth: !!o.moth }];
+    },
+    lanternPair(A, o) {  // brackets on facing walls 300 apart, half a cycle out of step
+      const d = pick(), p0 = o.ph || 0;
+      return [...make.lantern(A, { side: d, P: o.P, ph: p0 }), ...make.lantern(A + 300, { side: -d, P: o.P, ph: p0 + o.P / 2 })];
+    },
+    lanternThorn(A, o) { // a thorn knot under its lamp, a lantern on the far wall above
+      const d = pick(), L = lamp(A + C0.lamp.up, { P: o.lp, ph: o.ph });
+      return [...make.thorn(A, { side: d }, L), ...make.lantern(A + 330, { side: -d, P: o.P, ph: (o.ph || 0) + 1.3 })];
+    },
+    lanternPhantom(A, o) { // a lantern low, a phantom drifting above it under its lamp
+      return [...make.lantern(A, { side: pick(), P: o.P, ph: o.ph }), ...make.phantom(A + 230, { P: o.lp, ph: (o.ph || 0) + 0.7 })];
+    },
+    shadow(A, o, L) {
+      const d = o.side || pick(); flat(A - 50, A + 50, wallOf(d));
+      L = L || lamp(A + C0.lamp.up, o);
+      return [{ type: 'lighthouseShadow', side: d, alt: A, lamp: L, lo: A - 40, hi: A + 40, ease: S0.ease, moth: !!o.moth }];
+    },
+    shadowThorn(A, o) {  // a shadow hand, a thorn knot on the far wall above it, one lamp over both (light one, the other goes)
+      const d = pick(), L = lamp(A + 300, o);
+      return [...make.shadow(A, { side: d }, L), ...make.thorn(A + 190, { side: -d }, L)];
+    },
+    shadowLantern(A, o) { // a shadow hand under its lamp, a lantern on the far wall above
+      const d = pick();
+      return [...make.shadow(A, { side: d, P: o.P, ph: o.ph }), ...make.lantern(A + 330, { side: -d, P: o.lp, ph: (o.ph || 0) + 2 })];
+    },
+    shadowPhantom(A, o) { // a shadow hand low, a phantom drifting above it, one lamp over both
+      const L = lamp(A + 330, o);
+      return [...make.shadow(A, { side: pick() }, L), ...make.phantom(A + 190, {}, L)];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, lighthouse: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const n0 = lamps.length, hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc, lamps: lamps.slice(n0) }); }
+  }
+  // finish the traps now the flat faces are known: wall positions (a phantom drifts round the shaft's middle)
+  for (const b of beats) for (const h of b.hs) {
+    const [L, R] = lOpening(h.lo - 4, h.hi + 4);
+    h.L = L; h.R = R; h.base = h.side > 0 ? L : h.side < 0 ? R : L;
+    if (h.type === 'lighthouseThorn') h.x = h.base + h.side * 70;
+    else if (h.type === 'lighthouseLantern') h.x = h.base + h.side * 80;
+    else if (h.type === 'lighthouseShadow') h.x = h.base + h.side * 90;
+    else { h.cx = (L + R) / 2; h.x = h.cx; h.amp = Math.min(P0.amp, (R - L) / 2 - 40); }
+    out.push(h);
+  }
+  // each lamp hangs over the middle of the shaft at its height (on the back wall)
+  for (const L of lamps) { const [l, r] = lWalls(L.alt); L.x = (l + r) / 2; }
+  out.sort((p, q) => p.lo - q.lo);
+  lamps.sort((p, q) => p.alt - q.alt);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, lighthouseDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  const farLane = (h, reach, a) => { const [l, r] = lWalls(a), e = h.base + h.side * reach; return h.side > 0 ? (e + r) / 2 : (l + e) / 2; };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + C0.end - 120, 0.5);
+    else {   // the Keeper's Quarters: a life ring of coconuts (a ring of ten, a big coin in the middle), then a weave
+      const cA = sc.a0 + 640, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 10; k++) { const an = k / 10 * Math.PI * 2; add(cx + Math.cos(an) * 74, cA + Math.sin(an) * 74, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 120, sc.a0 + 520, 0.7, 2); weave(sc.a0 + 800, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way (the open lane past it); a trap guarding a moth keeps it as the dare
+  let moths = 0;
+  for (const b of beats) {
+    for (const h of b.hs) {
+      if (h.type === 'lighthouseThorn') column(farLane(h, 160, h.alt), h.alt - 40, 3, 40, { clear: 26 });
+      else if (h.type === 'lighthouseLantern') column(farLane(h, 175, h.alt - 60), h.alt - 110, 3, 40, { clear: 26 });
+      else if (h.type === 'lighthouseShadow') column(farLane(h, S0.reach + 30, h.alt), h.alt - 30, 2, 44, { clear: 26 });
+      else column(mid(h.alt), h.alt + 80, 2, 40, { clear: 26 });
+      if (h.moth) {
+        let mx, ma;
+        if (h.type === 'lighthouseThorn') { mx = h.base + h.side * 96; ma = h.alt - 34; }
+        else if (h.type === 'lighthouseShadow') { mx = h.base + h.side * 120; ma = h.alt + 2; }
+        else { mx = h.cx - h.amp * 0.55; ma = h.alt + 4; }
+        fruit.push({ x: mx, alt: ma, kind: 'lighthouseMoth', moth: true, clear: -Infinity }); moths++;
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(h => h.hi)) + 70, a1 = Math.min(...next.hs.map(h => h.lo)) - 90; if (a1 - a0 > 60) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the caverns')
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= C0.chiliGap + 130; j++) if (spots[j].a - last >= C0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < C0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, lighthouse: true, sections: secs, beats, top: topA, moths, lamps,
+    reliefAt,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 34): its own shaft (createLighthouseLevel), the lighthouse look (G.theme), its missions
+// (the Lantern Room, 3 luna moths, fly through 5 phantoms in the dark) and its length in metres (from the layout).
+const ADV_LIGHTHOUSE = { name: 'Haunted Lighthouse', theme: 'lighthouse', seed: 'isl-34-lighthouse', reward: 250, target: 0, len: lighthouseEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Lantern Room' }, { k: 'lighthouseMoth', n: 3 }, { k: 'lighthouseGhost', n: 5 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Haunted Lighthouse, island level 34)
 // (LEVELGEN slot: Wizard's Spire, island level 35)
 // (LEVELGEN slot: Starfall Summit, island level 36)
@@ -40521,7 +40916,7 @@ const ISLAND = {
     { id: 31, name: 'Cheddar Caverns', region: 'cheese', pilot: 'dachshund', perk: 'One bark and the cat paw pulls back', stage: 'cheese' },
     { id: 32, name: 'Toybox Tower', region: 'toybox', pilot: 'robot', perk: 'Toy soldiers salute and stand aside', stage: 'toybox' },
     { id: 33, name: 'Monkey Carnival', region: 'carnival', pilot: 'lemur', perk: 'The monkeys think he is part of the act' },
-    { id: 34, name: 'Haunted Lighthouse', region: 'lighthouse', pilot: 'firefly', perk: 'Carries her own light' },
+    { id: 34, name: 'Haunted Lighthouse', region: 'lighthouse', pilot: 'firefly', perk: 'His own glow burns back the shadow hands', stage: 'lighthouse' },
     { id: 35, name: 'Wizard\'s Spire', region: 'wizard', pilot: 'mushroom', perk: 'The wizard\'s pet: the books leave him alone' },
     { id: 36, name: 'Starfall Summit', region: 'starfall', pilot: 'goat', perk: 'A firework rocket that goes extra high' },
     { id: 37, name: 'Beanstalk Heights', region: 'beanstalk', pilot: 'snail', perk: 'Crawls up the stalk when the fuel runs out' },
@@ -40600,6 +40995,7 @@ ADV_STAGES.pinball = ADV_PINBALL;   // (island level 29, Pinball Palace: see cre
 ADV_STAGES.candy = ADV_CANDY;   // (island level 30, Candy Caverns: see createCandyLevel)
 ADV_STAGES.cheese = ADV_CHEESE;   // (island level 31, Cheddar Caverns: see createCheeseLevel)
 ADV_STAGES.toybox = ADV_TOYBOX;   // (island level 32, Toybox Tower: see createToyboxLevel)
+ADV_STAGES.lighthouse = ADV_LIGHTHOUSE;   // (island level 34, Haunted Lighthouse: see createLighthouseLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -77570,6 +77966,1671 @@ ADV_GOALS.toyboxDodge = { text: () => 'Never get knocked by a top', done: r => !
 if (/[?&]debug\b/.test(location.search)) window.CRT = { TOYBOX, TOYBOX_STAGE, toyboxShapes, toyboxDanger, toyboxJackState, toyboxMarchState, toyboxTopState, toyboxYoyoState, createToyboxLevel, cache: TOYBOX_CACHE, scr: (x, a) => [sx(x), sy(a)] };
 // (game slot: Toybox Tower, island level 32)
 // (game slot: Monkey Carnival, island level 33)
+// ---------- Haunted Lighthouse (island level 34): its look, traps, lamps, moths and sounds ----------
+// The stage's shaft and traps are laid out by createLighthouseLevel (LEVELGEN); here they come alive and get drawn.
+// While it runs G.theme is 'lighthouse': up the inside of an old lighthouse at midnight. Its walls of curved whitewashed
+// brick (salt-stained, the wash peeling to red brick in patches, moss in the joints, granite pilasters), portholes full of
+// moonlit sea, iron sconces and cobwebs set into them; behind, the far curve of the tower with tall arched windows and
+// the moon, the spiral stair winding up the back wall, landings of the keeper's things; brass lens lamps swinging gold
+// beams through the dark, ghost-green wisps and sea mist. Nothing of it shows anywhere else (Daily and Practice never set
+// a theme). Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left (the moon) or the nearest
+// lamp, every edge a darker shade of its own colour (never black), detail as line pairs (a dark furrow under a lit
+// ridge), sheen strokes and soft glows.
+// Performance: everything static (the walls, the backdrop's layers, brackets, lamps, thorn stems, lanterns, the lantern
+// room) is drawn once into cached canvases at the screen's pixel density (tiles down the height, rendered a little ahead
+// of the camera, one per frame) and blitted; beams are one cached wedge each, gradients for live parts are built once in
+// local units and reused; motes, sparks and wisps are cheap fills, capped in number.
+const LIGHTHOUSE_P = {
+  wash: ['#eef3ff', '#c4cff0', '#8a96c4', '#4a5482'], washE: '#3e4874',
+  brick: ['#e8a090', '#c0705e', '#8c4c40', '#5a2e34'],
+  stone: ['#c8d0e8', '#98a2c4', '#646e98', '#3e4670'], stoneE: '#363e66',
+  brass: ['#fff4c8', '#ffd98a', '#d6a046', '#8a5a22'], brassE: '#6e4418',
+  iron: ['#b4b4d0', '#7c7a9c', '#4e4c6c', '#38365a'], ironE: '#34325a',
+  wood: ['#c89a74', '#94664a', '#644030', '#432a22'], woodE: '#3e2620',
+  ghost: ['#f0fffa', '#a6f6dc', '#52bea8', '#2f8478'], ghostE: '#2a7a70',
+  thorn: ['#ffe4f0', '#ff7ab0', '#c03c7c', '#7a2050'], thornE: '#6a1c46',
+  ink: ['#7a68c8', '#463a8a', '#2a2058', '#1c1640'], inkE: '#8e74e8',
+  moth: ['#f6fff0', '#d4f7c4', '#9ee0a4', '#5aa880'],
+  gold: [255, 222, 140], beam: [255, 226, 150], moon: [176, 204, 255], ghostC: [150, 255, 214], inkC: [150, 110, 255],
+  pal: { bgTop: [52, 70, 120], bgBot: [20, 26, 58], far: [46, 60, 104], far2: [40, 52, 94], wall: [196, 206, 236], wallIn: [70, 80, 124], rim: [214, 226, 255] },
+};
+const lighthouseOn = () => !!(G && G.theme === 'lighthouse');
+{ const base = pal; pal = function (key, a) { return lighthouseOn() && LIGHTHOUSE_P.pal[key] ? LIGHTHOUSE_P.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function lighthouseLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function lighthouseRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+const lighthouseCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const lighthouseHex = h => h.slice(1, 7).match(/../g).map(x => parseInt(x, 16));
+const lighthouseMixC = (a, b, k) => a.map((v, i) => lerp(v, b[i], k));
+function lighthouseCirc(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.01, r), 0, TWO_PI); }
+function lighthouseEll(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); }
+function lighthouseRRect(c, x, y, w, h, r) { c.beginPath(); c.roundRect(Math.min(x, x + w), Math.min(y, y + h), Math.abs(w), Math.abs(h), Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2))); }
+// a sheen stroke on a round thing (an arc of white on its lit upper left)
+function lighthouseSheen(c, x, y, r, a = 0.5, from = 3.6, to = 4.7) { c.save(); c.strokeStyle = `rgba(255,255,250,${a})`; c.lineWidth = Math.max(0.6, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.7, from, to); c.stroke(); c.restore(); }
+// a four-point twinkle (additive)
+function lighthouseTwinkle(c, x, y, r, a, col = [255, 244, 210]) {
+  if (a < 0.03 || r < 0.3) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = lighthouseCol(col, Math.min(1, a));
+  c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.22, y - r * 0.22); c.lineTo(x + r, y); c.lineTo(x + r * 0.22, y + r * 0.22); c.lineTo(x, y + r); c.lineTo(x - r * 0.22, y + r * 0.22); c.lineTo(x - r, y); c.lineTo(x - r * 0.22, y - r * 0.22); c.closePath(); c.fill();
+  c.restore();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function lighthouseCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0); c.lineJoin = 'round'; c.lineCap = 'round';
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const LIGHTHOUSE_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map(), grads: new Map() };
+function lighthouseCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (LIGHTHOUSE_CACHE.key !== key) { LIGHTHOUSE_CACHE.key = key; LIGHTHOUSE_CACHE.walls.clear(); LIGHTHOUSE_CACHE.layers.clear(); LIGHTHOUSE_CACHE.sprites.clear(); LIGHTHOUSE_CACHE.grads.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function lighthouseSprite(name, w, h, draw) {
+  let sp = LIGHTHOUSE_CACHE.sprites.get(name);
+  if (!sp) { sp = lighthouseCanvas(w, h); draw(sp.c, sp.w, sp.h); LIGHTHOUSE_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// A cached piece of art in screen orientation drawn at the screen's scale in world units round its origin (y down),
+// covering x0..x1, y0..y1; blitted with lighthouseBlit(sp, X, Y) at the origin's screen point
+function lighthousePiece(name, x0, x1, y0, y1, draw) {
+  let sp = LIGHTHOUSE_CACHE.sprites.get(name);
+  if (!sp) {
+    sp = lighthouseCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = -x0 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(s, s); draw(sp.c);
+    LIGHTHOUSE_CACHE.sprites.set(name, sp);
+  }
+  return sp;
+}
+const lighthouseBlit = (sp, X, Y) => ctx.drawImage(sp.cv, X - sp.ax, Y - sp.ay, sp.w, sp.h);
+// a gradient built once in local units for the main context (reused every frame under a transform)
+function lighthouseGrad(name, make) { let g = LIGHTHOUSE_CACHE.grads.get(name); if (!g) { g = make(ctx); LIGHTHOUSE_CACHE.grads.set(name, g); } return g; }
+// a soft additive glow blitted from a cached disc (cheap: no gradient built per frame)
+function lighthouseGlow(x, y, r, col, a, c = ctx) {
+  if (a < 0.004 || r < 0.5) return;
+  const sp = lighthouseSprite('glow' + col.join(','), 64, 64, cc => { cc.fillStyle = lighthouseRG(32, 32, 32, [lighthouseCol(col, 1), lighthouseCol(col, 0.32), lighthouseCol(col, 0)], cc); cc.fillRect(0, 0, 64, 64); });
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+// a soft dark shade blitted from a cached disc (multiplied in: shadows on the whitewash stay blue)
+function lighthouseShade(x, y, rx, ry, a, c = ctx) {
+  if (a < 0.01) return;
+  const sp = lighthouseSprite('shade', 64, 32, cc => { cc.fillStyle = lighthouseRG(32, 16, 32, ['rgba(20,22,58,1)', 'rgba(20,22,58,.45)', 'rgba(20,22,58,0)'], cc); cc.save(); cc.scale(1, 0.5); cc.fillRect(0, 0, 64, 64); cc.restore(); });
+  c.save(); c.globalAlpha = Math.min(1, a); c.drawImage(sp.cv, x - rx, y - ry, rx * 2, ry * 2); c.restore();
+}
+// the tower's time, and how loud something at height a sounds (0 off screen)
+const lighthouseT = () => (G && G.lighthouseT) || 0;
+const lighthouseVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+// is the pilot Lumo the firefly (his own glow burns back the shadow hands: the perk)?
+const lighthouseGlowbug = () => settings.character === 'firefly';
+
+// ---- the tower's own particles: ghost wisps, sparks, smoke, rings, cinders of ghost fire ----
+function lighthouseFx(kind, x, a, vx, va, life, size, o = {}) {
+  const D = G.lighthouseFx || (G.lighthouseFx = []); if (D.length > 150) D.shift();
+  D.push({ kind, x, a, vx, va, life, max: life, size, rot: Math.random() * 6, w: (Math.random() - 0.5) * 8, ...o });
+}
+function updateLighthouseFx(dt) {
+  const D = G.lighthouseFx; if (!D) return;
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    if (q.kind === 'spark') { q.va -= 300 * dt; q.vx *= 1 - dt * 1.2; }
+    else if (q.kind === 'smoke' || q.kind === 'wisp') { q.vx *= 1 - dt * 1.6; q.va = q.va * (1 - dt * 1.4) + 30 * dt; }
+    else if (q.kind === 'cinder') { q.vx *= 1 - dt * 2; q.va = q.va * (1 - dt * 2) + 40 * dt; }
+    q.x += q.vx * dt; q.a += q.va * dt; q.rot += q.w * dt;
+  }
+}
+// a puff of ink smoke / ghost wisp (cached soft blobs)
+function lighthouseBlobSprite(col) {
+  return lighthouseSprite('blob' + col.join(','), 32, 32, c => { c.fillStyle = lighthouseRG(16, 16, 16, [lighthouseCol(col, 0.9), lighthouseCol(col, 0.4), lighthouseCol(col, 0)], c); c.fillRect(0, 0, 32, 32); });
+}
+function drawLighthouseFx() {
+  const D = G.lighthouseFx; if (!D || !D.length) return;
+  for (const q of D) {
+    const y = sy(q.a); if (y < -50 || y > H + 50) continue;
+    const t = q.life / q.max, x = sx(q.x);
+    if (q.kind === 'smoke') {
+      const r = q.size * (0.6 + 0.9 * (1 - t)) * s, sp = lighthouseBlobSprite([60, 44, 120]);
+      ctx.save(); ctx.globalAlpha = 0.55 * t; ctx.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); ctx.restore();
+    } else if (q.kind === 'wisp' || q.kind === 'cinder') {
+      const r = q.size * (q.kind === 'wisp' ? 0.7 + 0.6 * (1 - t) : 0.5 + 0.5 * t) * s;
+      lighthouseGlow(x, y, r * 2.2, q.col || LIGHTHOUSE_P.ghostC, 0.5 * t);
+      if (q.kind === 'cinder') { ctx.fillStyle = `rgba(230,255,244,${0.85 * t})`; lighthouseCirc(ctx, x, y, r * 0.45); ctx.fill(); }
+    } else if (q.kind === 'ring') {
+      const u = 1 - t, r = q.size * (0.3 + u) * s;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = lighthouseCol(q.col || [200, 255, 230], 0.45 * t); ctx.lineWidth = (2 * t + 0.5) * s;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * (q.flat || 0.5), 0, 0, TWO_PI); ctx.stroke(); ctx.restore();
+    } else {   // a spark: a short hot streak along its flight
+      const col = q.col || [255, 226, 150];
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = lighthouseCol(col, t); ctx.lineWidth = q.size * s; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - q.vx * 0.025 * s, y + q.va * 0.025 * s); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+// ---- sounds (synth): a lamp's gear clunk, thorns crackling into being, a phantom's wail, a chain rattle and a whoosh
+// of ghost fire, a shadow's sizzle and creak, a moth's chime, the foghorn ----
+const LIGHTHOUSE_SFX = {
+  // the lamp turning about at the end of its swing: a soft brass clunk with a ring
+  lclunk: (t, B, v) => { vTone(B, t, 196, { f2: 160, glide: 0.06, type: 'triangle', v: 0.05 * v, dur: 0.14 }); vTone(B, t + 0.01, 784, { type: 'sine', v: 0.012 * v, dur: 0.5 }); },
+  // thorns crackling into being where the light lands: a glassy shimmer over a bramble crackle
+  lthorn: (t, B, v) => { vNoise(B, t, { f: 5200, q: 4, v: 0.04 * v, dur: 0.22, a: 0.02 }); for (let k = 0; k < 4; k++) vTone(B, t + k * 0.03, 1700 + k * 330, { type: 'sine', v: 0.012 * v, dur: 0.16 }); vNoise(B, t, { type: 'bandpass', f: 900, q: 2, v: 0.04 * v, dur: 0.08 }); },
+  // a phantom caught in the light: a wavering ghostly wail; passed through in the dark: a cold shiver of air
+  lwail: (t, B, v) => { vTone(B, t, 420, { f2: 640, glide: 0.35, type: 'sine', v: 0.05 * v, dur: 0.75, a: 0.12, vib: [7, 22], vibAt: 0.05 }); vTone(B, t + 0.05, 632, { f2: 840, glide: 0.4, type: 'triangle', lp: 1400, v: 0.02 * v, dur: 0.6, a: 0.15, vib: [6, 30] }); },
+  lboo: (t, B) => { vNoise(B, t, { f: 700, f2: 2400, q: 1.4, v: 0.07, dur: 0.4, a: 0.05 }); vTone(B, t, 330, { f2: 220, glide: 0.35, type: 'sine', v: 0.05, dur: 0.4, vib: [9, 14] }); vTone(B, t + 0.05, 1320, { type: 'sine', v: 0.015, dur: 0.5 }); },
+  // the ghost lantern: its chain rattling (the tell), then a whoosh of ghost fire as it swings
+  lrattle: (t, B, v) => { for (let k = 0; k < 7; k++) { vNoise(B, t + k * 0.09, { f: 3600 + (k % 3) * 600, q: 6, v: 0.03 * v, dur: 0.04 }); vTone(B, t + k * 0.09, 2400 + (k % 2) * 500, { type: 'square', lp: 4000, v: 0.006 * v, dur: 0.03 }); } },
+  lwhoosh: (t, B, v) => { vNoise(B, t, { f: 500, f2: 1600, q: 1.2, v: 0.1 * v, dur: 0.6, a: 0.12 }); vTone(B, t, 160, { f2: 260, glide: 0.4, type: 'sawtooth', lp: 700, v: 0.03 * v, dur: 0.6, a: 0.1 }); },
+  // the shadow hand: burnt back by the light (a sizzle and a hiss), creeping out again (a low creak)
+  lsizzle: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 4200, v: 0.06 * v, dur: 0.45, a: 0.01 }); vNoise(B, t, { f: 1600, f2: 700, q: 1.2, v: 0.05 * v, dur: 0.35 }); vTone(B, t, 220, { f2: 120, glide: 0.3, type: 'sawtooth', lp: 900, v: 0.03 * v, dur: 0.3 }); },
+  lcreep: (t, B, v) => { vTone(B, t, 70, { f2: 96, glide: 0.6, type: 'sawtooth', lp: 380, q: 4, v: 0.05 * v, dur: 0.7, a: 0.2, vib: [11, 6] }); },
+  // a luna moth caught: a soft rising chime and a flutter of wings
+  lmoth: (t, B) => { [84, 88, 91, 96].forEach((m, i) => vTone(B, t + i * 0.07, mf(m), { type: 'sine', v: 0.055, dur: 0.5 })); vTone(B, t + 0.3, mf(103), { type: 'sine', v: 0.02, dur: 0.9 }); for (let k = 0; k < 6; k++) vNoise(B, t + k * 0.05, { f: 1800, q: 3, v: 0.02, dur: 0.03 }); },
+  // the Lantern Room: the great lamp lit, the old foghorn's deep call and a bell
+  lhorn: (t, B) => { vTone(B, t, 82, { type: 'sawtooth', lp: 420, v: 0.12, dur: 1.4, a: 0.15 }); vTone(B, t, 123, { type: 'sawtooth', lp: 520, v: 0.06, dur: 1.4, a: 0.15 }); [[0.2, 72], [0.5, 79], [0.8, 84]].forEach(([d, m]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.06, dur: 1.6 }); vTone(B, t + d, mf(m + 19), { type: 'sine', v: 0.012, dur: 1 }); }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = LIGHTHOUSE_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + (o.delay || 0) + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+
+// ---- the traps at play ----
+CAUSES.lighthouseThorn = 'Caught on the ghost thorns';
+CAUSES.lighthousePhantom = 'Spooked by a phantom';
+CAUSES.lighthouseLantern = 'Clonked by a ghost lantern';
+CAUSES.lighthouseShadow = 'Grabbed by a shadow hand';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'lighthouseThorn' ? [255, 140, 190] : cause === 'lighthousePhantom' ? [150, 255, 214] : cause === 'lighthouseLantern' ? [160, 255, 200] : cause === 'lighthouseShadow' ? [170, 140, 255] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!LIGHTHOUSE_TYPES.has(h.type)) return base(h);
+  return lighthouseShapes(h, lighthouseT()).map(shrinkShape);
+}; }
+// the tower's clock runs with the game
+{ const base = updateHazards; updateHazards = function (dt) {
+  if (G.level && G.level.lighthouse) { G.lighthouseT = (G.lighthouseT || 0) + dt; updateLighthouseTraps(dt); updateLighthouseFx(dt); }
+  base(dt);
+}; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.lighthouse) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && LIGHTHOUSE_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// how close the pilot's hitbox comes to a point
+const lighthouseNear = (x, a) => { let d = Infinity; for (const c of pCaps) d = Math.min(d, ptSeg(x, a, c.x0, c.a0, c.x1, c.a1) - c.r); return d; };
+function updateLighthouseTraps(dt) {
+  const top = G.camAlt + viewH, T = lighthouseT(), play = G.state === 'play', L = G.level;
+  // the lamps: a clunk as each turns about at the end of its swing
+  for (const lp of L.lamps) {
+    if (lp.alt < G.camAlt - 200 || lp.alt - lp.len > top + 100) continue;
+    const u = pmod(T - lp.ph, lp.P) / lp.P, q = u < 0.25 || u >= 0.75 ? 0 : 1;
+    if (lp.q != null && lp.q !== q && lp.alt < top + 60) sfx('lclunk', { v: lighthouseVol(lp.alt) * 0.7 });
+    lp.q = q;
+  }
+  for (const h of G.hazards) {
+    if (!LIGHTHOUSE_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80, v = vis ? lighthouseVol(h.alt) : 0;
+    if (h.type === 'lighthouseThorn') {
+      // each stem crackles into being as the light reaches it
+      let n = 0; for (let i = 0; i < 4; i++) { const [mx, ma] = lighthouseStemMid(h, i); if (lighthouseLit(h.lamp, mx, ma, T)) n++; }
+      if (vis && n > (h.n || 0)) { sfx('lthorn', { v: v * 0.8 }); const [mx, ma] = lighthouseStemMid(h, 1); for (let k = 0; k < 3; k++) lighthouseFx('spark', mx + (Math.random() - 0.5) * 60, ma + (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 80, 40 + Math.random() * 60, 0.4, 1.4, { col: [255, 170, 210] }); }
+      h.n = n;
+    } else if (h.type === 'lighthousePhantom') {
+      const st = lighthousePhantomState(h, T), was = h.st || st;
+      if (vis && st.lit && !was.lit) { sfx('lwail', { v }); lighthouseFx('ring', st.x, st.a, 0, 0, 0.4, 40, { flat: 1, col: [180, 255, 230] }); }
+      if (vis && Math.random() < dt * (st.lit ? 14 : 5)) lighthouseFx('wisp', st.x + (Math.random() - 0.5) * 30, st.a - 30, -st.vx * 0.2 + (Math.random() - 0.5) * 20, -10 - Math.random() * 20, 0.9, 4 + Math.random() * 3);
+      // flown through in the dark: a mission (once a phantom)
+      if (play && !st.lit && !h.passed && Math.abs(st.a - G.p.alt) < 90) {
+        const S = lighthousePhantomBody([], st.x, st.a, LIGHTHOUSE.phantom.sc * 0.8);
+        if (S.some(q => pCaps.some(c => (q.k === 'c' ? ptSeg(q.x, q.a, c.x0, c.a0, c.x1, c.a1) : Math.min(ptSeg(q.x0, q.a0, c.x0, c.a0, c.x1, c.a1), ptSeg(q.x1, q.a1, c.x0, c.a0, c.x1, c.a1))) < q.r + c.r))) {
+          h.passed = true; h.boo = T;
+          const n = G.stats.lighthouseGhost = (G.stats.lighthouseGhost || 0) + 1, of = advGoalN('lighthouseGhost');
+          chainEvent(of && n <= of ? `Through a phantom! ${n}/${of}` : 'Through a phantom!', '#bfffe6', 1.2);
+          sfx('lboo'); vibrate(12);
+          for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; lighthouseFx('wisp', st.x, st.a, Math.cos(an) * 120, Math.sin(an) * 120, 0.7, 5); }
+          lighthouseFx('ring', st.x, st.a, 0, 0, 0.5, 46, { flat: 1, col: [200, 255, 236] });
+        }
+      }
+      h.st = st;
+    } else if (h.type === 'lighthouseLantern') {
+      const st = lighthouseLanternState(h, T), was = h.st || st;
+      if (vis && st.tell != null && was.tell == null) sfx('lrattle', { v });
+      if (vis && st.swing != null && was.swing == null) sfx('lwhoosh', { v });
+      if (vis && st.swing != null && Math.random() < dt * 40) { const [x, a] = lighthouseLanternAt(h, st.th); lighthouseFx('cinder', x + (Math.random() - 0.5) * 10, a, (Math.random() - 0.5) * 30, 10 + Math.random() * 30, 0.6, 3 + Math.random() * 2); }
+      h.st = st;
+    } else if (h.type === 'lighthouseShadow') {
+      // the perk: Lumo's own glow burns the hand back while he is near it
+      if (lighthouseGlowbug() && play) {
+        const d = Math.abs(G.p.alt - h.alt) < 160 ? Math.abs(G.p.x - h.base) : Infinity, want = d < Infinity ? clamp(d - 70, LIGHTHOUSE.shadow.min, LIGHTHOUSE.shadow.reach) : LIGHTHOUSE.shadow.reach;
+        const was = h.cap ?? LIGHTHOUSE.shadow.reach; h.cap = want < was ? Math.max(want, was - LIGHTHOUSE.shadow.back * dt) : Math.min(want, was + LIGHTHOUSE.shadow.grow * dt);
+        if (h.cap >= LIGHTHOUSE.shadow.reach - 0.5) h.cap = null;
+        if (want < LIGHTHOUSE.shadow.reach - 20 && !h.glowT) { h.glowT = T; addPop('Glow!', G.p.x, G.p.alt + 70, { col: '#fff3b0', sub: 'the shadow shrinks back' }); }
+        if (want >= LIGHTHOUSE.shadow.reach - 20 && h.glowT && T - h.glowT > 2) h.glowT = 0;
+      } else h.cap = null;
+      const r = lighthouseShadowReach(h, T), was = h.r ?? r;
+      if (vis && r < was - 0.5 && !(h.was < was - 0.5)) sfx('lsizzle', { v });
+      if (vis && r > was + 0.5 && !(h.was > was + 0.5)) sfx('lcreep', { v: v * 0.8 });
+      if (vis && r < was - 0.5 && Math.random() < dt * 40) { const x = h.base + h.side * (r + 12); lighthouseFx('smoke', x, h.alt + (Math.random() - 0.5) * 30, h.side * 20 + (Math.random() - 0.5) * 30, 20 + Math.random() * 30, 0.9, 7 + Math.random() * 5); if (Math.random() < 0.5) lighthouseFx('spark', x, h.alt + (Math.random() - 0.5) * 20, -h.side * 60 * Math.random(), 60 + Math.random() * 80, 0.4, 1.3); }
+      h.was = was; h.r = r;
+    }
+  }
+}
+// ---- the lamps and the traps' art (static parts cached as world-unit pieces, live parts drawn on top) ----
+
+// ---- Lens Lamps: a brass Fresnel lamp on an iron bracket bolted to the tower's back wall (behind the flight) ----
+// the lamp (origin at the lens's middle, world units, y down): the round iron back plate on the bricks with its rivets,
+// the bracket arm coming forward, the brass cap with its vent and finial, the glass beehive of prism rings, a base ring
+function lighthouseLampSprite() {
+  return lighthousePiece('lamp', -34, 34, -58, 40, c => {
+    const P = LIGHTHOUSE_P, B = P.brass, I = P.iron;
+    // the back plate on the wall and its shadow
+    c.fillStyle = 'rgba(16,20,52,.35)'; lighthouseEll(c, 3, -36, 17, 13); c.fill();
+    c.fillStyle = lighthouseRG(-4, -42, 18, [I[0], I[1], I[2]], c); lighthouseEll(c, 0, -38, 15, 11.5); c.fill();
+    c.strokeStyle = P.ironE; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(230,232,255,.55)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, -38, 12.5, 9, 0, 3.4, 4.9); c.stroke();
+    for (const [x, y] of [[-10, -38], [10, -38], [0, -46], [0, -30]]) { c.fillStyle = lighthouseRG(x - 0.6, y - 0.6, 2.4, ['#e8e8ff', I[1], I[3]], c); lighthouseCirc(c, x, y, 1.7); c.fill(); }
+    // the arm: a forged bar curving forward and down to the lamp's cap, a scroll under it
+    c.lineCap = 'round';
+    for (const [lw, col] of [[6, P.ironE], [4.2, I[1]], [1.2, 'rgba(220,222,255,.6)']]) { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(0, -38); c.quadraticCurveTo(lw < 2 ? -1.4 : 0, -30, 0, -24); c.stroke(); }
+    c.strokeStyle = I[2]; c.lineWidth = 2; c.beginPath(); c.moveTo(-1, -33); c.bezierCurveTo(-12, -33, -14, -24, -8, -22); c.bezierCurveTo(-4, -21, -4, -26, -7, -26); c.stroke();
+    // the cap: a brass dome with a vent ring and finial
+    c.fillStyle = lighthouseLG(-20, 0, 20, 0, [B[0], B[1], B[2], B[3]], c);
+    c.beginPath(); c.moveTo(-21, -15); c.quadraticCurveTo(-19, -27, 0, -28); c.quadraticCurveTo(19, -27, 21, -15); c.closePath(); c.fill();
+    c.strokeStyle = P.brassE; c.lineWidth = 0.9; c.stroke();
+    c.strokeStyle = 'rgba(255,250,220,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-15, -18); c.quadraticCurveTo(-12, -25, -2, -26); c.stroke();
+    c.fillStyle = lighthouseLG(-6, 0, 6, 0, [B[1], B[3]], c); lighthouseRRect(c, -6, -30, 12, 3, 1.2); c.fill();
+    c.fillStyle = lighthouseRG(-1, -33, 4, [B[0], B[2]], c); lighthouseCirc(c, 0, -32, 2.8); c.fill();
+    // the glass beehive: stacked prism rings (amber glass, brass bands between, a lit stripe at each ring's top)
+    const rings = [[-15, 16], [-9, 21], [-3, 23], [3, 23], [9, 21], [15, 16]];
+    for (let i = 0; i < rings.length - 1; i++) {
+      const [y0, r0] = rings[i], [y1, r1] = rings[i + 1];
+      c.fillStyle = lighthouseLG(-r0, 0, r0, 0, ['rgba(160,110,50,.96)', 'rgba(255,236,170,.96)', 'rgba(255,252,232,1)', 'rgba(236,180,80,.96)', 'rgba(150,96,40,.96)'], c);
+      c.beginPath(); c.moveTo(-r0, y0); c.lineTo(r0, y0); c.lineTo(r1, y1); c.lineTo(-r1, y1); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(150,96,30,.85)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-r1, y1); c.lineTo(r1, y1); c.stroke();
+      c.strokeStyle = 'rgba(255,255,236,.75)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(-r0 + 1.4, y0 + 0.9); c.lineTo(r0 - 1.4, y0 + 0.9); c.stroke();
+    }
+    c.strokeStyle = 'rgba(140,90,34,.8)'; c.lineWidth = 1.1; c.beginPath();
+    for (const f of [-0.6, 0, 0.6]) { c.moveTo(f * 16, -15); c.quadraticCurveTo(f * 26, 0, f * 16, 15); }
+    c.stroke();
+    // the base ring and a drip finial
+    c.fillStyle = lighthouseLG(0, 14, 0, 21, [B[0], B[1], B[2]], c); lighthouseEll(c, 0, 16.5, 18, 4.6); c.fill(); c.strokeStyle = P.brassE; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = lighthouseRG(-1, 21, 5, [B[0], B[2]], c); lighthouseCirc(c, 0, 22.5, 3.2); c.fill();
+  });
+}
+// the beam: one cached wedge pointing down (apex at the top middle), three soft layers fading along it
+function lighthouseBeamSprite() {
+  const X = LIGHTHOUSE.lamp, L = X.len, hw = Math.tan(X.ha * 1.6) * L;
+  return lighthousePiece('beam', -hw - 2, hw + 2, -4, L, c => {
+    for (const [k, al] of [[1.6, 0.09], [1.0, 0.2], [0.5, 0.26]]) {
+      const w = Math.tan(X.ha * k) * L;
+      c.fillStyle = lighthouseLG(0, 0, 0, L, [`rgba(255,240,180,${al * 2})`, `rgba(255,224,140,${al})`, `rgba(255,214,130,${al * 0.45})`, 'rgba(255,210,120,0)'], c);
+      c.beginPath(); c.moveTo(-3, 6); c.lineTo(-w, L); c.lineTo(w, L); c.lineTo(3, 6); c.closePath(); c.fill();
+    }
+  });
+}
+// the shaft's inside between two heights (the beam is clipped to it: light lands on the walls, never past them)
+function lighthouseShaftClip(a0, a1) {
+  ctx.beginPath();
+  for (let a = a0; a <= a1; a += 24) ctx.lineTo(sx(leftWall(a) - 4), sy(a));
+  ctx.lineTo(sx(leftWall(a1) - 4), sy(a1));
+  for (let a = a1; a >= a0; a -= 24) ctx.lineTo(sx(rightWall(a) + 4), sy(a));
+  ctx.lineTo(sx(rightWall(a0) + 4), sy(a0));
+  ctx.closePath();
+}
+function drawLighthouseLamps() {
+  const L = G.level; if (!L || !L.lamps) return;
+  lighthouseCacheCheck();
+  const T = lighthouseT(), bot = G.camAlt - 80 - drawPad, top = G.camAlt + viewH + 80 + drawPad, X = LIGHTHOUSE.lamp, bs = lighthouseBeamSprite(), ls = lighthouseLampSprite();
+  for (const lp of L.lamps) {
+    if (lp.alt + 60 < bot || lp.alt - X.len > top) continue;
+    const a = lighthouseBeamAng(lp, T), x = sx(lp.x), y = sy(lp.alt);
+    // the beam (clipped to the shaft), dust turning in it, a warm splash where it lands on a wall
+    ctx.save(); lighthouseShaftClip(Math.max(bot, lp.alt - X.len - 10), lp.alt + 30); ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-a); ctx.globalAlpha = 0.9 + 0.1 * Math.sin(G.t * 7 + lp.alt); lighthouseBlit(bs, 0, 0); ctx.restore();
+    for (let i = 0; i < 14; i++) {
+      const d = 40 + hash2(i, 9301 + (lp.alt | 0)) * (X.len - 90), off = (hash2(i, 9302) - 0.5) * 1.6 * X.ha, an = a + off, px = x + Math.sin(an) * d * s + Math.sin(G.t * 0.8 + i) * 3 * s, py = y + Math.cos(an) * d * s + Math.cos(G.t * 0.6 + i) * 3 * s;
+      ctx.fillStyle = `rgba(255,240,196,${(0.3 + 0.3 * Math.sin(G.t * 2 + i)) * (1 - d / X.len)})`; ctx.fillRect(px, py, 1.6 * s, 1.6 * s);
+    }
+    ctx.restore();
+    for (const side of [0, 1]) {
+      // where the beam's middle meets this wall (if it does within its reach): warm the whitewash there
+      const dir = Math.sin(a); if ((side === 0) !== (dir < 0) || Math.abs(dir) < 0.05) continue;
+      let hitA = null; for (let dd = 30; dd < X.len; dd += 12) { const wx = lp.x + Math.sin(a) * dd, wa = lp.alt - Math.cos(a) * dd, [l, r] = walls(wa); if (wx < l + 2 || wx > r - 2) { hitA = [side ? r : l, wa, dd]; break; } }
+      if (hitA) lighthouseGlow(sx(hitA[0]), sy(hitA[1]), (40 + hitA[2] * 0.12) * s, [255, 210, 130], 0.32 * (1 - hitA[2] / X.len) + 0.08);
+    }
+    // the lamp itself, its lens glowing, the bullseye turned the way the beam points
+    lighthouseGlow(x, y, 70 * s, [255, 214, 120], 0.3 + 0.05 * Math.sin(G.t * 9) * Math.sin(G.t * 5.3));
+    lighthouseBlit(ls, x, y);
+    const bx = x + Math.sin(a) * 10 * s;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    lighthouseGlow(bx, y + 2 * s, 18 * s, [255, 246, 210], 0.9);
+    ctx.strokeStyle = 'rgba(255,250,220,.55)'; ctx.lineWidth = 0.7 * s; for (const rr of [3.5, 7, 10.5]) { ctx.beginPath(); ctx.ellipse(bx, y + 2 * s, rr * (0.55 + 0.45 * Math.cos(a)) * s, rr * s, 0, 0, TWO_PI); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+// ---- Ghost Thorns ----
+// a bramble stem (wall-local, x into the shaft times d, y down, the knot at the origin): a tapered stem lit along its
+// top, a dark furrow down its belly, hooked thorns on alternate sides (pink to a white tip), a sharp tip; or its ghost:
+// the same outline dashed in pale teal, barely there
+function lighthouseStemArt(c, d, i, solid) {
+  const [v0, L, ang, curl] = LIGHTHOUSE_STEMS[i], P = LIGHTHOUSE_P, N = 16, pts = [];
+  for (let k = 0; k <= N; k++) { const w = k / N, a = ang + curl * w * w; pts.push([d * (5 + Math.cos(a) * L * w), -(v0 + Math.sin(a) * L * w)]); }
+  const half = w => lerp(4.6, 1.3, w), left = [], right = [];
+  for (let k = 0; k <= N; k++) {
+    const [x0, y0] = pts[Math.max(0, k - 1)], [x1, y1] = pts[Math.min(N, k + 1)], dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l, hw = half(k / N);
+    left.push([pts[k][0] + nx * hw, pts[k][1] + ny * hw]); right.push([pts[k][0] - nx * hw, pts[k][1] - ny * hw]);
+  }
+  const [tx, ty] = pts[N], [qx, qy] = pts[N - 1], tdx = tx - qx, tdy = ty - qy;
+  const outline = () => { c.beginPath(); left.forEach(([x, y], k) => k ? c.lineTo(x, y) : c.moveTo(x, y)); c.lineTo(tx + tdx * 1.6, ty + tdy * 1.6); for (let k = N; k >= 0; k--) c.lineTo(right[k][0], right[k][1]); c.closePath(); };
+  // thorns: hooked, alternating sides, shrinking toward the tip
+  const thorns = [];
+  for (let k = 2; k < N - 1; k += 2) {
+    const [x, y] = pts[k], [x2, y2] = pts[k + 1], dx = x2 - x, dy = y2 - y, l = Math.hypot(dx, dy) || 1, sd = (k / 2) % 2 ? 1 : -1, px = -dy / l * sd, py = dx / l * sd, tl = 11 - k * 0.45;
+    thorns.push([x, y, dx / l, dy / l, px, py, tl]);
+  }
+  const thornPath = ([x, y, ux, uy, px, py, tl]) => { const tipx = x + px * tl + ux * 3, tipy = y + py * tl + uy * 3; c.beginPath(); c.moveTo(x - ux * 3, y - uy * 3); c.quadraticCurveTo(x + px * tl * 0.45, y + py * tl * 0.45, tipx, tipy); c.quadraticCurveTo(x + px * 2 + ux * 2, y + py * 2 + uy * 2, x + ux * 3, y + uy * 3); c.closePath(); return [tipx, tipy]; };
+  if (solid) {
+    for (const q of thorns) { const [tipx, tipy] = thornPath(q); c.fillStyle = lighthouseLG(q[0], q[1], tipx, tipy, ['#9a2c62', P.thorn[1], P.thorn[0]], c); c.fill(); c.strokeStyle = P.thornE; c.lineWidth = 0.7; c.stroke(); }
+    outline(); c.fillStyle = lighthouseLG(0, -v0 - 8, 0, -v0 + 8, [P.thorn[1], P.thorn[2], P.thorn[3]], c); c.fill();
+    c.strokeStyle = P.thornE; c.lineWidth = 0.9; c.stroke();
+    // the belly furrow and the lit ridge (a line pair), a few bark nicks
+    c.lineWidth = 1.1; c.strokeStyle = 'rgba(80,14,48,.55)'; c.beginPath(); right.slice(1, N - 2).forEach(([x, y], k) => { const [cx, cy] = pts[k + 1]; const X0 = lerp(cx, x, 0.5), Y0 = lerp(cy, y, 0.5); k ? c.lineTo(X0, Y0) : c.moveTo(X0, Y0); }); c.stroke();
+    c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,214,234,.85)'; c.beginPath(); left.slice(1, N - 3).forEach(([x, y], k) => { const [cx, cy] = pts[k + 1]; const X0 = lerp(cx, x, 0.45), Y0 = lerp(cy, y, 0.45); k ? c.lineTo(X0, Y0) : c.moveTo(X0, Y0); }); c.stroke();
+    for (let k = 3; k < N - 3; k += 4) { const [x, y] = pts[k]; c.strokeStyle = 'rgba(90,20,56,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x - 1.6, y - 1); c.lineTo(x + 1.6, y + 1); c.stroke(); }
+    // the sharp tip
+    c.fillStyle = lighthouseLG(qx, qy, tx + tdx * 1.6, ty + tdy * 1.6, [P.thorn[1], P.thorn[0]], c); c.beginPath(); c.moveTo(left[N - 1][0], left[N - 1][1]); c.lineTo(tx + tdx * 1.6, ty + tdy * 1.6); c.lineTo(right[N - 1][0], right[N - 1][1]); c.closePath(); c.fill();
+  } else {
+    outline(); c.fillStyle = 'rgba(150,255,224,.06)'; c.fill();
+    c.setLineDash([3, 3]); c.strokeStyle = 'rgba(176,255,228,.5)'; c.lineWidth = 1.1; c.stroke();
+    c.lineWidth = 0.8; c.strokeStyle = 'rgba(176,255,228,.38)'; for (const q of thorns) { thornPath(q); c.stroke(); }
+    c.setLineDash([]);
+  }
+}
+const lighthouseStemPiece = (d, i, solid) => lighthousePiece(`stem${d}${i}${solid ? 's' : 'g'}`, d > 0 ? -12 : -190, d > 0 ? 190 : 12, -110, 110, c => lighthouseStemArt(c, d, i, solid));
+// the knot: a gnarled burl of old bramble grown into the mortar, roots crawling off along the wall
+function lighthouseKnotPiece(d) {
+  return lighthousePiece('knot' + d, -40, 40, -34, 34, c => {
+    const P = LIGHTHOUSE_P;
+    c.lineCap = 'round';
+    for (const [an, len] of [[-0.9, 26], [0.3, 30], [1.2, 22], [2.4, 18]]) {
+      const ex = -d * Math.abs(Math.cos(an)) * len * 0.7 + d * 2, ey = Math.sin(an) * len;
+      c.strokeStyle = P.thorn[3]; c.lineWidth = 3.4; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(ex * 0.4 + 4 * d, ey * 0.6, ex, ey); c.stroke();
+      c.strokeStyle = 'rgba(255,170,206,.45)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(0, -1); c.quadraticCurveTo(ex * 0.4 + 4 * d, ey * 0.6 - 1, ex, ey - 1); c.stroke();
+    }
+    c.fillStyle = lighthouseRG(d * 2, -8, 22, ['#d8689c', '#8a2e62', '#521a40'], c); lighthouseEll(c, d * 2, 0, 10.5, 24); c.fill();
+    c.strokeStyle = P.thornE; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,176,212,.6)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(d * 4, -18); c.quadraticCurveTo(d * 7, -4, d * 4, 12); c.stroke();
+    c.strokeStyle = 'rgba(60,10,40,.55)'; c.lineWidth = 1; c.beginPath(); c.moveTo(d * -1, -14); c.quadraticCurveTo(d * 2, 0, d * -2, 16); c.moveTo(d * 3, -6); c.quadraticCurveTo(d * 5, 2, d * 2, 8); c.stroke();
+    lighthouseSheen(c, d * 2, -6, 9, 0.35, 3.7, 4.5);
+  });
+}
+function drawLighthouseThorn(h) {
+  lighthouseCacheCheck();
+  const T = lighthouseT(), L = h.lamp, d = h.side, X = sx(h.base), Y = sy(h.alt);
+  for (let i = 0; i < 4; i++) {
+    const [mx, ma] = lighthouseStemMid(h, i), off = lighthouseBeamOff(L, mx, ma, T), k = 1 - smooth(L.ha * 0.8, L.ha * 1.3, off);
+    const near = off < Infinity ? 1 - smooth(L.ha, L.ha * 3.2, off) : 0;   // the tell: the ghost brightens as the light comes
+    if (k < 0.98) { ctx.save(); ctx.globalAlpha = (1 - k) * (0.55 + 0.45 * near + 0.08 * Math.sin(G.t * 3 + i)); lighthouseBlit(lighthouseStemPiece(d, i, false), X, Y); ctx.restore(); }
+    if (near > 0.05 && k < 0.9) lighthouseGlow(sx(mx), sy(ma), 44 * s, [150, 255, 214], 0.12 * near);
+    if (k > 0.02) { lighthouseGlow(sx(mx), sy(ma), 56 * s, [255, 110, 160], 0.22 * k); ctx.save(); ctx.globalAlpha = k; lighthouseBlit(lighthouseStemPiece(d, i, true), X, Y); ctx.restore(); }
+  }
+  lighthouseBlit(lighthouseKnotPiece(d), X, Y);
+}
+
+// ---- Phantom ----
+// a sheet ghost (art units, y down, about 50 across with its arms): the hood, the arms (raised as the light catches it),
+// a tattered hem of four tails rippling back
+function lighthouseGhostPath(c, t, lit) {
+  const wv = k => Math.sin(t * 5 + k * 1.7) * 2.2, ar = lit * 6;
+  c.beginPath();
+  c.moveTo(-16, 6);
+  c.bezierCurveTo(-17, -14, -9, -23, 0, -23);
+  c.bezierCurveTo(9, -23, 17, -14, 16, 6);
+  c.quadraticCurveTo(24, 2 - ar, 25, -4 - ar); c.quadraticCurveTo(26, 4, 17, 12);
+  const tails = [[14, 26 + wv(0)], [5, 22 + wv(1)], [-5, 27 + wv(2)], [-15, 23 + wv(3)]];
+  let px = 17, py = 12;
+  for (const [tx, ty] of tails) { c.quadraticCurveTo(px - 1, (py + ty) / 2 + 4, tx + wv(tx) * 0.6, ty); const vx = tx - 4.5, vy = ty - 7; c.quadraticCurveTo(tx - 1, ty - 2, vx, vy); px = vx; py = vy; }
+  c.quadraticCurveTo(-19, 14, -17, 12);
+  c.quadraticCurveTo(-26, 4, -25, -4 - ar); c.quadraticCurveTo(-24, 2 - ar, -16, 6);
+  c.closePath();
+}
+function drawLighthousePhantom(h) {
+  const T = lighthouseT(), st = h.st || lighthousePhantomState(h, T), P = LIGHTHOUSE_P, sc = LIGHTHOUSE.phantom.sc * s, x = sx(st.x), y = sy(st.a);
+  if (y < -80 || y > H + 80) return;
+  const k = st.k, face = st.vx >= 0 ? 1 : -1, t = G.t + h.alt * 0.01;
+  const boo = h.boo != null ? clamp(1 - (T - h.boo) / 0.6, 0, 1) : 0;
+  if (k > 0.05) lighthouseGlow(x, y, 70 * s, P.ghostC, 0.3 * k); else lighthouseGlow(x, y, 44 * s, [150, 210, 255], 0.1 + 0.2 * boo);
+  ctx.save(); ctx.translate(x, y); ctx.scale(sc * face, sc); ctx.rotate(-st.vx * 0.0012 * face);
+  // see-through: a faint sheet, a dashed outline, hollow eyes (always, fading as it turns solid)
+  if (k < 0.97) {
+    ctx.save(); ctx.globalAlpha = (1 - k) * (0.85 + 0.15 * Math.sin(t * 2));
+    lighthouseGhostPath(ctx, t, 0); ctx.fillStyle = lighthouseGrad('phSee', c => lighthouseLG(0, -23, 0, 26, ['rgba(190,236,255,.24)', 'rgba(150,210,245,.12)', 'rgba(130,190,240,0)'], c)); ctx.fill();
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(196,242,255,.55)'; ctx.lineWidth = 1 / LIGHTHOUSE.phantom.sc; ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(206,244,255,.32)'; for (const e of [-1, 1]) { lighthouseEll(ctx, e * 5.5, -8, 3, 4); ctx.fill(); }
+    lighthouseEll(ctx, 0, 2, 2.4, 3); ctx.fill();
+    ctx.restore();
+  }
+  if (k > 0.02) {
+    ctx.save(); ctx.globalAlpha = k;
+    lighthouseGhostPath(ctx, t, k);
+    ctx.fillStyle = lighthouseGrad('phBody', c => { const g = c.createRadialGradient(-6, -14, 2, -2, -4, 34); g.addColorStop(0, P.ghost[0]); g.addColorStop(0.5, P.ghost[1]); g.addColorStop(1, P.ghost[2]); return g; }); ctx.fill();
+    ctx.save(); lighthouseGhostPath(ctx, t, k); ctx.clip();
+    for (const fx of [-8, 3, 11]) {
+      ctx.strokeStyle = 'rgba(40,130,120,.42)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(fx, 6); ctx.quadraticCurveTo(fx + 2, 16, fx - 1, 26); ctx.stroke();
+      ctx.strokeStyle = 'rgba(240,255,250,.55)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(fx + 1.6, 6); ctx.quadraticCurveTo(fx + 3.6, 16, fx + 0.6, 25); ctx.stroke();
+    }
+    // the lamp's gold light on its upper side
+    ctx.strokeStyle = 'rgba(255,226,140,.8)'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(0, -2, 15, 20, 0, 3.6, 5.8); ctx.stroke();
+    ctx.restore();
+    lighthouseGhostPath(ctx, t, k); ctx.strokeStyle = P.ghostE; ctx.lineWidth = 1.1; ctx.stroke();
+    lighthouseSheen(ctx, -2, -10, 14, 0.55, 3.6, 4.7);
+    // angry eyes under heavy brows, a wailing mouth with two little fangs
+    for (const e of [-1, 1]) {
+      ctx.fillStyle = '#f6fffc'; lighthouseEll(ctx, e * 5.6, -8, 3.6, 4.4); ctx.fill(); ctx.strokeStyle = 'rgba(40,120,110,.7)'; ctx.lineWidth = 0.6; ctx.stroke();
+      ctx.fillStyle = '#1e5a56'; lighthouseEll(ctx, e * 5.6 + 0.8, -7.4, 1.9, 2.5); ctx.fill();
+      ctx.fillStyle = '#fff'; lighthouseCirc(ctx, e * 5.6 + 0.2, -8.4, 0.7); ctx.fill();
+      ctx.strokeStyle = '#2a7a70'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(e * 9.6, -13.6); ctx.lineTo(e * 2.4, -11.4); ctx.stroke();
+    }
+    ctx.fillStyle = '#1f4f5a'; lighthouseEll(ctx, 0, 4, 4.4, 5.4 + Math.sin(t * 6) * 0.8); ctx.fill();
+    ctx.fillStyle = '#5ec8c0'; lighthouseEll(ctx, 0, 7.2, 2.6, 1.6); ctx.fill();
+    ctx.fillStyle = '#f4fffb'; for (const e of [-1, 1]) { ctx.beginPath(); ctx.moveTo(e * 3.6, 0.4); ctx.lineTo(e * 1.6, 0); ctx.lineTo(e * 2.6, 2.6); ctx.fill(); }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ---- Ghost Lantern ----
+// the bracket (origin at the wall, d into the shaft): a riveted wall plate, a forged arm to the hook, a scrolled brace
+function lighthouseBracketPiece(d) {
+  return lighthousePiece('brk' + d, d > 0 ? -10 : -70, d > 0 ? 70 : 10, -14, 40, c => {
+    const P = LIGHTHOUSE_P, I = P.iron, A = LIGHTHOUSE.lantern.arm;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const iron = (lw, col) => { c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); c.moveTo(d * 2, 0); c.lineTo(d * A, 0); c.quadraticCurveTo(d * (A + 6), 0, d * (A + 5), 5);
+      c.moveTo(d * 1, 24); c.bezierCurveTo(d * 30, 22, d * (A - 10), 14, d * (A - 6), 1);
+      c.moveTo(d * 16, 1); c.bezierCurveTo(d * 22, 4, d * 25, 11, d * 19, 13); c.bezierCurveTo(d * 14, 14, d * 13, 9, d * 17, 9); c.stroke(); };
+    c.fillStyle = 'rgba(16,20,52,.3)'; c.save(); c.translate(d * 3, 4); iron(5, 'rgba(16,20,52,.3)'); c.restore();
+    iron(4.2, P.ironE); iron(2.8, I[1]);
+    c.strokeStyle = 'rgba(220,224,255,.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(d * 3, -1.2); c.lineTo(d * (A - 1), -1.2); c.stroke();
+    c.fillStyle = lighthouseLG(d * -3, 0, d * 8, 0, [I[0], I[2]], c); lighthouseRRect(c, d > 0 ? -2 : -6, -8, 8, 36, 2); c.fill();
+    c.strokeStyle = P.ironE; c.lineWidth = 0.8; c.stroke();
+    for (const yy of [-3, 23]) { c.fillStyle = lighthouseRG(d * 2 - 0.6, yy - 0.6, 2.4, ['#e4e4ff', I[1], I[3]], c); lighthouseCirc(c, d * 2, yy, 1.8); c.fill(); }
+  });
+}
+// the lantern (centred on its glass, the handle up, about 26 × 44): handle ring, a pyramid cap, the glass with its
+// cage bars, a heavy base; its ghost flame is drawn live
+function lighthouseLanternSprite() {
+  return lighthousePiece('lantern', -22, 22, -32, 30, c => {
+    const I = ['#b6b4d0', '#7a7896', '#4a4866'], E = LIGHTHOUSE_P.ironE, k = 1.9;
+    c.scale(k, k);
+    c.strokeStyle = I[1]; c.lineWidth = 1.6; c.beginPath(); c.arc(0, -13, 3.2, Math.PI, 0); c.stroke();
+    c.fillStyle = lighthouseLG(-9, 0, 9, 0, I, c); c.beginPath(); c.moveTo(-9, -6); c.lineTo(-4, -12); c.lineTo(4, -12); c.lineTo(9, -6); c.closePath(); c.fill();
+    c.strokeStyle = E; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(230,230,255,.6)'; c.beginPath(); c.moveTo(-7, -6.8); c.lineTo(-3.4, -11); c.stroke();
+    c.fillStyle = lighthouseRG(0, 3, 11, ['rgba(230,255,245,.92)', 'rgba(120,240,200,.7)', 'rgba(40,140,120,.85)'], c); lighthouseRRect(c, -7, -6, 14, 17, 2); c.fill();
+    c.strokeStyle = I[2]; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-7, -6); c.lineTo(-7, 11); c.moveTo(7, -6); c.lineTo(7, 11); c.moveTo(0, -6); c.lineTo(0, -3); c.moveTo(0, 9.5); c.lineTo(0, 11); c.moveTo(-7, 2.5); c.lineTo(-5, 2.5); c.moveTo(5, 2.5); c.lineTo(7, 2.5); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-5, -4); c.lineTo(-5, 0); c.stroke();
+    c.fillStyle = lighthouseLG(0, 10.5, 0, 15, I, c); lighthouseRRect(c, -9, 10.5, 18, 4, 1.5); c.fill(); c.strokeStyle = E; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = 'rgba(230,230,255,.5)'; c.fillRect(-8, 11, 16, 0.8);
+  });
+}
+function drawLighthouseLantern(h) {
+  lighthouseCacheCheck();
+  const X = LIGHTHOUSE.lantern, d = h.side, T = lighthouseT(), st = h.st || lighthouseLanternState(h, T), [pxw, pa] = lighthouseLanternPivot(h);
+  lighthouseBlit(lighthouseBracketPiece(d), sx(h.base), sy(h.alt));
+  const [lxw, la] = lighthouseLanternAt(h, st.th), ux = d * Math.sin(st.th), ua = -Math.cos(st.th);
+  const px = sx(pxw), py = sy(pa), lx = sx(lxw), ly = sy(la), flare = st.swing != null ? 1 - Math.abs(st.swing - 0.5) * 0.6 : st.tell || 0;
+  // the ghost fire trailing its swing
+  if (st.swing != null) {
+    for (let q = 9; q >= 1; q--) {
+      const s2 = lighthouseLanternState(h, T - q * 0.03); if (s2.swing == null) continue;
+      const [qx, qa] = lighthouseLanternAt(h, s2.th), f = 1 - q / 10;
+      lighthouseGlow(sx(qx), sy(qa + 2), (10 + 12 * f) * s, LIGHTHOUSE_P.ghostC, 0.4 * f);
+      if (q <= 4) { ctx.fillStyle = `rgba(214,255,238,${0.5 * f})`; lighthouseCirc(ctx, sx(qx), sy(qa + 2), (3 + 4 * f) * s); ctx.fill(); }
+    }
+  }
+  lighthouseGlow(lx, ly, (44 + 22 * flare) * s, LIGHTHOUSE_P.ghostC, 0.35 + 0.3 * flare);
+  if (st.tell != null || st.swing != null) lighthouseGlow(lx, ly, 46 * s, [255, 110, 150], 0.12 + 0.12 * flare);
+  // the chain: oval links from the hook to the handle
+  const hx = lx - ux * 29 * s, hy = ly + ua * 29 * s, n = 8, ang = Math.atan2(hx - px, hy - py);
+  for (let i = 0; i < n; i++) {
+    const v = (i + 0.5) / n, cx = lerp(px, hx, v), cy = lerp(py + 5 * s, hy, v), alt = i % 2;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(-ang);
+    ctx.strokeStyle = LIGHTHOUSE_P.ironE; ctx.lineWidth = 2.2 * s; ctx.beginPath(); alt ? (ctx.moveTo(0, -3.6 * s), ctx.lineTo(0, 3.6 * s)) : ctx.ellipse(0, 0, 2.3 * s, 4 * s, 0, 0, TWO_PI); ctx.stroke();
+    ctx.strokeStyle = 'rgba(206,210,240,.75)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); alt ? (ctx.moveTo(-0.5 * s, -3 * s), ctx.lineTo(-0.5 * s, 1 * s)) : ctx.ellipse(0, 0, 2.3 * s, 4 * s, 0, 3.4, 4.6); ctx.stroke();
+    ctx.restore();
+  }
+  // the lantern, tilting with its swing, the ghost flame inside (two tiny eyes in it)
+  ctx.save(); ctx.translate(lx, ly); ctx.rotate(-Math.atan2(ux, -ua) * 0.85);
+  lighthouseBlit(lighthouseLanternSprite(), 0, 0);
+  const k = 1.9 * s, fh = (9 + flare * 5 + Math.sin(G.t * 14) * 1.2) * k;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = lighthouseGrad('lanFlame', c => lighthouseLG(0, 9, 0, -6, ['rgba(246,255,249,.95)', 'rgba(158,255,216,.9)', 'rgba(60,220,170,.5)'], c));
+  ctx.save(); ctx.scale(k, k); const f2 = fh / k;
+  ctx.beginPath(); ctx.moveTo(-4, 8); ctx.quadraticCurveTo(-5, 2, -1 + Math.sin(G.t * 9) * 1.5, 9 - f2); ctx.quadraticCurveTo(2, 0, 3, -1); ctx.quadraticCurveTo(5, 4, 4, 8); ctx.closePath(); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#1d5a50'; for (const e of [-1, 1]) { lighthouseEll(ctx, e * 1.7, 4.4, 0.9, Math.max(0.2, 1.3 - flare * 0.5)); ctx.fill(); }
+  ctx.restore();
+  ctx.restore();
+  // wisps curling up off its cap
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let q = 0; q < 3; q++) {
+    const v = pmod(G.t * 0.9 + q / 3 + h.alt * 0.001, 1), wx = lx + (Math.sin(G.t * 3 + q * 2) * 4 - ux * 18 * v) * s, wy = ly - (16 + v * 26) * s;
+    ctx.strokeStyle = `rgba(170,255,226,${0.5 * (1 - v)})`; ctx.lineWidth = (2.2 * (1 - v) + 0.5) * s; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.quadraticCurveTo(wx + 4 * s, wy - 5 * s, wx, wy - 10 * s); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---- Shadow Hand ----
+// the stain it comes out of: an inky pool soaked into the whitewash, cracks running off it (the eyes are live)
+function lighthouseStainPiece(d) {
+  return lighthousePiece('stain' + d, -46, 46, -50, 50, c => {
+    c.fillStyle = lighthouseRG(d * 4, 0, 46, ['rgba(26,18,60,.85)', 'rgba(40,28,84,.5)', 'rgba(50,36,100,0)'], c); lighthouseEll(c, d * 2, 0, 30, 46); c.fill();
+    c.strokeStyle = 'rgba(30,22,70,.6)'; c.lineWidth = 1.2; c.beginPath();
+    for (const [an, len] of [[-1.2, 40], [-0.5, 34], [0.6, 38], [1.3, 30]]) { const ex = -d * Math.abs(Math.cos(an)) * len * 0.5, ey = Math.sin(an) * len; c.moveTo(0, 0); c.lineTo(ex * 0.5 + 3 * d, ey * 0.5); c.lineTo(ex, ey); }
+    c.stroke();
+    c.strokeStyle = 'rgba(170,150,255,.25)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(d * 2, 0, 26, 40, 0, d > 0 ? -1.2 : Math.PI + 0.2, d > 0 ? -0.2 : Math.PI + 1.2); c.stroke();
+  });
+}
+function drawLighthouseShadow(h) {
+  lighthouseCacheCheck();
+  const X = LIGHTHOUSE.shadow, d = h.side, T = lighthouseT(), R = h.r ?? lighthouseShadowReach(h, T), pts = lighthouseShadowArm(h, T, R), P = LIGHTHOUSE_P;
+  const burning = h.was != null && R < h.was - 0.5, out = (R - X.min) / (X.reach - X.min);
+  const bx = sx(h.base), by = sy(h.alt);
+  lighthouseBlit(lighthouseStainPiece(d), bx, by);
+  lighthouseGlow(sx(h.base + d * R * 0.6), by, (60 + 40 * out) * s, P.inkC, 0.14 + 0.12 * out);
+  // the arm: a tapered inky limb, its upper edge lit violet, its underside deep, smoky wisps along it
+  const N = pts.length - 1, top = [], bot = [];
+  for (let k = 0; k <= N; k++) {
+    const [x0, a0] = pts[Math.max(0, k - 1)], [x1, a1] = pts[Math.min(N, k + 1)], dx = (x1 - x0) * d, da = a1 - a0, l = Math.hypot(dx, da) || 1, hw = lerp(13, 9, k / N) * (0.92 + 0.08 * Math.sin(G.t * 4 + k));
+    top.push([sx(pts[k][0] - (da / l) * hw * d * 0), sy(pts[k][1] + hw)]); bot.push([sx(pts[k][0]), sy(pts[k][1] - hw)]);
+  }
+  const [px, pa] = pts[N], sp = lighthouseEase(out), PX = sx(px), PY = sy(pa);
+  ctx.save(); ctx.translate(0, by);
+  ctx.fillStyle = lighthouseGrad('inkArm', c => lighthouseLG(0, -16 * s, 0, 16 * s, [P.ink[0], P.ink[1], P.ink[2], P.ink[3]], c));
+  ctx.beginPath(); top.forEach(([x, y], k) => k ? ctx.lineTo(x, y - by) : ctx.moveTo(x, y - by)); for (let k = N; k >= 0; k--) ctx.lineTo(bot[k][0], bot[k][1] - by); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(176,150,255,.75)'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); top.forEach(([x, y], k) => k ? ctx.lineTo(x, y + 1.4 * s) : ctx.moveTo(x, y + 1.4 * s)); ctx.stroke();
+  ctx.strokeStyle = 'rgba(20,14,48,.55)'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); bot.forEach(([x, y], k) => k ? ctx.lineTo(x, y - 2 * s) : ctx.moveTo(x, y - 2 * s)); ctx.stroke();
+  // knuckle creases along the forearm (a dark furrow, a lit ridge)
+  for (const v of [0.35, 0.62]) { const k = Math.round(v * N), [ax, aa] = pts[k], X0 = sx(ax), Y0 = sy(aa); ctx.strokeStyle = 'rgba(20,14,50,.5)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(X0 - d * 2 * s, Y0 - 8 * s); ctx.quadraticCurveTo(X0 + d * 2 * s, Y0, X0 - d * 2 * s, Y0 + 8 * s); ctx.stroke(); ctx.strokeStyle = 'rgba(160,136,240,.45)'; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.moveTo(X0 - d * 0.4 * s, Y0 - 8 * s); ctx.quadraticCurveTo(X0 + d * 3.6 * s, Y0, X0 - d * 0.4 * s, Y0 + 8 * s); ctx.stroke(); }
+  // the hand: a palm and three long clawed fingers, splayed as it reaches, curled as it is burnt back
+  ctx.save(); ctx.translate(PX, PY); ctx.scale(d * s, s);
+  for (const f of [-1, 0, 1]) {
+    const an = f * 0.5 * sp + Math.sin(G.t * 3 + f) * 0.08, len = 8 + 16 * sp, curl = (1 - sp) * 1.2;
+    const fx = 12 + len * Math.cos(an), fy = -(f * 5 + Math.sin(an) * 18 * sp);
+    const mx = 12 + len * 0.55 * Math.cos(an), my = -f * 5 - Math.sin(an) * 9 * sp;
+    ctx.strokeStyle = P.ink[3]; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(6, -f * 4); ctx.quadraticCurveTo(mx, my - curl * 3, fx, fy + curl * 6); ctx.stroke();
+    ctx.strokeStyle = P.ink[2]; ctx.lineWidth = 7.4; ctx.beginPath(); ctx.moveTo(6, -f * 4); ctx.quadraticCurveTo(mx, my - curl * 3, fx, fy + curl * 6); ctx.stroke();
+    ctx.strokeStyle = 'rgba(168,144,250,.7)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(7, -f * 4 - 3); ctx.quadraticCurveTo(mx, my - curl * 3 - 3, fx - 1, fy + curl * 6 - 3); ctx.stroke();
+    // the claw: a hooked pale violet nail
+    ctx.fillStyle = lighthouseLG(fx, fy - 4, fx + 7, fy + 4, ['#efe6ff', '#b8a2f4', '#7a62c8'], ctx);
+    ctx.beginPath(); ctx.moveTo(fx - 1, fy + curl * 6 - 3.4); ctx.quadraticCurveTo(fx + 8, fy + curl * 6 - 2, fx + 6.5, fy + curl * 6 + 4.5); ctx.quadraticCurveTo(fx + 3, fy + curl * 6 + 1, fx - 1, fy + curl * 6 + 3.4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(90,70,170,.8)'; ctx.lineWidth = 0.6; ctx.stroke();
+  }
+  ctx.fillStyle = lighthouseGrad('inkPalm', c => lighthouseRG(-2, -5, 18, [P.ink[0], P.ink[1], P.ink[2]], c)); lighthouseEll(ctx, 6, 0, 13, 12.5); ctx.fill();
+  ctx.strokeStyle = 'rgba(176,150,255,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(6, 0, 11.5, 11, 0, 3.5, 5.2); ctx.stroke();
+  ctx.restore();
+  // burnt back: the front glows like embers and smokes
+  if (burning) { lighthouseGlow(PX + d * 8 * s, PY, 30 * s, [255, 190, 110], 0.45); lighthouseGlow(PX + d * 8 * s, PY, 14 * s, [255, 240, 200], 0.4); }
+  // its eyes in the stain on the wall: two violet slits, wide while it reaches, squeezed shut in the light
+  const open = clamp(out * 1.3 - 0.2, 0.08, 1) * (pmod(G.t / 2.8 + h.alt * 0.013, 1) < 0.05 ? 0.1 : 1), ex = bx - d * 6 * s;
+  for (const e of [-1, 1]) {
+    const ey = by - 16 * s + e * 7 * s;
+    lighthouseGlow(ex, ey, 12 * s, P.inkC, 0.5 * open + 0.1);
+    ctx.fillStyle = `rgba(226,214,255,${0.5 + 0.5 * open})`; ctx.beginPath(); ctx.ellipse(ex, ey, 2.2 * s * open + 0.6 * s, 4.6 * s, 0, 0, TWO_PI); ctx.fill();
+  }
+}
+DRAW.lighthouseThorn = drawLighthouseThorn; DRAW.lighthousePhantom = drawLighthousePhantom; DRAW.lighthouseLantern = drawLighthouseLantern; DRAW.lighthouseShadow = drawLighthouseShadow;
+// ---- the tower's scene ----
+// Walls: curved whitewashed brick. Courses of hand-laid brick (varied heights, each brick foreshortened as the drum of
+// the tower curves away toward the screen's edge), the wash in three moonlit tones, peeled in patches to the red brick
+// beneath, chips knocked out of it, a lit top lip and a shaded underside on every brick (line pairs), salt streaks and
+// sea moss in the joints low down, granite pilasters where the wall stands in. Along the shaft a real lip: the wash
+// catching the moon on the right wall, in shade on the left, its edge a deeper blue-grey, chips nicked out of it. Set
+// into the brick something that changes with the section (iron sconces with candles at the door, portholes and
+// cobwebs on the thorn stair, little framed portraits whose eyes glow in the gallery, chains and hooks in the locker,
+// oil cans on brackets in the stores, pictures and a ship's clock in the quarters, rain-streaked portholes on the storm
+// stair, brass lamps in the lantern room). Flames flicker, portholes glint (live, from a list each tile keeps). All drawn
+// once into cached tiles (LIGHTHOUSE_TILE high) and blitted.
+const LIGHTHOUSE_TILE = 200;
+const LIGHTHOUSE_DECOR = { "The Keeper's Door": 'sconce', 'The Thorn Stair': 'port', 'The Phantom Gallery': 'portrait', 'The Chain Locker': 'chain', 'The Shadow Stores': 'can', "The Keeper's Quarters": 'home', 'The Storm Stair': 'storm', 'The Lantern Room': 'brass' };
+function lighthouseSecName(a) {
+  const S = G.level && G.level.sections; if (!S) return "The Keeper's Door";
+  let n = S[0].name; for (const q of S) if (a >= q.a0) n = q.name; return n;
+}
+const lighthouseDecorAt = a => LIGHTHOUSE_DECOR[lighthouseSecName(a)] || 'sconce';
+// Each section's light and colour: the backdrop's gradient (top, middle, bottom), a multiply tint over the layers, the
+// colour of its light pools and how strong they are; warm: lamplight in the quarters; storm: rain on the windows
+const LIGHTHOUSE_MOOD = {
+  "The Keeper's Door":     { g: [[74, 96, 152], [44, 58, 106], [16, 20, 50]], tint: [214, 226, 255], pool: [170, 200, 255], pk: 0.2 },
+  'The Thorn Stair':       { g: [[82, 86, 146], [48, 50, 98], [18, 16, 48]], tint: [228, 216, 252], pool: [200, 190, 255], pk: 0.18 },
+  'The Phantom Gallery':   { g: [[58, 98, 128], [32, 62, 88], [10, 26, 40]], tint: [204, 240, 238], pool: [150, 255, 214], pk: 0.17 },
+  'The Chain Locker':      { g: [[72, 82, 122], [42, 48, 82], [14, 16, 38]], tint: [214, 220, 246], pool: [190, 210, 255], pk: 0.17 },
+  'The Shadow Stores':     { g: [[76, 64, 128], [44, 34, 86], [16, 10, 40]], tint: [224, 208, 255], pool: [180, 150, 255], pk: 0.17 },
+  "The Keeper's Quarters": { g: [[116, 88, 104], [66, 52, 78], [26, 20, 38]], tint: [255, 228, 206], pool: [255, 190, 120], pk: 0.24, warm: 1 },
+  'The Storm Stair':       { g: [[50, 62, 100], [28, 34, 66], [8, 10, 28]], tint: [200, 212, 242], pool: [160, 190, 255], pk: 0.15, storm: 1 },
+  'The Lantern Room':      { g: [[124, 112, 132], [72, 64, 98], [26, 24, 48]], tint: [255, 236, 210], pool: [255, 214, 140], pk: 0.24, warm: 0.6 },
+};
+function lighthouseMoodAt(a) {
+  const S = G.level && G.level.sections, D = LIGHTHOUSE_MOOD["The Keeper's Door"];
+  if (!S) return D;
+  let i = 0; for (let k = 0; k < S.length; k++) if (a >= S[k].a0) i = k;
+  const cur = LIGHTHOUSE_MOOD[S[i].name] || D, prev = i > 0 ? LIGHTHOUSE_MOOD[S[i - 1].name] || D : cur, k = smooth(S[i].a0 - 150, S[i].a0 + 150, a);
+  if (k >= 1 || prev === cur) return cur;
+  const L = (x, y) => Array.isArray(x) ? x.map((v, j) => Array.isArray(v) ? L(v, y[j]) : lerp(v, y[j], k)) : lerp(x, y, k);
+  return { g: L(prev.g, cur.g), tint: L(prev.tint, cur.tint), pool: L(prev.pool, cur.pool), pk: L(prev.pk, cur.pk), warm: lerp(prev.warm || 0, cur.warm || 0, k), storm: lerp(prev.storm || 0, cur.storm || 0, k) };
+}
+const lighthouseSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function lighthouseWallTile(side, k) {
+  const C = LIGHTHOUSE_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = lighthouseRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+// a candle flame (screen px at (x, y) its base, r its height): a cached teardrop, flickering, with a warm glow
+function lighthouseFlame(x, y, r, ph, k = 1, c = ctx, col = [255, 196, 110]) {
+  const sp = lighthouseSprite('flame', 24, 48, cc => {
+    cc.fillStyle = lighthouseRG(12, 34, 20, ['rgba(255,252,228,1)', 'rgba(255,214,120,1)', 'rgba(255,140,60,.9)', 'rgba(255,110,50,0)'], cc);
+    cc.beginPath(); cc.moveTo(12, 2); cc.bezierCurveTo(16, 16, 22, 26, 20, 36); cc.quadraticCurveTo(18, 46, 12, 46); cc.quadraticCurveTo(6, 46, 4, 36); cc.bezierCurveTo(2, 26, 8, 16, 12, 2); cc.fill();
+    cc.fillStyle = 'rgba(255,255,248,.95)'; lighthouseEll(cc, 12, 37, 3.4, 6); cc.fill();
+  });
+  const fl = 0.86 + 0.14 * Math.sin(G.t * 13 + ph) * Math.sin(G.t * 7.3 + ph * 2), w = r * 0.5, h = r * fl;
+  lighthouseGlow(x, y - h * 0.55, r * 2.8, col, 0.24 * k, c);
+  c.save(); c.translate(x, y); c.rotate(Math.sin(G.t * 3 + ph) * 0.06); c.drawImage(sp.cv, -w / 2, -h, w, h); c.restore();
+}
+// ---- little things set into the walls (c in tile px, (x, y) the spot, k = s, dir into the shaft) ----
+// an iron sconce: a curled bracket, a drip tray, a stub of candle (its flame is live)
+function lighthouseDecorSconce(c, x, y, k, dir) {
+  const I = LIGHTHOUSE_P.iron;
+  c.strokeStyle = LIGHTHOUSE_P.ironE; c.lineWidth = 2.4 * k; c.beginPath(); c.moveTo(x - dir * 4 * k, y + 8 * k); c.quadraticCurveTo(x + dir * 2 * k, y + 8 * k, x + dir * 3 * k, y); c.stroke();
+  c.strokeStyle = I[1]; c.lineWidth = 1.4 * k; c.stroke();
+  c.fillStyle = lighthouseLG(0, y - 2 * k, 0, y + 2 * k, [I[0], I[2]], c); lighthouseEll(c, x + dir * 3 * k, y, 5 * k, 1.8 * k); c.fill();
+  c.fillStyle = lighthouseLG(x + dir * 1 * k, 0, x + dir * 5 * k, 0, ['#fffaf0', '#e8dcc4', '#b8a684'], c); c.fillRect(x + dir * 3 * k - 2 * k, y - 9 * k, 4 * k, 8 * k);
+  c.fillStyle = 'rgba(255,255,255,.8)'; lighthouseEll(c, x + dir * 3 * k - 0.6 * k, y - 8.6 * k, 1 * k, 1.8 * k); c.fill();
+}
+// a porthole: a brass rim with bolts, the glass full of moonlit sea and sky, a glint (rain streaks on the storm stair)
+function lighthouseDecorPort(c, x, y, k, rain) {
+  const B = LIGHTHOUSE_P.brass, r = 8.5 * k;
+  c.fillStyle = 'rgba(16,20,52,.35)'; lighthouseCirc(c, x + 1.4 * k, y + 1.6 * k, r + 3 * k); c.fill();
+  c.fillStyle = lighthouseLG(x - r, y - r, x + r, y + r, [B[0], B[2], B[3]], c); lighthouseCirc(c, x, y, r + 2.6 * k); c.fill();
+  c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 0.8 * k; c.stroke();
+  c.save(); lighthouseCirc(c, x, y, r); c.clip();
+  c.fillStyle = lighthouseLG(0, y - r, 0, y + r, ['#5872b4', '#344c8c', '#22346a'], c); c.fillRect(x - r, y - r, 2 * r, 2 * r);
+  c.fillStyle = lighthouseLG(0, y + r * 0.1, 0, y + r, ['#2c4a7c', '#16284e'], c); c.fillRect(x - r, y + r * 0.15, 2 * r, r);
+  c.strokeStyle = 'rgba(214,232,255,.55)'; c.lineWidth = 0.7 * k; c.beginPath(); for (let q = 0; q < 3; q++) { const yy = y + r * 0.3 + q * 2 * k; c.moveTo(x - 3 * k - q * k, yy); c.lineTo(x + 3 * k + q * k, yy); } c.stroke();
+  c.fillStyle = 'rgba(236,244,255,.9)'; lighthouseCirc(c, x + r * 0.35, y - r * 0.4, 1.8 * k); c.fill();
+  if (rain) { c.strokeStyle = 'rgba(200,220,255,.4)'; c.lineWidth = 0.6 * k; c.beginPath(); for (let q = 0; q < 5; q++) { const xx = x - r + q * r * 0.45; c.moveTo(xx, y - r); c.lineTo(xx - 2 * k, y + r); } c.stroke(); }
+  c.restore();
+  c.strokeStyle = 'rgba(255,250,220,.75)'; c.lineWidth = 1 * k; c.beginPath(); c.arc(x, y, r + 1.2 * k, 3.5, 4.9); c.stroke();
+  c.fillStyle = B[3]; for (let q = 0; q < 6; q++) { const an = q / 6 * TWO_PI + 0.3; lighthouseCirc(c, x + Math.cos(an) * (r + 1.3 * k), y + Math.sin(an) * (r + 1.3 * k), 0.8 * k); c.fill(); }
+}
+// a little framed portrait of an old keeper (his eyes glow green now and then: live)
+function lighthouseDecorPortrait(c, x, y, k) {
+  const B = LIGHTHOUSE_P.brass, w = 13 * k, h = 17 * k;
+  c.fillStyle = 'rgba(16,20,52,.35)'; c.fillRect(x - w / 2 + 1.6 * k, y - h / 2 + 2 * k, w, h);
+  c.fillStyle = lighthouseLG(x - w / 2, y - h / 2, x + w / 2, y + h / 2, [B[1], B[2], B[3]], c); c.fillRect(x - w / 2, y - h / 2, w, h);
+  c.fillStyle = lighthouseLG(0, y - h / 2, 0, y + h / 2, ['#3e4a6a', '#2a3050'], c); c.fillRect(x - w / 2 + 2 * k, y - h / 2 + 2 * k, w - 4 * k, h - 4 * k);
+  // the keeper: cap, grey beard, dark coat
+  c.fillStyle = '#25304e'; c.beginPath(); c.moveTo(x - 4 * k, y + 6.5 * k); c.quadraticCurveTo(x, y + 1 * k, x + 4 * k, y + 6.5 * k); c.closePath(); c.fill();
+  c.fillStyle = '#c8b8a8'; lighthouseCirc(c, x, y - 1 * k, 2.6 * k); c.fill();
+  c.fillStyle = '#e6e6ee'; c.beginPath(); c.moveTo(x - 2.6 * k, y - 0.4 * k); c.quadraticCurveTo(x, y + 4.4 * k, x + 2.6 * k, y - 0.4 * k); c.closePath(); c.fill();
+  c.fillStyle = '#1e2846'; c.fillRect(x - 3 * k, y - 4.6 * k, 6 * k, 1.8 * k); c.fillRect(x - 3.6 * k, y - 3 * k, 7.2 * k, 0.8 * k);
+  c.strokeStyle = 'rgba(255,248,214,.7)'; c.lineWidth = 0.7 * k; c.beginPath(); c.moveTo(x - w / 2 + 0.5 * k, y + h / 2 - 1 * k); c.lineTo(x - w / 2 + 0.5 * k, y - h / 2 + 0.5 * k); c.lineTo(x + w / 2 - 1 * k, y - h / 2 + 0.5 * k); c.stroke();
+}
+// chains looped on an iron hook
+function lighthouseDecorChain(c, x, y, k, dir) {
+  const I = LIGHTHOUSE_P.iron;
+  c.strokeStyle = LIGHTHOUSE_P.ironE; c.lineWidth = 2.2 * k; c.beginPath(); c.moveTo(x - dir * 3 * k, y); c.lineTo(x + dir * 3 * k, y); c.quadraticCurveTo(x + dir * 5 * k, y - 3 * k, x + dir * 3 * k, y - 4 * k); c.stroke();
+  for (let q = 0; q < 7; q++) {
+    const v = q / 6, cx = x + dir * (2 + Math.sin(v * Math.PI) * 6) * k, cy = y + (2 + v * 22) * k;
+    c.strokeStyle = I[2]; c.lineWidth = 1.6 * k; c.beginPath(); q % 2 ? (c.moveTo(cx, cy - 2.4 * k), c.lineTo(cx, cy + 2.4 * k)) : c.ellipse(cx, cy, 1.6 * k, 2.6 * k, 0, 0, TWO_PI); c.stroke();
+    c.strokeStyle = 'rgba(214,216,246,.6)'; c.lineWidth = 0.6 * k; c.beginPath(); c.arc(cx - 0.4 * k, cy, 1.4 * k, 3.4, 4.6); c.stroke();
+  }
+}
+// an oil can on a little iron shelf
+function lighthouseDecorCan(c, x, y, k, dir) {
+  const I = LIGHTHOUSE_P.iron;
+  c.fillStyle = lighthouseLG(0, y, 0, y + 3 * k, [I[0], I[2]], c); c.fillRect(Math.min(x - dir * 3 * k, x + dir * 12 * k), y, 15 * k, 2.4 * k);
+  c.strokeStyle = I[2]; c.lineWidth = 1.2 * k; c.beginPath(); c.moveTo(x - dir * 2 * k, y + 2 * k); c.lineTo(x - dir * 2 * k, y + 8 * k); c.lineTo(x + dir * 6 * k, y + 2.4 * k); c.stroke();
+  const cx = x + dir * 5 * k;
+  c.fillStyle = lighthouseLG(cx - 4 * k, 0, cx + 4 * k, 0, ['#e88a6a', '#b84a3a', '#7a2a24'], c); lighthouseRRect(c, cx - 4 * k, y - 10 * k, 8 * k, 10 * k, 1.4 * k); c.fill();
+  c.strokeStyle = '#6a2420'; c.lineWidth = 0.6 * k; c.stroke();
+  c.fillStyle = '#f2d06a'; c.fillRect(cx - 4 * k, y - 6.6 * k, 8 * k, 2 * k);
+  c.strokeStyle = '#7a2a24'; c.lineWidth = 1.2 * k; c.beginPath(); c.moveTo(cx + dir * 3 * k, y - 9 * k); c.lineTo(cx + dir * 8 * k, y - 15 * k); c.stroke();
+  c.fillStyle = 'rgba(255,240,230,.7)'; c.fillRect(cx - 3 * k, y - 9.4 * k, 1 * k, 7 * k);
+}
+// a ship's clock in a brass case
+function lighthouseDecorClock(c, x, y, k) {
+  const B = LIGHTHOUSE_P.brass, r = 7.5 * k;
+  c.fillStyle = 'rgba(16,20,52,.3)'; lighthouseCirc(c, x + 1.4 * k, y + 1.6 * k, r + 2 * k); c.fill();
+  c.fillStyle = lighthouseLG(x - r, y - r, x + r, y + r, [B[0], B[2], B[3]], c); lighthouseCirc(c, x, y, r + 2 * k); c.fill();
+  c.fillStyle = lighthouseRG(x - 2 * k, y - 2 * k, r, ['#fffaf0', '#f0e6d0'], c); lighthouseCirc(c, x, y, r); c.fill();
+  c.strokeStyle = '#3a3050'; c.lineWidth = 0.6 * k; c.beginPath(); for (let q = 0; q < 12; q++) { const an = q / 12 * TWO_PI; c.moveTo(x + Math.cos(an) * r * 0.78, y + Math.sin(an) * r * 0.78); c.lineTo(x + Math.cos(an) * r * 0.92, y + Math.sin(an) * r * 0.92); } c.stroke();
+  c.lineWidth = 1 * k; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 3 * k, y - 3.6 * k); c.moveTo(x, y); c.lineTo(x - 1.6 * k, y + 4.6 * k); c.stroke();
+}
+// a small brass oil lamp on a bracket (its glow is live)
+function lighthouseDecorBrass(c, x, y, k, dir) {
+  const B = LIGHTHOUSE_P.brass;
+  c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 1.8 * k; c.beginPath(); c.moveTo(x - dir * 3 * k, y + 6 * k); c.quadraticCurveTo(x + dir * 4 * k, y + 6 * k, x + dir * 4 * k, y); c.stroke();
+  c.fillStyle = lighthouseLG(x, y - 10 * k, x + dir * 8 * k, y, ['rgba(255,250,220,.95)', 'rgba(255,214,120,.8)'], c); lighthouseRRect(c, x + dir * 4 * k - 3 * k, y - 11 * k, 6 * k, 9 * k, 2 * k); c.fill();
+  c.fillStyle = lighthouseLG(0, y - 2 * k, 0, y + 2 * k, [B[1], B[3]], c); lighthouseEll(c, x + dir * 4 * k, y - 1 * k, 4.4 * k, 2 * k); c.fill();
+  c.fillStyle = B[2]; c.fillRect(x + dir * 4 * k - 2.6 * k, y - 12.6 * k, 5.2 * k, 2 * k);
+}
+// a corner of cobweb hanging off the lip
+function lighthouseDecorWeb(c, x, y, k, dir) {
+  c.strokeStyle = 'rgba(214,226,255,.42)'; c.lineWidth = 0.6 * k; c.beginPath();
+  for (let q = 0; q < 4; q++) { const an = Math.PI / 2 + dir * (0.2 + q * 0.38); c.moveTo(x, y); c.lineTo(x + Math.cos(an) * 26 * k * dir * dir, y + Math.sin(an) * 26 * k); }
+  for (let r = 8; r < 28; r += 6) { c.moveTo(x + Math.cos(Math.PI / 2 + dir * 0.2) * r * k, y + Math.sin(Math.PI / 2 + dir * 0.2) * r * k); for (let q = 1; q < 4; q++) { const an = Math.PI / 2 + dir * (0.2 + q * 0.38), am = Math.PI / 2 + dir * (0.2 + (q - 0.5) * 0.38); c.quadraticCurveTo(x + Math.cos(am) * r * 0.82 * k, y + Math.sin(am) * r * 0.82 * k, x + Math.cos(an) * r * k, y + Math.sin(an) * r * k); } }
+  c.stroke();
+}
+function lighthouseRenderWallTile(side, k) {
+  const a0 = k * LIGHTHOUSE_TILE - 4, a1 = (k + 1) * LIGHTHOUSE_TILE + 4, dir = side ? -1 : 1, wx = a => side ? rightWall(a) : leftWall(a), P = LIGHTHOUSE_P, L = G.level;
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = lighthouseSpan(), xa = side ? reach - 16 : s0, xb = side ? s1 : reach + 16;
+  const sp = lighthouseCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c;
+  sp.xa = xa; sp.a1 = a1; sp.live = [];
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 70, A1 = a1 + 70, seed = (L && L.seed) || 0;
+  const pts = []; for (let a = A0; a <= A1 + 3; a += 3) pts.push([X(wx(a)), Y(a), a]);
+  const at = (a, d) => [X(wx(a) - dir * d), Y(a)];     // d units into the wall from its face
+  const trace = (off = 0) => { c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - dir * off * s; i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); };
+  const edge = side ? X(xb) + 40 : X(xa) - 40;
+  const body = () => { c.beginPath(); c.moveTo(edge, Y(A0)); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(edge, Y(A1 + 3)); c.closePath(); };
+  const R = (q, n = 0) => hash2(k * 13 + q, (seed & 0xffff) + 901 + side * 41 + n);
+  // the mortar
+  const ex = X(wx((a0 + a1) / 2));
+  body(); c.fillStyle = lighthouseLG(ex, 0, ex - dir * 90 * s, 0, ['#3a4472', '#2c3462', '#222852'], c); c.fill();
+  c.save(); body(); c.clip();
+  // the bricks: courses of varied height, each brick foreshortened as the drum curves away (wide at the face)
+  const INS = 90, D = u => INS * Math.sin(clamp(u, 0, 1) * Math.PI / 2), wash = [[], [], []], red = [], chips = [];
+  const rowSeed = a => Math.floor(a / 9.2);
+  const patches = []; for (let i = 0; i < 2; i++) patches.push([0.15 + R(i, 3) * 0.5, lerp(A0, A1, R(i, 4)), 12 + R(i, 5) * 16]);
+  for (let ya = Math.floor(A0 / 9.2) * 9.2; ya < A1 + 10; ya += 9.2) {
+    const row = rowSeed(ya), rh = 9.2, rr = n => hash2(row * 7 + n, (seed & 0xffff) + 931 + side * 3);
+    let u = -rr(1) * 0.22;
+    for (let q = 0; u < 1 && q < 12; q++) {
+      const len = 0.17 + rr(q + 2) * 0.16, d0 = D(u) + 0.6, d1 = D(u + len) - 0.6;
+      if (d1 - d0 > 0.8 && u + len > 0) {
+        const xA = X(wx(ya + rh / 2) - dir * Math.max(0, d0)), xB = X(wx(ya + rh / 2) - dir * d1), x0 = Math.min(xA, xB), bw = Math.abs(xB - xA), y0 = Y(ya + rh - 0.6), bh = (rh - 1.4) * s;
+        const inP = patches.some(([pu, pa, pr]) => Math.hypot((u + len / 2 - pu) * 70, ya - pa) < pr);
+        const b = [x0, y0, bw, bh];
+        if (inP) red.push(b); else { wash[(rr(q + 20) * 3) | 0].push(b); if (rr(q + 30) < 0.16 && bw > 3 * s) chips.push([x0 + rr(q + 40) * bw * 0.6, y0 + rr(q + 41) * bh * 0.4, (1.5 + rr(q + 42) * 3) * s, (1.2 + rr(q + 43) * 2) * s]); }
+      }
+      u += len;
+    }
+  }
+  const WT = [['#d6def6', '#a8b4dc', '#7682b0'], ['#ccd4f0', '#9eaad4', '#6c78a8'], ['#e0e6fa', '#b2bee4', '#808cba']];
+  wash.forEach((g, i) => { c.fillStyle = lighthouseLG(ex, 0, ex - dir * 80 * s, 0, WT[i], c); c.beginPath(); for (const [x, y, bw, bh] of g) c.roundRect(x, y, bw, bh, 1.6 * s); c.fill(); });
+  c.fillStyle = lighthouseLG(ex, 0, ex - dir * 80 * s, 0, [P.brick[1], P.brick[2], P.brick[3]], c); c.beginPath(); for (const [x, y, bw, bh] of red) c.roundRect(x, y, bw, bh, 1.3 * s); c.fill();
+  // chips knocked out of the wash (brick showing, a lit lower lip)
+  c.fillStyle = '#a05a50'; c.beginPath(); for (const [x, y, cw, ch] of chips) { c.moveTo(x, y); c.lineTo(x + cw, y + 0.3 * s); c.lineTo(x + cw * 0.8, y + ch); c.lineTo(x + cw * 0.15, y + ch * 0.8); c.closePath(); } c.fill();
+  c.strokeStyle = 'rgba(236,240,255,.55)'; c.lineWidth = 0.5 * s; c.beginPath(); for (const [x, y, cw, ch] of chips) { c.moveTo(x + cw * 0.8, y + ch); c.lineTo(x + cw * 0.15, y + ch * 0.8); } c.stroke();
+  // each brick's lit top lip and shaded underside (line pairs)
+  const all = wash.flat();
+  c.strokeStyle = 'rgba(244,248,255,.55)'; c.lineWidth = 0.7 * s; c.beginPath(); for (const [x, y, bw] of all) { c.moveTo(x + 1 * s, y + 0.5 * s); c.lineTo(x + bw - 1 * s, y + 0.5 * s); } c.stroke();
+  c.strokeStyle = 'rgba(30,36,80,.5)'; c.beginPath(); for (const [x, y, bw, bh] of all.concat(red)) { c.moveTo(x + 1 * s, y + bh - 0.3 * s); c.lineTo(x + bw - 1 * s, y + bh - 0.3 * s); } c.stroke();
+  c.strokeStyle = 'rgba(255,190,170,.35)'; c.beginPath(); for (const [x, y, bw] of red) { c.moveTo(x + 1 * s, y + 0.5 * s); c.lineTo(x + bw - 1 * s, y + 0.5 * s); } c.stroke();
+  // the ragged edge of each peeled patch
+  for (const [pu, pa, pr] of patches) {
+    const cx = X(wx(pa) - dir * D(pu)), cy = Y(pa), R2 = q => hash2(q, (pa | 0) + 3); c.strokeStyle = 'rgba(226,232,255,.45)'; c.lineWidth = 0.9 * s; c.beginPath();
+    for (let q = 0; q <= 12; q++) { const an = q / 12 * TWO_PI, rr = pr * (0.75 + R2(q) * 0.35) * s, px = cx + Math.cos(an) * rr * 0.55, py = cy + Math.sin(an) * rr; q ? c.lineTo(px, py) : c.moveTo(px, py); }
+    c.stroke();
+  }
+  // salt streaks running down, sea moss gathered in the joints (more of it low in the tower)
+  const mossK = 1 - smooth(4000, 16000, a0);
+  for (let i = 0; i < 4; i++) { const [x, y] = at(lerp(A0, A1, R(i, 11)), 6 + R(i, 12) * 40), len = (16 + R(i, 13) * 34) * s; c.fillStyle = lighthouseLG(0, y, 0, y + len, ['rgba(226,236,255,.3)', 'rgba(226,236,255,0)'], c); c.fillRect(x - 1.2 * s, y, 2.4 * s, len); }
+  for (let i = 0; i < 2 + Math.round(4 * mossK); i++) {
+    const [x, y] = at(lerp(A0, A1, R(i, 21)), 4 + R(i, 22) * 34);
+    c.fillStyle = lighthouseRG(x, y, 9 * s, ['rgba(90,170,140,.5)', 'rgba(70,140,120,0)'], c); lighthouseEll(c, x, y, 9 * s, 4 * s); c.fill();
+    c.fillStyle = 'rgba(150,222,176,.7)'; for (let q = 0; q < 4; q++) { lighthouseCirc(c, x + (q - 1.5) * 2.4 * s, y - 1 * s + (q % 2) * s, 0.9 * s); c.fill(); }
+  }
+  // the granite pilasters where the wall stands in: dressed blocks, bevelled, cooler and greyer than the wash
+  if (L && L.reliefAt) {
+    for (let a = Math.floor(A0 / 22) * 22; a < A1; a += 22) {
+      const dd = L.reliefAt(a + 11, side); if (dd < 1) continue;
+      const w0 = 14 + dd, h0 = 20, [x, y] = at(a + 11, 0), xw = x - dir * w0 * s * (hash2(a / 22 | 0, 961) < 0.5 ? 1 : 0.7);
+      const x0 = Math.min(x, xw), bw = Math.abs(xw - x);
+      c.fillStyle = lighthouseLG(0, y - h0 / 2 * s, 0, y + h0 / 2 * s, [P.stone[0], P.stone[1], P.stone[2]], c); lighthouseRRect(c, x0, y - (h0 / 2 - 1) * s, bw, (h0 - 2) * s, 2 * s); c.fill();
+      c.strokeStyle = P.stoneE; c.lineWidth = 0.8 * s; c.stroke();
+      c.strokeStyle = 'rgba(244,248,255,.6)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(x0 + 1.5 * s, y - (h0 / 2 - 2) * s); c.lineTo(x0 + bw - 1.5 * s, y - (h0 / 2 - 2) * s); c.stroke();
+      c.fillStyle = 'rgba(60,70,110,.35)'; for (let q = 0; q < 3; q++) { c.fillRect(x0 + bw * hash2(q, (a | 0) + 971), y + (hash2(q, (a | 0) + 972) - 0.5) * 12 * s, 1.2 * s, 1.2 * s); }
+    }
+  }
+  // the drum's shade toward the screen's edge
+  c.fillStyle = lighthouseLG(ex - dir * 18 * s, 0, ex - dir * 80 * s, 0, ['rgba(14,18,44,0)', 'rgba(14,18,44,.55)'], c); c.fillRect(Math.min(edge, ex), 0, Math.abs(edge - ex) + 100, sp.h);
+  // what is set into it
+  const fl = lighthouseDecorAt((a0 + a1) / 2);
+  for (let i = Math.floor(A0 / 110) - 1; i <= Math.floor(A1 / 110) + 1; i++) {
+    const ma = i * 110 + 30 + 40 * hash2(i, (seed & 0xffff) + 981 + side), pick = hash2(i, (seed & 0xffff) + 983 + side);
+    if (ma < A0 + 20 || ma > A1 - 20) continue;
+    if (L && L.reliefAt && L.reliefAt(ma, side) > 1) continue;
+    const j = hash2(i, 985 + side);
+    if (fl === 'sconce' && pick < 0.6) { const [x, y] = at(ma, 7); lighthouseDecorSconce(c, x, y, s, dir); sp.live.push({ type: 'flame', x: wx(ma) - dir * 7 + dir * 3, a: ma + 9, j }); }
+    else if ((fl === 'port' || fl === 'storm') && pick < 0.5) { const [x, y] = at(ma, 13); lighthouseDecorPort(c, x, y, s, fl === 'storm'); sp.live.push({ type: 'port', x: wx(ma) - dir * 13, a: ma, j }); }
+    else if (fl === 'port' && pick < 0.75) { const [x, y] = at(ma, 1); lighthouseDecorWeb(c, x, y, s, -dir); }
+    else if (fl === 'portrait' && pick < 0.55) { const [x, y] = at(ma, 13); lighthouseDecorPortrait(c, x, y, s); sp.live.push({ type: 'eyes', x: wx(ma) - dir * 13, a: ma + 1, j }); }
+    else if (fl === 'portrait' && pick < 0.8) { const [x, y] = at(ma, 7); lighthouseDecorSconce(c, x, y, s, dir); sp.live.push({ type: 'flame', x: wx(ma) - dir * 4, a: ma + 9, j, col: [150, 255, 214] }); }
+    else if (fl === 'chain' && pick < 0.55) { const [x, y] = at(ma + 14, 8); lighthouseDecorChain(c, x, y, s, dir); }
+    else if (fl === 'can' && pick < 0.55) { const [x, y] = at(ma, 7); lighthouseDecorCan(c, x, y, s, dir); }
+    else if (fl === 'home' && pick < 0.4) { const [x, y] = at(ma, 13); lighthouseDecorClock(c, x, y, s); }
+    else if (fl === 'home' && pick < 0.75) { const [x, y] = at(ma, 7); lighthouseDecorBrass(c, x, y, s, dir); sp.live.push({ type: 'lamp', x: wx(ma) - dir * 3, a: ma + 6, j }); }
+    else if (fl === 'storm' && pick < 0.75) { const [x, y] = at(ma, 1); lighthouseDecorWeb(c, x, y, s, -dir); }
+    else if (fl === 'brass' && pick < 0.6) { const [x, y] = at(ma, 7); lighthouseDecorBrass(c, x, y, s, dir); sp.live.push({ type: 'lamp', x: wx(ma) - dir * 3, a: ma + 6, j }); }
+  }
+  c.restore();
+  // ---- the lip along the shaft: the wash's rounded edge (moonlit on the right wall, in shade on the left), its edge
+  // a deeper blue-grey, chips nicked out of it, up-facing slopes catching the light
+  const moon = side ? 1 : 0.55;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.lineWidth = 12 * s; c.strokeStyle = 'rgba(20,24,60,.3)'; trace(8); c.stroke();
+  c.lineWidth = 5.4 * s; c.strokeStyle = `rgba(232,238,255,${0.55 + 0.35 * moon})`; trace(3.4); c.stroke();
+  c.lineWidth = 1.1 * s; c.strokeStyle = 'rgba(120,132,180,.6)'; trace(6.6); c.stroke();
+  c.lineWidth = 2 * s; c.strokeStyle = '#5a6698'; trace(0.6); c.stroke();
+  c.lineWidth = 0.9 * s; c.strokeStyle = `rgba(206,218,255,${0.5 + 0.4 * moon})`; trace(side ? 1.6 : -0.2); c.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], slope = (x1 - x0) * dir;
+    if (slope <= 0.3 * s) continue;
+    c.strokeStyle = `rgba(244,248,255,${clamp(slope / s * 0.45, 0, 0.9)})`; c.lineWidth = 2.4 * s; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+  }
+  for (let a = Math.ceil(A0 / 40) * 40; a < A1; a += 40) {
+    const hh = hash2(Math.round(a / 40), (seed & 0xffff) + 991 + side); if (hh > 0.45) continue;
+    const [cx, cy] = at(a + hh * 30, 0.4);
+    c.fillStyle = 'rgba(60,70,120,.85)'; c.beginPath(); c.moveTo(cx, cy - 4 * s); c.lineTo(cx - dir * 3.4 * s, cy); c.lineTo(cx, cy + 3 * s); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(236,242,255,.8)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(cx - dir * 3.4 * s, cy); c.lineTo(cx, cy + 3 * s); c.stroke();
+  }
+  return sp;
+}
+function drawLighthouseWalls() {
+  lighthouseCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = LIGHTHOUSE_TILE;
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = lighthouseWallTile(side, k);
+    ctx.drawImage(t.cv, ox + t.xa * s, sy(t.a1), t.w, t.h);
+    for (const q of t.live) {
+      const y = sy(q.a); if (y < -30 || y > H + 30) continue;
+      const x = sx(q.x);
+      if (q.type === 'flame') lighthouseFlame(x, y, 8 * s, q.j * 20, 1, ctx, q.col);
+      else if (q.type === 'port') lighthouseGlow(x, y, 16 * s, [170, 200, 255], 0.14 + 0.05 * Math.sin(G.t * 1.3 + q.j * 9));
+      else if (q.type === 'lamp') lighthouseGlow(x, y, 18 * s, [255, 214, 130], 0.32 + 0.05 * Math.sin(G.t * 5 + q.j * 9));
+      else if (q.type === 'eyes') { const o = Math.max(0, Math.sin(G.t * 0.6 + q.j * 40)) ** 8; if (o > 0.05) for (const e of [-1, 1]) lighthouseGlow(x + e * 1.2 * s, y, 4 * s, [150, 255, 214], 0.9 * o); }
+    }
+  }
+  // render one tile ahead each frame (above the screen, where you are heading)
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!LIGHTHOUSE_CACHE.walls.has(side + ':' + k)) { lighthouseWallTile(side, k); done = true; break; } if (done) break; }
+}
+
+// ---- the backdrop: the inside of the tower at night (calm, hazed, lower in contrast). Three parallax layers drawn once
+// per tile and blitted: the far (0.06) curve of the tower's brick with tall arched windows full of moon, stars and sea;
+// the middle (0.18) the spiral stair winding up the back wall, flights of stone treads on iron brackets, a railing,
+// landings with arched doors; the near (0.38) each section's set dressing on stone corbels and timber beams out of the
+// walls (barrels, crates, coiled rope, nets of glass floats, life rings, the keeper's desk and logbook, his bunk and
+// stove, a figurehead, buckets under the drips on the storm stair, the lens's spare prisms in their racks). Windows and
+// lamps glow live; shafts of moonlight fall slantwise through the far windows.
+const LIGHTHOUSE_LAYERS = [{ f: 0.06, LT: 600, id: 0 }, { f: 0.18, LT: 480, id: 1 }, { f: 0.38, LT: 420, id: 2 }];
+const LIGHTHOUSE_HAZE = [70, 86, 140];
+const lighthouseMute = (q, k) => { const v = typeof q !== 'string' ? q : q[0] === '#' ? lighthouseHex(q) : q.match(/\d+/g).slice(0, 3).map(Number); return lighthouseCol(v.map((x, i) => lerp(x, LIGHTHOUSE_HAZE[i], k))); };
+const lighthouseMuteA = (C, k) => C.map(q => lighthouseMute(q, k));
+function lighthouseLayerTile(L, k) {
+  const C = LIGHTHOUSE_CACHE.layers, key = L.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = lighthouseSpan(), pa0 = k * L.LT - 3, pa1 = (k + 1) * L.LT + 3;
+  t = lighthouseCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1;
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  t.c.lineJoin = 'round'; t.c.lineCap = 'round';
+  const col = { live: [] };
+  for (let kk = k - 1; kk <= k + 1; kk++) lighthouseDrawLayer(t.c, L, kk, X, Y, x0, x1, col);
+  t.live = col.live.filter(g => g.a >= pa0 - 160 && g.a < pa1 + 160 && Math.floor(g.a / L.LT) === k);
+  { t.c.globalCompositeOperation = 'source-atop'; t.c.fillStyle = ['rgba(60,76,132,.42)', 'rgba(64,78,130,.16)', 'rgba(60,72,124,.1)'][L.id]; t.c.fillRect(0, 0, t.w, t.h); t.c.globalCompositeOperation = 'source-over'; }
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// a tall arched window in the far wall: night sky, stars, maybe the moon, the sea and its moon path, a stone frame and
+// mullions, rain streaks on the storm stair (c, centre x, sill y in px, w × h px)
+function lighthouseArchWindow(c, x, y, w, h, k, moon, rain, mute) {
+  const arch = () => { c.beginPath(); c.moveTo(x - w / 2, y); c.lineTo(x - w / 2, y - h + w / 2); c.arc(x, y - h + w / 2, w / 2, Math.PI, TWO_PI); c.lineTo(x + w / 2, y); c.closePath(); };
+  // the deep reveal round it (the wall's thickness), lit on its lower left
+  c.save(); c.translate(4 * k, 3 * k); arch(); c.fillStyle = lighthouseMute('#1e264c', mute); c.fill(); c.restore();
+  arch(); c.fillStyle = lighthouseLG(0, y - h, 0, y, lighthouseMuteA(['#6a86c8', '#4660a0', '#2e4280'], mute * 0.7), c); c.fill();
+  c.save(); arch(); c.clip();
+  const r = n => hash2(n, (x * 7 + y) | 0);
+  for (let i = 0; i < 16; i++) { c.fillStyle = `rgba(236,244,255,${0.35 + 0.5 * r(i + 50)})`; c.fillRect(x - w / 2 + r(i) * w, y - h + r(i + 20) * h * 0.65, 1.2 * k, 1.2 * k); }
+  if (moon) {
+    const mx = x + w * 0.12, my = y - h * 0.72, mr = w * 0.2;
+    c.fillStyle = lighthouseRG(mx, my, mr * 3, ['rgba(220,234,255,.5)', 'rgba(200,220,255,0)'], c); c.fillRect(mx - mr * 3, my - mr * 3, mr * 6, mr * 6);
+    c.fillStyle = lighthouseRG(mx - mr * 0.3, my - mr * 0.3, mr, ['#ffffff', '#e6eeff', '#b4c4ec'], c); lighthouseCirc(c, mx, my, mr); c.fill();
+    c.fillStyle = 'rgba(150,170,214,.5)'; lighthouseCirc(c, mx - mr * 0.3, my - mr * 0.1, mr * 0.22); c.fill(); lighthouseCirc(c, mx + mr * 0.35, my + mr * 0.3, mr * 0.15); c.fill();
+  }
+  // the sea, a far headland, the moon path
+  c.fillStyle = lighthouseLG(0, y - h * 0.24, 0, y, lighthouseMuteA(['#2e4c80', '#1a2e58'], mute * 0.6), c); c.fillRect(x - w, y - h * 0.24, w * 2, h);
+  c.fillStyle = lighthouseMute('#24345e', mute * 0.6); c.beginPath(); c.moveTo(x - w / 2, y - h * 0.24); c.quadraticCurveTo(x - w * 0.2, y - h * 0.31, x + w * 0.05, y - h * 0.24); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(214,232,255,.55)'; c.lineWidth = 1 * k; c.beginPath(); for (let q = 0; q < 5; q++) { const yy = y - h * 0.2 + q * h * 0.04; c.moveTo(x + w * 0.12 - (4 + q * 2) * k, yy); c.lineTo(x + w * 0.12 + (4 + q * 2) * k, yy); } c.stroke();
+  if (rain) { c.strokeStyle = 'rgba(200,220,255,.3)'; c.lineWidth = 0.8 * k; c.beginPath(); for (let q = 0; q < 14; q++) { const xx = x - w / 2 + r(q + 90) * w; c.moveTo(xx, y - h + r(q + 70) * h * 0.6); c.lineTo(xx - 3 * k, y - h + r(q + 70) * h * 0.6 + 20 * k); } c.stroke(); }
+  c.restore();
+  // the stone frame, mullion and transom, a lit inner edge
+  c.strokeStyle = lighthouseMute('#8a96c0', mute); c.lineWidth = 4 * k; arch(); c.stroke();
+  c.strokeStyle = lighthouseMute('#c4ceee', mute); c.lineWidth = 1.2 * k; c.beginPath(); c.moveTo(x - w / 2 - 2 * k, y); c.lineTo(x - w / 2 - 2 * k, y - h + w / 2); c.arc(x, y - h + w / 2, w / 2 + 2 * k, Math.PI, Math.PI * 1.5); c.stroke();
+  c.strokeStyle = lighthouseMute('#7682ae', mute); c.lineWidth = 2 * k; c.beginPath(); c.moveTo(x, y - h); c.lineTo(x, y); c.moveTo(x - w / 2, y - h * 0.42); c.lineTo(x + w / 2, y - h * 0.42); c.stroke();
+  c.fillStyle = lighthouseMute('#a4aed6', mute); c.fillRect(x - w / 2 - 6 * k, y, w + 12 * k, 4 * k);
+}
+// a flight of the spiral stair across the back wall: stone treads (lit top, shaded riser) on the stringer, an iron rail
+function lighthouseFlight(c, xA, yA, xB, yB, k, mute) {
+  const n = Math.max(6, Math.round(Math.abs(xB - xA) / (26 * k))), sw = (xB - xA) / n, rise = (yA - yB) / n;
+  const top = lighthouseMute('#9aa6d0', mute), face = lighthouseMute('#6e7aa8', mute), under = lighthouseMute('#4c5684', mute), lit = lighthouseMute('#d4dcf6', mute);
+  c.fillStyle = under; c.beginPath(); c.moveTo(xA, yA + 10 * k); c.lineTo(xB, yB + 10 * k); c.lineTo(xB, yB + 26 * k); c.lineTo(xA, yA + 26 * k); c.closePath(); c.fill();
+  for (let i = 0; i < n; i++) {
+    const x = xA + i * sw, y = yA - i * rise, x0 = Math.min(x, x + sw);
+    c.fillStyle = face; c.fillRect(x0, y - rise, Math.abs(sw) + 0.5 * k, rise + 12 * k);
+    c.fillStyle = top; c.beginPath(); c.moveTo(x - 2 * k * Math.sign(sw), y - rise); c.lineTo(x + sw + 1 * k * Math.sign(sw), y - rise); c.lineTo(x + sw + 4 * k * Math.sign(sw), y - rise - 4 * k); c.lineTo(x + 1 * k * Math.sign(sw), y - rise - 4 * k); c.closePath(); c.fill();
+    c.strokeStyle = lit; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x, y - rise + 0.4 * k); c.lineTo(x + sw, y - rise + 0.4 * k); c.stroke();
+    c.strokeStyle = under; c.beginPath(); c.moveTo(x + sw, y - rise); c.lineTo(x + sw, y + 10 * k); c.stroke();
+  }
+  c.strokeStyle = lighthouseMute('#4a4e78', mute); c.lineWidth = 1.2 * k; c.beginPath();
+  for (let i = 0; i < n; i++) { const x = xA + i * sw + sw / 2, y = yA - i * rise - rise - 4 * k; c.moveTo(x, y); c.lineTo(x, y - 20 * k); }
+  c.stroke();
+  c.lineWidth = 2.4 * k; c.beginPath(); c.moveTo(xA, yA - 24 * k - rise); c.lineTo(xB, yB - 24 * k - rise); c.stroke();
+  c.strokeStyle = lighthouseMute('#b8c0e8', mute); c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(xA, yA - 25.4 * k - rise); c.lineTo(xB, yB - 25.4 * k - rise); c.stroke();
+}
+// a stone corbel ledge jutting from a screen edge (exx the edge's x, dd 1 from the left, ty its top), a lit top face
+function lighthouseLedge(c, exx, dd, ty, out, k, mute = 0) {
+  const P = LIGHTHOUSE_P.stone, x0 = exx - dd * 30 * k, x1 = exx + dd * out;
+  c.fillStyle = lighthouseLG(0, ty, 0, ty + 14 * k, lighthouseMuteA([P[1], P[2], P[3]], mute), c); c.beginPath(); c.moveTo(x0, ty); c.lineTo(x1, ty); c.lineTo(x1 - dd * 4 * k, ty + 10 * k); c.lineTo(x0, ty + 12 * k); c.closePath(); c.fill();
+  c.fillStyle = lighthouseMute(P[0], mute); c.fillRect(Math.min(x0, x1), ty - 1 * k, Math.abs(x1 - x0), 2.2 * k);
+  // its two corbel brackets underneath
+  for (const f of [0.35, 0.75]) { const bx = lerp(x0, x1, f); c.fillStyle = lighthouseMute(P[2], mute); c.beginPath(); c.moveTo(bx - 6 * k, ty + 10 * k); c.lineTo(bx + 6 * k, ty + 10 * k); c.quadraticCurveTo(bx + 4 * k, ty + 22 * k, bx, ty + 26 * k); c.quadraticCurveTo(bx - 4 * k, ty + 22 * k, bx - 6 * k, ty + 10 * k); c.fill(); }
+}
+function lighthouseBarrel(c, x, y, k, mute) {
+  const W = LIGHTHOUSE_P.wood, w = 14 * k, h = 20 * k;
+  c.fillStyle = lighthouseLG(x - w, 0, x + w, 0, lighthouseMuteA([W[0], W[1], W[2], W[3]], mute), c); c.beginPath(); c.moveTo(x - w * 0.82, y); c.quadraticCurveTo(x - w * 1.05, y - h / 2, x - w * 0.82, y - h); c.lineTo(x + w * 0.82, y - h); c.quadraticCurveTo(x + w * 1.05, y - h / 2, x + w * 0.82, y); c.closePath(); c.fill();
+  c.strokeStyle = lighthouseMute('#56586e', mute); c.lineWidth = 1.8 * k; c.beginPath(); for (const v of [0.2, 0.8]) { c.moveTo(x - w * 0.95, y - h * v); c.lineTo(x + w * 0.95, y - h * v); } c.stroke();
+  c.strokeStyle = lighthouseMute('#4a3028', mute); c.lineWidth = 0.6 * k; c.beginPath(); for (const v of [-0.4, 0, 0.4]) { c.moveTo(x + w * v, y); c.quadraticCurveTo(x + w * v * 1.2, y - h / 2, x + w * v, y - h); } c.stroke();
+  c.fillStyle = lighthouseMute(W[0], mute); lighthouseEll(c, x, y - h, w * 0.82, 3 * k); c.fill();
+}
+function lighthouseCrate(c, x, y, w, h, k, mute) {
+  const W = LIGHTHOUSE_P.wood;
+  c.fillStyle = lighthouseLG(0, y - h, 0, y, lighthouseMuteA([W[0], W[1], W[2]], mute), c); c.fillRect(x - w / 2, y - h, w, h);
+  c.strokeStyle = lighthouseMute(W[3], mute); c.lineWidth = 1 * k; c.strokeRect(x - w / 2, y - h, w, h);
+  c.beginPath(); c.moveTo(x - w / 2, y - h); c.lineTo(x + w / 2, y); c.stroke();
+  c.strokeStyle = lighthouseMute('#e0c4a4', mute); c.lineWidth = 0.7 * k; c.beginPath(); c.moveTo(x - w / 2 + 1 * k, y - h + 1 * k); c.lineTo(x + w / 2 - 1 * k, y - h + 1 * k); c.stroke();
+}
+function lighthouseRope(c, x, y, k, mute) {
+  for (let q = 0; q < 4; q++) { c.strokeStyle = lighthouseMute(q % 2 ? '#c4a676' : '#a88a5e', mute); c.lineWidth = 2.6 * k; lighthouseEll(c, x, y - 3 * k - q * 2.4 * k, (12 - q * 1.5) * k, 3.6 * k); c.stroke(); }
+  c.strokeStyle = lighthouseMute('#ecd6aa', mute); c.lineWidth = 0.7 * k; c.beginPath(); c.ellipse(x, y - 11 * k, 7 * k, 2.4 * k, 0, 3.4, 5.4); c.stroke();
+}
+function lighthouseLifeRing(c, x, y, k, mute) {
+  const r = 11 * k;
+  for (let q = 0; q < 8; q++) { c.strokeStyle = lighthouseMute(q % 2 ? '#f4f0ec' : '#e0503a', mute); c.lineWidth = 6 * k; c.beginPath(); c.arc(x, y, r, q / 8 * TWO_PI, (q + 1) / 8 * TWO_PI); c.stroke(); }
+  c.strokeStyle = lighthouseMute('#ffffff', mute); c.lineWidth = 1 * k; c.beginPath(); c.arc(x, y, r + 1.4 * k, 3.6, 4.6); c.stroke();
+  c.strokeStyle = lighthouseMute('#c4a676', mute); c.lineWidth = 1 * k; c.beginPath(); c.moveTo(x, y - r - 3 * k); c.lineTo(x, y - r - 14 * k); c.stroke();
+}
+function lighthouseNet(c, xa, ya, xb, yb, k, mute, a, t) {
+  // a fishing net slung from a beam end, glass floats caught in it (their glow is live)
+  const sag = 34 * k;
+  c.strokeStyle = lighthouseMute('#8a94b4', mute); c.lineWidth = 0.7 * k; c.beginPath();
+  for (let q = 0; q <= 8; q++) { const v = q / 8, x = lerp(xa, xb, v), y = lerp(ya, yb, v); c.moveTo(x, y); c.quadraticCurveTo(x + 2 * k, y + sag * 0.7, x, y + sag * (0.8 + 0.3 * Math.sin(v * Math.PI))); }
+  for (let r = 0.25; r <= 1; r += 0.25) { c.moveTo(xa, ya + sag * r * 0.8); c.quadraticCurveTo((xa + xb) / 2, (ya + yb) / 2 + sag * r * 1.1 + 6 * k, xb, yb + sag * r * 0.8); }
+  c.stroke();
+  for (let q = 0; q < 3; q++) { const v = 0.25 + q * 0.25, x = lerp(xa, xb, v), y = lerp(ya, yb, v) + sag * (0.55 + 0.2 * Math.sin(q * 2)), r = 5 * k; c.fillStyle = lighthouseRG(x - r * 0.3, y - r * 0.3, r, lighthouseMuteA(q % 2 ? ['#d8fff0', '#6ad8b0', '#2a8a74'] : ['#e0f0ff', '#78a8e8', '#3a5aa8'], mute), c); lighthouseCirc(c, x, y, r); c.fill(); t.live.push({ type: 'float', xpx: x, a: a, ypx: y, r: 9, col: q % 2 ? [150, 255, 214] : [170, 200, 255] }); }
+}
+// a hanging oil lamp on a chain from a beam (its glow is live)
+function lighthouseHangLamp(c, x, y, len, k, mute, a, t, warm) {
+  c.strokeStyle = lighthouseMute('#5a5a7a', mute); c.lineWidth = 1 * k; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + len); c.stroke();
+  const B = LIGHTHOUSE_P.brass, ly = y + len;
+  c.fillStyle = lighthouseMute(B[2], mute); c.beginPath(); c.moveTo(x - 6 * k, ly + 4 * k); c.lineTo(x, ly - 2 * k); c.lineTo(x + 6 * k, ly + 4 * k); c.closePath(); c.fill();
+  c.fillStyle = lighthouseLG(0, ly + 4 * k, 0, ly + 14 * k, warm ? ['rgba(255,250,220,.95)', 'rgba(255,200,110,.85)'] : ['rgba(236,255,248,.9)', 'rgba(150,240,210,.75)'], c); lighthouseRRect(c, x - 4.5 * k, ly + 4 * k, 9 * k, 10 * k, 2 * k); c.fill();
+  c.fillStyle = lighthouseMute(B[3], mute); c.fillRect(x - 5.5 * k, ly + 13.5 * k, 11 * k, 2.4 * k);
+  t.live.push({ type: 'lamp', xpx: x, ypx: ly + 9 * k, a, r: 26, col: warm ? [255, 206, 120] : [150, 255, 214] });
+}
+function lighthouseDrawLayer(c, L, k, X, Y, x0, x1, t) {
+  const id = L.id, LT = L.LT, base = k * LT, wa = (base + LT / 2) / L.f, sec = lighthouseSecName(wa), mood = LIGHTHOUSE_MOOD[sec] || {}, h = (q, n = 0) => hash2(k * 7 + n, 7100 + id * 37 + q);
+  const LX = X(Math.max(x0 + 6, -ox / s)), RX = X(Math.min(x1 - 6, WORLD_W + ox / s)), MX = (X(0) + X(WORLD_W)) / 2, PW = X(WORLD_W) - X(0);
+  if (id === 0) {
+    // the far curve of the tower: brick courses bowing round it, a damp stain or two, two tall arched windows
+    const mute = 0.5;
+    c.strokeStyle = lighthouseMute('#5a6aa0', mute); c.lineWidth = 1 * s; c.beginPath();
+    for (let y = Y(base + LT) - 10 * s; y < Y(base) + 10 * s; y += 12 * s) { c.moveTo(LX - 40 * s, y); c.quadraticCurveTo(MX, y - 14 * s, RX + 40 * s, y); }
+    c.stroke();
+    c.strokeStyle = lighthouseMute('#3a4678', mute); c.beginPath();
+    for (let y = Y(base + LT) - 10 * s, row = 0; y < Y(base) + 10 * s; y += 12 * s, row++) for (let x = LX - 40 * s + (row % 2) * 13 * s; x < RX + 40 * s; x += 26 * s) { const u = (x - MX) / (PW * 0.8), yy = y - 14 * s * (1 - u * u) * 0.5; c.moveTo(x, yy); c.lineTo(x, yy + 12 * s); }
+    c.stroke();
+    for (let q = 0; q < 2; q++) { const sx2 = X(60 + 280 * h(q, 3)), sy2 = Y(base + LT * h(q, 4)); c.fillStyle = lighthouseRG(sx2, sy2, 50 * s, ['rgba(40,60,90,.3)', 'rgba(40,60,90,0)'], c); lighthouseEll(c, sx2, sy2, 30 * s, 60 * s); c.fill(); }
+    const side = pmod(k, 2), wxw = side ? 280 + 40 * h(5) : 70 + 50 * h(5), wy = base + 160 + 200 * h(6);
+    lighthouseArchWindow(c, X(wxw), Y(wy), 46 * s, 120 * s, s, h(7) < 0.4, mood.storm, 0.32);
+    t.live.push({ type: 'win', xpx: X(wxw), a: wy + 60, ypx: Y(wy + 60), r: 70 });
+    // the section's own things on the far wall (hazed): the gallery's big portraits, the locker's hanging chains, the
+    // stores' racks of oil drums, the quarters' hammock and drying sails, a ship's wheel on the storm stair
+    const fl = LIGHTHOUSE_DECOR[sec] || 'sconce', ox2 = side ? 70 + 50 * h(8) : 270 + 50 * h(8), oy = Y(base + 200 + 200 * h(9)), m2 = 0.36;
+    if (fl === 'portrait') for (let q = 0; q < 2; q++) { const fx = X(ox2 + (q - 0.5) * 70), fy = oy + q * 30 * s, fw = 40 * s, fh = 54 * s; c.fillStyle = lighthouseMute('#8a6a3a', m2); c.fillRect(fx - fw / 2 - 4 * s, fy - fh / 2 - 4 * s, fw + 8 * s, fh + 8 * s); c.fillStyle = lighthouseMute('#2e3a52', m2); c.fillRect(fx - fw / 2, fy - fh / 2, fw, fh); c.fillStyle = lighthouseMute('#9a8a7a', m2); lighthouseCirc(c, fx, fy - 6 * s, 8 * s); c.fill(); c.fillStyle = lighthouseMute('#d8d8e0', m2); c.beginPath(); c.moveTo(fx - 8 * s, fy - 4 * s); c.quadraticCurveTo(fx, fy + 12 * s, fx + 8 * s, fy - 4 * s); c.fill(); c.fillStyle = lighthouseMute('#1e2846', m2); c.fillRect(fx - 9 * s, fy - 18 * s, 18 * s, 5 * s); c.fillRect(fx - 14 * s, fy + 10 * s, 28 * s, 17 * s); t.live.push({ type: 'eyes2', xpx: fx, ypx: fy - 7 * s, a: base + LT / 2, r: 1 }); }
+    else if (fl === 'chain') { c.strokeStyle = lighthouseMute('#4a4a6c', m2); c.lineWidth = 2 * s; for (let q = 0; q < 3; q++) { const cx2 = X(ox2 + (q - 1) * 30), len = (120 + 80 * h(q + 20)) * s; c.beginPath(); for (let y = Y(base + LT); y < Y(base + LT) + len; y += 6 * s) { c.moveTo(cx2, y); c.lineTo(cx2, y + 4 * s); } c.stroke(); c.beginPath(); c.arc(cx2, Y(base + LT) + len + 5 * s, 5 * s, 0.3, Math.PI * 1.7); c.stroke(); } }
+    else if (fl === 'can') { for (let r2 = 0; r2 < 2; r2++) { const ry = oy + r2 * 40 * s; c.fillStyle = lighthouseMute('#5a4a3a', m2); c.fillRect(X(ox2 - 60), ry, 120 * s, 4 * s); for (let q = 0; q < 4; q++) { const dx = X(ox2 - 45 + q * 30); c.fillStyle = lighthouseLG(dx - 10 * s, 0, dx + 10 * s, 0, lighthouseMuteA(['#c86a50', '#8a3a2e'], m2), c); c.fillRect(dx - 10 * s, ry - 26 * s, 20 * s, 26 * s); c.fillStyle = lighthouseMute('#e0b060', m2); c.fillRect(dx - 10 * s, ry - 16 * s, 20 * s, 3 * s); } } }
+    else if (fl === 'home') { const hx0 = X(ox2 - 60), hx1 = X(ox2 + 60); c.strokeStyle = lighthouseMute('#c4a676', m2); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(hx0, oy); c.quadraticCurveTo((hx0 + hx1) / 2, oy + 50 * s, hx1, oy); c.stroke(); c.fillStyle = lighthouseMute('#c8b090', m2); c.beginPath(); c.moveTo(hx0 + 10 * s, oy + 8 * s); c.quadraticCurveTo((hx0 + hx1) / 2, oy + 56 * s, hx1 - 10 * s, oy + 8 * s); c.quadraticCurveTo((hx0 + hx1) / 2, oy + 36 * s, hx0 + 10 * s, oy + 8 * s); c.fill(); for (let q = 0; q < 3; q++) { const sx3 = X(ox2 - 40 + q * 40), sy3 = oy - 80 * s; c.fillStyle = lighthouseMute(q % 2 ? '#e8e0d0' : '#c87a6a', m2); c.beginPath(); c.moveTo(sx3 - 12 * s, sy3); c.lineTo(sx3 + 12 * s, sy3); c.lineTo(sx3 + 9 * s, sy3 + 26 * s); c.lineTo(sx3 - 10 * s, sy3 + 24 * s); c.closePath(); c.fill(); } c.strokeStyle = lighthouseMute('#8a7a6a', m2); c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(ox2 - 70), oy - 80 * s); c.lineTo(X(ox2 + 70), oy - 80 * s); c.stroke(); }
+    else if (fl === 'storm') { const wx3 = X(ox2), wy3 = oy, R3 = 30 * s; c.strokeStyle = lighthouseMute('#8a5a3a', m2); c.lineWidth = 5 * s; lighthouseCirc(c, wx3, wy3, R3); c.stroke(); c.lineWidth = 3 * s; c.beginPath(); for (let q = 0; q < 8; q++) { const an = q / 8 * TWO_PI; c.moveTo(wx3, wy3); c.lineTo(wx3 + Math.cos(an) * R3 * 1.35, wy3 + Math.sin(an) * R3 * 1.35); } c.stroke(); c.fillStyle = lighthouseMute('#b88a4a', m2); lighthouseCirc(c, wx3, wy3, 6 * s); c.fill(); }
+  } else if (id === 1) {
+    // the spiral stair: a flight crossing the back wall each tile (alternating ways), landings at each end with an
+    // arched door, iron brackets under the treads
+    const mute = 0.34, dirn = pmod(k, 2) ? 1 : -1, yA = Y(base + 60), yB = Y(base + LT - 60);
+    const xA = dirn > 0 ? X(-20) : X(WORLD_W + 20), xB = dirn > 0 ? X(WORLD_W + 20) : X(-20);
+    // the landing at the top end: a slab, an arched door with a lit crack under it, a lamp
+    const lx = dirn > 0 ? X(WORLD_W - 70) : X(70), ly = yB - 2 * s;
+    c.fillStyle = lighthouseMute('#2a3260', mute); c.beginPath(); c.moveTo(lx - 20 * s, ly - 26 * s); c.lineTo(lx - 20 * s, ly - 58 * s); c.arc(lx, ly - 58 * s, 20 * s, Math.PI, TWO_PI); c.lineTo(lx + 20 * s, ly - 26 * s); c.closePath(); c.fill();
+    c.fillStyle = lighthouseLG(0, ly - 78 * s, 0, ly - 26 * s, lighthouseMuteA(['#6a4a3e', '#4a3028'], mute), c); c.beginPath(); c.moveTo(lx - 15 * s, ly - 26 * s); c.lineTo(lx - 15 * s, ly - 58 * s); c.arc(lx, ly - 58 * s, 15 * s, Math.PI, TWO_PI); c.lineTo(lx + 15 * s, ly - 26 * s); c.closePath(); c.fill();
+    c.strokeStyle = lighthouseMute('#3a2420', mute); c.lineWidth = 1 * s; c.beginPath(); for (const f of [-7, 0, 7]) { c.moveTo(lx + f * s, ly - 26 * s); c.lineTo(lx + f * s, ly - 70 * s); } c.stroke();
+    c.fillStyle = 'rgba(255,214,140,.7)'; c.fillRect(lx - 14 * s, ly - 27.5 * s, 28 * s, 1.6 * s);
+    t.live.push({ type: 'lan', xpx: lx, ypx: ly - 28 * s, a: base + LT - 60, r: 22 });
+    lighthouseFlight(c, xA, yA, xB, yB, s, mute);
+    // iron brackets under the flight, bolted into the back wall
+    c.strokeStyle = lighthouseMute('#40446c', mute); c.lineWidth = 2 * s; c.beginPath();
+    for (let q = 1; q < 4; q++) { const v = q / 4, bx = lerp(xA, xB, v), by = lerp(yA, yB, v) + 26 * s; c.moveTo(bx, by); c.lineTo(bx - dirn * 14 * s, by + 22 * s); c.lineTo(bx + dirn * 10 * s, by + 22 * s); }
+    c.stroke();
+    // cobweb sheets in the corner under the flight
+    c.strokeStyle = 'rgba(200,214,250,.22)'; c.lineWidth = 0.6 * s;
+    { const cx = dirn > 0 ? X(20) : X(WORLD_W - 20), cy = yA + 30 * s, dd = dirn > 0 ? 1 : -1; c.beginPath(); for (let q = 0; q < 5; q++) { const an = Math.PI * 0.5 - dd * q * 0.36; c.moveTo(cx, cy); c.lineTo(cx + Math.cos(an) * 50 * s * dd, cy + Math.sin(an) * 50 * s); } for (let r = 12; r < 52; r += 10) { c.moveTo(cx, cy + r * s); for (let q = 1; q < 5; q++) { const an = Math.PI * 0.5 - dd * q * 0.36, am = Math.PI * 0.5 - dd * (q - 0.5) * 0.36; c.quadraticCurveTo(cx + Math.cos(am) * r * 0.85 * s * dd, cy + Math.sin(am) * r * 0.85 * s, cx + Math.cos(an) * r * s * dd, cy + Math.sin(an) * r * s); } } c.stroke(); }
+  } else {
+    // the near set dressing: two ledges a tile from the screen's edges, each with the section's things on it
+    const mute = 0.16, fl = LIGHTHOUSE_DECOR[sec] || 'sconce';
+    for (let q = 0; q < 2; q++) {
+      const sd = (pmod(k, 2) + q) % 2, dd = sd ? -1 : 1, exx = sd ? RX + 4 * s : LX - 4 * s, ty = Y(base + 120 + q * 200 + 40 * h(q, 11)), out = (70 + 30 * h(q, 12)) * s, ta = base + 120 + q * 200 + 40 * h(q, 11);
+      const v = hash2(k * 3 + q, 7171);
+      if (fl === 'home' || (fl === 'sconce' && v < 0.4)) {
+        // a timber beam with a hanging lamp and a net of floats
+        c.fillStyle = lighthouseLG(0, ty - 8 * s, 0, ty + 6 * s, lighthouseMuteA(['#94664a', '#644030', '#432a22'], mute), c); c.fillRect(Math.min(exx - dd * 30 * s, exx + dd * out * 1.3), ty - 7 * s, out * 1.3 + 30 * s, 12 * s);
+        c.fillStyle = lighthouseMute('#c89a74', mute); c.fillRect(Math.min(exx - dd * 30 * s, exx + dd * out * 1.3), ty - 7.5 * s, out * 1.3 + 30 * s, 1.6 * s);
+        lighthouseHangLamp(c, exx + dd * out * 1.1, ty + 5 * s, 26 * s, s, mute, ta - 40, t, fl === 'home' || mood.warm);
+        if (fl !== 'home') lighthouseNet(c, exx + dd * 6 * s, ty + 5 * s, exx + dd * out * 0.8, ty + 5 * s, s, mute, ta - 30, t);
+        else { lighthouseLedge(c, exx, dd, ty + 90 * s, out, s, mute); const cx = exx + dd * out * 0.5; c.fillStyle = lighthouseLG(0, ty + 60 * s, 0, ty + 90 * s, lighthouseMuteA(['#5a5e7e', '#3a3c5a'], mute), c); lighthouseRRect(c, cx - 14 * s, ty + 62 * s, 28 * s, 28 * s, 3 * s); c.fill(); c.fillStyle = 'rgba(255,170,90,.75)'; c.fillRect(cx - 9 * s, ty + 74 * s, 18 * s, 8 * s); t.live.push({ type: 'lamp', xpx: cx, ypx: ty + 78 * s, a: ta - 80, r: 30, col: [255, 170, 90] }); c.fillStyle = lighthouseMute('#3a3c5a', mute); c.fillRect(cx - 3 * s, ty + 16 * s, 6 * s, 46 * s); }
+        continue;
+      }
+      lighthouseLedge(c, exx, dd, ty, out, s, mute);
+      const px = (f) => exx + dd * out * f;
+      if (fl === 'sconce' || fl === 'port') { lighthouseBarrel(c, px(0.3), ty, s, mute); lighthouseRope(c, px(0.7), ty, s, mute); lighthouseLifeRing(c, exx - dd * 10 * s, ty - 46 * s, s, mute); }
+      else if (fl === 'portrait') { lighthouseCrate(c, px(0.3), ty, 22 * s, 18 * s, s, mute); lighthouseHangLamp(c, px(0.75), ty - 70 * s, 20 * s, s, mute, ta + 40, t, false); c.strokeStyle = lighthouseMute('#5a5a7a', mute); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(px(0.75), ty - 70 * s); c.lineTo(exx - dd * 10 * s, ty - 70 * s); c.stroke(); }
+      else if (fl === 'chain') { lighthouseCrate(c, px(0.25), ty, 20 * s, 16 * s, s, mute); lighthouseCrate(c, px(0.25) + dd * 4 * s, ty - 16 * s, 16 * s, 14 * s, s, mute); lighthouseRope(c, px(0.7), ty, s, mute); }
+      else if (fl === 'can') { lighthouseBarrel(c, px(0.25), ty, s, mute); lighthouseBarrel(c, px(0.62), ty, s, mute); lighthouseCrate(c, px(0.45), ty - 20 * s, 18 * s, 14 * s, s, mute); }
+      else if (fl === 'storm') { lighthouseBarrel(c, px(0.3), ty, s, mute); c.fillStyle = lighthouseMute('#7a84a8', mute); c.beginPath(); c.moveTo(px(0.68) - 8 * s, ty - 14 * s); c.lineTo(px(0.68) + 8 * s, ty - 14 * s); c.lineTo(px(0.68) + 6 * s, ty); c.lineTo(px(0.68) - 6 * s, ty); c.closePath(); c.fill(); t.live.push({ type: 'drip', xpx: px(0.68), ypx: ty - 14 * s, a: ta, r: 1 }); }
+      else { lighthouseCrate(c, px(0.3), ty, 22 * s, 16 * s, s, mute); lighthouseHangLamp(c, px(0.7), ty - 60 * s, 18 * s, s, mute, ta + 50, t, true); c.strokeStyle = lighthouseMute('#8a6a3a', mute); c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(px(0.7), ty - 60 * s); c.lineTo(exx - dd * 10 * s, ty - 60 * s); c.stroke(); }
+    }
+  }
+}
+// the backdrop's live lights (gathered as its tiles are drawn) and the moonlight
+function drawLighthouseBackground() {
+  lighthouseCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P;
+  const M = lighthouseMoodAt(G.camAlt + viewH * 0.5);
+  ctx.fillStyle = lighthouseLG(0, 0, 0, H, M.g.map(c => lighthouseCol(c))); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  lighthouseGlow(ox + playW * 0.25, -H * 0.15, playW * 1.1, [170, 200, 255], 0.12);
+  for (const Ly of LIGHTHOUSE_LAYERS) {
+    const base = G.camAlt * Ly.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / Ly.LT); k * Ly.LT < pa1; k++) {
+      const t = lighthouseLayerTile(Ly, k), y = H - (t.pa1 - base) * s, tx = ox + t.xa * s;
+      ctx.drawImage(t.cv, tx, y, t.w, t.h);
+      for (const g of t.live) {
+        const yy = y + g.ypx, x = tx + g.xpx;
+        if (yy < Y0 - 80 || yy > Y1 + 80) continue;
+        if (g.type === 'win') lighthouseGlow(x, yy, g.r * s, [150, 180, 255], 0.1 + 0.03 * Math.sin(G.t * 0.7 + x));
+        else if (g.type === 'lan') lighthouseGlow(x, yy, g.r * s, [255, 200, 120], 0.22 + 0.06 * Math.sin(G.t * 2.3 + x));
+        else if (g.type === 'lamp') lighthouseGlow(x, yy, g.r * s, g.col || [255, 206, 120], 0.3 + 0.08 * Math.sin(G.t * 3 + x));
+        else if (g.type === 'eyes2') { const o = Math.max(0, Math.sin(G.t * 0.5 + x * 0.1)) ** 10; if (o > 0.05) for (const e of [-1, 1]) lighthouseGlow(x + e * 3.4 * s, yy, 5 * s, [150, 255, 214], 0.8 * o); }
+        else if (g.type === 'float') lighthouseGlow(x, yy, g.r * s, g.col, 0.18 + 0.08 * Math.sin(G.t * 1.6 + x));
+        else if (g.type === 'drip') { const u = pmod(G.t * 0.8 + x * 0.01, 1); ctx.fillStyle = `rgba(190,210,255,${0.6 * (1 - u)})`; lighthouseEll(ctx, x, yy - 60 * s + u * 56 * s, 1.2 * s, 2.2 * s); ctx.fill(); }
+      }
+    }
+    if (Ly.id === 0) drawLighthouseShafts(M);
+  }
+  // the section's own light: the layers tinted to its colour, soft pools of its light, the corners in shade
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = lighthouseCol(M.tint); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore();
+  { const slot = 520, f = 0.14, base = G.camAlt * f, first = Math.floor((base - 300) / slot), last = Math.ceil((base + viewH + 300) / slot);
+    for (let i = first; i <= last; i++) { const y = H - (i * slot - base) * s, x = ox + playW * (0.18 + 0.64 * hash2(i, 7901)), r = (150 + 90 * hash2(i, 7902)) * s; lighthouseGlow(x, y, r, M.pool, M.pk * (0.75 + 0.25 * Math.sin(G.t * 0.6 + i))); } }
+  ctx.fillStyle = lighthouseCol(M.g[2], 0.22); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  if (M.storm > 0.05) { const u = pmod(G.t, 6.5), f = (u < 0.12 ? 1 - u / 0.12 : 0) + (u > 0.22 && u < 0.4 ? 0.6 * (1 - (u - 0.22) / 0.18) : 0); if (f > 0.01) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(150,180,255,${0.16 * f * M.storm})`; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore(); } }
+  drawLighthouseMotes(M);
+}
+// cool shafts of moonlight falling slantwise from the far windows, dust turning in them
+function drawLighthouseShafts(M) {
+  const sp = lighthouseSprite('shaft', 90, 400, c => {
+    c.fillStyle = lighthouseLG(0, 0, 90, 0, ['rgba(190,214,255,0)', 'rgba(190,214,255,.5)', 'rgba(224,236,255,.85)', 'rgba(190,214,255,.5)', 'rgba(190,214,255,0)'], c); c.fillRect(0, 0, 90, 400);
+    c.globalCompositeOperation = 'destination-in'; c.fillStyle = lighthouseLG(0, 0, 0, 400, ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, 90, 400);
+  });
+  const T = G.t, warm = M.warm || 0;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 2; i++) {
+    const x = ox + playW * (0.22 + 0.5 * i) + Math.sin(T * 0.1 + i * 2) * 14 * s, ang = -0.32 + i * 0.12, w = (64 + 30 * i) * s, h = H * 1.25, al = (0.07 + 0.03 * Math.sin(T * 0.5 + i)) * (1 - 0.5 * warm);
+    ctx.save(); ctx.translate(x, -H * 0.1); ctx.rotate(ang); ctx.globalAlpha = al; ctx.drawImage(sp.cv, -w / 2, 0, w, h); ctx.globalAlpha = 1;
+    for (let q = 0; q < 6; q++) { const u = pmod(T * (0.03 + 0.02 * hash2(q, 7701 + i)) + hash2(q, 7702 + i), 1), my = u * h * 0.85, mx = (hash2(q, 7703 + i) - 0.5) * w * 0.6 + Math.sin(T * 0.8 + q) * 4 * s; lighthouseTwinkle(ctx, mx, my, (1.4 + 1.4 * hash2(q, 7704)) * s, Math.sin(u * Math.PI) * 0.4, [220, 232, 255]); }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// motes: pale dust drifting in the moonlight, ghost-green wisps now and then, sea mist curling round the foot of the tower
+MOTE_DRIFT.lmote = [-4, 10];
+{ const base = moteKind; moteKind = function (m, a) { return lighthouseOn() ? 'lmote' : base(m, a); }; }
+function drawLighthouseMotes(M) {
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 0.7 + m.ph) * 7 * s, y = m.y, tw = 0.4 + 0.6 * Math.max(0, Math.sin(G.t * 2 + m.ph * 3)) ** 3;
+    if (m.r > 0.86) { lighthouseGlow(x, y, (5 + 4 * m.depth) * s, LIGHTHOUSE_P.ghostC, 0.22 * m.depth * tw); continue; }
+    const r = (0.4 + m.sz * 0.5) * m.depth * s;
+    ctx.fillStyle = M.warm > 0.5 ? `rgba(255,226,180,${0.45 * m.depth * tw})` : `rgba(206,222,255,${0.45 * m.depth * tw})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+  }
+  // sea mist at the foot of the tower (the first few hundred metres)
+  const mk = 1 - smooth(300, 1400, G.camAlt);
+  if (mk > 0.01) {
+    const sp = lighthouseBlobSprite([170, 195, 240]);
+    for (let i = 0; i < 7; i++) {
+      const mx = ox + pmod(i * 61 + G.t * (6 + i), playW + 160) - 80, my = sy(80 + (i % 3) * 40), rr = (60 + (i % 3) * 18) * s;
+      ctx.save(); ctx.globalAlpha = 0.35 * mk; ctx.drawImage(sp.cv, mx - rr * 1.4, my - rr * 0.6, rr * 2.8, rr * 1.2); ctx.restore();
+    }
+  }
+}
+// the midground (0.55): stone treads of the old stair jutting in from beyond the screen's edges, iron brackets under them,
+// a lantern or a coil of rope on some
+function lighthouseTreadSprite(v) {
+  return lighthouseSprite('tread' + v, 200, 110, c => {
+    c.translate(150, 40); const P = LIGHTHOUSE_P.stone, I = LIGHTHOUSE_P.iron;
+    c.fillStyle = lighthouseLG(0, -10, 0, 14, [P[1], P[2], P[3]], c); c.beginPath(); c.moveTo(-150, -10); c.lineTo(-4, -8); c.quadraticCurveTo(2, 2, -4, 12); c.lineTo(-150, 14); c.closePath(); c.fill();
+    c.strokeStyle = LIGHTHOUSE_P.stoneE; c.lineWidth = 1; c.stroke();
+    c.fillStyle = P[0]; c.beginPath(); c.moveTo(-150, -10); c.lineTo(-4, -8); c.lineTo(-10, -15); c.lineTo(-150, -17); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(250,252,255,.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-150, -16.4); c.lineTo(-10, -14.4); c.stroke();
+    c.strokeStyle = 'rgba(60,70,110,.5)'; c.lineWidth = 0.8; c.beginPath(); for (const x of [-120, -80, -40]) { c.moveTo(x, -8); c.lineTo(x + 2, 12); } c.stroke();
+    // the iron bracket under it
+    c.strokeStyle = LIGHTHOUSE_P.ironE; c.lineWidth = 4; c.beginPath(); c.moveTo(-100, 14); c.quadraticCurveTo(-40, 16, -20, 14); c.moveTo(-100, 50); c.quadraticCurveTo(-40, 40, -24, 14); c.stroke();
+    c.strokeStyle = I[1]; c.lineWidth = 2.4; c.stroke();
+    if (v) {
+      // a storm lantern standing on it
+      const B = LIGHTHOUSE_P.brass;
+      c.fillStyle = lighthouseLG(-52, 0, -36, 0, [I[0], I[2]], c); c.beginPath(); c.moveTo(-54, -24); c.lineTo(-44, -32); c.lineTo(-34, -24); c.closePath(); c.fill();
+      c.fillStyle = lighthouseLG(0, -24, 0, -10, ['rgba(255,250,220,.95)', 'rgba(255,200,110,.85)'], c); lighthouseRRect(c, -52, -24, 16, 13, 2); c.fill();
+      c.strokeStyle = I[2]; c.lineWidth = 1.2; c.strokeRect(-52, -24, 16, 13);
+      c.fillStyle = B[2]; c.fillRect(-54, -12, 20, 3);
+    } else {
+      for (let q = 0; q < 4; q++) { c.strokeStyle = q % 2 ? '#c4a676' : '#a88a5e'; c.lineWidth = 2.6; lighthouseEll(c, -60, -20 - q * 2.4, 14 - q * 1.6, 3.6); c.stroke(); }
+    }
+  });
+}
+function drawLighthouseMidground() {
+  lighthouseCacheCheck();
+  const f = 0.55, slot = 320, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 7401); if (r < 0.45) continue;
+    const side = hash2(i, 7402) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, v = hash2(i, 7403) < 0.55 ? 1 : 0, sp = lighthouseTreadSprite(v);
+    if (y + 70 * s < -20 || y - 60 * s > H) continue;
+    const nose = (4 + 16 * r) * s, x = side ? cssW - nose : nose;
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.translate(x, y); if (side) ctx.scale(-1, 1);
+    ctx.drawImage(sp.cv, -150 * s, -40 * s, 200 * s, 110 * s); ctx.restore();
+    if (v) lighthouseGlow(side ? x + 44 * s : x - 44 * s, y - 17 * s, 30 * s, [255, 206, 120], 0.35 + 0.06 * Math.sin(G.t * 4 + i));
+  }
+}
+// speed: pale streaks of moonlight along the walls
+function drawLighthouseSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 71), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 72) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = lighthouseCol(j < 0.6 ? [190, 214, 255] : [236, 244, 255], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: sheets of old cobweb hanging in close over the screen's edges (over the walls, never the lanes), a spider
+// dangling from one now and then
+function lighthouseWebSprite(v) {
+  return lighthouseSprite('fweb' + v, 90, 120, c => {
+    const R = n => hash2(v, 7520 + n), n = 6, cx = 0, cy = 0;
+    c.strokeStyle = 'rgba(220,232,255,.38)'; c.lineWidth = 0.7; c.beginPath();
+    for (let q = 0; q < n; q++) { const an = q / (n - 1) * Math.PI * 0.5, len = 80 + 30 * R(q); c.moveTo(cx, cy); c.lineTo(Math.cos(an) * len, Math.sin(an) * len * 1.2); }
+    for (let r = 14; r < 90; r += 12 + 4 * R(r)) { c.moveTo(r, 0); for (let q = 1; q < n; q++) { const an = q / (n - 1) * Math.PI * 0.5, am = (q - 0.5) / (n - 1) * Math.PI * 0.5; c.quadraticCurveTo(Math.cos(am) * r * 0.82, Math.sin(am) * r * 0.98, Math.cos(an) * r, Math.sin(an) * r * 1.2); } }
+    c.stroke();
+    c.fillStyle = 'rgba(230,240,255,.5)'; for (let q = 0; q < 5; q++) { lighthouseCirc(c, 20 + 50 * R(q + 30), 20 + 60 * R(q + 40), 0.9); c.fill(); }
+    if (v % 2) { c.strokeStyle = 'rgba(220,232,255,.5)'; c.beginPath(); c.moveTo(34, 40); c.lineTo(34, 92); c.stroke(); c.fillStyle = '#3a3460'; lighthouseEll(c, 34, 96, 3.4, 4); c.fill(); lighthouseCirc(c, 34, 91, 2.2); c.fill(); c.strokeStyle = '#3a3460'; c.lineWidth = 0.8; c.beginPath(); for (const e of [-1, 1]) for (const q of [-1, 0, 1]) { c.moveTo(34, 95 + q * 1.4); c.lineTo(34 + e * 6, 92 + q * 3); } c.stroke(); c.fillStyle = 'rgba(200,190,255,.7)'; lighthouseCirc(c, 33, 94.6, 0.9); c.fill(); }
+  });
+}
+function drawLighthouseForeground() {
+  lighthouseCacheCheck();
+  const f = 1.3, slot = 380, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, 7511) < 0.55) continue;
+    const side = hash2(i, 7512) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, v = i & 3, sp = lighthouseWebSprite(v), sc = (0.7 + 0.25 * hash2(i, 7513)) * s;
+    if (y + 120 * sc < -20 || y - 10 * sc > H) continue;
+    ctx.save(); ctx.translate(side ? cssW : 0, y); ctx.scale(side ? -sc : sc, sc); ctx.drawImage(sp.cv, 0, 0, 90, 120); ctx.restore();
+  }
+}
+// The tower's light: a deep blue vignette, cool moonlight from the upper left, the Lantern Room blazing as you near it
+function drawLighthouseLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = lighthouseGrad('vign' + cssW + 'x' + H, c => { const g = c.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75); g.addColorStop(0, 'rgba(10,14,40,0)'); g.addColorStop(1, 'rgba(10,14,40,.38)'); return g; });
+  ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = lighthouseGrad('moonTop' + H, c => { const g = c.createLinearGradient(0, 0, cssW * 0.6, H * 0.5); g.addColorStop(0, 'rgba(170,200,255,.08)'); g.addColorStop(1, 'rgba(170,200,255,0)'); return g; });
+  ctx.fillRect(X0, Y0, WW, H * 0.6 + P);
+  ctx.restore();
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 260), k = clamp(1 - Math.abs(a.end + 260 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) lighthouseGlow(cssW / 2, y, Math.max(cssW, H) * 0.7, [255, 220, 150], (0.05 + 0.08 * pay) * k);
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (lighthouseOn()) drawLighthouseBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (lighthouseOn()) drawLighthouseMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (lighthouseOn()) drawLighthouseWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (lighthouseOn()) drawLighthouseLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (lighthouseOn()) drawLighthouseSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (lighthouseOn()) drawLighthouseForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { if (lighthouseOn()) drawLighthouseLamps(); base(); if (lighthouseOn()) drawLighthouseFx(); }; }
+// ---- the finish: the Lantern Room ----
+// The stair comes out at the top of the tower into the lantern room: a ring of tall glass panes in a brass frame (diagonal
+// astragals, the night sea and sky outside, the moon low over the water), an iron gallery rail running round outside
+// them, a domed copper roof with its ventilator ball overhead. In the middle on a cast-iron pedestal stands the great
+// Fresnel lens: a glass beehive of prism rings in a brass cage, a bullseye at its heart, the lamp inside it. Beside it
+// floats the old keeper's friendly ghost (pale green, peaked cap, a big white beard, a brass oil can in one hand),
+// polishing the lens and humming. Clear the stage and he waves you in, the lens blazes, its beams sweep out through the
+// glass over the sea and the foghorn sounds. The deck: two iron grating half-floors sliding out of the walls under you.
+const LIGHTHOUSE_FIN = { lens: 70, lensW: 146, lensH: 196, ped: 46, keeper: 1.5, dome: 640, glass: [70, 560], rail: 40 };
+function lighthouseRoomRender(E) {
+  const key = 'room' + E; let sp = LIGHTHOUSE_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 120, A1 = E + 900, F = LIGHTHOUSE_FIN, P = LIGHTHOUSE_P;
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = xl - 24, xb = xr + 24;
+  sp = lighthouseCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1; sp.xl = xl; sp.xr = xr; sp.lights = [];
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s, mid = (xl + xr) / 2; sp.mid = mid;
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the night outside: deep sky, stars, the moon low over the sea, a far headland with its own little light
+  c.fillStyle = lighthouseLG(0, Y(A1), 0, Y(E), ['#1a2250', '#2c3a78', '#4a62a8', '#6a84c4'], c); c.fillRect(0, 0, sp.w, sp.h);
+  for (let q = 0; q < 70; q++) { const x = X(lerp(xl, xr, hash2(q, 6101))), y = Y(E + 180 + 640 * hash2(q, 6102)), r = (0.5 + 1.1 * hash2(q, 6103) ** 3) * s; c.fillStyle = `rgba(236,244,255,${0.4 + 0.5 * hash2(q, 6104)})`; lighthouseCirc(c, x, y, r); c.fill(); }
+  { const mx = X(mid + 90), my = Y(E + 300), mr = 30 * s;
+    c.fillStyle = lighthouseRG(mx, my, mr * 4, ['rgba(220,234,255,.45)', 'rgba(200,220,255,.1)', 'rgba(200,220,255,0)'], c); c.fillRect(mx - mr * 4, my - mr * 4, mr * 8, mr * 8);
+    c.fillStyle = lighthouseRG(mx - mr * 0.3, my - mr * 0.3, mr, ['#ffffff', '#eef2ff', '#bcc8ee'], c); lighthouseCirc(c, mx, my, mr); c.fill();
+    c.fillStyle = 'rgba(150,170,214,.45)'; for (const [dx, dy, r] of [[-0.3, -0.1, 0.24], [0.35, 0.3, 0.16], [0.1, -0.45, 0.1]]) { lighthouseCirc(c, mx + dx * mr, my + dy * mr, r * mr); c.fill(); } }
+  // the sea and its moon path, the far headland
+  const sea = E + 190;
+  c.fillStyle = lighthouseLG(0, Y(sea), 0, Y(E), ['#3a5a96', '#22386a', '#162650'], c); c.fillRect(0, Y(sea), sp.w, Y(E - 130) - Y(sea));
+  c.fillStyle = '#2a3a6a'; c.beginPath(); c.moveTo(X(xl - 10), Y(sea)); c.quadraticCurveTo(X(xl + 50), Y(sea + 34), X(xl + 120), Y(sea + 12)); c.quadraticCurveTo(X(xl + 150), Y(sea + 4), X(xl + 170), Y(sea)); c.closePath(); c.fill();
+  c.fillStyle = '#3a4c80'; c.fillRect(X(xl + 70), Y(sea + 44), 4 * s, 18 * s); sp.lights.push(['far', xl + 72, sea + 46]);
+  c.strokeStyle = 'rgba(220,234,255,.6)'; c.lineWidth = 1.2 * s; c.beginPath();
+  for (let q = 0; q < 12; q++) { const yy = Y(sea - 6 - q * 9), w = (8 + q * 5) * s, x0 = X(mid + 90) + (hash2(q, 6111) - 0.5) * 10 * s; c.moveTo(x0 - w / 2, yy); c.lineTo(x0 + w / 2, yy); }
+  c.stroke();
+  c.strokeStyle = 'rgba(160,190,240,.35)'; c.lineWidth = 0.8 * s; c.beginPath();
+  for (let q = 0; q < 24; q++) { const yy = Y(sea - 4 - 120 * hash2(q, 6112)), x0 = X(lerp(xl, xr, hash2(q, 6113))), w = (6 + 12 * hash2(q, 6114)) * s; c.moveTo(x0, yy); c.quadraticCurveTo(x0 + w / 2, yy - 2 * s, x0 + w, yy); }
+  c.stroke();
+  // the gallery outside the glass: an iron rail (posts and two bars) round the tower's top, seen through the panes
+  { const ra = E + F.rail + 26, I = P.iron;
+    c.fillStyle = lighthouseLG(0, Y(E + 34), 0, Y(E), [I[1], I[2], I[3]], c); c.fillRect(0, Y(E + 34), sp.w, 34 * s);
+    c.fillStyle = 'rgba(214,220,250,.6)'; c.fillRect(0, Y(E + 34), sp.w, 1.6 * s);
+    c.strokeStyle = I[3]; c.lineWidth = 2.4 * s; c.beginPath(); for (let x = xl; x < xr; x += 22) { c.moveTo(X(x), Y(E + 34)); c.lineTo(X(x), Y(ra + 14)); } c.stroke();
+    c.lineWidth = 3 * s; c.beginPath(); c.moveTo(0, Y(ra + 14)); c.lineTo(sp.w, Y(ra + 14)); c.moveTo(0, Y(ra - 6)); c.lineTo(sp.w, Y(ra - 6)); c.stroke();
+    c.strokeStyle = 'rgba(200,206,240,.6)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(0, Y(ra + 15.2)); c.lineTo(sp.w, Y(ra + 15.2)); c.stroke(); }
+  // the panes: tall glass in a brass frame with diagonal astragals (the lantern's diamond glazing), a sheen across each
+  { const [g0, g1] = F.glass, B = P.brass, n = Math.max(3, Math.round((xr - xl) / 130)), pw = (xr - xl) / n;
+    c.fillStyle = 'rgba(190,214,255,.06)'; c.fillRect(0, Y(E + g1), sp.w, (g1 - g0) * s);
+    c.save(); c.beginPath(); c.rect(X(xl), Y(E + g1), (xr - xl) * s, (g1 - g0) * s); c.clip();
+    c.strokeStyle = B[3]; c.lineWidth = 2.6 * s; c.beginPath();
+    for (let d = -(g1 - g0); d < xr - xl + (g1 - g0); d += 58) { c.moveTo(X(xl + d), Y(E + g0)); c.lineTo(X(xl + d + (g1 - g0) * 0.5), Y(E + g1)); c.moveTo(X(xl + d), Y(E + g0)); c.lineTo(X(xl + d - (g1 - g0) * 0.5), Y(E + g1)); }
+    c.stroke(); c.strokeStyle = 'rgba(255,230,170,.45)'; c.lineWidth = 0.8 * s; c.stroke();
+    for (let i = 0; i < n; i++) { const x0 = xl + i * pw; c.fillStyle = lighthouseLG(X(x0), Y(E + g1), X(x0 + pw), Y(E + g0), ['rgba(255,255,255,0)', 'rgba(255,255,255,.08)', 'rgba(255,255,255,0)', 'rgba(255,255,255,.05)', 'rgba(255,255,255,0)'], c); c.fillRect(X(x0), Y(E + g1), pw * s, (g1 - g0) * s); }
+    c.restore();
+    // the mullions (vertical brass bars), the sill and the head
+    for (let i = 0; i <= n; i++) { const x = xl + i * pw; c.fillStyle = lighthouseLG(X(x - 5), 0, X(x + 5), 0, [B[1], B[2], B[3]], c); c.fillRect(X(x - 4.5), Y(E + g1 + 8), 9 * s, (g1 - g0 + 16) * s); c.fillStyle = 'rgba(255,250,220,.7)'; c.fillRect(X(x - 3.5), Y(E + g1 + 8), 1.2 * s, (g1 - g0 + 16) * s); }
+    for (const [ya, hh] of [[E + g0 - 14, 18], [E + g1, 22]]) {
+      c.fillStyle = lighthouseLG(0, Y(ya + hh), 0, Y(ya), [B[0], B[2], B[3]], c); c.fillRect(0, Y(ya + hh), sp.w, hh * s);
+      c.fillStyle = LIGHTHOUSE_P.brassE; c.fillRect(0, Y(ya) - 1.2 * s, sp.w, 1.2 * s);
+      c.fillStyle = B[3]; for (let x = xl; x < xr; x += 18) { lighthouseCirc(c, X(x), Y(ya + hh / 2), 1.4 * s); c.fill(); }
+    } }
+  // the domed copper roof's underside: green-bronze ribs curving in to the ventilator, a hook in the middle
+  { const d0 = E + F.glass[1] + 22, Cu = ['#8ad8c0', '#4a9a8a', '#2a6a64', '#1c4a4a'];
+    c.fillStyle = lighthouseLG(0, Y(A1), 0, Y(d0), [Cu[3], Cu[2], Cu[1]], c); c.beginPath(); c.moveTo(0, Y(d0)); c.quadraticCurveTo(X(mid), Y(d0 + 520), sp.w, Y(d0)); c.lineTo(sp.w, 0); c.lineTo(0, 0); c.closePath(); c.fill();
+    c.strokeStyle = Cu[3]; c.lineWidth = 2 * s; c.beginPath(); for (let q = -4; q <= 4; q++) { const bx = mid + q * (xr - xl) / 8; c.moveTo(X(bx), Y(d0)); c.quadraticCurveTo(X(lerp(bx, mid, 0.5)), Y(d0 + 160), X(mid), Y(d0 + 300)); } c.stroke();
+    c.strokeStyle = 'rgba(190,255,230,.4)'; c.lineWidth = 0.8 * s; c.stroke();
+    c.strokeStyle = 'rgba(200,255,236,.55)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(0, Y(d0) - 2 * s); c.quadraticCurveTo(X(mid), Y(d0 + 520) - 2 * s, sp.w, Y(d0) - 2 * s); c.stroke(); }
+  // the keeper's things round the room: a brass barometer on the left mullion, oil cans and a polishing cloth on a little
+  // shelf on the right, a logbook on a stand
+  { const B = P.brass, bx = xl + 34, ba = E + 260;
+    c.fillStyle = lighthouseLG(X(bx - 10), 0, X(bx + 10), 0, [B[0], B[2], B[3]], c); lighthouseRRect(c, X(bx - 9), Y(ba + 70), 18 * s, 90 * s, 9 * s); c.fill(); c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 0.8 * s; c.stroke();
+    c.fillStyle = lighthouseRG(X(bx) - 2 * s, Y(ba + 48) - 2 * s, 12 * s, ['#fffaf0', '#ece2c8'], c); lighthouseCirc(c, X(bx), Y(ba + 48), 10 * s); c.fill();
+    c.strokeStyle = '#3a3050'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(X(bx), Y(ba + 48)); c.lineTo(X(bx + 5), Y(ba + 54)); c.stroke();
+    c.fillStyle = '#c84a3a'; c.fillRect(X(bx - 1), Y(ba + 30), 2 * s, 18 * s);
+    const sx2 = xr - 70, sa = E + 150;
+    c.fillStyle = lighthouseLG(0, Y(sa + 4), 0, Y(sa - 4), [P.wood[0], P.wood[2]], c); c.fillRect(X(sx2 - 30), Y(sa + 4), 70 * s, 7 * s);
+    c.strokeStyle = P.iron[2]; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(X(sx2 + 34), Y(sa - 3)); c.lineTo(X(sx2 + 40), Y(sa - 30)); c.stroke();
+    for (const [dx, h, col] of [[-18, 20, ['#e88a6a', '#b84a3a', '#7a2a24']], [0, 26, ['#9ad0ff', '#4a80c8', '#2a4a8a']], [18, 16, ['#e88a6a', '#b84a3a', '#7a2a24']]]) {
+      c.fillStyle = lighthouseLG(X(sx2 + dx - 6), 0, X(sx2 + dx + 6), 0, col, c); lighthouseRRect(c, X(sx2 + dx - 6), Y(sa + 4 + h), 12 * s, h * s, 2 * s); c.fill();
+      c.fillStyle = 'rgba(255,240,230,.7)'; c.fillRect(X(sx2 + dx - 4), Y(sa + 2 + h), 1.2 * s, (h - 4) * s);
+      c.strokeStyle = col[2]; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(sx2 + dx + 3), Y(sa + 4 + h)); c.lineTo(X(sx2 + dx + 8), Y(sa + 12 + h)); c.stroke();
+    }
+    c.fillStyle = '#f0ece0'; c.beginPath(); c.moveTo(X(sx2 + 26), Y(sa + 4)); c.quadraticCurveTo(X(sx2 + 32), Y(sa - 14), X(sx2 + 28), Y(sa - 22)); c.lineTo(X(sx2 + 36), Y(sa - 20)); c.quadraticCurveTo(X(sx2 + 40), Y(sa - 6), X(sx2 + 36), Y(sa + 4)); c.closePath(); c.fill();
+    // the logbook on its stand at the left
+    const lx = xl + 70, la = E;
+    c.strokeStyle = P.wood[3]; c.lineWidth = 3 * s; c.beginPath(); c.moveTo(X(lx), Y(la)); c.lineTo(X(lx), Y(la + 60)); c.moveTo(X(lx - 12), Y(la)); c.lineTo(X(lx + 12), Y(la)); c.stroke();
+    c.fillStyle = lighthouseLG(0, Y(la + 76), 0, Y(la + 58), [P.wood[1], P.wood[3]], c); c.beginPath(); c.moveTo(X(lx - 22), Y(la + 58)); c.lineTo(X(lx + 22), Y(la + 58)); c.lineTo(X(lx + 18), Y(la + 72)); c.lineTo(X(lx - 18), Y(la + 72)); c.closePath(); c.fill();
+    c.fillStyle = '#fffaf0'; c.beginPath(); c.moveTo(X(lx - 19), Y(la + 66)); c.quadraticCurveTo(X(lx - 10), Y(la + 72), X(lx), Y(la + 68)); c.quadraticCurveTo(X(lx + 10), Y(la + 72), X(lx + 19), Y(la + 66)); c.lineTo(X(lx + 16), Y(la + 76)); c.quadraticCurveTo(X(lx + 8), Y(la + 80), X(lx), Y(la + 77)); c.quadraticCurveTo(X(lx - 8), Y(la + 80), X(lx - 16), Y(la + 76)); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(80,80,120,.6)'; c.lineWidth = 0.6 * s; c.beginPath(); for (let q = 0; q < 3; q++) { c.moveTo(X(lx - 14), Y(la + 73 - q * 2.4)); c.lineTo(X(lx - 3), Y(la + 72.4 - q * 2.4)); c.moveTo(X(lx + 3), Y(la + 72.4 - q * 2.4)); c.lineTo(X(lx + 14), Y(la + 73 - q * 2.4)); } c.stroke();
+  }
+  // the pedestal: a fluted cast-iron column with a brass collar, the clockwork box that turns the lens
+  { const I = P.iron, B = P.brass, pb = E + 8, pt = E + F.lens;
+    c.fillStyle = lighthouseLG(X(mid - 40), 0, X(mid + 40), 0, [I[0], I[1], I[2], I[3]], c); c.beginPath(); c.moveTo(X(mid - 44), Y(pb)); c.lineTo(X(mid - 30), Y(pb + 22)); c.lineTo(X(mid - 26), Y(pt - 10)); c.lineTo(X(mid + 26), Y(pt - 10)); c.lineTo(X(mid + 30), Y(pb + 22)); c.lineTo(X(mid + 44), Y(pb)); c.closePath(); c.fill();
+    c.strokeStyle = LIGHTHOUSE_P.ironE; c.lineWidth = 0.9 * s; c.stroke();
+    c.strokeStyle = 'rgba(40,38,70,.55)'; c.lineWidth = 1 * s; c.beginPath(); for (const f of [-16, -6, 4, 14]) { c.moveTo(X(mid + f), Y(pb + 24)); c.lineTo(X(mid + f * 0.92), Y(pt - 12)); } c.stroke();
+    c.strokeStyle = 'rgba(230,230,255,.5)'; c.beginPath(); c.moveTo(X(mid - 22), Y(pb + 24)); c.lineTo(X(mid - 20), Y(pt - 12)); c.stroke();
+    // the clockwork box: brass-cornered, a little window showing a cog
+    c.fillStyle = lighthouseLG(0, Y(pb + 50), 0, Y(pb + 22), [I[1], I[2]], c); lighthouseRRect(c, X(mid - 22), Y(pb + 50), 44 * s, 28 * s, 3 * s); c.fill(); c.strokeStyle = LIGHTHOUSE_P.ironE; c.stroke();
+    c.fillStyle = '#20223e'; lighthouseCirc(c, X(mid), Y(pb + 36), 8 * s); c.fill(); sp.cog = [mid, pb + 36];
+    c.fillStyle = B[2]; for (const e of [-1, 1]) for (const f of [24, 48]) { lighthouseCirc(c, X(mid + e * 19), Y(pb + f), 1.8 * s); c.fill(); }
+    c.fillStyle = lighthouseLG(0, Y(pt), 0, Y(pt - 12), [B[0], B[2], B[3]], c); lighthouseRRect(c, X(mid - 50), Y(pt), 100 * s, 12 * s, 3 * s); c.fill(); c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 0.9 * s; c.stroke();
+    c.strokeStyle = 'rgba(255,252,230,.85)'; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(X(mid - 47), Y(pt) + 1.6 * s); c.lineTo(X(mid + 47), Y(pt) + 1.6 * s); c.stroke(); }
+  c.restore();
+  // fade the room's foot (below the deck) into the shaft's own backdrop
+  c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = lighthouseLG(0, Y(E + 6), 0, Y(A0), ['rgba(0,0,0,0)', 'rgba(0,0,0,.85)', 'rgba(0,0,0,1)'], c); c.fillRect(0, Y(E + 6), sp.w, Y(A0) - Y(E + 6) + 2); c.restore();
+  LIGHTHOUSE_CACHE.sprites.set(key, sp);
+  return sp;
+}
+// The great lens (cached, in world units round the middle of its base, y down): a beehive of glass prism rings in a brass
+// cage. Upper and lower catadioptric rings (cool aqua glass with gold catchlights), the central drum's refracting belt
+// with the bullseye at its heart; brass ribs and rings holding it together; a finial on top.
+function lighthouseLensSprite() {
+  const F = LIGHTHOUSE_FIN, w = F.lensW, h = F.lensH;
+  return lighthousePiece('lens', -w / 2 - 10, w / 2 + 10, -h - 30, 6, c => {
+    const B = LIGHTHOUSE_P.brass, P2 = (y0, y1, x0) => ({ y0, y1, x0 });
+    // the glass body silhouette (rounded barrel)
+    const body = () => { c.beginPath(); c.moveTo(-w * 0.36, 0); c.bezierCurveTo(-w * 0.56, -h * 0.25, -w * 0.56, -h * 0.75, -w * 0.3, -h); c.lineTo(w * 0.3, -h); c.bezierCurveTo(w * 0.56, -h * 0.75, w * 0.56, -h * 0.25, w * 0.36, 0); c.closePath(); };
+    body(); c.fillStyle = lighthouseLG(-w / 2, -h, w / 2, 0, ['#e8fff8', '#9ee0e0', '#5aa8c0', '#3a6aa0'], c); c.fill();
+    c.save(); body(); c.clip();
+    // the prism rings: bands, each lit along its top edge, gold catchlights on the left
+    const ring = (y, hh, k) => {
+      c.fillStyle = lighthouseLG(0, y - hh, 0, y, [`rgba(255,255,255,${0.5 * k})`, 'rgba(160,230,240,.15)', 'rgba(40,90,140,.35)'], c); c.fillRect(-w, y - hh, w * 2, hh);
+      c.strokeStyle = 'rgba(30,70,110,.5)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-w, y); c.lineTo(w, y); c.stroke();
+      c.strokeStyle = 'rgba(255,240,180,.75)'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(-w * 0.42, y - hh + 0.8); c.lineTo(-w * 0.2, y - hh + 0.8); c.stroke();
+    };
+    for (let q = 0; q < 6; q++) ring(-h + 8 + q * 9, 9, 1 - q * 0.1);
+    const rb = ['rgba(255,140,170,.28)', 'rgba(255,230,140,.32)', 'rgba(150,255,200,.28)', 'rgba(140,200,255,.28)'];
+    for (let q = 0; q < 11; q++) { const y = q < 6 ? -h + 12 + q * 9 : -8 - (q - 6) * 9 + 4; c.fillStyle = rb[q % 4]; lighthouseEll(c, w * (0.18 + 0.04 * (q % 3)), y, 5, 1.6); c.fill(); }
+    for (let q = 0; q < 5; q++) ring(-8 - q * 9 + 9, 9, 0.5 + q * 0.1);
+    // the belt: vertical refracting panels round the bullseye
+    const bt = -h + 62, bb = -50;
+    c.fillStyle = lighthouseLG(-w / 2, 0, w / 2, 0, ['rgba(40,90,150,.35)', 'rgba(220,255,250,.35)', 'rgba(40,90,150,.2)', 'rgba(220,255,250,.25)', 'rgba(40,90,150,.35)'], c); c.fillRect(-w, bt, w * 2, bb - bt);
+    // the bullseye: concentric rings of glass, a hot centre
+    const by = (bt + bb) / 2;
+    for (let r = 34; r > 4; r -= 6) { c.fillStyle = lighthouseRG(-r * 0.25, by - r * 0.25, r, ['rgba(255,255,255,.5)', 'rgba(150,220,235,.3)', 'rgba(40,100,150,.35)'], c); lighthouseCirc(c, 0, by, r); c.fill(); c.strokeStyle = 'rgba(30,70,110,.45)'; c.lineWidth = 0.7; c.stroke(); c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 0.8; c.beginPath(); c.arc(0, by, r - 1, 3.5, 4.6); c.stroke(); }
+    c.restore();
+    // the brass cage: vertical ribs following the barrel, rings top, belt and bottom
+    c.strokeStyle = B[3]; c.lineWidth = 1.8; c.beginPath();
+    for (const f of [-0.82, 0.82]) { c.moveTo(f * w * 0.36, 0); c.bezierCurveTo(f * w * 0.56, -h * 0.25, f * w * 0.56, -h * 0.75, f * w * 0.3, -h); }
+    c.stroke(); c.strokeStyle = B[1]; c.lineWidth = 0.9; c.stroke();
+    for (const [y, ww] of [[0, 0.36], [bt, 0.53], [bb, 0.53], [-h, 0.3]]) {
+      c.fillStyle = lighthouseLG(0, y - 4, 0, y + 4, [B[0], B[2], B[3]], c); lighthouseRRect(c, -w * ww - 3, y - 3.5, (w * ww + 3) * 2, 7, 3); c.fill();
+      c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 0.7; c.stroke();
+      c.fillStyle = 'rgba(255,252,230,.8)'; c.fillRect(-w * ww, y - 2.6, w * ww * 1.2, 1);
+    }
+    c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-w * 0.4, -h * 0.2); c.bezierCurveTo(-w * 0.5, -h * 0.4, -w * 0.5, -h * 0.6, -w * 0.36, -h * 0.85); c.stroke();
+    // the cap and finial
+    c.fillStyle = lighthouseLG(-20, 0, 20, 0, [B[0], B[1], B[2], B[3]], c); c.beginPath(); c.moveTo(-w * 0.3, -h - 3); c.quadraticCurveTo(0, -h - 26, w * 0.3, -h - 3); c.closePath(); c.fill(); c.strokeStyle = LIGHTHOUSE_P.brassE; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = lighthouseRG(-1.4, -h - 26, 5, [B[0], B[1], B[3]], c); lighthouseCirc(c, 0, -h - 24, 4.2); c.fill();
+  });
+}
+// The keeper's ghost (cached body in world units round his middle, y down; arm, eyes, bob and glow live): a plump
+// pale-green ghost with a wispy tail, a navy peaked cap with a brass badge, a big white beard and moustache, rosy cheeks,
+// round spectacles, a brass oil can in his right hand.
+function lighthouseKeeperBody() {
+  return lighthousePiece('keeper', -36, 36, -56, 56, c => {
+    const G2 = LIGHTHOUSE_P.ghost;
+    // the body and tail
+    c.fillStyle = lighthouseLG(-26, -40, 22, 50, ['rgba(244,255,250,.95)', 'rgba(170,246,220,.88)', 'rgba(90,200,170,.6)', 'rgba(60,170,150,0)'], c);
+    c.beginPath(); c.moveTo(-24, -18); c.bezierCurveTo(-30, 10, -22, 30, -10, 40); c.quadraticCurveTo(0, 46, 6, 52); c.quadraticCurveTo(4, 40, 14, 36); c.bezierCurveTo(26, 22, 30, 0, 24, -18); c.quadraticCurveTo(0, -38, -24, -18); c.fill();
+    c.strokeStyle = 'rgba(70,170,150,.55)'; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-20, -14); c.quadraticCurveTo(-25, 6, -16, 24); c.stroke();
+    // the head
+    c.fillStyle = lighthouseRG(-5, -32, 20, [G2[0], G2[1], 'rgba(120,220,190,.9)'], c); lighthouseEll(c, 0, -28, 16, 15); c.fill();
+    // the beard and moustache
+    c.fillStyle = lighthouseLG(0, -28, 0, 4, ['#ffffff', '#e6f4ee', '#b8dccc'], c); c.beginPath(); c.moveTo(-14, -26); c.quadraticCurveTo(-18, -6, -6, 2); c.quadraticCurveTo(0, 6, 6, 2); c.quadraticCurveTo(18, -6, 14, -26); c.quadraticCurveTo(0, -18, -14, -26); c.fill();
+    c.strokeStyle = 'rgba(150,200,180,.7)'; c.lineWidth = 0.7; c.beginPath(); for (const x of [-7, 0, 7]) { c.moveTo(x, -16); c.quadraticCurveTo(x + 1, -8, x * 0.6, -2); } c.stroke();
+    c.fillStyle = '#ffffff'; for (const e of [-1, 1]) { c.beginPath(); c.moveTo(0, -22); c.quadraticCurveTo(e * 8, -26, e * 12, -20); c.quadraticCurveTo(e * 6, -21, 0, -19); c.fill(); }
+    c.fillStyle = '#f0a8b0'; lighthouseEll(c, 0, -24.5, 2.6, 2); c.fill();
+    c.fillStyle = 'rgba(255,150,170,.4)'; for (const e of [-1, 1]) { lighthouseEll(c, e * 9, -25, 3, 1.8); c.fill(); }
+    // the cap
+    c.fillStyle = lighthouseLG(0, -48, 0, -36, ['#4a5c9a', '#2c3a6e', '#1e2850'], c); c.beginPath(); c.moveTo(-15, -37); c.quadraticCurveTo(-17, -48, -2, -50); c.quadraticCurveTo(16, -50, 15, -37); c.closePath(); c.fill();
+    c.fillStyle = '#18203e'; c.beginPath(); c.moveTo(-16, -37); c.quadraticCurveTo(0, -33, 16, -37); c.quadraticCurveTo(10, -31, -2, -32); c.quadraticCurveTo(-12, -33, -16, -37); c.fill();
+    c.strokeStyle = 'rgba(160,180,240,.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-12, -46); c.quadraticCurveTo(-4, -49, 6, -48.6); c.stroke();
+    c.fillStyle = lighthouseRG(-0.5, -42, 3.4, LIGHTHOUSE_P.brass.slice(0, 3), c); lighthouseCirc(c, 0, -41.4, 2.8); c.fill();
+    // the spectacles' rims (eyes live)
+    c.strokeStyle = '#c89a4a'; c.lineWidth = 0.9; for (const e of [-1, 1]) { lighthouseCirc(c, e * 5.6, -30, 4.2); c.stroke(); } c.beginPath(); c.moveTo(-1.4, -30); c.lineTo(1.4, -30); c.stroke();
+    // the left arm resting on his tummy
+    c.fillStyle = 'rgba(200,250,232,.95)'; lighthouseEll(c, -10, 8, 9, 5, 0.4); c.fill(); c.strokeStyle = 'rgba(70,170,150,.5)'; c.lineWidth = 0.7; c.stroke();
+  });
+}
+function lighthouseKeeper(T, bob, cheer, blink) {
+  const B = LIGHTHOUSE_P.brass;
+  lighthouseGlow(0, bob - 10, 64, LIGHTHOUSE_P.ghostC, 0.18 + 0.12 * cheer);
+  ctx.save(); ctx.translate(0, bob); ctx.rotate(Math.sin(T * 1.3) * 0.04);
+  // the right arm: polishing the lens with his cloth (rubbing in little circles), or waving the oil can up high on the clear
+  const wave = cheer > 0 ? -1.8 * cheer + Math.sin(T * 9) * 0.3 * cheer : 0, rub = cheer > 0 ? 0 : Math.sin(T * 5) * 0.25;
+  ctx.save(); ctx.translate(18, -8); ctx.rotate(-0.4 + wave + rub);
+  ctx.fillStyle = 'rgba(200,250,232,.95)'; lighthouseEll(ctx, 10, 0, 12, 4.6); ctx.fill(); ctx.strokeStyle = 'rgba(70,170,150,.5)'; ctx.lineWidth = 0.7; ctx.stroke();
+  // the oil can in his hand
+  ctx.translate(22, 0); ctx.rotate(0.4 - wave * 0.6);
+  ctx.fillStyle = lighthouseLG(-6, 0, 6, 0, [B[0], B[2], B[3]]); ctx.beginPath(); ctx.moveTo(-6, 6); ctx.lineTo(-5, -4); ctx.quadraticCurveTo(0, -8, 5, -4); ctx.lineTo(6, 6); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = LIGHTHOUSE_P.brassE; ctx.lineWidth = 0.6; ctx.stroke();
+  ctx.strokeStyle = B[2]; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(3, -5); ctx.lineTo(12, -14); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,252,230,.8)'; ctx.fillRect(-4, -3, 1, 8);
+  ctx.restore();
+  lighthouseBlit(lighthouseKeeperBody(), 0, 0);
+  // the eyes behind his spectacles (happy arcs when he cheers, a blink now and then), a smile under the moustache
+  ctx.strokeStyle = '#2a4a50'; ctx.fillStyle = '#2a4a50'; ctx.lineWidth = 1.2;
+  for (const e of [-1, 1]) {
+    if (cheer > 0.3) { ctx.beginPath(); ctx.arc(e * 5.6, -29, 2, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+    else if (blink) { ctx.beginPath(); ctx.moveTo(e * 5.6 - 1.8, -30); ctx.lineTo(e * 5.6 + 1.8, -30); ctx.stroke(); }
+    else { lighthouseEll(ctx, e * 5.6, -30, 1.3, 1.7); ctx.fill(); ctx.fillStyle = '#fff'; lighthouseCirc(ctx, e * 5.6 - 0.5, -30.6, 0.5); ctx.fill(); ctx.fillStyle = '#2a4a50'; }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; for (const e of [-1, 1]) { ctx.beginPath(); ctx.arc(e * 5.6, -30, 4.2, 3.6, 4.6); ctx.lineTo(e * 5.6, -30); ctx.fill(); }
+  if (cheer > 0.3) { ctx.fillStyle = '#7a3a4a'; ctx.beginPath(); ctx.ellipse(0, -16.5, 3.4, 2.4 * cheer, 0, 0, Math.PI); ctx.fill(); }
+  ctx.restore();
+}
+function drawLighthouseDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t, F = LIGHTHOUSE_FIN, P = LIGHTHOUSE_P;
+  if (y < -260 || y - (900 * s) > H + 200) return;
+  lighthouseCacheCheck();
+  const rm = lighthouseRoomRender(E), ct = a.clearT >= 0 ? a.clearT : -1, pay = ct >= 0 ? Math.min(1, ct * 1.6) : 0;
+  ctx.drawImage(rm.cv, ox + rm.xa * s, sy(rm.a1), rm.w, rm.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 120; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 120; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  const mx = sx(rm.mid), ly = sy(E + F.lens + 80), idle = 0.32 + 0.06 * Math.sin(T * 1.7);
+  // the far headland's little light winking
+  for (const [k, x, al] of rm.lights) if (k === 'far') lighthouseGlow(sx(x), sy(al), 10 * s, [255, 220, 150], 0.4 + 0.4 * Math.max(0, Math.sin(T * 1.4)) ** 6);
+  // the beams sweeping out over the sea through the glass (a slow turn idle, blazing and quicker on the clear)
+  { const bs = lighthouseBeamSprite(), turn = T * (0.5 + 1.1 * pay), L2 = Math.max(cssW, H) * 0.9, wide = 0.8 + 0.4 * pay;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let q = 0; q < 2; q++) {
+      const an = turn + q * Math.PI, face = Math.cos(an), al = (0.1 + 0.9 * pay) * (0.6 + 0.4 * Math.max(0, face));
+      if (al < 0.01) continue;
+      const side = Math.sin(an) > 0 ? 1 : -1, len = L2 * (0.25 + 0.75 * Math.abs(Math.sin(an)));
+      const kk = len / (LIGHTHOUSE.lamp.len * s);
+      ctx.save(); ctx.translate(mx, ly); ctx.rotate(side > 0 ? -Math.PI / 2 + 0.06 : Math.PI / 2 - 0.06); ctx.scale(kk * wide, kk); ctx.globalAlpha = Math.min(1, al);
+      ctx.drawImage(bs.cv, -bs.ax, -bs.ay, bs.w, bs.h); if (pay > 0.2) { ctx.scale(0.55, 1); ctx.drawImage(bs.cv, -bs.ax, -bs.ay, bs.w, bs.h); } ctx.restore();
+    }
+    ctx.restore(); }
+  // the lamp inside the lens and the lens itself
+  lighthouseGlow(mx, ly, (90 + 120 * pay) * s, [255, 226, 150], idle + 0.45 * pay);
+  { const sp = lighthouseLensSprite(); lighthouseBlit(sp, mx, sy(E + F.lens)); }
+  lighthouseGlow(mx, ly, (22 + 30 * pay) * s, [255, 250, 230], 0.6 + 0.4 * pay);
+  lighthouseTwinkle(ctx, mx - 30 * s, sy(E + F.lens + 140), (5 + 6 * pay) * s, 0.4 + 0.5 * Math.max(0, Math.sin(T * 2.1)) ** 4 + 0.4 * pay);
+  // the clockwork's cog turning behind its window
+  if (rm.cog) { const [cx, ca] = rm.cog; ctx.save(); ctx.translate(sx(cx), sy(ca)); ctx.rotate(T * (0.6 + 2 * pay)); ctx.strokeStyle = P.brass[2]; ctx.lineWidth = 1.6 * s; ctx.beginPath(); for (let q = 0; q < 8; q++) { const an = q / 8 * TWO_PI; ctx.moveTo(Math.cos(an) * 3 * s, Math.sin(an) * 3 * s); ctx.lineTo(Math.cos(an) * 6.6 * s, Math.sin(an) * 6.6 * s); } ctx.stroke(); ctx.fillStyle = P.brass[1]; lighthouseCirc(ctx, 0, 0, 3.4 * s); ctx.fill(); ctx.restore(); }
+  // the keeper floating beside his lens
+  { const kx = mx + 122 * s, ky = sy(E + 150); if (ky > -160 && ky < H + 120) {
+    const cheer = ct >= 0 ? smooth(0, 0.3, ct) : 0, bob = Math.sin(T * 1.6) * 4 + (cheer ? -Math.abs(Math.sin(T * 5)) * 5 * cheer : 0), blink = pmod(T / 3.7, 1) < 0.04;
+    ctx.save(); ctx.translate(kx, ky); ctx.scale(-F.keeper * s, F.keeper * s); lighthouseKeeper(T, bob, cheer, blink); ctx.restore();
+    // a few ghostly notes as he hums (idle) or sparkles round him (cheer)
+    for (let q = 0; q < 3; q++) { const u = pmod(T * 0.35 + q / 3, 1), nx = kx + (14 + q * 8 + Math.sin(u * 6 + q) * 6) * s, ny = ky - (40 + u * 50) * s, al = Math.sin(u * Math.PI) * (0.7 - 0.4 * cheer);
+      ctx.fillStyle = `rgba(190,255,230,${al})`; lighthouseEll(ctx, nx, ny, 2.4 * s, 1.8 * s, -0.4); ctx.fill(); ctx.strokeStyle = `rgba(190,255,230,${al})`; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(nx + 2.2 * s, ny); ctx.lineTo(nx + 2.2 * s, ny - 8 * s); ctx.quadraticCurveTo(nx + 5 * s, ny - 7 * s, nx + 6 * s, ny - 4 * s); ctx.stroke(); }
+  } }
+  // the payoff: gold sparks drifting down through the room
+  if (pay > 0) for (let q = 0; q < 22; q++) {
+    const u = pmod(T * (0.16 + 0.1 * hash2(q, 6231)) + hash2(q, 6232), 1), x = lerp(rm.xl + 20, rm.xr - 20, hash2(q, 6233)) + Math.sin(u * 8 + q) * 12, al = E + 640 - u * 620, a2 = Math.min(1, pay * 2) * Math.sin(u * Math.PI);
+    lighthouseTwinkle(ctx, sx(x), sy(al), (3 + 3 * hash2(q, 6234)) * s, a2, q % 3 ? [255, 236, 170] : [190, 255, 230]);
+  }
+  ctx.restore();
+  // ---- the deck: two iron grating half-floors sliding out of the walls to meet, a brass kick-plate along their edges
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, I = P.iron, B = P.brass;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 12 : R + 12), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet, e)), th = 10 * s, xa = Math.min(X0, X1), w = Math.abs(X1 - X0);
+    if (w < 2) continue;
+    // an iron bracket under it into the wall
+    ctx.fillStyle = lighthouseLG(0, y, 0, y + 40 * s, [I[1], I[2], I[3]]); ctx.beginPath(); ctx.moveTo(X0, y + th); ctx.lineTo(X0 - side * 34 * s, y + th); ctx.quadraticCurveTo(X0 - side * 10 * s, y + th + 10 * s, X0, y + th + 40 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.ironE; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    // the grating: a dark frame, a lattice of bars (lit tops), a brass kick-plate on top
+    ctx.fillStyle = lighthouseLG(0, y, 0, y + th, [I[1], I[2], I[3]]); lighthouseRRect(ctx, xa, y, w, th, 2 * s); ctx.fill();
+    ctx.strokeStyle = P.ironE; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    ctx.fillStyle = 'rgba(20,20,46,.75)'; for (let x = xa + 4 * s; x < xa + w - 6 * s; x += 7 * s) ctx.fillRect(x, y + 2.4 * s, 4 * s, th - 4.8 * s);
+    ctx.strokeStyle = 'rgba(214,214,246,.5)'; ctx.lineWidth = 0.7 * s; ctx.beginPath(); ctx.moveTo(xa + 2 * s, y + 1.4 * s); ctx.lineTo(xa + w - 2 * s, y + 1.4 * s); ctx.stroke();
+    ctx.fillStyle = lighthouseLG(0, y - 3 * s, 0, y + 1 * s, [B[0], B[2]]); lighthouseRRect(ctx, xa, y - 3 * s, w, 4 * s, 1.6 * s); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,240,.75)'; ctx.fillRect(xa + 3 * s, y - 2.4 * s, Math.max(0, w - 6 * s), 0.9 * s);
+    ctx.fillStyle = B[3]; for (let x = xa + 8 * s; x < xa + w - 4 * s; x += 22 * s) { lighthouseCirc(ctx, x, y - 1 * s, 0.9 * s); ctx.fill(); }
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (lighthouseOn()) drawLighthouseDeck(); else base(); }; }
+// the payoff: the foghorn, the lens blazing, gold and ghost-green sparks bursting up round you, rings, a warm flash
+function lighthouseClearBurst() {
+  const a = G.adv, p = G.p;
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; lighthouseFx('spark', p.x, a.end + 40, Math.cos(an) * 300, Math.sin(an) * 300 + 100, 0.7, 2.2, { col: k % 3 ? [255, 226, 150] : [170, 255, 220] }); }
+  for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; lighthouseFx('wisp', p.x, a.end + 40, Math.cos(an) * 140, Math.sin(an) * 140 + 60, 1.2, 8); }
+  for (let k = 0; k < 3; k++) lighthouseFx('ring', p.x, a.end + 40, 0, 0, 0.6 + k * 0.15, 60 + k * 40, { flat: 0.7, col: [255, 230, 170] });
+  puff(p.x, a.end + 30, 0, 40, 0.7, 22, 'star');
+  sfx('lhorn');
+  G.flashCol = [255, 226, 170];
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (lighthouseOn() && !boss) lighthouseClearBurst(); }; }
+// ---- luna moths: three big pale-green moths fluttering in daring spots (a thorn's reach, a phantom's lane, a hand's
+// grab), drawn to the light; worth a big coin each. And the stage's moth and phantom missions ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'lighthouseMoth') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.lighthouseMoth = (st.lighthouseMoth || 0) + 1, of = advGoalN('lighthouseMoth');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Luna moth ${n}/${of}!` : 'Luna moth!', '#d8ffd0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [214, 255, 220];
+  for (let k = 0; k < 14; k++) { const an = k / 14 * TWO_PI; lighthouseFx('spark', f.x, f.alt, Math.cos(an) * 200, Math.sin(an) * 200, 0.55, 2, { col: k % 3 ? [214, 255, 200] : [255, 236, 170] }); }
+  for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; lighthouseFx('wisp', f.x, f.alt, Math.cos(an) * 90, Math.sin(an) * 90, 0.8, 5, { col: [200, 255, 210] }); }
+  for (let k = 0; k < 3; k++) lighthouseFx('ring', f.x, f.alt, 0, 0, 0.5 + k * 0.15, 30 + k * 22, { flat: 1, col: [220, 255, 220] });
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#d8ffd0', big: true, sub: 'luna moth' });
+  vibrate([20, 30, 20]); sfx('lmoth');
+}; }
+// The moth (round its body's middle, world units, y down): two forewings and two hindwings that sweep back into long
+// curling tails, pale green shading to lemon at the edges with a lilac-brown leading edge, an eyespot on each wing, a
+// fuzzy white body, feathery gold antennae. One wing is cached; flapping squashes each wing across (live).
+function lighthouseWingSprite() {
+  return lighthousePiece('mwing', -2, 34, -22, 42, c => {
+    const M = LIGHTHOUSE_P.moth;
+    // the hindwing and its long tail
+    c.fillStyle = lighthouseLG(0, 0, 26, 36, [M[1], M[2], M[3]], c);
+    c.beginPath(); c.moveTo(1, 2); c.bezierCurveTo(16, 2, 22, 12, 18, 20); c.bezierCurveTo(16, 26, 20, 34, 26, 40); c.quadraticCurveTo(14, 36, 12, 26); c.quadraticCurveTo(6, 20, 1, 10); c.closePath(); c.fill();
+    c.strokeStyle = '#5a9a7a'; c.lineWidth = 0.7; c.stroke();
+    // the forewing
+    c.fillStyle = lighthouseLG(0, -20, 30, 6, [M[0], M[1], M[2]], c);
+    c.beginPath(); c.moveTo(1, -2); c.bezierCurveTo(8, -14, 22, -21, 32, -19); c.bezierCurveTo(31, -10, 26, 0, 16, 5); c.quadraticCurveTo(8, 6, 1, 4); c.closePath(); c.fill();
+    c.strokeStyle = '#5a9a7a'; c.lineWidth = 0.7; c.stroke();
+    // the lilac leading edge, a lemon rim along the trailing edges
+    c.strokeStyle = '#a07aa8'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(2, -3); c.bezierCurveTo(9, -14, 22, -20, 31, -19); c.stroke();
+    c.strokeStyle = 'rgba(255,250,170,.8)'; c.lineWidth = 1; c.beginPath(); c.moveTo(31, -17); c.bezierCurveTo(30, -9, 25, 0, 16, 4); c.moveTo(18, 21); c.bezierCurveTo(17, 27, 20, 34, 25, 39); c.stroke();
+    // the veins
+    c.strokeStyle = 'rgba(80,150,110,.45)'; c.lineWidth = 0.5; c.beginPath(); for (const [x, y] of [[26, -14], [24, -4], [16, 2]]) { c.moveTo(2, 0); c.quadraticCurveTo(x * 0.5, y * 0.4, x, y); } for (const [x, y] of [[16, 14], [14, 24]]) { c.moveTo(2, 6); c.quadraticCurveTo(x * 0.6, y * 0.5, x, y); } c.stroke();
+    // the eyespots (a ring of lilac and gold round a clear centre)
+    for (const [x, y, r] of [[17, -7, 3.4], [12, 14, 2.6]]) {
+      c.fillStyle = '#8a5a8a'; lighthouseCirc(c, x, y, r); c.fill();
+      c.fillStyle = '#ffd86a'; lighthouseCirc(c, x, y, r * 0.66); c.fill();
+      c.fillStyle = '#eafff0'; lighthouseCirc(c, x - r * 0.15, y - r * 0.15, r * 0.34); c.fill();
+    }
+    c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1; c.beginPath(); c.moveTo(5, -4); c.quadraticCurveTo(12, -12, 22, -16); c.stroke();
+  });
+}
+function lighthouseMothBody() {
+  return lighthousePiece('mbody', -10, 10, -20, 20, c => {
+    // the antennae (feathery)
+    c.strokeStyle = '#d8b060'; c.lineWidth = 0.8;
+    for (const e of [-1, 1]) {
+      c.beginPath(); c.moveTo(e * 1.4, -9); c.quadraticCurveTo(e * 4, -15, e * 8, -18); c.stroke();
+      c.beginPath(); for (let q = 1; q < 6; q++) { const v = q / 6, x = lerp(e * 1.4, e * 8, v), y = lerp(-9, -18, v) - Math.sin(v * Math.PI) * 1.6; c.moveTo(x, y); c.lineTo(x - e * 1.6, y - 1.6); c.moveTo(x, y); c.lineTo(x + e * 1.4, y + 1.2); } c.stroke();
+    }
+    // the fuzzy body
+    c.fillStyle = lighthouseLG(-3, 0, 3, 0, ['#ffffff', '#eef4e8', '#bcd0bc'], c); lighthouseEll(c, 0, 1, 3.4, 9.5); c.fill();
+    c.strokeStyle = 'rgba(160,180,160,.7)'; c.lineWidth = 0.5; c.beginPath(); for (let q = 0; q < 4; q++) { c.moveTo(-3, -1 + q * 3); c.quadraticCurveTo(0, q * 3, 3, -1 + q * 3); } c.stroke();
+    c.fillStyle = lighthouseRG(-0.8, -8, 3.4, ['#ffffff', '#e4ecdc'], c); lighthouseCirc(c, 0, -7.6, 3); c.fill();
+    c.fillStyle = '#3a2a40'; for (const e of [-1, 1]) { lighthouseCirc(c, e * 1.5, -8, 0.9); c.fill(); }
+    c.fillStyle = '#fff'; for (const e of [-1, 1]) { lighthouseCirc(c, e * 1.5 - 0.3, -8.3, 0.3); c.fill(); }
+  });
+}
+function drawLighthouseMothArt(t, ph, sc = 1) {
+  const flap = Math.sin(t * 7 + ph), k = 0.35 + 0.65 * Math.abs(flap), bob = Math.sin(t * 1.9 + ph) * 3, sw = Math.sin(t * 1.3 + ph) * 0.12;
+  lighthouseGlow(0, bob, 40 * sc, [210, 255, 210], 0.3 + 0.1 * Math.sin(t * 3 + ph));
+  ctx.save(); ctx.translate(0, bob); ctx.rotate(sw);
+  const wing = lighthouseWingSprite(), body = lighthouseMothBody();
+  for (const e of [-1, 1]) { ctx.save(); ctx.scale(e * k * sc, sc); ctx.drawImage(wing.cv, -wing.ax / s * 1, -wing.ay / s, wing.w / s, wing.h / s); ctx.restore(); }
+  ctx.save(); ctx.scale(sc, sc); ctx.drawImage(body.cv, -body.ax / s, -body.ay / s, body.w / s, body.h / s); ctx.restore();
+  ctx.restore();
+  const v = (t * 0.6 + ph) % 1, a = Math.sin(v * Math.PI);
+  lighthouseTwinkle(ctx, 20 * sc, -18 * sc + bob, 5 * a * sc, 0.9 * a, [230, 255, 220]);
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'lighthouseMoth')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'lighthouseMoth');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'lighthouseMoth') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawLighthouseMothArt(G.t, f.alt * 0.05 + f.x * 0.01, 0.62); ctx.restore();
+  }
+}; }
+// the moth and phantom missions (stars), and their counts on the HUD under the others
+ADV_GOALS.lighthouseMoth = { text: g => `Catch all ${g.n} luna moths`, done: (r, g) => (r.stats.lighthouseMoth || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.lighthouseMoth || 0)}/${g.n}` };
+ADV_GOALS.lighthouseGhost = { text: g => `Fly through ${g.n} phantoms in the dark`, done: (r, g) => (r.stats.lighthouseGhost || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.lighthouseGhost || 0)}/${g.n}` };
+function lighthouseGhostIcon() {
+  // a little phantom (about 20 across): a pale sheet with a wavy hem, two eyes, a dashed arrow through it
+  ctx.fillStyle = lighthouseLG(0, -10, 0, 10, ['#f4fffa', '#a6f6dc', '#52bea8']); ctx.beginPath(); ctx.moveTo(-8, 9); ctx.lineTo(-8, -2); ctx.quadraticCurveTo(-8, -11, 0, -11); ctx.quadraticCurveTo(8, -11, 8, -2); ctx.lineTo(8, 9); for (let q = 0; q < 4; q++) ctx.quadraticCurveTo(6 - q * 4, 5, 4 - q * 4, 9); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = LIGHTHOUSE_P.ghostE; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.fillStyle = '#1e3a40'; for (const e of [-1, 1]) { lighthouseEll(ctx, e * 3, -3, 1.4, 2); ctx.fill(); }
+  ctx.strokeStyle = '#fff3b0'; ctx.lineWidth = 1.6; ctx.setLineDash([2.4, 2]); ctx.beginPath(); ctx.moveTo(-13, 6); ctx.lineTo(11, -6); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#fff3b0'; ctx.beginPath(); ctx.moveTo(14, -7.6); ctx.lineTo(8, -8.4); ctx.lineTo(11, -3); ctx.closePath(); ctx.fill();
+}
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv; if (!a || !a.st || a.st.theme !== 'lighthouse') return;
+  const goals = advGoalList(a.lv, a.st);
+  let row = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  for (const k of ['lighthouseMoth', 'lighthouseGhost']) {
+    const g = goals.find(q => q.k === k); if (!g) continue;
+    const n = G.stats[k] || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * row, txt = `${Math.min(n, g.n)}/${g.n}`;
+    ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(14,18,44,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#d8ffd0' : '#eef2ff'; ctx.fillText(txt, xr, y);
+    ctx.translate(xr - tw - 13, y); ctx.scale(0.62, 0.62);
+    if (k === 'lighthouseMoth') { ctx.scale(0.8, 0.8); drawLighthouseMothArt(G.t, 0, 0.62); } else lighthouseGhostIcon();
+    ctx.restore();
+    row++;
+  }
+}; }
+// The stage on the island: level 34 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'lighthouse' || (G.level && G.level.lighthouse)) return;
+  G.level = createLighthouseLevel(G.seed, st); G.lighthouseT = 0; G.lighthouseFx = [];
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Lantern Room ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the tower's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) {
+  window.CRL = { LIGHTHOUSE, LIGHTHOUSE_STAGE, lighthouseShapes, lighthouseDanger, lighthousePhantomState, lighthouseLanternState, lighthouseShadowReach, lighthouseBeamAng, lighthouseLit, createLighthouseLevel, cache: LIGHTHOUSE_CACHE, scr: (x, a) => [sx(x), sy(a)] };
+  const base = die; die = function (cause, h) {
+    if (lighthouseOn()) try { const R = q => q.k === 'c' ? [q.x, q.a, q.r].map(Math.round) : q.k === 's' ? [q.x0, q.a0, q.x1, q.a1, q.r].map(Math.round) : ['b', q.x0, q.x1, q.a0, q.a1].map(v => typeof v === 'number' ? Math.round(v) : v); window.CRL.lastDie = { cause, T: G.lighthouseT, t: G.t, p: [G.p.x, G.p.alt, G.p.vy].map(Math.round), caps: pCaps.map(c => [c.x0, c.a0, c.x1, c.a1, c.r].map(Math.round)), S: h && hazardShapes && h.type ? hazardShapes(h).map(R) : null, stack: new Error().stack.split('\n').slice(1, 5).join(' | ') }; } catch (e) { window.CRL.lastDie = String(e); }
+    return base.apply(this, arguments);
+  };
+}
 // (game slot: Haunted Lighthouse, island level 34)
 // (game slot: Wizard's Spire, island level 35)
 // (game slot: Starfall Summit, island level 36)

@@ -4613,6 +4613,164 @@ const toyboxStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick:
 const toyboxSummary = () => `PASS: Toybox Tower: ${toyboxStats.seeds} layouts × ${toyboxStats.len} m, only its own traps (${Object.entries(toyboxStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${toyboxStats.minW.toFixed(0)}+ wide, toy-stack wall slope ${toyboxStats.slope.toFixed(2)} (max ${TB.RULES.maxWallSlope}); open lanes at every moment past jacks ${toyboxStats.lane.toyboxJack.toFixed(0)}+, marches ${toyboxStats.lane.toyboxMarch.toFixed(0)}+, tops ${toyboxStats.lane.toyboxTop.toFixed(0)}+ (both sides of it), yo-yos ${toyboxStats.lane.toyboxYoyo.toFixed(0)}+ (minLane ${TB.RULES.minLane}), beats ${toyboxStats.beatGap.toFixed(0)}+ apart; pickups ${toyboxStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${toyboxStats.rolls} tops to dodge; ${toyboxStats.traps} beats and ${toyboxStats.stars} golden teddies (reach and escape) flown by the widest pilot in ${toyboxStats.searches} searches, the slowest pass ${toyboxStats.worst.toFixed(1)} s`;
 // (test slot: Toybox Tower, island level 32)
 // (test slot: Monkey Carnival, island level 33)
+// ---------- Adventure: Haunted Lighthouse (island level 34), an authored stage with its own traps ----------
+// As the caverns' checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), then every beat and every luna moth flown by a time-space search for the widest pilot on the traps'
+// own clocks (and their lamps' swings: a thorn stem or a phantom is solid only in the beam, a shadow hand only out of it)
+// from several start phases.
+const LH = new Function(regions.join('\n') + '\nreturn { createLighthouseLevel, lighthouseShapes, lighthouseDanger, lighthouseEnd, lighthouseLit, lighthouseBeamOff, lighthouseShadowReach, lighthousePhantomState, lighthouseLanternState, LIGHTHOUSE, LIGHTHOUSE_STAGE, LIGHTHOUSE_TYPES, ADV_LIGHTHOUSE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const lighthouseStats = { seeds: 0, traps: 0, searches: 0, worst: 0, moths: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { lighthouseThorn: Infinity, lighthouseLantern: Infinity, lighthouseShadow: Infinity }, len: 0, kinds: {}, beatGap: Infinity, lamps: 0, beamGap: Infinity, phantoms: 0, litFrac: {} };
+{
+  const R = LH.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = LH.ADV_LIGHTHOUSE, X = LH.LIGHTHOUSE;
+  const lfail = (rule, d) => fail('lighthouse: ' + rule, d);
+  if (st0.theme !== 'lighthouse' || !(st0.reward > 0)) lfail('the lighthouse is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'lighthouseMoth' && g.n === 3) || !st0.goals.some(g => g.k === 'lighthouseGhost' && g.n > 0)) lfail('three missions: the lantern room, 3 moths and the phantoms', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * LH.UNITS_PER_M - LH.lighthouseEnd()) > 1e-6) lfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: thorns, then phantoms, then lanterns, then shadow hands, each taught alone; never faster than taught
+  {
+    const fam = { thorn: 'thorn', thornPair: 'thorn', phantom: 'phantom', phantomPair: 'phantom', phantomThorn: 'phantom', lantern: 'lantern', lanternPair: 'lantern', lanternThorn: 'lantern', lanternPhantom: 'lantern', shadow: 'shadow', shadowThorn: 'shadow', shadowLantern: 'shadow', shadowPhantom: 'shadow' };
+    const firsts = {}, seen = [];
+    for (const sec of LH.LIGHTHOUSE_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { lfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) lfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+    }
+    if (seen.join() !== 'thorn,phantom,lantern,shadow') lfail('the lighthouse teaches thorns, phantoms, lanterns, then shadow hands', seen.join());
+    if (!LH.LIGHTHOUSE_STAGE.some(sec => sec.calm && !sec.finish && sec !== LH.LIGHTHOUSE_STAGE[0])) lfail('the lighthouse has a breather', '');
+    if (!LH.LIGHTHOUSE_STAGE[LH.LIGHTHOUSE_STAGE.length - 1].finish) lfail('the stage ends at the Lantern Room', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (LH.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  const span = q => { const r = q.r || 0; return q.k === 'c' ? [q.a - r, q.a + r] : [Math.min(q.a0, q.a1) - r, Math.max(q.a0, q.a1) + r]; };
+  // the search (as the caverns'): solid = every lethal shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) LH.lighthouseShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = LH.createLighthouseLevel(LH.advSeed(st), st), hz = [], fr = [];
+    lighthouseStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) lfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) lfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    lighthouseStats.len = level.end / 10;
+    for (const h of hz) if (!LH.LIGHTHOUSE_TYPES.has(h.type)) lfail('the lighthouse only has its own traps', h.type);
+    for (const h of hz) lighthouseStats.kinds[h.type.slice(10)] = (lighthouseStats.kinds[h.type.slice(10)] || 0) + (k ? 0 : 1);
+    if (!k) { lighthouseStats.lamps = level.lamps.length; lighthouseStats.phantoms = hz.filter(h => h.type === 'lighthousePhantom').length; }
+    if (hz.filter(h => h.type === 'lighthousePhantom').length < st0.goals.find(g => g.k === 'lighthouseGhost').n + 2) lfail('the lighthouse has more phantoms than the phantom mission needs', '');
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); lighthouseStats.beatGap = Math.min(lighthouseStats.beatGap, g); if (g < 0) lfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) lfail('the lantern room below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      lighthouseStats.minW = Math.min(lighthouseStats.minW, r - l); lighthouseStats.slope = Math.max(lighthouseStats.slope, l2 - l, r - r2);
+    }
+    if (lighthouseStats.minW < R.minWidth) lfail('the shaft is never narrower than minWidth', lighthouseStats.minW.toFixed(1));
+    if (lighthouseStats.slope > R.maxWallSlope) lfail('the walls never step in faster than maxWallSlope', lighthouseStats.slope.toFixed(2));
+    // every lit trap answers only to its own lamp: no other lamp's beam ever reaches anywhere it can be
+    for (const h of hz) if (h.lamp) for (const L of level.lamps) {
+      if (L === h.lamp) continue;
+      let dmin = Infinity; for (const q of LH.lighthouseDanger(h)) { const [a0, a1] = span(q), [x0, x1] = ext([q]); for (const a of [a0, a1]) for (const x of [x0, x1]) if (a < L.alt - 8) dmin = Math.min(dmin, Math.hypot(x - L.x, a - L.alt)); }
+      lighthouseStats.beamGap = Math.min(lighthouseStats.beamGap, dmin - L.len);
+      if (dmin < L.len + 10) { lfail('a lamp\'s beam never reaches another beat\'s traps', `${h.type} at ${h.alt | 0}, lamp at ${L.alt | 0}`); break; }
+    }
+    // static lanes: a thorn knot's every stem, a lantern's whole swing, a shadow hand at full reach leave an open lane of
+    // minLane to the far wall at every height they reach
+    for (const h of hz) {
+      if (h.type === 'lighthousePhantom') continue;
+      for (const q of LH.lighthouseShapes(h, 0, [], 'sweep')) {
+        const [a0, a1] = span(q);
+        for (let a = a0; a <= a1; a += 6) {
+          const [x0, x1] = ext([q]), [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l;
+          lighthouseStats.lane[h.type] = Math.min(lighthouseStats.lane[h.type], m);
+          if (m < R.minLane) { lfail('every thorn knot, lantern swing and shadow hand leaves a lane of minLane to the far wall', `${h.type} ${m.toFixed(1)} at ${h.alt | 0}`); break; }
+        }
+      }
+    }
+    // how much of the time each lit trap is there (for the summary)
+    if (!k) for (const h of hz) if (h.lamp) { const n = 200; let on = 0; for (let i = 0; i < n; i++) { const tt = h.lamp.ph + i * h.lamp.P / n; if (h.type === 'lighthouseShadow' ? LH.lighthouseShadowReach(h, tt) > LH.LIGHTHOUSE.shadow.reach * 0.6 : LH.lighthouseShapes(h, tt, [], undefined).length > (h.type === 'lighthouseThorn' ? 1 : 0)) on++; } const key = h.type.slice(10); (lighthouseStats.litFrac[key] = lighthouseStats.litFrac[key] || []).push(on / n); }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = LH.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) lfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: moths and the Keeper's Quarters' ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(LH.laneSize().w / 2 + 6 + LH.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of LH.lighthouseDanger(h)) dd = Math.min(dd, LH.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) lighthouseStats.pick = Math.min(lighthouseStats.pick, dd);
+      if (dd < need - 0.5) lfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a moth is a dare, but never inside a solid part (a thorn's knot, a lantern's bracket)
+    for (const f of fr.filter(f => f.kind === 'lighthouseMoth')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of LH.lighthouseShapes(h, 0, [], 'body')) if (LH.shapeDist(q, f.x, f.alt) < LH.COCO_R + 4) { lfail('a moth never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < LH.pickR(fr[i]) + LH.pickR(fr[j]) + LH.PICK_GAP - 0.01) lfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'lighthouseMoth').length !== 3) lfail('the lighthouse holds exactly 3 luna moths', `${fr.filter(f => f.kind === 'lighthouseMoth').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) lfail('the lighthouse keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      lighthouseStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        lighthouseStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) lfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else lighthouseStats.worst = Math.max(lighthouseStats.worst, tm);
+      }
+    }
+    // every moth can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'lighthouseMoth')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      let ok = true;
+      for (let p = 0; p < 6 && ok; p++) {
+        lighthouseStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < X.moth.r + W / 2 - 4);
+        if (tm < 0) { lfail('every luna moth can be reached and escaped by the widest pilot', `moth at ${f.alt | 0}, phase ${p}, seed ${k}`); ok = false; }
+      }
+      if (ok) lighthouseStats.moths++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const lighthouseSummary = () => `PASS: Haunted Lighthouse: ${lighthouseStats.seeds} layouts × ${lighthouseStats.len} m, only its own traps (${Object.entries(lighthouseStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}) under ${lighthouseStats.lamps} lamps, each taught alone first; shaft ${lighthouseStats.minW.toFixed(0)}+ wide, wall slope ${lighthouseStats.slope.toFixed(2)} (max ${LH.RULES.maxWallSlope}); every beam ${lighthouseStats.beamGap.toFixed(0)}+ short of other beats' traps; solid share (thorn stems and phantoms in the light, shadow hands reaching out in the dark) ${Object.entries(lighthouseStats.litFrac).map(([k, v]) => `${k} ${Math.round(100 * Math.min(...v))}-${Math.round(100 * Math.max(...v))}%`).join(', ')}; open lanes past thorn knots ${lighthouseStats.lane.lighthouseThorn.toFixed(0)}+, lantern swings ${lighthouseStats.lane.lighthouseLantern.toFixed(0)}+, shadow hands ${lighthouseStats.lane.lighthouseShadow.toFixed(0)}+ (minLane ${LH.RULES.minLane}); beats ${lighthouseStats.beatGap.toFixed(0)}+ apart; pickups ${lighthouseStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${lighthouseStats.traps} beats and ${lighthouseStats.moths} moths (reach and escape) flown by the widest pilot in ${lighthouseStats.searches} searches, the slowest pass ${lighthouseStats.worst.toFixed(1)} s`;
 // (test slot: Haunted Lighthouse, island level 34)
 // (test slot: Wizard's Spire, island level 35)
 // (test slot: Starfall Summit, island level 36)
@@ -4644,4 +4802,5 @@ console.log(pinballSummary());
 console.log(candySummary());
 console.log(cheeseSummary());
 console.log(toyboxSummary());
+console.log(lighthouseSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
