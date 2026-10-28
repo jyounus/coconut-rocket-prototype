@@ -1982,6 +1982,175 @@ console.log(`PASS: ${checked} shafts × ${HEIGHT / 10} m checked against every l
 console.log(`PASS: ${pairStats.pairs} character × vehicle pairs: ${pairStats.flyable} fly now (21 pilots on their own rides, ${pairStats.swaps} swapped split pairs${pairStats.flyable < pairStats.pairs ? ', the rest wait on a split' : ''}); ${pairStats.vehicles} split vehicles and ${pairStats.characters} split characters inside their size envelopes (envelope scale ${pairStats.minEnv.toFixed(3)}+, floor ${SEAT_FLOOR}), so every pair of split parts fits; swapped pairs inside ${PILOT_CAP.w} × ${PILOT_CAP.h} art units at any tilt (widest ${pairStats.worst || '-'} ${pairStats.worstW.toFixed(2)}), characters scaled ${pairStats.swaps ? pairStats.minS.toFixed(3) : '-'}+${pairStats.cramped ? `, ${pairStats.cramped} cramped in a closed ride's room` : ''}; ${pairStats.sure} swaps also fit at their guaranteed placement${pairStats.collars ? ` (${pairStats.collars} rides add a collar's capsules)` : ''}${pairStats.offCentre.length ? `; off-centre seats: ${pairStats.offCentre.join(', ')}, ${pairStats.shifted} riders moved towards the centre` : ''}; widest pair ${(pairStats.widest * PILOT_SCALE).toFixed(2)} world units (limit ${(LANE_LIMIT.w * PILOT_SCALE).toFixed(2)})`);
 // Level slots: each new themed level puts its test block immediately before its slot line.
 // (test slot: Murk Mire, island level 7)
+// ---------- Adventure: the Hidden Lagoon (island level 11), an authored stage with its own traps ----------
+// As the grotto's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every golden conch flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases. A gushing cascade counts as solid here (the search never relies on being swept),
+// and a gulper's suck drags the search toward its mouth exactly as it drags the rocket.
+const LG = new Function(regions.join('\n') + '\nreturn { createLagoonLevel, lagoonShapes, lagoonDanger, lagoonEnd, lagoonFishState, lagoonFishPos, lagoonJellyState, lagoonFallFlow, lagoonFallSheet, lagoonFallX, lagoonGulpState, lagoonGulpPull, lagoonGulpBody, LAGOON, LAGOON_STAGE, LAGOON_TYPES, ADV_LAGOON, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const lagoonStats = { seeds: 0, traps: 0, searches: 0, worst: 0, conchs: 0, pick: Infinity, minW: Infinity, slope: 0, ledgeLane: Infinity, gulpLane: Infinity, fallLane: Infinity, jellyGap: Infinity, arcRoom: Infinity, sweep: 0, len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = LG.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = LG.ADV_LAGOON, X = LG.LAGOON;
+  const lfail = (rule, d) => fail('lagoon: ' + rule, d);
+  if (st0.theme !== 'lagoon' || !(st0.reward > 0)) lfail('the Hidden Lagoon is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'lagoonConch' && g.n === 3) || !st0.goals.some(g => g.k === 'lagoonDry')) lfail('three missions: the lagoon, 3 golden conchs and staying dry', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * LG.UNITS_PER_M - LG.lagoonEnd()) > 1e-6) lfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: piranhas, then jellies, then cascades, then gulpers, each taught alone (never faster at first)
+  {
+    const firsts = {}, seen = [], base = k => k.replace(/Stack|Pair|Fish$|Jelly$/, '');
+    for (const sec of LG.LAGOON_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base(kind);
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) lfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P) lfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'fish,jelly,fall,gulp') lfail('the lagoon teaches piranhas, jellies, cascades, then gulpers', seen.join());
+    if (!LG.LAGOON_STAGE.some(sec => sec.calm && !sec.finish && sec !== LG.LAGOON_STAGE[0])) lfail('the lagoon has a breather', '');
+    if (!LG.LAGOON_STAGE[LG.LAGOON_STAGE.length - 1].finish) lfail('the stage ends in the hidden lagoon', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (LG.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the grotto's): solid = every lethal shape plus every gushing sheet; a sucking gulper drags each step
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, gul = traps.filter(h => h.type === 'lagoonGulp');
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) { LG.lagoonShapes(h, t, S); if (h.type === 'lagoonFall') LG.lagoonShapes(h, t, S, 'sheet'); }
+      const gst = gul.map(h => [h, LG.lagoonGulpState(h, t)]);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        let drift = 0; for (const [h, gs] of gst) drift += LG.lagoonGulpPull(h, gs, xi * DX, lo + ai * DA);
+        const dc = drift * DT / DX;   // (the drag this step, in cells: added to every move, to the nearest cell)
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + Math.round(dX + dc), na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = LG.createLagoonLevel(LG.advSeed(st), st), hz = [], fr = [];
+    lagoonStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) lfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) lfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    lagoonStats.len = level.end / 10;
+    for (const h of hz) if (!LG.LAGOON_TYPES.has(h.type)) lfail('the lagoon only has its own traps', h.type);
+    for (const h of hz) lagoonStats.kinds[h.type] = (lagoonStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); lagoonStats.beatGap = Math.min(lagoonStats.beatGap, g); if (g < 0) lfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) lfail('the lagoon below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      lagoonStats.minW = Math.min(lagoonStats.minW, r - l); lagoonStats.slope = Math.max(lagoonStats.slope, l2 - l, r - r2);
+    }
+    if (lagoonStats.minW < R.minWidth) lfail('the shaft is never narrower than minWidth', lagoonStats.minW.toFixed(1));
+    if (lagoonStats.slope > R.maxWallSlope) lfail('the walls never step in faster than maxWallSlope', lagoonStats.slope.toFixed(2));
+    // static lanes: between a piranha's ledge tips, past a gulper's widest gape, past a cascade's full gush (minLane);
+    // a jelly always leaves one gap the widest pilot fits with room, at every point of its drift, stroke and flare
+    for (const h of hz) {
+      const [l, r] = level.walls(h.alt);
+      if (h.type === 'lagoonFish') { const S = []; LG.lagoonShapes({ ...h, P: 1e9, ph: 0 }, 0, S); const tl = Math.max(...S.filter(q => q.x0 < h.x).map(q => Math.max(q.x0, q.x1) + q.r)), tr = Math.min(...S.filter(q => q.x0 > h.x).map(q => Math.min(q.x0, q.x1) - q.r)), m = tr - tl; lagoonStats.ledgeLane = Math.min(lagoonStats.ledgeLane, m); if (m < R.minLane) lfail('a piranha\'s ledges leave a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'lagoonGulp') { const [x0, x1] = ext(LG.lagoonGulpBody([], h, 1)); const m = h.side > 0 ? r - x1 : x0 - l; lagoonStats.gulpLane = Math.min(lagoonStats.gulpLane, m); if (m < R.minLane) lfail('a gulper\'s widest gape leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'lagoonFall') { const S = LG.lagoonFallSheet([], h, 1); for (const q of S) { const ar = (q.a0 + q.a1) / 2, [ll, rr] = level.walls(ar), x = h.side > 0 ? Math.max(q.x0, q.x1) + q.r : Math.min(q.x0, q.x1) - q.r, m = h.side > 0 ? rr - x : x - ll; lagoonStats.fallLane = Math.min(lagoonStats.fallLane, m); if (m < R.minLane) lfail('a full cascade leaves a dry lane of minLane', `${m.toFixed(1)} at ${h.alt}`); } }
+      if (h.type === 'lagoonJelly') for (let t = 0; t < 24; t += 0.1) {
+        const S = LG.lagoonShapes(h, t, []), [x0, x1] = ext(S), [ll, rr] = level.walls(LG.lagoonJellyState(h, t).a - 50), best = Math.max(x0 - ll, rr - x1);
+        lagoonStats.jellyGap = Math.min(lagoonStats.jellyGap, best); if (best < W + 2 * M + 30) { lfail('a jelly always leaves a gap the widest pilot fits with room', `${best.toFixed(1)} at ${h.alt}`); break; }
+      }
+    }
+    // a piranha's leap never crowds the racing lane: above the very top of its arc (both ways, its body's full size)
+    // there is at least minLane of open height before any other trap's reach (a cascade's rock; its sheet only sweeps),
+    // so a pilot that has cleared the ledges can sit above the arc and is never hit from below
+    { const top = q => q.k === 'c' ? q.a + q.r : Math.max(q.a0, q.a1) + (q.r || 0), bot = q => q.k === 'c' ? q.a - q.r : Math.min(q.a0, q.a1) - (q.r || 0);
+      for (const h of hz) if (h.type === 'lagoonFish') {
+        const arcTop = Math.max(...LG.lagoonDanger(h).map(top));
+        let room = Infinity;
+        for (const g of hz) if (g !== h && g.alt > h.alt && g.alt < h.alt + 900) { const S = g.type === 'lagoonFall' ? LG.lagoonShapes(g, 0, [], 'body') : LG.lagoonDanger(g); room = Math.min(room, Math.min(...S.map(bot)) - arcTop); }
+        lagoonStats.arcRoom = Math.min(lagoonStats.arcRoom, room);
+        if (room < R.minLane) lfail('a piranha\'s arc leaves minLane of open lane above it', `${room.toFixed(1)} at ${h.alt}`);
+      } }
+    // a cascade's sweep (down at its push speed, out of the sheet) never carries you into a lethal trap: the column below
+    // and beside its sheet is clear of every other trap's whole reach
+    for (const h of hz.filter(h => h.type === 'lagoonFall')) {
+      const others = hz.filter(q => q !== h && q.type !== 'lagoonFall' && q.lo < h.top + 60 && q.hi > h.alt - 420), S = []; for (const q of others) S.push(...LG.lagoonDanger(q));
+      const x0 = Math.min(h.base, LG.lagoonFallX(h, X.fall.len) + h.side * (X.fall.w1 / 2 + 40)), x1 = Math.max(h.base, LG.lagoonFallX(h, X.fall.len) + h.side * (X.fall.w1 / 2 + 40));
+      let bad = false; for (let x = x0; x <= x1 && !bad; x += 8) for (let a = h.alt - 150; a <= h.top && !bad; a += 8) if (capHit(S, x, a, 0)) bad = true;
+      if (bad) lfail('a cascade never sweeps you into a trap', `${h.alt}`);
+      lagoonStats.sweep++;
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = LG.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) lfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: conchs and the Shallows' ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(LG.laneSize().w / 2 + 6 + LG.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of LG.lagoonDanger(h)) dd = Math.min(dd, LG.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) lagoonStats.pick = Math.min(lagoonStats.pick, dd);
+      if (dd < need - 0.5) lfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // the conchs are dares, but never inside a lethal shape at its widest
+    for (const f of fr.filter(f => f.kind === 'lagoonConch')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt && h.type !== 'lagoonFall') {
+      const S = h.type === 'lagoonFish' ? (() => { const S = []; LG.lagoonShapes({ ...h, P: 1e9, ph: 0 }, 0, S); return S; })() : LG.lagoonDanger(h);
+      for (const q of S) if (LG.shapeDist(q, f.x, f.alt) < LG.COCO_R + 2) { lfail('a conch never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < LG.pickR(fr[i]) + LG.pickR(fr[j]) + LG.PICK_GAP - 0.01) lfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'lagoonConch').length !== 3) lfail('the lagoon holds exactly 3 golden conchs', `${fr.filter(f => f.kind === 'lagoonConch').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) lfail('the lagoon keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      lagoonStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        lagoonStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) lfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else lagoonStats.worst = Math.max(lagoonStats.worst, tm);
+      }
+    }
+    // every conch can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'lagoonConch')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        lagoonStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < LG.COCO_R + W / 2 - 4);
+        if (tm < 0) lfail('every golden conch can be grabbed and escaped by the widest pilot', `conch at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      lagoonStats.conchs++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const lagoonSummary = () => `PASS: Hidden Lagoon: ${lagoonStats.seeds} layouts × ${lagoonStats.len} m, only its own traps (${Object.entries(lagoonStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${lagoonStats.minW.toFixed(0)}+ wide, wall slope ${lagoonStats.slope.toFixed(2)} (max ${LG.RULES.maxWallSlope}); lanes between piranha ledges ${lagoonStats.ledgeLane.toFixed(0)}+, past gulpers ${lagoonStats.gulpLane.toFixed(0)}+, beside full cascades ${lagoonStats.fallLane.toFixed(0)}+ (minLane ${LG.RULES.minLane}), jelly gaps ${lagoonStats.jellyGap.toFixed(0)}+, ${lagoonStats.arcRoom.toFixed(0)}+ open above every piranha arc, beats ${lagoonStats.beatGap.toFixed(0)}+ apart; ${lagoonStats.sweep} cascade sweeps clear of every trap; pickups ${lagoonStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${lagoonStats.traps} beats and ${lagoonStats.conchs} conchs (grab and escape) flown by the widest pilot, dragged by every gulper, in ${lagoonStats.searches} searches from 6 phases each, the slowest pass ${lagoonStats.worst.toFixed(1)} s`;
 // (test slot: Hidden Lagoon, island level 11)
 // ---------- Adventure: the Amethyst Geode (island level 16), an authored stage with its own traps ----------
 // As Frost Hollow's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
@@ -2154,4 +2323,5 @@ console.log(frostSummary());
 console.log(stormSummary());
 console.log(mineSummary());
 console.log(geodeSummary());
+console.log(lagoonSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
