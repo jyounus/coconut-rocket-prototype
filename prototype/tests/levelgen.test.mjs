@@ -3058,6 +3058,195 @@ const vaultStats = { seeds: 0, traps: 0, searches: 0, worst: 0, rubies: 0, chest
 }
 const vaultSummary = () => `PASS: Cursed Treasure Vault: ${vaultStats.seeds} layouts × ${vaultStats.len} m, only its own traps (${Object.entries(vaultStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${vaultStats.minW.toFixed(0)}+ wide, wall slope ${vaultStats.slope.toFixed(2)} (max ${VG.RULES.maxWallSlope}); open lanes past avalanches ${vaultStats.lane.vaultAval.toFixed(0)}+, chests ${vaultStats.lane.vaultChest.toFixed(0)}+, skulls ${vaultStats.lane.vaultSkull.toFixed(0)}+, surges ${vaultStats.lane.vaultSurge.toFixed(0)}+ (minLane ${VG.RULES.minLane}), beats ${vaultStats.beatGap.toFixed(0)}+ apart; pickups ${vaultStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${vaultStats.traps} beats, ${vaultStats.rubies} rubies and ${vaultStats.chests}/${vaultStats.realChests} real chests (reach and escape) flown by the widest pilot in ${vaultStats.searches} searches, the slowest pass ${vaultStats.worst.toFixed(1)} s`;
 // (test slot: Cursed Treasure Vault, island level 23)
+// ---------- Adventure: Cascade Falls (island level 24), an authored stage with its own traps ----------
+// As the Fossil Bonepit's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases and looks), then every beat and every rainbow drop flown by a time-space search for the widest pilot on
+// the traps' own clocks from 6 start phases. Inside a chute the search climbs no faster than the chute lets it, and a
+// surge front counts as solid: every beat can be passed without ever being washed back, which the "never washed back"
+// mission needs.
+const CA = new Function(regions.join('\n') + '\nreturn { createCascadeLevel, cascadeShapes, cascadeDanger, cascadeEnd, cascadeCx, cascadeHw, cascadeTipFill, cascadeChuteAt, cascadeLogAt, cascadeFishAt, cascadeFishPt, cascadeTipperAt, cascadeTipPt, CASCADE, CASCADE_STAGE, CASCADE_TYPES, ADV_CASCADE, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const cascadeStats = { seeds: 0, traps: 0, searches: 0, worst: 0, drops: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, hop: 0, tipV: 0, chutes: 0, dryLane: Infinity, bend: 0 };
+{
+  const R = CA.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = CA.ADV_CASCADE, X = CA.CASCADE;
+  if (st0.theme !== 'cascade' || !(st0.reward > 0)) fail('Cascade Falls is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'cascadeDrops' && g.n === 3) || !st0.goals.some(g => g.k === 'cascadeDry')) fail('Cascade Falls has three missions: the Rainbow Spring, 3 rainbow drops and never washed back', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * CA.UNITS_PER_M - CA.cascadeEnd()) > 1e-6) fail('the Cascade Falls stage length matches its layout', `${st0.len}`);
+  // the stage's order: the great fall alone first, then logs, then flying fish, then tippers, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { logPair: 'cascadeLog', fishBoth: 'cascadeFish', fishLog: 'cascadeFish', tipperPair: 'cascadeTipper', tipperFish: 'cascadeTipper', tipperLog: 'cascadeTipper', logBoth: 'cascadeLog', fishTwin: 'cascadeFish', tipperBoth: 'cascadeTipper' };
+    const S = CA.CASCADE_STAGE, firstChute = S.findIndex(sec => sec.chute), firstBeat = S.findIndex(sec => sec.beats);
+    if (!(firstChute > 0 && firstChute < firstBeat && !S[firstChute].beats)) fail('Cascade Falls teaches the Downpour Chute alone before any trap', `${firstChute} ${firstBeat}`);
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) fail('each cascade trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) fail('a cascade trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'cascadeLog,cascadeFish,cascadeTipper') fail('Cascade Falls teaches logs, then flying fish, then tippers', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) fail('Cascade Falls has a breather ledge', '');
+    if (!S[S.length - 1].finish) fail('Cascade Falls ends in the Rainbow Spring', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (CA.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // the middle of the widest dry ground at height a (beside or between the falls there)
+  const dryMid = (level, chutes, a) => {
+    const [l, r] = level.walls(a), here = chutes.filter(q => a >= q.lo && a <= q.hi).map(q => [CA.cascadeCx(q, a) - CA.cascadeHw(q, a), CA.cascadeCx(q, a) + CA.cascadeHw(q, a)]).sort((p, q) => p[0] - q[0]);
+    let x = l, best = null; for (const [p, q] of [...here, [r, r]]) { if (!best || p - x > best[1] - best[0]) best = [x, p]; x = Math.max(x, q); }
+    return (best[0] + best[1]) / 2;
+  };
+  // every lethal shape of the traps at t, and the chutes' surge fronts (the search never lets itself be washed back)
+  const allShapes = (traps, t, S) => { for (const h of traps) CA.cascadeShapes(h, t, S); return S; };
+  // the search (as the fossil's): in a chute the climb is capped at the chute's `up`
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), upC = Math.floor(X.chute.up * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, chutes = traps.filter(h => h.type === 'cascadeChute');
+    const wet = new Map(), inChute = (xi, ai) => { const key = xi * 1000 + ai; if (wet.has(key)) return wet.get(key); const x = xi * DX, a = lo + ai * DA, v = chutes.some(c => a > c.lo && a < c.hi && Math.abs(x - CA.cascadeCx(c, a)) < CA.cascadeHw(c, a)); wet.set(key, v); return v; };
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000, u = inChute(xi, ai) ? upC : up;
+        for (let dA = -dn; dA <= u; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.casDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)), xs: [...front].slice(0, 30).map(k => [Math.floor((k % V) / 1000) * DX, lo + (k % V) % 1000 * DA]) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = CA.createCascadeLevel(CA.advSeed(st), st), hz = [], fr = [];
+    cascadeStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) fail('cascade traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) fail('cascade pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    cascadeStats.len = level.end / 10;
+    for (const h of hz) if (!CA.CASCADE_TYPES.has(h.type)) fail('Cascade Falls only has its own traps', h.type);
+    for (const h of hz) cascadeStats.kinds[h.type] = (cascadeStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    const chutes = hz.filter(h => h.type === 'cascadeChute'), traps0 = hz.filter(h => h.type !== 'cascadeChute');
+    cascadeStats.chutes = chutes.length;
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one thing to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); cascadeStats.beatGap = Math.min(cascadeStats.beatGap, g); if (g < 0) fail('cascade beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (traps0.some(h => h.hi > level.end - 320) || chutes.some(c => c.hi > level.end - 200)) fail('the Rainbow Spring below the finish is clear of traps and falls', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      cascadeStats.minW = Math.min(cascadeStats.minW, r - l); cascadeStats.slope = Math.max(cascadeStats.slope, l2 - l, r - r2);
+    }
+    if (cascadeStats.minW < R.minWidth) fail('the cascade shaft is never narrower than minWidth', cascadeStats.minW.toFixed(1));
+    if (cascadeStats.slope > R.maxWallSlope) fail('the cascade walls never step in faster than maxWallSlope', cascadeStats.slope.toFixed(2));
+    // the chutes: where the traps are, a fall leaves a dry lane each side the widest pilot fits; elsewhere (it may
+    // hug a wall or split in two) there is always dry ground the widest pilot fits; every bend, shift and swell is gentle
+    for (const c of chutes) {
+      const trapped = traps0.some(h => h.hi > c.lo && h.lo < c.hi);
+      for (let a = c.lo; a <= c.hi; a += 4) {
+        const [l, r] = level.walls(a), cx = CA.cascadeCx(c, a), hw = CA.cascadeHw(c, a);
+        if (trapped) {
+          const lane = Math.min(cx - hw - l, r - cx - hw); cascadeStats.dryLane = Math.min(cascadeStats.dryLane, lane);
+          if (lane < W + 10) { fail('beside the traps a chute always leaves a dry lane each side', `${a}: ${lane.toFixed(0)}`); break; }
+        } else {
+          const here = chutes.filter(q => a >= q.lo && a <= q.hi).map(q => [CA.cascadeCx(q, a) - CA.cascadeHw(q, a), CA.cascadeCx(q, a) + CA.cascadeHw(q, a)]).sort((p, q) => p[0] - q[0]);
+          let x = l, best = 0; for (const [p, q] of here) { best = Math.max(best, p - x); x = Math.max(x, q); } best = Math.max(best, r - x);
+          cascadeStats.dryGround = Math.min(cascadeStats.dryGround ?? Infinity, best);
+          if (best < W + 10) { fail('beside a chute there is always dry ground the widest pilot fits', `${a}: ${best.toFixed(0)}`); break; }
+        }
+        cascadeStats.bend = Math.max(cascadeStats.bend, Math.abs(CA.cascadeCx(c, a + 4) - cx) / 4, Math.abs(CA.cascadeHw(c, a + 4) - hw) / 4);
+      }
+    }
+    if (cascadeStats.bend > 0.5) fail('a chute only bends gently', cascadeStats.bend.toFixed(2));
+    cascadeStats.chuteKinds = { twin: chutes.filter(c => c.twin).length, pool: chutes.filter(c => c.pool).length, shift: chutes.filter(c => c.shift).length };
+    if (!cascadeStats.chuteKinds.twin || !cascadeStats.chuteKinds.pool || !cascadeStats.chuteKinds.shift) fail('the falls vary: one splits in two, one crosses the shaft, one breaks into terrace pools', JSON.stringify(cascadeStats.chuteKinds));
+    for (const h of hz) {
+      if (h.type === 'cascadeLog') {
+        // a log only ever falls: after it leaves the shelf it never rises more than its little hop off the boulder
+        let low = Infinity;
+        for (let t = 0; t < h.P; t += 1 / 120) { const s1 = CA.cascadeLogAt(h, t); if (s1.ph === 'fall' || s1.ph === 'fly') { if (s1.a > low + 1e-6) cascadeStats.hop = Math.max(cascadeStats.hop, s1.a - low); low = Math.min(low, s1.a); } else low = Infinity; }
+        if (cascadeStats.hop > X.log.hop + 0.5) fail('a log only ever falls (a little hop off its boulder at most)', `${h.alt} ${cascadeStats.hop.toFixed(1)}`);
+      }
+      if (h.type === 'cascadeFish') {
+        // flying fish never rise once out of the water, and glide out of the chute's side into the basin on the wall
+        for (let i = 0; i < h.n; i++) { let prev = Infinity; for (let q = 0; q <= 1.0001; q += 0.02) { const [, a] = CA.cascadeFishPt(h, i, q); if (a > prev + 1e-6) { fail('flying fish never rise', `${h.alt}`); break; } prev = a; } }
+        const c = chutes.find(c => h.alt > c.lo && h.alt < c.hi);
+        if (!c || Math.abs(Math.abs(h.x0 - CA.cascadeCx(c, h.alt)) - (CA.cascadeHw(c, h.alt) - 10)) > 1e-6) fail('flying fish leap out of a chute', `${h.alt}`);
+      }
+      if (h.type === 'cascadeTipper') {
+        if (!(CA.cascadeTipFill(h.P) >= X.tipper.minFill && CA.cascadeTipFill(h.P) > X.tipper.tell)) fail('a tipper always has time to fill (and to creak before it tips)', `${h.alt} ${h.P}`);
+        // a tipper's arm only swings fast downward: rising back, its tip is never faster than `rise`
+        let prev = null;
+        for (let t = 0; t < h.P; t += 1 / 120) { const s1 = CA.cascadeTipperAt(h, t), a = CA.cascadeTipPt(h, s1.th, X.tipper.L)[1]; if (prev != null && a > prev) cascadeStats.tipV = Math.max(cascadeStats.tipV, (a - prev) * 120); prev = a; }
+        if (cascadeStats.tipV > X.tipper.rise + 1e-6) fail('a tipper only rises slowly (it strikes downward)', `${h.alt} ${cascadeStats.tipV.toFixed(0)}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = CA.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) fail('cascade pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the rainbow drops, the ledge's coconut rainbow)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(CA.laneSize().w / 2 + 6 + CA.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of traps0) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of CA.cascadeDanger(h)) dd = Math.min(dd, CA.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) cascadeStats.pick = Math.min(cascadeStats.pick, dd);
+      if (dd < need - 0.5) fail('cascade pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < CA.pickR(fr[i]) + CA.pickR(fr[j]) + CA.PICK_GAP - 0.01) fail('cascade pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'drop').length !== 3) fail('Cascade Falls holds exactly 3 rainbow drops', `${fr.filter(f => f.kind === 'drop').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) fail('Cascade Falls keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      // (it starts in a dry lane 150 under the beat, or just over the last beat's reach where that is closer)
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      cascadeStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0), c = traps.find(h => h.type === 'cascadeChute' && a0 > h.lo && a0 < h.hi);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = c ? [(l + CA.cascadeCx(c, a0) - CA.cascadeHw(c, a0)) / 2, (CA.cascadeCx(c, a0) + CA.cascadeHw(c, a0) + r) / 2] : [dryMid(level, chutes, a0), (l + r) / 2 - 60, (l + r) / 2 + 60, l + 45, r - 45];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];   // (start in whichever dry lane the trap below isn't sweeping just then)
+        cascadeStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) fail('every cascade trap can be passed by the widest pilot from any phase, never washed back', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.casDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else cascadeStats.worst = Math.max(cascadeStats.worst, tm);
+      }
+    }
+    // the Downpour (the chute alone) can be climbed from any phase without being washed back
+    for (const c of chutes.filter(c => c.sec === 'The Downpour' && !c.twinOf)) for (let p = 0; p < 3; p++) for (let a = c.lo - 100; a < c.hi; a += 700) {
+      const hi = Math.min(c.hi + 60, a + 800), traps = near(a, hi), [l, r] = level.walls(a + 40);
+      cascadeStats.searches++;
+      const x0 = dryMid(level, chutes, a + 40);
+      if (fly(level, traps, x0, a + 40, p * 1.7 + k, (x, aa) => aa >= hi - 10, a, hi + 20) < 0) fail('the Downpour can be climbed without being washed back', `${a | 0} phase ${p}`);
+    }
+    // every rainbow drop can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'drop')) {
+      const own = traps0.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), c = traps.find(h => h.type === 'cascadeChute' && lo + 40 > h.lo && lo + 40 < h.hi), x0 = dryMid(level, chutes, lo + 40);
+      for (let p = 0; p < 6; p++) {
+        cascadeStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < CA.COCO_R + W / 2 - 4);
+        if (tm < 0) fail('every rainbow drop can be grabbed and escaped by the widest pilot', `drop at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      cascadeStats.drops++;
+    }
+  }
+}
+const cascadeSummary = () => `PASS: Cascade Falls: ${cascadeStats.seeds} layouts × ${cascadeStats.len} m, only its own traps (${Object.entries(cascadeStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), the great fall taught alone, then each trap alone first; shaft ${cascadeStats.minW.toFixed(0)}+ wide, wall slope ${cascadeStats.slope.toFixed(2)} (max ${CA.RULES.maxWallSlope}); falls (${cascadeStats.chutes}: ${cascadeStats.chuteKinds.twin} split, ${cascadeStats.chuteKinds.shift} crossing, ${cascadeStats.chuteKinds.pool} terrace pools) leave dry ground ${cascadeStats.dryGround | 0}+, beside traps ${cascadeStats.dryLane.toFixed(0)}+ dry lanes and bend at most ${cascadeStats.bend.toFixed(2)}; logs only fall (hop ${cascadeStats.hop.toFixed(1)}), fish never rise, tippers rise at ${cascadeStats.tipV.toFixed(0)} at most; beats ${cascadeStats.beatGap.toFixed(0)}+ apart; pickups ${cascadeStats.pick.toFixed(1)}+ from any reach; ${cascadeStats.traps} beats × 6 phases, the Downpour and ${cascadeStats.drops} rainbow drops flown by the widest pilot never washed back (${cascadeStats.searches} searches, slowest ${cascadeStats.worst.toFixed(1)} s)`;
 // (test slot: Cascade Falls, island level 24)
 // (test slot: Gull Cliffs, island level 25)
 // (test slot: Clockwork Tower, island level 26)
@@ -3090,4 +3279,5 @@ console.log(bogSummary());
 console.log(fossilSummary());
 console.log(shipwreckSummary());
 console.log(vaultSummary());
+console.log(cascadeSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
