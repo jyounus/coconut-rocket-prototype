@@ -2747,6 +2747,163 @@ const fossilStats = { seeds: 0, traps: 0, searches: 0, worst: 0, ambers: 0, pick
 }
 const fossilSummary = () => `PASS: Fossil Bonepit: ${fossilStats.seeds} layouts × ${fossilStats.len} m, only its own traps (${Object.entries(fossilStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${fossilStats.minW.toFixed(0)}+ wide, wall slope ${fossilStats.slope.toFixed(2)} (max ${FO.RULES.maxWallSlope}); lower jaws never rise, skulls only slam down and always leave a ${fossilStats.lanes.toFixed(0)}+ lane, ribs only slide sideways, serpents only dip; beats ${fossilStats.beatGap.toFixed(0)}+ apart; pickups ${fossilStats.pick.toFixed(1)}+ from any reach; ${fossilStats.digs} buried bones on quiet wall; ${fossilStats.traps} beats × 6 phases and ${fossilStats.ambers} amber mosquitoes flown by the widest pilot never dusted (${fossilStats.searches} searches, slowest ${fossilStats.worst.toFixed(1)} s)`;
 // (test slot: Fossil Bonepit, island level 21)
+// ---------- Adventure: Shipwreck Hold (island level 22), an authored stage with its own traps ----------
+// As the lagoon's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat and every golden compass flown by a time-space search for the widest pilot on the
+// traps' own clocks from 6 start phases.
+const SW = new Function(regions.join('\n') + '\nreturn { createShipwreckLevel, shipwreckShapes, shipwreckDanger, shipwreckEnd, shipwreckCannonState, shipwreckBallX, shipwreckPortAlt, shipwreckBarrels, shipwreckAnchorState, shipwreckAnchorBody, shipwreckYard, shipwreckKrakenState, shipwreckArm, shipwreckArmBody, shipwreckSlingPos, shipwreckSlingBody, SHIPWRECK, SHIPWRECK_STAGE, SHIPWRECK_TYPES, ADV_SHIPWRECK, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const shipwreckStats = { seeds: 0, traps: 0, searches: 0, worst: 0, compasses: 0, pick: Infinity, minW: Infinity, slope: 0, barrelLane: Infinity, anchorLane: Infinity, anchorWall: Infinity, armLane: Infinity, gapRow: Infinity, slingGap: [Infinity, 0], len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = SW.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = SW.ADV_SHIPWRECK, X = SW.SHIPWRECK;
+  const sfail = (rule, d) => fail('shipwreck: ' + rule, d), swLerp = (a, b, t) => a + (b - a) * t;
+  if (st0.theme !== 'shipwreck' || !(st0.reward > 0)) sfail('Shipwreck Hold is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'shipwreckCompass' && g.n === 3) || !st0.goals.some(g => g.k === 'shipwreckGap' && g.n > 0)) sfail('three missions: the cabin, 3 golden compasses and the broadside gaps', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * SW.UNITS_PER_M - SW.shipwreckEnd()) > 1e-6) sfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: cannons, then anchors, then krakens, then slings, each taught alone (never faster at first)
+  {
+    const firsts = {}, seen = [], base = k => k === 'broadside' ? 'cannon' : k.replace(/(Pair|Cannon|Anchor|Kraken)$/, '');
+    for (const sec of SW.SHIPWRECK_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = base(kind);
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) sfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (o.P && firsts[b].P && o.P > firsts[b].P) sfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'cannon,anchor,kraken,sling') sfail('the hold teaches cannons, anchors, krakens, then slings', seen.join());
+    if (!SW.SHIPWRECK_STAGE.some(sec => sec.calm && !sec.finish && sec !== SW.SHIPWRECK_STAGE[0])) sfail('the hold has a breather', '');
+    if (!SW.SHIPWRECK_STAGE[SW.SHIPWRECK_STAGE.length - 1].finish) sfail('the stage ends in the captain\'s cabin', '');
+  }
+  // the shut port's row fits the widest pilot between the balls with room; the rows either side of a live port don't
+  { const g = 2 * X.cannon.sp - 2 * X.cannon.ball; shipwreckStats.gapRow = g; if (g < Hh + 2 * M + 12) sfail('a rack\'s gap row fits the widest pilot', `${g}`); }
+  // nothing lethal comes from below: a kraken's arm only ever sweeps down (its angle never rises while it is out)
+  { const h = { side: 1, base: 20, alt: 0, P: 5, ph: 0 }; let prev = null; for (let t = 0; t < 5; t += 0.01) { const st = SW.shipwreckKrakenState(h, t); if (st.ext > 0 && prev && prev.ext > 0 && st.ang > prev.ang + 1e-9) { sfail('a kraken\'s arm only sweeps down', `${t.toFixed(2)}`); break; } prev = st; } }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (SW.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const a = q.k === 'c' ? q.x - q.r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - q.r, b = q.k === 'c' ? q.x + q.r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + q.r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the lagoon's): solid = every lethal shape at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 10 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) SW.shipwreckShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = SW.createShipwreckLevel(SW.advSeed(st), st), hz = [], fr = [];
+    shipwreckStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) sfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) sfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    shipwreckStats.len = level.end / 10;
+    for (const h of hz) if (!SW.SHIPWRECK_TYPES.has(h.type)) sfail('the hold only has its own traps', h.type);
+    for (const h of hz) shipwreckStats.kinds[h.type] = (shipwreckStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); shipwreckStats.beatGap = Math.min(shipwreckStats.beatGap, g); if (g < 0) sfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) sfail('the traps in a beat never overlap', `${b.kind} at ${b.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) sfail('the cabin below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      shipwreckStats.minW = Math.min(shipwreckStats.minW, r - l); shipwreckStats.slope = Math.max(shipwreckStats.slope, l2 - l, r - r2);
+    }
+    if (shipwreckStats.minW < R.minWidth) sfail('the shaft is never narrower than minWidth', shipwreckStats.minW.toFixed(1));
+    if (shipwreckStats.slope > R.maxWallSlope) sfail('the walls never step in faster than maxWallSlope', shipwreckStats.slope.toFixed(2));
+    // static lanes: past a rack's barrels, past an anchor's yard and its anchor at rest (and in its lurch and settle),
+    // past a kraken arm's whole sweep (minLane); an anchor's swing never reaches the far wall; a sling's pallet never
+    // touches a wall, and the gap at its end opens wide enough for the widest pilot with room
+    for (const h of hz) {
+      const lane = (S, a) => { const [l, r] = level.walls(a), [x0, x1] = ext(S); return h.side > 0 ? r - x1 : x0 - l; };
+      if (h.type === 'shipwreckCannon') { const m = Math.min(...Array.from({ length: h.n }, (_, i) => lane(SW.shipwreckBarrels([], h), SW.shipwreckPortAlt(h, i)))); shipwreckStats.barrelLane = Math.min(shipwreckStats.barrelLane, m); if (m < R.minLane) sfail('a rack\'s barrels leave a lane of minLane', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'shipwreckAnchor') {
+        const S = SW.shipwreckYard([], h); for (let k2 = 0; k2 <= 8; k2++) SW.shipwreckAnchorBody(S, h, swLerp(-X.anchor.back - 0.03, 0.05, k2 / 8));
+        const m = Math.min(lane(S, h.alt), lane(S, h.pa - 100)); shipwreckStats.anchorLane = Math.min(shipwreckStats.anchorLane, m); if (m < R.minLane) sfail('an anchor at rest leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt}`);
+        for (let k2 = 0; k2 <= 24; k2++) { const B = SW.shipwreckAnchorBody([], h, swLerp(-X.anchor.back - 0.03, X.anchor.amp, k2 / 24)); for (const q of B) { const qa = q.k === 'c' ? q.a : (q.a0 + q.a1) / 2, [l, r] = level.walls(qa), [x0, x1] = ext([q]), m2 = h.side > 0 ? r - x1 : x0 - l, m3 = h.side > 0 ? x0 - l : r - x1; shipwreckStats.anchorWall = Math.min(shipwreckStats.anchorWall, m2, m3); if (m2 < 4 || m3 < 2) sfail('an anchor never swings into a wall', `${Math.min(m2, m3).toFixed(1)} at ${h.alt}`); } }
+      }
+      if (h.type === 'shipwreckKraken') { const m = lane(SW.shipwreckDanger(h), h.alt); shipwreckStats.armLane = Math.min(shipwreckStats.armLane, m); if (m < R.minLane) sfail('a kraken\'s arm leaves a lane of minLane by the far wall', `${m.toFixed(1)} at ${h.alt}`); }
+      if (h.type === 'shipwreckSling') for (const s of [-1, 1]) {
+        const p = { x: h.cx + s * h.amp }, [x0, x1] = ext(SW.shipwreckSlingBody([], h, p.x, h.alt)), [l, r] = level.walls(h.alt + 20), shut = s > 0 ? r - x1 : x0 - l, open = s > 0 ? x0 - l : r - x1;
+        shipwreckStats.slingGap = [Math.min(shipwreckStats.slingGap[0], shut), Math.max(shipwreckStats.slingGap[1], open)];
+        if (shut < 4) sfail('a sling\'s pallet never touches a wall', `${shut.toFixed(1)} at ${h.alt}`);
+        if (open < W + 2 * M + 30) sfail('a sling\'s end gap opens wide for the widest pilot', `${open.toFixed(1)} at ${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = SW.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) sfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: compasses and the Galley's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(SW.laneSize().w / 2 + 6 + SW.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of SW.shipwreckDanger(h)) dd = Math.min(dd, SW.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) shipwreckStats.pick = Math.min(shipwreckStats.pick, dd);
+      if (dd < need - 0.5) sfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // the compasses are dares, but never inside a trap's solid parts (barrels, yard, the anchor at rest)
+    for (const f of fr.filter(f => f.kind === 'shipwreckCompass')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt) {
+      const S = h.type === 'shipwreckCannon' ? SW.shipwreckBarrels([], h) : h.type === 'shipwreckAnchor' ? SW.shipwreckAnchorBody(SW.shipwreckYard([], h), h, 0) : [];
+      for (const q of S) if (SW.shapeDist(q, f.x, f.alt) < SW.COCO_R + 2) { sfail('a compass never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < SW.pickR(fr[i]) + SW.pickR(fr[j]) + SW.PICK_GAP - 0.01) sfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'shipwreckCompass').length !== 3) sfail('the hold holds exactly 3 golden compasses', `${fr.filter(f => f.kind === 'shipwreckCompass').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) sfail('the hold keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      shipwreckStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        shipwreckStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) sfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else shipwreckStats.worst = Math.max(shipwreckStats.worst, tm);
+      }
+    }
+    // every compass can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'shipwreckCompass')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < 6; p++) {
+        shipwreckStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < SW.COCO_R + W / 2 - 4);
+        if (tm < 0) sfail('every golden compass can be grabbed and escaped by the widest pilot', `compass at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      shipwreckStats.compasses++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const shipwreckSummary = () => `PASS: Shipwreck Hold: ${shipwreckStats.seeds} layouts × ${shipwreckStats.len} m, only its own traps (${Object.entries(shipwreckStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${shipwreckStats.minW.toFixed(0)}+ wide, wall slope ${shipwreckStats.slope.toFixed(2)} (max ${SW.RULES.maxWallSlope}); lanes past barrels ${shipwreckStats.barrelLane.toFixed(0)}+, past anchors at rest ${shipwreckStats.anchorLane.toFixed(0)}+, past a kraken's sweep ${shipwreckStats.armLane.toFixed(0)}+ (minLane ${SW.RULES.minLane}); a rack's gap row ${shipwreckStats.gapRow} high (widest pilot ${PILOT_H.toFixed(0)}); anchors ${shipwreckStats.anchorWall.toFixed(0)}+ off the walls; sling end gaps ${shipwreckStats.slingGap[0].toFixed(0)}..${shipwreckStats.slingGap[1].toFixed(0)}; beats ${shipwreckStats.beatGap.toFixed(0)}+ apart; pickups ${shipwreckStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${shipwreckStats.traps} beats and ${shipwreckStats.compasses} compasses (grab and escape) flown by the widest pilot in ${shipwreckStats.searches} searches from 6 phases each, the slowest pass ${shipwreckStats.worst.toFixed(1)} s`;
 // (test slot: Shipwreck Hold, island level 22)
 // (test slot: Cursed Treasure Vault, island level 23)
 // (test slot: Cascade Falls, island level 24)
@@ -2779,4 +2936,5 @@ console.log(geodeSummary());
 console.log(lagoonSummary());
 console.log(bogSummary());
 console.log(fossilSummary());
+console.log(shipwreckSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
