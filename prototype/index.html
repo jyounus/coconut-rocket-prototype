@@ -5563,6 +5563,447 @@ const ADV_HIVE = { name: 'Honeycomb Hive', theme: 'hive', seed: 'isl-5-hive', re
 /* LEVELGEN:END */
 // Level slots: each new themed level puts its own LEVELGEN-marked block (the stage, its
 // traps' shapes and its layout) immediately before its slot line, so levels built in parallel never share an anchor.
+/* LEVELGEN:BEGIN */
+// ---------- Murk Mire (island level 7): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Frost Hollow (see createFrostLevel): a calm mire mouth, then one new trap at a time, each
+// taught alone and slow before it is combined (the Belching Flats, the Snapper Thicket, the Acid Spillway, the Wisp
+// Fen), a breather (the Sunken Willow), the Deep Murk (the fog thickens) and the Rotgut Gauntlet, then the Bog Heart's
+// hollow and its finish deck. Its own shaft (peat banks bound in slimy mangrove roots and moss), its own traps and its
+// own look (G.theme 'bog', see the bog drawing); it runs pinned to the jungle (pinJungle) like the temple, so nothing of
+// the endless zones shows up.
+// The traps (every one leaves a lane or a timing that the widest pilot fits through, and nothing lethal ever comes
+// from below):
+// - bogVent (Gas Vent): a warty mud mound on a peat shelf jutting from a wall. Every P s it gurgles for `tell` s (it
+//   swells, its throat glows, bubbles pop faster), then belches a column of lime swamp gas straight up, widening as it
+//   rises to `rise` above the mouth (`grow` s), holds it `hold` s, then the column lifts off the mouth and thins away
+//   upward (`lift` s). The shelf and mound always hurt, the gas while it hangs there. It never belches while you are
+//   inside its column's reach above the mouth (it keeps gurgling until you are out: see the bog update), so the gas
+//   never comes up at you from below; the lane past the column is always open. The axolotl breathes the gas safely
+//   (its perk; the shelf and the mound still hurt him).
+// - bogSnap (Snapper Plant): a carnivorous plant rooted in a mossy hummock on a wall, its stalk coiled like a spring.
+//   When you come within `trig` below its head it rears back for `tell` s (jaws gaping, eyes going red), then lunges
+//   straight across the shaft to within `gap` of the far wall (too narrow for any pilot), snaps shut, holds `hold` s,
+//   recoils slowly (`recoil` s) and rests `rest` s; if you are still in reach it strikes again. Bait it, then slip past
+//   while it recoils. Its head, jaws and stalk hurt.
+// - bogSpout (Acid Spout): a hollow mangrove root jutting from a wall, choked with slime, a pool of acid behind it.
+//   Every P s it dribbles for a while, gurgles and spits for `tell` s, then surges: the stream's throw sweeps out
+//   across the shaft (`rise` s) until it splashes on the far wall, holds `hold` s, and ebbs back (`ebb` s). The root
+//   and the stream hurt (the stream breaks into harmless spray `drop` below its mouth); thread the gap while it
+//   dribbles, never under its arc.
+// - bogWisp (Will-o'-wisp): a ghostly lime light hovering at one height. While you are below it within `see` it drifts
+//   after you sideways (never faster than `v`, never up or down); once you are above it, it drifts home. Lure it to
+//   one wall, then dart to the other and climb past it.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const BOG = {
+  swell: [13, 7], knob: { every: 190, len: 80, D: [10, 20] },   // wall relief: two slow swells and rounded root knobs
+  vent: { shelf: 96, mx: 56, mouth: 20, rise: 270, lean: 12, hw: [13, 70], tell: 0.95, grow: 0.3, hold: 1.0, lift: 0.55, hit: 0.84, ease: 400 },
+  snap: { trig: 300, rest0: 44, gap: 38, head: 17, tell: 0.75, lunge: 0.16, hold: 0.35, recoil: 0.85, rest: 0.45, droop: 10, ease: 440 },
+  spout: { pipe: 46, r: 14, g: 900, drop: 150, vLow: 46, tell: 0.85, rise: 0.36, hold: 0.95, ebb: 0.5, w: 8, ease: 420 },
+  wisp: { r: 18, see: 520, v: 130, acc: 420, home: 60, bob: 6, ease: 460 },
+  chiliGap: 470, end: 380,
+};
+const BOG_TYPES = new Set(['bogVent', 'bogSnap', 'bogSpout', 'bogWisp']);
+// The stage, bottom to top (as FROST_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft; murk: thicker fog, drawing only). jar: a firefly jar goes
+// with that beat (three in all).
+const BOG_STAGE = [
+  { name: 'Mire Mouth', w: 350, len: 800, calm: true },
+  { name: 'Belching Flats', w: 364, beats: [[470, 'vent', { side: 1, P: 5.4 }], [640, 'vent', { side: -1, P: 5.2, ph: 0.45 }], [640, 'vent', { side: 1, P: 5.0, ph: 0.2, jar: true }],
+    [660, 'ventPair', { P: 5.0 }], [760, 'ventPair', { P: 4.7, ph: 0.3 }]], tail: 720 },
+  { name: 'Snapper Thicket', w: 360, beats: [[470, 'snap', { side: 1 }], [640, 'snap', { side: -1 }], [660, 'snap', { side: 1, jar: true }],
+    [700, 'snapPair', {}], [720, 'snapVent', { P: 4.8 }]], tail: 640 },
+  { name: 'Acid Spillway', w: 360, beats: [[460, 'spout', { side: 1, P: 4.8 }], [620, 'spout', { side: -1, P: 4.6, ph: 0.4 }], [640, 'spoutPair', { P: 4.6 }],
+    [720, 'spoutVent', { P: 4.6 }], [880, 'spout', { side: 1, P: 4.2, ph: 0.6 }]], tail: 560 },
+  { name: 'The Sunken Willow', w: 350, len: 900, calm: true },
+  { name: 'Wisp Fen', w: 364, beats: [[480, 'wisp', { at: 0 }], [660, 'wisp', { at: 0.3 }], [680, 'wisp', { at: -0.3, jar: true }],
+    [720, 'wispPair', {}], [740, 'wispSnap', {}]], tail: 600 },
+  { name: 'The Deep Murk', w: 358, murk: true, beats: [[460, 'ventPair', { P: 4.6 }], [860, 'snapSpout', { P: 4.4 }], [720, 'wispVent', { P: 4.6 }],
+    [760, 'spoutPair', { P: 4.3, ph: 0.25 }], [780, 'snapPair', {}]], tail: 600 },
+  { name: 'Rotgut Gauntlet', w: 356, beats: [[460, 'spoutVent', { P: 4.3 }], [760, 'wispSnap', {}], [720, 'ventPair', { P: 4.4, ph: 0.6 }], [860, 'snapSpout', { P: 4.2 }],
+    [720, 'wispPair', {}], [700, 'spoutPair', { P: 4.1, ph: 0.5 }], [700, 'snapVent', { P: 4.4 }]], tail: 760 },
+  { name: 'The Bog Heart', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height (the finish deck), from the layout alone
+const bogEnd = () => { let y = 0; for (const sec of BOG_STAGE) { if (sec.finish) return y + BOG.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a gas vent's clock at u (seconds into its cycle; play keeps its own clock h.clk, held while you are in its column):
+// tell 0..1 while it gurgles, then the column's bottom and top (0..1 of `rise` above the mouth) and its strength k
+function bogVentAt(h, clk) {
+  const V = BOG.vent, u = pmod(clk, h.P);
+  if (u < V.tell) return { tell: u / V.tell, bot: 0, top: 0, k: 0, u };
+  let v = u - V.tell;
+  if (v < V.grow) return { tell: 0, bot: 0, top: 1 - Math.pow(1 - v / V.grow, 2), k: 1, u, v };
+  v -= V.grow;
+  if (v < V.hold) return { tell: 0, bot: 0, top: 1, k: 1, u, v };
+  v -= V.hold;
+  if (v < V.lift) { const e = v / V.lift; return { tell: 0, bot: e * e * 0.9 + e * 0.1, top: 1, k: 1 - e * 0.6, u, v }; }
+  return { tell: 0, bot: 0, top: 0, k: 0, u, rest: true };
+}
+// the vent's own clock now (play keeps h.clk; the drawing, the pickups and the test read the free clock)
+const bogVentClk = (h, t) => h.clk != null ? h.clk : t + h.ph * h.P;
+// the column at fraction f (0 the mouth, 1 its top): centre x and half-width
+function bogPlumeAt(h, f) { const V = BOG.vent; return [h.mx + h.side * V.lean * f, V.hw[0] + V.hw[1] * Math.pow(f, 0.8)]; }
+// the column's circles [x, alt, r] between fractions f0 and f1 (fitted inside its drawn puffs: `hit` of its girth)
+function bogPlume(h, f0, f1) {
+  const V = BOG.vent, out = [], ma = h.alt + V.mouth;
+  if (f1 - f0 < 0.01) return out;
+  for (let f = f0; ; ) {
+    const [x, hw] = bogPlumeAt(h, f), r = hw * V.hit;
+    out.push([x, ma + f * V.rise, r]);
+    if (f >= f1) break;
+    f = Math.min(f1, f + Math.max(0.03, r * 0.9 / V.rise));
+  }
+  return out;
+}
+// a snapper's pose at τ seconds after it was set off (τ null or < 0: resting): its head [x, alt], how far out it is
+// (0 rest .. 1 full reach), the jaws' gape (0 shut .. 1 wide), tell 0..1 and the phase name
+function bogSnapAt(h, tau) {
+  const S = BOG.snap, d = h.side, rest = [h.base + d * S.rest0, h.alt + 4];
+  const at = (k, back = 0) => [lerp(rest[0], h.tip, k) - d * back, lerp(rest[1], h.alt - S.droop, k)];
+  if (tau == null || tau < 0) return { head: rest, k: 0, gape: 0.25, tell: 0, ph: 'idle' };
+  let v = tau;
+  if (v < S.tell) { const e = v / S.tell; return { head: at(0, 12 * smooth(0, 0.7, e)), k: 0, gape: lerp(0.25, 1, smooth(0, 0.6, e)), tell: e, ph: 'tell' }; }
+  v -= S.tell;
+  if (v < S.lunge) { const e = v / S.lunge, k = 1 - Math.pow(1 - e, 3); return { head: at(k, 12 * (1 - k)), k, gape: 1, tell: 0, ph: 'lunge' }; }
+  v -= S.lunge;
+  if (v < S.hold) return { head: at(1), k: 1, gape: v < 0.04 ? 1 - v / 0.04 : 0, tell: 0, ph: 'hold', v };
+  v -= S.hold;
+  if (v < S.recoil) { const e = v / S.recoil, k = 1 - smooth(0, 1, e); return { head: at(k), k, gape: 0.25 * smooth(0.4, 1, e), tell: 0, ph: 'recoil' }; }
+  return { head: rest, k: 0, gape: 0.25, tell: 0, ph: 'rest' };
+}
+// a snapper's whole cycle (set off, strike, recoil, rest: it may strike again after this)
+const bogSnapCycle = () => { const S = BOG.snap; return S.tell + S.lunge + S.hold + S.recoil + S.rest; };
+// τ for a snapper at time t in play (h.trigT set when it was set off) or, for the test, on a fixed run of strikes
+// from t0 (h.trig0: every cycle straight after the last, as a pilot that never leaves its reach sees it)
+function bogSnapTau(h, t) {
+  if (h.trig0 != null) { const v = t - h.trig0; return v < 0 ? null : pmod(v, bogSnapCycle()); }
+  return h.trigT == null ? null : t - h.trigT;
+}
+// the stalk's points from the root to the head (shared by the hitbox and the drawing): a curve that is coiled at rest
+// and pulled straight by the lunge
+function bogSnapStalk(h, st, n = 6) {
+  const d = h.side, rx = h.base + d * 6, ra = h.alt - 6, [hx, ha] = st.head, pts = [];
+  for (let i = 0; i <= n; i++) {
+    const v = i / n, sag = Math.sin(v * Math.PI) * (10 * (1 - st.k) + 4);
+    pts.push([lerp(rx, hx - d * 12, v), lerp(ra, ha, v) - sag]);
+  }
+  return pts;
+}
+// an acid spout's clock: the stream's throw speed (vLow dribbling .. the full surge's vFull), tell 0..1, surge 0..1
+function bogSpoutAt(h, t) {
+  const S = BOG.spout, u = pmod(t / h.P + h.ph, 1) * h.P, rest = h.P - (S.tell + S.rise + S.hold + S.ebb);
+  const sp = k => ({ v: lerp(S.vLow, h.vFull, k), k });
+  if (u < rest) return { ...sp(0), tell: 0, u };
+  let v = u - rest;
+  if (v < S.tell) return { ...sp(0.05 * smooth(0.5, 1, v / S.tell)), tell: v / S.tell, u };
+  v -= S.tell;
+  if (v < S.rise) return { ...sp(smooth(0, 1, v / S.rise)), tell: 0, surge: true, u };
+  v -= S.rise;
+  if (v < S.hold) return { ...sp(1), tell: 0, surge: true, u };
+  v -= S.hold;
+  if (v < S.ebb) return { ...sp(1 - smooth(0, 1, v / S.ebb)), tell: 0, u };
+  return { ...sp(0), tell: 0, u };
+}
+// the stream's centre line at throw speed v: points [x, alt] from the mouth until it splashes on the far wall or breaks
+// into spray `drop` below the mouth (wallAt(a) gives the far wall's x at height a; hit: where it splashed, if it did)
+function bogStream(h, v, wallAt) {
+  const S = BOG.spout, d = h.side, mx = h.base + d * S.pipe, ma = h.alt - 2, pts = [[mx, ma]];
+  let hit = null;
+  for (let k = 1; k <= 24; k++) {
+    const tau = Math.sqrt(2 * S.drop / S.g) * k / 24, x = mx + d * v * tau, a = ma - 0.5 * S.g * tau * tau, w = wallAt ? wallAt(a) : h.far;
+    if (d > 0 ? x >= w - 4 : x <= w + 4) {
+      const [px, pa] = pts[pts.length - 1], f = Math.abs((w - 4 * d) - px) / Math.max(1e-6, Math.abs(x - px));
+      pts.push([lerp(px, x, clamp(f, 0, 1)), lerp(pa, a, clamp(f, 0, 1))]); hit = pts[pts.length - 1]; break;
+    }
+    pts.push([x, a]);
+  }
+  return { pts, hit };
+}
+// One step of a wisp's drift (shared by play and the test): it follows the pilot's x while the pilot is below it within
+// `see` (pTop: the pilot's top, pLow: its bottom, px its x), else it drifts home; never faster than v (home: slower),
+// easing in with `acc`, kept off the walls (lim [x0, x1]). Mutates h.wx, h.wv.
+function bogWispStep(h, dt, px, pLow, pTop) {
+  const W = BOG.wisp, chase = pTop < h.alt + W.r && pTop > h.alt - W.see && pLow < h.alt;
+  const target = chase ? px : h.home, vmax = chase ? W.v : W.home;
+  const want = clamp((target - h.wx) * 4, -vmax, vmax);
+  h.wv = h.wv + clamp(want - h.wv, -W.acc * dt, W.acc * dt);
+  h.wx = clamp(h.wx + h.wv * dt, h.lim[0], h.lim[1]);
+  if (h.wx === h.lim[0] || h.wx === h.lim[1]) h.wv = 0;
+  h.chase = chase;
+}
+// the wisp's centre now (its bob is drawing and hitbox alike)
+const bogWispPos = (h, t) => [h.wx ?? h.home, h.alt + BOG.wisp.bob * Math.sin(t * 2.1 + h.ph * 6.283)];
+// Every collision shape of a bog trap at time t, fitted to its drawing. kind: undefined for all of them, 'body' the
+// solid parts only (a vent's shelf and mound, not its gas), 'gas' a vent's column only, 'strict' (the test) a vent's
+// column at full height from just before it belches until it lifts (so a passing pilot is never in its reach when it
+// starts, which is when play would hold it).
+function bogShapes(h, t, S = [], kind) {
+  const c = (x, a, r) => S.push({ k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r) => S.push({ k: 's', x0, a0, x1, a1, r });
+  const d = h.side;
+  if (h.type === 'bogVent') {
+    const V = BOG.vent;
+    if (kind !== 'gas') {
+      cap(h.base - d * 20, h.alt - 9, h.base + d * (V.shelf - 11), h.alt - 9, 11);   // the peat shelf
+      cap(h.mx - 18, h.alt + 4, h.mx + 18, h.alt + 4, 8);                          // the mound's skirt
+      c(h.mx, h.alt + 10, 11);                                                       // its throat
+    }
+    if (kind !== 'body') {
+      const st = bogVentAt(h, bogVentClk(h, t));
+      if (kind === 'strict') { const e = pmod(bogVentClk(h, t), h.P) - V.tell; if (e > -0.12 && e < V.grow + V.hold + V.lift) for (const [x, a, r] of bogPlume(h, e > V.grow + V.hold ? st.bot : 0, 1)) c(x, a, r); }
+      else if (st.k > 0.05) for (const [x, a, r] of bogPlume(h, st.bot, st.top)) c(x, a, r);
+    }
+  } else if (h.type === 'bogSnap') {
+    const Sn = BOG.snap, st = bogSnapAt(h, bogSnapTau(h, t)), [hx, ha] = st.head;
+    c(h.base + d * 4, h.alt - 10, 20);                                    // the mossy hummock it roots in
+    c(hx, ha, Sn.head);                                                   // the head
+    cap(hx + d * 6, ha, hx + d * (14 + 8 * st.gape), ha, 9 + 4 * st.gape);  // the jaws, wider as they gape
+    const P = bogSnapStalk(h, st, 4);
+    for (let i = 1; i < P.length; i++) cap(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1], 5);
+  } else if (h.type === 'bogSpout') {
+    const Sp = BOG.spout;
+    cap(h.base - d * 14, h.alt, h.base + d * (Sp.pipe - 6), h.alt, Sp.r);   // the hollow root
+    const st = bogSpoutAt(h, t), { pts } = bogStream(h, st.v, null);
+    for (let i = 1; i < pts.length; i++) cap(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], Sp.w);
+  } else if (h.type === 'bogWisp') {
+    const [x, a] = bogWispPos(h, t); c(x, a, BOG.wisp.r);
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): a vent and its whole column, a snapper's whole lunge, a
+// spout's every throw, a wisp's whole band.
+function bogDanger(h) {
+  const S = [];
+  if (h.type === 'bogVent') { bogShapes(h, 0, S, 'body'); for (const [x, a, r] of bogPlume(h, 0, 1)) S.push({ k: 'c', x, a, r }); }
+  else if (h.type === 'bogSnap') { for (let k = 0; k <= 30; k++) bogShapes({ ...h, trig0: 0 }, k / 30 * bogSnapCycle(), S); }
+  else if (h.type === 'bogSpout') { for (let k = 0; k < 40; k++) bogShapes(h, h.P * (k / 40 - h.ph), S); }
+  else if (h.type === 'bogWisp') { const W = BOG.wisp; S.push({ k: 's', x0: h.lim[0], a0: h.alt, x1: h.lim[1], a1: h.alt, r: W.r + W.bob }); }
+  return S;
+}
+
+// The Murk Mire's shaft, laid out in full from BOG_STAGE (the seed only nudges looks and phases). It answers the same
+// questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createBogLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xB06B06) >>> 0), B0 = BOG;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of BOG_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = bogEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 64, w, smooth(150, 600, a));
+  };
+  // the peat's relief on a side: two slow swells and now and then a rounded knob where a root mass bulges out of the
+  // bank (a smooth hump, never steeper than RULES.maxWallSlope), eased flat where a trap is mounted and over the launch.
+  const ph0 = (seed & 0xfff) / 0xfff * 6.283, KB = B0.knob;
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knobAt = (a, side) => {
+    const i = Math.floor(a / KB.every), j = hash2(i, (seed & 0xffff) + 91 + side * 17); if (j < 0.4) return 0;
+    const c = i * KB.every + KB.every * (0.3 + 0.4 * hash2(i, 93 + side)), D = lerp(KB.D[0], KB.D[1], hash2(i, 97 + side)), u = (a - c) / (KB.len / 2);
+    return Math.abs(u) >= 1 ? 0 : D * Math.pow(Math.cos(u * Math.PI / 2), 2);
+  };
+  // the calm stretches' banks bulge more (deeper root masses; no trap needs the room there)
+  const rkAt = a => { const i = secAt(a), k = j => secs[j] && secs[j].calm && !secs[j].finish ? 1.25 : 0.72, nx = secs[i + 1]; let r = k(i);
+    if (i > 0) r = lerp(k(i - 1), r, smooth(secs[i].a0 - 150, secs[i].a0 + 150, a)); if (nx && a > nx.a0 - 150) r = lerp(k(i), k(i + 1), smooth(nx.a0 - 150, nx.a0 + 150, a)); return r; };
+  const reliefAt = (a, side) => {
+    const p = ph0 + side * 2.4, [l0, l1] = B0.swell;
+    const r = l0 * (0.5 + 0.5 * Math.sin(a / 97 + p)) + l1 * (0.5 + 0.5 * Math.sin(a / 41 + p * 1.7)) + knobAt(a, side);
+    return r * rkAt(a) * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function bWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function bOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = bWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng();
+  const make = {
+    vent(A, o) {
+      const V = B0.vent; flat(A - 50, A + V.mouth + V.rise * 0.5, o.side);
+      return [{ type: 'bogVent', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), lo: A - 24, hi: A + V.mouth + V.rise + V.hw[1] * V.hit, ease: V.ease, jar: !!o.jar }];
+    },
+    ventPair(A, o) {   // vents on facing walls 300 apart, half a cycle out of step: the gas swaps sides
+      const p0 = o.ph ?? ph(), d = rng() < 0.5 ? 1 : -1;
+      return [...make.vent(A, { side: d, P: o.P, ph: p0 }), ...make.vent(A + 300, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    snap(A, o) {
+      const S = B0.snap; flat(A - 50, A + 40, o.side);
+      return [{ type: 'bogSnap', side: o.side, alt: A, lo: A - S.droop - 30, hi: A + 34, trigLo: A - S.trig, ease: S.ease, jar: !!o.jar }];
+    },
+    snapPair(A, o) {   // snappers on facing walls 540 apart (the high one's reach starts above the low one): bait the low one, then the high one
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.snap(A, { side: d }), ...make.snap(A + 540, { side: -d })];
+    },
+    snapVent(A, o) {   // a vent low on one wall, a snapper rooted above its column: past the gas, then bait the plant
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.vent(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.snap(A + 500, { side: d })];
+    },
+    spout(A, o) {
+      const S = B0.spout; flat(A - S.drop - 30, A + 40, 0);
+      return [{ type: 'bogSpout', side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), lo: A - S.drop - 20, hi: A + S.r + 10, ease: S.ease }];
+    },
+    spoutPair(A, o) {   // spouts on facing walls 320 apart, half a cycle out of step
+      const p0 = o.ph ?? ph(), d = rng() < 0.5 ? 1 : -1;
+      return [...make.spout(A, { side: d, P: o.P, ph: p0 }), ...make.spout(A + 320, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    spoutVent(A, o) {   // a spout with a vent above it on the other wall: through the dribble, then past the gas
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.spout(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.vent(A + 300, { side: -d, P: o.P + 0.3, ph: ph() })];
+    },
+    snapSpout(A, o) {   // a spout, then a snapper above it on the other wall: wait out the surge, then bait the plant
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.spout(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.snap(A + 480, { side: -d })];
+    },
+    wisp(A, o) {
+      const W = B0.wisp;
+      return [{ type: 'bogWisp', side: 0, alt: A, at: o.at || 0, ph: rng(), lo: A - W.r - W.bob - 4, hi: A + W.r + W.bob + 4, ease: W.ease, jar: !!o.jar }];
+    },
+    wispPair(A, o) {   // two wisps 320 apart, homes on opposite sides
+      const k = rng() < 0.5 ? 1 : -1;
+      return [...make.wisp(A, { at: 0.35 * k }), ...make.wisp(A + 320, { at: -0.35 * k })];
+    },
+    wispSnap(A, o) {   // a wisp, then a snapper above it: the wisp herds you while you bait the plant
+      const d = rng() < 0.5 ? 1 : -1;
+      return [...make.wisp(A, { at: 0.3 * d }), ...make.snap(A + 400, { side: d })];
+    },
+    wispVent(A, o) {   // a vent, a wisp above its column's top
+      const d = rng() < 0.5 ? 1 : -1, V = B0.vent;
+      return [...make.vent(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.wisp(A + V.mouth + V.rise + 150, { at: -0.3 * d })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, bog: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions, reaches
+  for (const b of beats) for (const h of b.hs) {
+    if (h.type === 'bogVent') {
+      const V = B0.vent, [L, R] = bOpening(h.alt - 40, h.alt + 40);
+      h.base = h.side > 0 ? L : R; h.mx = h.base + h.side * V.mx; h.x = h.mx;
+    } else if (h.type === 'bogSnap') {
+      const S = B0.snap, [L, R] = bOpening(h.alt - 40, h.alt + 30);
+      h.base = h.side > 0 ? L : R; h.far = h.side > 0 ? R : L;
+      h.tip = h.far - h.side * (S.gap + S.head + 14 + 8);   // (the gaping jaws reach 22 past the head's centre)
+      h.x = (L + R) / 2;
+    } else if (h.type === 'bogSpout') {
+      const S = B0.spout, [L, R] = bOpening(h.alt - S.drop - 10, h.alt + 20), d = h.side;
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L;
+      // the full surge: just fast enough to splash on the far wall a little above the stream's spray line
+      h.vFull = Math.abs(h.far - (h.base + d * S.pipe)) / Math.sqrt(2 * (S.drop - 18) / S.g);
+      h.x = (L + R) / 2;
+    } else if (h.type === 'bogWisp') {
+      const W = B0.wisp, [L, R] = bOpening(h.alt - 30, h.alt + 30);
+      h.lim = [L + W.r + 12, R - W.r - 12]; h.home = lerp(h.lim[0], h.lim[1], 0.5 + 0.5 * h.at); h.x = h.home;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, bogDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = bWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = bWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = bWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38) => { for (let k = 0; k < n; k++) add(x, a0 + k * step); };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + B0.end - 120, 0.5);
+    else {   // the Sunken Willow: a ring of coconuts round a lily pad (golden at its top and bottom), then a weave
+      const cA = sc.a0 + 380, cx = mid(cA);
+      for (let k = 0; k < 10; k++) { const an = k / 10 * Math.PI * 2 + Math.PI / 2; add(cx + Math.cos(an) * 92, cA + Math.sin(an) * 92, k === 0 || k === 5 ? 'gold' : 'coco', { clear: -Infinity }); }
+      for (let k = 0; k < 5; k++) { const an = k / 5 * Math.PI * 2 + Math.PI / 2; add(cx + Math.cos(an) * 42, cA + Math.sin(an) * 42, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 600, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way: up the lane past a vent's column, a line through a snapper's recoil gap, a
+  // column through a spout's dribble gap, round a wisp's far side (each firefly jar a dare: in a vent's column, in a
+  // snapper's bite, beside a wisp's home)
+  for (const b of beats) {
+    const top = b.hs[b.hs.length - 1];
+    for (const h of b.hs) {
+      if (h.type === 'bogVent') {
+        const [l, r] = bWalls(h.alt + 160), V = B0.vent, edge = h.mx + h.side * (V.lean + V.hw[1]), x = h.side > 0 ? (edge + r) / 2 : (l + edge) / 2;
+        column(x, h.alt + 40, 4, 44);
+        if (h.jar) add(h.mx + h.side * 8, h.alt + V.mouth + V.rise * 0.42, 'jar', { jar: true, clear: -Infinity });
+      } else if (h.type === 'bogSnap') {
+        const [l, r] = bWalls(h.alt), x = h.side > 0 ? r - 80 : l + 80;
+        column(x, h.trigLo + 20, 3, 42); add(lerp(l, r, 0.5), h.hi + 70);
+        if (h.jar) add(lerp(h.base + h.side * B0.snap.rest0, h.tip, 0.55), h.alt - 2, 'jar', { jar: true, clear: -Infinity });
+      } else if (h.type === 'bogSpout') {
+        const [l, r] = bWalls(h.alt - 60), x = h.side > 0 ? r - 90 : l + 90;
+        column(x, h.alt - 300, 3, 40); add(x, h.hi + 50);
+      } else if (h.type === 'bogWisp') {
+        const [l, r] = bWalls(h.alt);
+        column(lerp(l, r, h.at > 0 ? 0.24 : 0.76), h.alt - 260, 3, 40); add(lerp(l, r, 0.5), h.hi + 70);
+        if (h.jar) add(h.at > 0 ? h.lim[0] + 6 : h.lim[1] - 6, h.alt + 4, 'jar', { jar: true, clear: -Infinity });
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = top.hi + 90, a1 = Math.min(...next.hs.map(q => q.type === 'bogSnap' ? q.trigLo : q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the temple's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= B0.chiliGap + 130; j++) if (spots[j].a - last >= B0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < B0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: bWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, bog: true, sections: secs, beats, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, knobAt, reliefAt,
+    murkAt: a => { let k = 0; for (const sc of secs) if (sc.murk) k = Math.max(k, smooth(sc.a0 - 300, sc.a0 + 150, a) * (1 - smooth(sc.a1 - 100, sc.a1 + 300, a))); return k; },
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 7): its own shaft (createBogLevel), the bog look (G.theme), its missions and its
+// length in metres (from the layout).
+const ADV_BOG = { name: 'Murk Mire', theme: 'bog', seed: 'isl-7-bog', reward: 170, target: 0, len: bogEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the Bog Heart' }, { k: 'bogJars', n: 3 }, { k: 'bogOneBite' }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Murk Mire, island level 7)
 /* LEVELGEN:BEGIN */
 // ---------- Hidden Lagoon (island level 11): the stage, its traps' shapes and its layout ----------
@@ -35096,7 +35537,7 @@ const ISLAND = {
     { id: 4,  name: 'Sunken Temple',     region: 'temple',  pilot: 'raccoon',   perk: 'Sniffs out hidden treasure rooms', stage: 'temple' },
     { id: 5,  name: 'Honeycomb Hive',    region: 'hive',    pilot: 'bear',      perk: 'Honey-mad: licks sticky honey off twice as fast', stage: 'hive' },
     { id: 6,  name: "Idol's Climb",      region: 'temple',  pilot: 'piggy',     perk: 'Gold idols are worth double' },
-    { id: 7,  name: 'Murk Mire',         region: 'bog',     pilot: 'axolotl',   perk: 'Breathes the swamp gas safely' },
+    { id: 7,  name: 'Murk Mire',         region: 'bog',     pilot: 'axolotl',   perk: 'Breathes the swamp gas safely', stage: 'bog' },
     { id: 8,  name: 'Snapjaw Swamp',     region: 'bog',     pilot: 'dachshund', perk: 'Snappers lunge at the hot dog, not you' },
     { id: 9,  name: 'Gobblebloom',       region: 'jungle',  pilot: 'chameleon', perk: 'Hot-chili shots burn the plant boss', boss: 'flytrap', stage: 4 },
     { id: 10, name: 'Glowshroom Grotto', region: 'grotto',  pilot: 'mushroom',  perk: 'Immune to spore clouds', stage: 'grotto' },
@@ -35194,6 +35635,7 @@ ADV_STAGES.mine = ADV_MINE;   // (island level 13, Old Gold Mine: see createMine
 ADV_STAGES.grotto = ADV_GROTTO;   // (island level 10, Glowshroom Grotto: see createGrottoLevel)
 ADV_STAGES.geode = ADV_GEODE;   // (island level 16, Amethyst Geode: see createGeodeLevel)
 ADV_STAGES.lagoon = ADV_LAGOON;   // (island level 11, Hidden Lagoon: see createLagoonLevel)
+ADV_STAGES.bog = ADV_BOG;   // (island level 7, Murk Mire: see createBogLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -46305,6 +46747,1677 @@ ADV_GOALS.mineOutrun = { text: () => 'Outrun every falling scaffold', done: r =>
 // play-testing hook (only with ?debug in the URL): the mine's shapes and clocks for scripts
 if (/[?&]debug\b/.test(location.search)) window.CRM = { MINE, MINE_STAGE, gatePhase, gatePeriod, mineShapes, mineDashState, mineTntState, mineScafPose, mineBuckets, mineCartAt, mineDanger, createMineLevel, mineDressing, scr: (x, a) => [sx(x), sy(a)], walls: a => walls(a), cssW: () => cssW };
 // Level slots: each new themed level puts its game block (look, traps, pickups, sounds) immediately before its slot line.
+// ---------- Murk Mire (island level 7): its look, traps, firefly jars and sounds ----------
+// The stage's shaft and traps are laid out by createBogLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'bog': a sunken mire under a sickly olive haze, light filtering down yellow-green through the fog,
+// walls of layered peat, olive mud and ochre clay bound in slimy mangrove roots, cushioned with moss and bearded with it
+// underneath, bracket fungi and lime slime on them; gnarled dead cypresses and root arches fading back into the murk,
+// swamp bubbles rising and fireflies drifting. Nothing of it shows anywhere else (Daily and Practice never set a
+// theme). Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left (or from the glowing thing
+// nearest), every edge a darker shade of its own colour (never black), detail as line pairs (a dark furrow under a lit
+// ridge), sheen strokes and soft glows; the backdrop stays calm and hazy so the traps and pickups read first. The static
+// art (wall tiles, backdrop layers, gas puffs) is drawn once into cached canvases and blitted (see bogTile).
+const BOGP = {
+  // the stage's colours: an olive haze, peat and mud, moss, lime acid
+  pal: { bgTop: [116, 126, 66], bgBot: [32, 40, 22], far: [94, 106, 58], far2: [72, 84, 46], wall: [64, 54, 34], wallIn: [24, 24, 14], rim: [200, 236, 100] },
+  haze: [150, 160, 92], hazeDk: [58, 68, 38], fog: [176, 188, 120], sun: [236, 236, 150],
+  lime: [196, 255, 74], limeHot: [242, 255, 176], limeDk: [86, 150, 26], acid: ['#f4ffb8', '#c4f24a', '#7cb81e', '#44700e'], acidEdge: '#3c6410',
+  gas: [[228, 252, 150], [164, 206, 70], [96, 130, 36]],
+  moss: ['#c6e06a', '#86ae3a', '#4a7224', '#2c4a16'], mossEdge: '#2e4c14',
+  bark: ['#b49c76', '#7a6446', '#46382a'], barkEdge: '#3a2c1c', barkDk: 'rgba(52,38,22,.55)', barkLt: 'rgba(255,240,200,.3)',
+  peat: [[[112, 90, 56], [74, 60, 38], [38, 34, 22]], [[104, 98, 58], [68, 66, 38], [36, 40, 22]], [[126, 102, 62], [88, 70, 42], [46, 40, 24]], [[88, 76, 54], [58, 52, 36], [30, 30, 20]]],
+  mud: ['#8a7a4e', '#5e5032', '#36301c'], mudEdge: '#33291a',
+  fungus: ['#fbf6cc', '#dcd486', '#9a9440'], fungusEdge: '#6e6a26',
+  plant: ['#cdf06a', '#78b432', '#3c7418', '#24480e'], plantEdge: '#2a5212', maw: ['#ff9aae', '#d42c4a', '#6a0c20'],
+  wisp: [[250, 255, 220], [200, 255, 120], [110, 210, 90]], fire: [255, 232, 120],
+  glass: [[236, 252, 240], [160, 214, 190], [70, 120, 104]], cork: ['#e6b880', '#b07c48', '#6a4422'], corkEdge: '#5a3618', twine: '#c8a46a',
+};
+const bogOn = () => !!(G && G.theme === 'bog');
+{ const base = pal; pal = function (key, a) { return bogOn() && BOGP.pal[key] ? BOGP.pal[key].slice() : base(key, a); }; }
+// gradient helpers in the current transform (evenly spread colour stops), a soft additive glow, colour arithmetic
+function bogLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function bogRG(x, y, r, cols, r0 = 0, c = ctx) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function bogGlow(x, y, r, col, a, c = ctx) { if (a < 0.004 || r < 0.5) return; c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = bogRG(x, y, r, [bogCol(col, a), bogCol(col, a * 0.32), bogCol(col, 0)], 0, c); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill(); c.restore(); }
+const bogLift = (q, k) => q.map(v => clamp(v + k, 0, 255));
+const bogMix = (p, q, k) => p.map((v, i) => v + (q[i] - v) * k);
+const bogCol = (q, a = 1) => a >= 1 ? `rgb(${q[0] | 0},${q[1] | 0},${q[2] | 0})` : `rgba(${q[0] | 0},${q[1] | 0},${q[2] | 0},${a < 0 ? 0 : a})`;
+function bogPoly(pts, close, c = ctx) { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); if (close) c.closePath(); }
+// a smooth closed blob through points (quadratic midpoints)
+function bogBlob(P, c = ctx) { const n = P.length, m = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; c.beginPath(); c.moveTo(...m(P[n - 1], P[0])); for (let i = 0; i < n; i++) c.quadraticCurveTo(P[i][0], P[i][1], ...m(P[i], P[(i + 1) % n])); c.closePath(); }
+// detail as a line pair: a dark furrow with a lit ridge just under it (dy: the ridge's offset)
+function bogPair(pts, dk, lt, w, dy = 0.9, c = ctx) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  bogPoly(pts.map(([x, y]) => [x, y + dy]), false, c); c.strokeStyle = lt; c.lineWidth = w * 0.8; c.stroke();
+  bogPoly(pts, false, c); c.strokeStyle = dk; c.lineWidth = w; c.stroke();
+}
+// a four-point twinkle (additive): x, y, size r, alpha a
+function bogTwinkle(x, y, r, a, col = [240, 255, 200]) {
+  if (a < 0.02 || r < 0.3) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bogCol(col, a);
+  ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.2, y - r * 0.2); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.2, y + r * 0.2); ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.2, y + r * 0.2); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.2, y - r * 0.2); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// is the pilot the axolotl (it breathes the swamp gas: its perk)?
+const bogAxolotl = () => { const pl = pilot(); return !!(pl && ((pl.character && pl.character.id === 'axolotl') || pl.id === 'axolotl')); };
+
+// ---- sounds (synth) ----
+const BOG_SFX = {
+  // a vent gurgling before it belches: slow bubbling blips, rising
+  bgurgle: (t, B, v) => { for (let i = 0; i < 6; i++) { const q = t + i * 0.14 + Math.random() * 0.03, f = 150 + i * 26 + Math.random() * 40; vTone(B, q, f, { f2: f * 1.9, glide: 0.07, type: 'sine', v: 0.07 * v, dur: 0.09 }); } vNoise(B, t, { type: 'lowpass', f: 420, v: 0.05 * v, dur: 0.85, a: 0.2 }); },
+  // ...and the belch: a deep wet whoosh of gas
+  bbelch: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 900, f2: 260, v: 0.2 * v, dur: 0.75, a: 0.02 }); vTone(B, t, 92, { f2: 58, glide: 0.4, type: 'sawtooth', lp: 380, v: 0.07 * v, dur: 0.5 }); vNoise(B, t + 0.05, { f: 1900, q: 0.8, v: 0.05 * v, dur: 0.5, a: 0.1 }); },
+  // a snapper set off: a leafy hiss rising to a rattle
+  bhiss: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 3200, f2: 5200, v: 0.07 * v, dur: 0.55, a: 0.05 }); for (let i = 0; i < 5; i++) vNoise(B, t + 0.2 + i * 0.07, { f: 2400, q: 6, v: 0.04 * v, dur: 0.03 }); },
+  // ...its lunge and the snap of its jaws
+  bsnap: (t, B, v) => { vNoise(B, t, { f: 1400, q: 0.7, v: 0.07 * v, dur: 0.12, a: 0.02 }); vTone(B, t + 0.14, 380, { f2: 140, glide: 0.06, type: 'square', lp: 1600, v: 0.08 * v, dur: 0.08 }); vNoise(B, t + 0.14, { f: 2600, q: 2, v: 0.14 * v, dur: 0.05 }); vTone(B, t + 0.14, 120, { f2: 70, glide: 0.1, type: 'sine', v: 0.1 * v, dur: 0.15 }); },
+  // an acid spout spitting before it surges
+  bspit: (t, B, v) => { for (let i = 0; i < 5; i++) { const q = t + i * 0.15 + Math.random() * 0.04; vNoise(B, q, { f: 900 + Math.random() * 700, q: 3, v: 0.05 * v, dur: 0.05 }); vTone(B, q, 260 + Math.random() * 120, { f2: 520, glide: 0.05, v: 0.03 * v, dur: 0.06 }); } },
+  // ...the surge: a gush, then the sizzle of acid on the far wall
+  bgush: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 600, f2: 1800, v: 0.14 * v, dur: 0.5, a: 0.05 }); vNoise(B, t + 0.2, { type: 'highpass', f: 4200, v: 0.06 * v, dur: 0.9, a: 0.1 }); },
+  // a wisp catching your scent: a hollow, eerie two-note whistle
+  bwisp: (t, B, v) => { vTone(B, t, 784, { f2: 932, glide: 0.25, type: 'sine', v: 0.035 * v, dur: 0.45, a: 0.08, vib: [6, 9] }); vTone(B, t + 0.18, 1175, { f2: 1046, glide: 0.3, type: 'triangle', v: 0.02 * v, dur: 0.5, a: 0.1 }); },
+  // a firefly jar: a bright glassy chime cascade over a warm swell, and a little buzz of wings
+  bjar: (t, B) => { [79, 84, 88, 91, 96, 100].forEach((m, i) => vTone(B, t + i * 0.055, mf(m), { type: i % 2 ? 'triangle' : 'sine', v: 0.07, dur: 0.4 })); vTone(B, t, mf(67), { type: 'sine', v: 0.06, dur: 0.9, a: 0.15 }); vNoise(B, t + 0.1, { f: 5200, q: 4, v: 0.025, dur: 0.6, a: 0.1 }); },
+  // the axolotl gulping the gas: a happy bubbly blip
+  bgills: (t, B) => { for (let i = 0; i < 4; i++) vTone(B, t + i * 0.06, mf(76 + i * 3), { f2: mf(84 + i * 3), glide: 0.05, type: 'sine', v: 0.05, dur: 0.07 }); },
+  // the Bog King's croak at the finish: a deep, happy ribbit
+  bcroak: (t, B) => { for (let i = 0; i < 2; i++) { const q = t + i * 0.22; vTone(B, q, 118, { f2: 84, glide: 0.16, type: 'sawtooth', lp: 700, q: 6, v: 0.12, dur: 0.18 }); vNoise(B, q, { f: 500, q: 4, v: 0.06, dur: 0.14 }); } },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = BOG_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1);
+}; }
+const bogVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.bogVent = 'Choked on swamp gas';
+CAUSES.bogSnap = 'Snapped up by a snapper plant';
+CAUSES.bogSpout = 'Splashed by an acid spout';
+CAUSES.bogWisp = 'Lured in by a will-o\'-wisp';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'bogVent' ? [200, 255, 90] : cause === 'bogSnap' ? [255, 110, 120] : cause === 'bogSpout' ? [210, 255, 80] : cause === 'bogWisp' ? [220, 255, 170] : base(cause); }; }
+// the lethal shapes (the axolotl breathes the gas: only a vent's shelf and mound can hurt him)
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!BOG_TYPES.has(h.type)) return base(h);
+  return bogShapes(h, G.t, [], h.type === 'bogVent' && bogAxolotl() ? 'body' : undefined).map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.bog) bogUpdateTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.bog) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// does any pilot capsule come within m of circle (x, a, r)?
+const bogNearCircle = (x, a, r, m = 0) => pCaps.some(c => ptSeg(x, a, c.x0, c.a0, c.x1, c.a1) < r + c.r + m);
+// world-space bits of the bog (bubbles, droplets, leaves, gas wisps): drift, fall or rise, and fade
+function bogBits(x, a, n, kind, v, o = {}) {
+  const B = G.bogBits || (G.bogBits = []);
+  for (let k = 0; k < n; k++) {
+    const an = o.an != null ? o.an + (Math.random() - 0.5) * (o.spread ?? 1) : Math.random() * TWO_PI, sp = v * (0.4 + 0.6 * Math.random());
+    B.push({ x: x + (Math.random() - 0.5) * (o.jx || 0), a: a + (Math.random() - 0.5) * (o.ja || 0), vx: Math.cos(an) * sp, va: Math.sin(an) * sp, life: (o.life || 0.8) * (0.7 + 0.6 * Math.random()), max: 0, kind, r: (o.r || 2) * (0.6 + 0.8 * Math.random()), rot: Math.random() * TWO_PI, vr: (Math.random() - 0.5) * 8 });
+    B[B.length - 1].max = B[B.length - 1].life;
+  }
+  if (B.length > 140) B.splice(0, B.length - 140);
+}
+function bogUpdateBits(dt) {
+  const B = G.bogBits; if (!B) return;
+  for (let i = B.length - 1; i >= 0; i--) {
+    const q = B[i]; q.life -= dt;
+    if (q.kind === 'drop') { q.va -= 900 * dt; q.vx *= 1 - dt * 0.5; }
+    else if (q.kind === 'leaf') { q.va = q.va * (1 - dt * 2) - 60 * dt; q.vx = q.vx * (1 - dt * 1.5) + Math.sin(G.t * 3 + q.rot) * 30 * dt; q.rot += q.vr * dt; }
+    else if (q.kind === 'bubble' || q.kind === 'fly') { q.va = q.va * (1 - dt * 1.2) + 40 * dt; q.vx *= 1 - dt * 1.5; }
+    else { q.va = q.va * (1 - dt * 1.6) + 26 * dt; q.vx *= 1 - dt * 2; }
+    q.x += q.vx * dt; q.a += q.va * dt;
+    if (q.life <= 0 || q.a < G.camAlt - 200) B.splice(i, 1);
+  }
+}
+function bogUpdateTraps(dt) {
+  const play = G.state === 'play', top = G.camAlt + viewH, axo = bogAxolotl(), V = BOG.vent, Sn = BOG.snap, Sp = BOG.spout;
+  bogUpdateBits(dt);
+  for (const h of G.hazards) {
+    if (!BOG_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'bogVent') {
+      // its own clock, held at the end of its gurgle while you are inside its column's reach (the gas never comes up at
+      // you from below; it belches the moment you are out)
+      if (h.clk == null) h.clk = G.t + h.ph * h.P;
+      const u = pmod(h.clk, h.P), inBand = play && bogPlume(h, 0, 1).some(([x, a, r]) => bogNearCircle(x, a, r / V.hit, 8));
+      h.held = inBand && u < V.tell && u + dt >= V.tell - 1e-3;
+      if (h.held) h.clk += Math.max(0, V.tell - 1e-3 - u); else h.clk += dt;
+      const st = bogVentAt(h, h.clk), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('bgurgle', { v: bogVol(h.alt) });
+      if (vis && st.k > 0 && !(was.k > 0)) { sfx('bbelch', { v: bogVol(h.alt) }); bogBits(h.mx, h.alt + V.mouth + 6, 8, 'drop', 260, { an: Math.PI / 2, spread: 1.6, life: 0.7, r: 2.2 }); }
+      if (vis && st.tell > 0.4 && Math.random() < dt * 10 * st.tell) bogBits(h.mx + (Math.random() - 0.5) * 14, h.alt + V.mouth + 2, 1, 'drop', 90, { an: Math.PI / 2, spread: 1.2, life: 0.5, r: 1.6 });
+      // the axolotl in the gas: gulps it happily (its perk)
+      if (play && axo && st.k > 0.05 && bogPlume(h, st.bot, st.top).some(([x, a, r]) => bogNearCircle(x, a, r, 0))) {
+        if (!h.gulped) { h.gulped = true; sfx('bgills'); G.stats.bogGulps = (G.stats.bogGulps || 0) + 1; if (!G.bogGillPop || G.t - G.bogGillPop > 3) { G.bogGillPop = G.t; chainEvent('Gills! Breathes it fine', '#d8ff7a', 1.2); } }
+        if (Math.random() < dt * 20) bogBits(G.p.x + (Math.random() - 0.5) * 30, G.p.alt + 20, 1, 'bubble', 60, { an: Math.PI / 2, spread: 1, life: 0.9, r: 2.6 });
+      }
+      if (st.k === 0) h.gulped = false;
+      h.st = st;
+    } else if (h.type === 'bogSnap') {
+      // set off when you come within its reach below its head; strikes again straight after its rest if you are still there
+      const tau = h.trigT == null ? null : G.t - h.trigT, inZone = play && pilotHigh() > h.trigLo && pilotLow() < h.alt + 60, cyc = bogSnapCycle();
+      if ((tau == null || tau >= cyc) && inZone) { h.trigT = G.t; if (vis) sfx('bhiss', { v: bogVol(h.alt) }); }
+      else if (tau != null && tau >= cyc) { h.trigT = null; h.bites = 0; }
+      const st = bogSnapAt(h, bogSnapTau(h, G.t)), was = h.st || st;
+      if (st.ph === 'lunge' && was.ph !== 'lunge') {
+        if (vis) sfx('bsnap', { v: bogVol(h.alt) });
+        // the mission: a second strike while you are still below its head
+        if (play && pilotLow() < h.alt + 34) { h.bites = (h.bites || 0) + 1; if (h.bites >= 2 && !h.bitTwice) { h.bitTwice = true; G.stats.bogBitten = (G.stats.bogBitten || 0) + 1; } }
+      }
+      if (play && pilotLow() > h.alt + 34) h.bites = 0;
+      if (st.ph === 'hold' && was.ph !== 'hold' && vis) {
+        const [hx, ha] = st.head;
+        bogBits(hx + h.side * 22, ha, 6, 'leaf', 160, { life: 1.1, r: 3 });
+        bogBits(hx + h.side * 20, ha, 5, 'drop', 120, { life: 0.6, r: 1.6 });
+        if (Math.abs(h.alt - G.p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 2);
+      }
+      if (vis && st.tell > 0.2 && Math.random() < dt * 8) { const [hx, ha] = st.head; bogBits(hx + h.side * 16, ha - 8, 1, 'drop', 30, { an: -Math.PI / 2, spread: 0.4, life: 0.6, r: 1.6 }); }
+      h.st = st;
+    } else if (h.type === 'bogSpout') {
+      const st = bogSpoutAt(h, G.t), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('bspit', { v: bogVol(h.alt) });
+      if (vis && st.surge && !was.surge) sfx('bgush', { v: bogVol(h.alt) });
+      if (vis) {
+        const { pts, hit } = bogStream(h, st.v, a => h.side > 0 ? rightWall(a) : leftWall(a));
+        // spits from the mouth in the tell; spray off the stream's end; a sizzle where it splashes on the far wall
+        if (st.tell > 0.3 && Math.random() < dt * 16) bogBits(h.base + h.side * Sp.pipe, h.alt, 1, 'drop', 140, { an: h.side > 0 ? 0.3 : Math.PI - 0.3, spread: 0.9, life: 0.5, r: 1.8 });
+        const end = pts[pts.length - 1];
+        if (Math.random() < dt * (hit ? 34 : 14)) bogBits(end[0], end[1], 1, 'drop', hit ? 150 : 70, { an: hit ? (h.side > 0 ? Math.PI * 0.75 : Math.PI * 0.25) : -Math.PI / 2, spread: 1.6, life: 0.5, r: 1.8 });
+        if (hit && Math.random() < dt * 9) bogBits(hit[0] - h.side * 6, hit[1] + 6, 1, 'smoke', 40, { an: Math.PI / 2, spread: 0.8, life: 1.1, r: 6 });
+      }
+      h.st = st;
+    } else if (h.type === 'bogWisp') {
+      if (h.wx == null) { h.wx = h.home; h.wv = 0; }
+      const wasChase = h.chase;
+      if (play) bogWispStep(h, dt, G.p.x, pilotLow(), pilotHigh()); else bogWispStep(h, dt, h.home, 1e9, 1e9);
+      if (h.chase && !wasChase && vis) sfx('bwisp', { v: bogVol(h.alt) * 0.9 });
+      h.x = h.wx;
+      if (vis && Math.random() < dt * 14) { const [x, a] = bogWispPos(h, G.t); bogBits(x + (Math.random() - 0.5) * 10, a + 6, 1, 'wisp', 26 + Math.abs(h.wv) * 0.2, { an: h.wv > 20 ? Math.PI * 0.85 : h.wv < -20 ? Math.PI * 0.15 : Math.PI / 2, spread: 0.7, life: 0.9, r: 4 }); }
+    }
+  }
+}
+
+// ---- cached art: the static walls and backdrop layers are drawn once into canvases, tile by tile, and blitted ----
+// A tile covers BOG_TH world units of height (plus a little overlap so no seam shows) at the screen's own resolution
+// (s × dpr); it is drawn in world units with y = -altitude (parallax layers: in their own layer space). At most one
+// tile is built ahead per frame; a tile needed on screen is always built at once. Tiles far from the view are dropped.
+const BOG_TH = 192, BOG_OV = 2;
+const bogCache = { key: '', tiles: new Map(), frame: 0, ahead: 0, sprites: {} };
+function bogCacheCheck() {
+  const k = `${cssW}|${H}|${dpr}|${s}|${ox}|${G.level && G.level.seed}|${G.level && G.level.end}`;
+  if (bogCache.key !== k) { bogCache.key = k; bogCache.tiles.clear(); bogCache.sprites = {}; }
+  bogCache.frame++; bogCache.ahead = 0;
+  if (bogCache.tiles.size > 90) for (const [id, t] of bogCache.tiles) if (t.used < bogCache.frame - 90) bogCache.tiles.delete(id);
+}
+function bogTile(layer, k, xr, draw) {
+  const id = layer + ':' + k; let t = bogCache.tiles.get(id);
+  if (t) { t.used = bogCache.frame; return t; }
+  const [x0, x1] = xr(k);
+  const a0 = k * BOG_TH - BOG_OV, a1 = (k + 1) * BOG_TH + BOG_OV, sd = s * dpr;
+  const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.ceil((x1 - x0) * sd)); cv.height = Math.ceil((a1 - a0) * sd);
+  const c = cv.getContext('2d'); c.setTransform(sd, 0, 0, sd, -x0 * sd, a1 * sd); c.lineJoin = 'round'; c.lineCap = 'round';
+  draw(c, k * BOG_TH, (k + 1) * BOG_TH, x0, x1);
+  t = { cv, x0, a1, w: cv.width / dpr, h: cv.height / dpr, used: bogCache.frame };
+  bogCache.tiles.set(id, t); return t;
+}
+// Blits a layer: parallax f (1: the walls), world x range [x0, x1] (fn of the tile index), drawn by draw.
+function bogLayer(layer, f, xr, draw, alpha = 1) {
+  const base = G.camAlt * f, lo = base - drawPad - 20, hi = base + viewH + drawPad + 20;
+  const k0 = Math.floor(lo / BOG_TH), k1 = Math.floor(hi / BOG_TH);
+  if (alpha < 1) { ctx.save(); ctx.globalAlpha = alpha; }
+  for (let k = k0; k <= k1; k++) {
+    const t = bogTile(layer, k, xr, draw);
+    ctx.drawImage(t.cv, ox + t.x0 * s, H - (t.a1 - base) * s, t.w, t.h);
+  }
+  if (alpha < 1) ctx.restore();
+  // build one tile ahead (above the view: the way you are going)
+  if (bogCache.ahead < 1 && !bogCache.tiles.has(layer + ':' + (k1 + 1))) { bogCache.ahead++; bogTile(layer, k1 + 1, xr, draw); }
+}
+// the screen's world x range (with room for the zoom and shake)
+const bogScrX = () => [(-ox - 50) / s, (cssW - ox + 50) / s];
+// a sprite drawn once (per cache key) into a canvas r×r world units, centred: draw(c) in world units round (0, 0)
+function bogSprite(id, r, draw) {
+  let sp = bogCache.sprites[id]; if (sp) return sp;
+  const sd = s * dpr, n = Math.ceil(2 * r * sd), cv = document.createElement('canvas'); cv.width = cv.height = n;
+  const c = cv.getContext('2d'); c.setTransform(sd, 0, 0, sd, n / 2, n / 2); c.lineJoin = 'round'; c.lineCap = 'round'; draw(c);
+  return (bogCache.sprites[id] = { cv, r, n });
+}
+// blits a sprite centred at screen (x, y), scaled by k (1: its own world size)
+function bogBlit(sp, x, y, k = 1, a = 1) {
+  if (a <= 0.01) return;
+  const w = sp.n / dpr * k;
+  if (a < 1) { const g = ctx.globalAlpha; ctx.globalAlpha = g * a; ctx.drawImage(sp.cv, x - w / 2, y - w / 2, w, w); ctx.globalAlpha = g; }
+  else ctx.drawImage(sp.cv, x - w / 2, y - w / 2, w, w);
+}
+
+// ---- the peat banks ----
+// Each wall is a bank of peat seen from the shaft: beds of peat, olive mud and ochre clay dipping across it (each bed
+// lit toward the face, deepening into the bank), fibrous line pairs through them, stones, old wood and snail shells
+// stuck in it; slimy mangrove roots snaking along the face with knuckles and rootlets; and the face itself a real lip:
+// a cushion of moss on top of every bulge (lit, tufted, little mushrooms and reeds growing out of it), the moss
+// bearded and the peat shaded under every overhang, chips and pebbles along the edge, bracket fungi on it and lime slime
+// oozing from its seams. All of it fixed by the height alone (hash2), so neighbouring tiles always agree.
+const BOG_BED = 34, BOG_TILT = 0.28;
+const bogWallX = (side, a) => side ? rightWall(a) : leftWall(a);
+const bogIn = (side, a) => side ? -rightWall(a) : leftWall(a);
+// how a bit of the face faces at height a: >0 up (the top of a bulge), <0 down (an overhang)
+const bogUp = (side, a) => -(bogIn(side, a + 5) - bogIn(side, a - 5)) / 10;
+// the bed index at world point (x, a) on a side
+function bogBedA(k, x, side) { const d = side ? x - 360 : 40 - x; return k * BOG_BED + BOG_TILT * d + 5 * Math.sin(x * 0.09 + k * 1.7) + 3 * Math.sin(x * 0.23 + k); }
+const bogBedKind = k => { const j = hash2(k, 7301); return j < 0.42 ? 0 : j < 0.66 ? 1 : j < 0.86 ? 2 : 3; };
+function bogDrawWall(c, side, a0, a1, X0, X1) {
+  const dir = side ? 1 : -1, lo = a0 - 6, hi = a1 + 6, wx = a => bogWallX(side, a);
+  const pts = []; for (let a = lo; a <= hi + 2; a += 2) pts.push([wx(a), a]);
+  const edge = side ? X1 + 4 : X0 - 4;
+  const body = () => { c.beginPath(); c.moveTo(edge, -lo); for (const [x, a] of pts) c.lineTo(x, -a); c.lineTo(edge, -(hi + 2)); c.closePath(); };
+  const P = BOGP.peat, col = (q, k = 0) => bogCol(bogLift(q, k));
+  // the peat's body, deep at the screen's edge, lighter toward the face
+  const xf = side ? 360 : 40, xd = side ? 420 : -20;
+  body(); c.fillStyle = bogLG(xd, 0, xf, 0, [bogCol([36, 30, 20]), bogCol([66, 54, 34]), bogCol([100, 82, 52])], c); c.fill();
+  c.save(); body(); c.clip();
+  // the beds: each filled from its lit face colour into its deep one, a fibrous line pair along each bed
+  const xs = []; for (let x = side ? 300 : X0 - 4; side ? x <= X1 + 4 : x <= 100; x += 6) xs.push(x);
+  const kA = Math.floor((lo - 60) / BOG_BED) - 2, kB = Math.ceil((hi + 60) / BOG_BED) + 2;
+  for (let k = kA; k <= kB; k++) {
+    const W = bogMoodAt(k * BOG_BED).wall, B = P[bogBedKind(k)].map(q => bogMix(q, W[0], W[1]));
+    c.beginPath(); xs.forEach((x, i) => { const a = bogBedA(k, x, side); i ? c.lineTo(x, -a) : c.moveTo(x, -a); });
+    for (let i = xs.length - 1; i >= 0; i--) c.lineTo(xs[i], -bogBedA(k + 1, xs[i], side));
+    c.closePath(); c.fillStyle = bogLG(xd, 0, xf + dir * 6, 0, [col(B[2], -6), col(B[1]), col(B[0])], c); c.fill();
+  }
+  for (let k = kA; k <= kB; k++) {
+    if (bogBedKind(k) === bogBedKind(k - 1) && hash2(k, 7303) < 0.6) continue;
+    const b = xs.map(x => [x, -bogBedA(k, x, side)]);
+    bogPair(b, 'rgba(28,22,10,.42)', 'rgba(255,236,170,.16)', 1.3, 1.1, c);
+    // fibres: short dark/lit dashes along the bed, as peat lies in layers
+    for (let q = 0; q < 5; q++) {
+      const j = hash2(k * 7 + q, 7305), x = side ? 362 + j * 50 : 38 - j * 50, a = bogBedA(k, x, side) + 6 + 14 * hash2(k * 7 + q, 7306), L = 5 + 8 * hash2(k * 7 + q, 7307);
+      bogPair([[x - L / 2, -a], [x, -a - 0.8], [x + L / 2, -a + 0.3]], 'rgba(30,24,12,.3)', 'rgba(255,240,190,.12)', 0.9, 0.8, c);
+    }
+  }
+  // stones, old wood and snail shells stuck in the peat (behind the moss)
+  for (let r = Math.floor((lo - 30) / 38); r * 38 < hi + 30; r++) {
+    const j = hash2(r, 7311 + side); if (j < 0.38) continue;
+    const a = r * 38 + 30 * hash2(r, 7312 + side), d = 6 + 26 * hash2(r, 7313 + side), x = wx(a) + dir * d, kind = hash2(r, 7314 + side);
+    if (kind < 0.55) {   // a rounded stone, lit top left, its own darker edge
+      const rr = 2.4 + 3.4 * hash2(r, 7315), sq = 0.65 + 0.3 * hash2(r, 7316), st = hash2(r, 7317) < 0.5 ? [[176, 164, 128], [118, 108, 82], [66, 60, 44]] : [[150, 156, 120], [98, 106, 76], [52, 60, 40]];
+      c.fillStyle = bogRG(x - rr * 0.4, -a - rr * 0.4, rr * 1.4, st.map(q => bogCol(q)), 0, c); c.beginPath(); c.ellipse(x, -a, rr, rr * sq, hash2(r, 7318) - 0.5, 0, TWO_PI); c.fill();
+      c.strokeStyle = bogCol(st[2], 0.8); c.lineWidth = 0.6; c.stroke();
+      c.strokeStyle = 'rgba(255,250,220,.45)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(x, -a, rr * 0.7, rr * sq * 0.6, 0, 3.5, 4.5); c.stroke();
+    } else if (kind < 0.8) {   // the end of an old drowned branch: rings and a bark rim
+      const rr = 2.6 + 2.4 * hash2(r, 7319);
+      c.fillStyle = bogRG(x - rr * 0.3, -a - rr * 0.3, rr * 1.2, ['#c8a874', '#8a6c44', '#4e3a22'], 0, c); c.beginPath(); c.ellipse(x, -a, rr, rr * 0.85, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = BOGP.barkEdge; c.lineWidth = 0.9; c.stroke();
+      c.strokeStyle = 'rgba(80,56,30,.55)'; c.lineWidth = 0.5; for (const f of [0.35, 0.65]) { c.beginPath(); c.ellipse(x + 0.3, -a + 0.2, rr * f, rr * f * 0.85, 0, 0, TWO_PI); c.stroke(); }
+      c.fillStyle = 'rgba(60,40,20,.8)'; c.beginPath(); c.arc(x + 0.3, -a + 0.2, 0.7, 0, TWO_PI); c.fill();
+    } else {   // a snail shell: a spiral, lit
+      const rr = 2.2 + 1.4 * hash2(r, 7320);
+      c.fillStyle = bogRG(x - rr * 0.4, -a - rr * 0.4, rr * 1.3, ['#f2dca4', '#c49a5a', '#7a5428'], 0, c); c.beginPath(); c.arc(x, -a, rr, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#6a4620'; c.lineWidth = 0.6; c.stroke();
+      c.beginPath(); for (let q = 0; q <= 20; q++) { const an = q * 0.6, rq = rr * (1 - q / 22); c.lineTo(x + Math.cos(an) * rq * 0.9, -a + Math.sin(an) * rq * 0.9); } c.stroke();
+      c.strokeStyle = 'rgba(255,248,220,.6)'; c.lineWidth = 0.5; c.beginPath(); c.arc(x, -a, rr * 0.75, 3.6, 4.6); c.stroke();
+    }
+  }
+  // roots snaking along the face: out of the bank, along the face, back in; dark edge, bark body, a lit ridge, knuckles
+  for (let r = Math.floor((lo - 320) / 170); r * 170 < hi + 40; r++) {
+    if (hash2(r, 7331 + side) < 0.45) continue;
+    const aS = r * 170 + 60 * hash2(r, 7332 + side), L = 150 + 160 * hash2(r, 7333 + side), th = 1.8 + 1.6 * hash2(r, 7334 + side), ph = 6.28 * hash2(r, 7335 + side), dd = 4 + 7 * hash2(r, 7336 + side);
+    if (aS > hi + 10 || aS + L < lo - 10) continue;
+    const rp = [];
+    for (let q = 0; q <= 1.0001; q += 1 / Math.ceil(L / 6)) {
+      const a = aS + q * L, dive = Math.pow(Math.abs(q - 0.5) * 2, 4);
+      rp.push([wx(a) + dir * (dd + 3 * Math.sin(a / 23 + ph) + dive * 30), -a, th * (1 - 0.6 * dive)]);
+    }
+    const stroke = (w, colr, dx = 0, dy = 0) => { for (let i = 1; i < rp.length; i++) { c.strokeStyle = colr; c.lineWidth = Math.max(0.4, rp[i][2] * w); c.beginPath(); c.moveTo(rp[i - 1][0] + dx, rp[i - 1][1] + dy); c.lineTo(rp[i][0] + dx, rp[i][1] + dy); c.stroke(); } };
+    stroke(2.0, 'rgba(26,20,10,.4)', 0.8 * -dir, 0.6);   // a soft shadow under it
+    stroke(1.8, BOGP.barkEdge); stroke(1.45, '#6e5636'); stroke(0.75, '#9a7e54', -0.35 * th, -0.2 * th); stroke(0.28, 'rgba(255,236,190,.55)', -0.55 * th, -0.35 * th);
+    // knuckles (a furrow and a lit ridge across the root) and rootlets reaching into the peat
+    for (let i = 3; i < rp.length - 3; i += 4) {
+      const [x, y, w] = rp[i]; if (w < 1.4) continue;
+      bogPair([[x - w * 0.8, y - 0.3], [x + w * 0.8, y + 0.3]], 'rgba(40,28,14,.6)', 'rgba(255,230,170,.35)', 0.7, 0.8, c);
+      if (hash2(r * 31 + i, 7337) < 0.3) { c.strokeStyle = '#5a4428'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + dir * 6, y + 3, x + dir * 10, y + 8 + 4 * hash2(i, r)); c.stroke(); }
+    }
+    // a glossy wet sheen along part of it
+    c.strokeStyle = 'rgba(220,255,170,.22)'; c.lineWidth = 0.6; c.beginPath(); rp.slice(Math.floor(rp.length * 0.3), Math.floor(rp.length * 0.55)).forEach(([x, y, w], i) => i ? c.lineTo(x - w * 0.5, y - w * 0.5) : c.moveTo(x - w * 0.5, y - w * 0.5)); c.stroke();
+  }
+  // lime slime oozing out of seams and down the face, a bead at each end
+  for (let r = Math.floor((lo - 60) / 95); r * 95 < hi + 60; r++) {
+    if (hash2(r, 7341 + side) < 0.55) continue;
+    const a = r * 95 + 50 * hash2(r, 7342 + side), L = 16 + 30 * hash2(r, 7343 + side), d0 = 3 + 8 * hash2(r, 7344 + side);
+    const sp = []; for (let q = 0; q <= 8; q++) { const aa = a - q / 8 * L; sp.push([wx(aa) + dir * (d0 * (1 - q / 8) + 1.2), -aa]); }
+    c.strokeStyle = 'rgba(60,100,14,.55)'; c.lineWidth = 3.4; bogPoly(sp, false, c); c.stroke();
+    c.strokeStyle = bogLG(0, -a, 0, -a + L, ['#c8f05a', '#8cc430'], c); c.lineWidth = 2.2; c.stroke();
+    c.strokeStyle = 'rgba(250,255,200,.7)'; c.lineWidth = 0.6; bogPoly(sp.map(([x, y]) => [x - 0.6, y]), false, c); c.stroke();
+    const [ex, ey] = sp[sp.length - 1]; c.fillStyle = bogRG(ex - 0.6, ey + 1, 2.6, ['#efffa8', '#9ad03a', '#4e8414'], 0, c); c.beginPath(); c.ellipse(ex, ey + 1.6, 1.8, 2.4, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,255,230,.85)'; c.beginPath(); c.arc(ex - 0.6, ey + 0.8, 0.55, 0, TWO_PI); c.fill();
+  }
+  // great roots: thick braided strands of two or three roots running long down the bank just behind the face
+  for (let r = Math.floor((lo - 420) / 240); r * 240 < hi + 40; r++) {
+    if (hash2(r, 7401 + side) < 0.35) continue;
+    const aS = r * 240 + 80 * hash2(r, 7402 + side), L = 220 + 200 * hash2(r, 7403 + side), n = 2 + (hash2(r, 7404 + side) < 0.5 ? 1 : 0), d0 = 7 + 6 * hash2(r, 7405 + side);
+    if (aS > hi + 10 || aS + L < lo - 10) continue;
+    for (let q = 0; q < n; q++) bogRoot(c, side, aS + q * 6, L - q * 20, d0 + q * 4.5, 3.4 + 1.6 * hash2(r * 3 + q, 7406) - q * 0.5, r * 3 + q, 3 + q * 1.4);
+  }
+  // root masses: wherever the bank bulges out in a knob, a ball of roots wraps round it
+  if (G.level && G.level.knobAt) {
+    for (let a = Math.floor((lo - 50) / 4) * 4; a < hi + 50; a += 4) {
+      const kn = G.level.knobAt(a, side); if (kn < 5 || kn < G.level.knobAt(a - 4, side) || kn < G.level.knobAt(a + 4, side)) continue;
+      const j = Math.floor(a);
+      for (let q = 0; q < 5; q++) bogRoot(c, side, a - 52 - 10 * hash2(j + q, 7411), 104 + 20 * hash2(j + q, 7412), 2 + q * 3.2, 2.6 + 1.4 * hash2(j + q, 7413), j * 5 + q, 1.5 + q);
+    }
+  }
+  // the moss cushion's shadow on the peat just inside the lip (it overhangs: depth)
+  for (const [x, a] of pts) { const w = 5 + 6 * smooth(-0.05, 0.5, bogUp(side, a)); c.fillStyle = 'rgba(18,16,8,.22)'; c.fillRect(Math.min(x + dir * (w + 3), x + dir * (w + 13)), -a - 1.2, 10, 2.4); }
+  // the shade under every overhang (a soft dark wedge on the peat below a bulge) and light on every rise
+  for (const [x, a] of pts) {
+    const up = bogUp(side, a);
+    if (up < -0.06) { c.fillStyle = `rgba(20,18,8,${Math.min(0.32, -up * 0.6)})`; c.fillRect(Math.min(x, x + dir * 22), -a - 1.2, 22, 2.4); }
+    else if (up > 0.08) { c.fillStyle = `rgba(255,240,170,${Math.min(0.12, up * 0.25)})`; c.fillRect(Math.min(x, x + dir * 12), -a - 1.2, 12, 2.4); }
+  }
+  c.restore();
+  // ---- the lip: moss cushioned on every rise, a thinner skin elsewhere, bearded under the overhangs ----
+  // the moss lies in cushions: a run of rounded lobes along the face, fatter on the rises
+  const SC = 11, scal = a => { const r = Math.floor(a / SC), u = a / SC - r; return Math.sin(Math.PI * u) * (2.2 + 2.4 * hash2(r, 7350 + side)); };
+  const mossW = a => 4 + 6 * smooth(-0.05, 0.5, bogUp(side, a)) + scal(a) * 1.2;
+  const mo = pts.map(([x, a]) => [x + dir * mossW(a), a]);
+  c.beginPath(); pts.forEach(([x, a], i) => i ? c.lineTo(x - dir * 0.6, -a) : c.moveTo(x - dir * 0.6, -a)); for (let i = mo.length - 1; i >= 0; i--) c.lineTo(mo[i][0], -mo[i][1]); c.closePath();
+  c.fillStyle = bogLG(xf - dir * 2, 0, xf + dir * 10, 0, [BOGP.moss[0], BOGP.moss[1], BOGP.moss[2]], c); c.fill();
+  // the cushions' inner edge (a dark furrow where the moss meets the peat), the creases between them, a lit crown on each
+  bogPoly(mo.map(([x, a]) => [x, -a]), false, c); c.strokeStyle = 'rgba(30,48,12,.6)'; c.lineWidth = 1.1; c.stroke();
+  for (let r = Math.floor(lo / SC); r * SC < hi; r++) {
+    const a = r * SC, x = wx(a), w = mossW(a + 0.01);
+    bogPair([[x, -a], [x + dir * (w + 1.2), -a + 0.6]], 'rgba(34,56,12,.55)', 'rgba(220,250,150,.35)', 0.8, -0.8, c);
+    const top = []; for (let u = 0.52; u <= 0.9; u += 0.06) { const aa = (r + u) * SC; top.push([wx(aa) + dir * mossW(aa) * 0.62, -aa]); }
+    c.strokeStyle = 'rgba(226,255,160,.5)'; c.lineWidth = 0.9; bogPoly(top, false, c); c.stroke();
+    for (let q = 0; q < 2; q++) { const aa = (r + 0.2 + 0.5 * hash2(r * 2 + q, 7355)) * SC, xx = wx(aa) + dir * mossW(aa) * (0.3 + 0.4 * hash2(r * 2 + q, 7356)); c.fillStyle = 'rgba(40,66,16,.45)'; c.beginPath(); c.arc(xx, -aa, 0.55, 0, TWO_PI); c.fill(); }
+  }
+  // the face's edge: a thin dark-moss line and a lit ridge on the rises
+  bogPoly(pts.map(([x, a]) => [x, -a]), false, c); c.strokeStyle = BOGP.mossEdge; c.lineWidth = 1.1; c.stroke();
+  c.lineWidth = 0.9;
+  for (let i = 1; i < pts.length; i++) {
+    const up = bogUp(side, pts[i][1]), lit = clamp(0.25 + up * 0.9 + (side ? 0.15 : 0), 0, 0.85);
+    if (lit < 0.08) continue;
+    const sn = bogMoodAt(pts[i][1]).sun; c.strokeStyle = bogCol(bogMix(sn, [232, 255, 170], 0.4), lit); c.beginPath(); c.moveTo(pts[i - 1][0] + dir * 1.1, -pts[i - 1][1] - 0.4); c.lineTo(pts[i][0] + dir * 1.1, -pts[i][1] - 0.4); c.stroke();
+  }
+  // tufts poking up out of the moss on the rises; beards hanging under the overhangs (hugging the face)
+  for (let r = Math.floor(lo / 5); r * 5 < hi; r++) {
+    const a = r * 5 + 2 * hash2(r, 7361 + side), up = bogUp(side, a), x = wx(a), j = hash2(r, 7362 + side);
+    if (up > 0.12 && j < 0.75) {
+      const n = 2 + Math.floor(3 * hash2(r, 7363));
+      for (let q = 0; q < n; q++) { const bx = x + dir * (0.5 + q * 1.4), L = 2.5 + 3.5 * hash2(r * 5 + q, 7364), lean = -dir * (0.4 + 0.8 * hash2(r * 5 + q, 7365)); c.strokeStyle = q % 2 ? '#a8d050' : '#78a634'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(bx, -a); c.quadraticCurveTo(bx + lean, -a - L * 0.6, bx + lean * 1.8, -a - L); c.stroke(); }
+    } else if (up < -0.1 && j < 0.6) {
+      const L = 4 + 9 * hash2(r, 7366) * Math.min(1, -up * 2.2), bx = x - dir * 0.4;
+      c.strokeStyle = '#4c7424'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(bx, -a); c.quadraticCurveTo(bx - dir * 1.2, -a + L * 0.5, bx - dir * 0.6, -a + L); c.stroke();
+      c.strokeStyle = 'rgba(200,236,130,.55)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(bx - dir * 0.2, -a); c.quadraticCurveTo(bx - dir * 1.1, -a + L * 0.4, bx - dir * 0.8, -a + L * 0.8); c.stroke();
+    }
+  }
+  // chips and pebbles along the edge
+  for (let r = Math.floor(lo / 19); r * 19 < hi; r++) {
+    if (hash2(r, 7371 + side) < 0.5) continue;
+    const a = r * 19 + 10 * hash2(r, 7372 + side), x = wx(a) + dir * 0.6, rr = 0.9 + 1.1 * hash2(r, 7373 + side);
+    c.fillStyle = bogRG(x - rr * 0.3, -a - rr * 0.3, rr * 1.3, ['#c4b88a', '#857a54', '#4c4630'], 0, c); c.beginPath(); c.ellipse(x, -a, rr * 1.2, rr, 0.3, 0, TWO_PI); c.fill();
+    c.strokeStyle = '#4a4228'; c.lineWidth = 0.4; c.stroke();
+  }
+  // tiny mushrooms and reeds growing out of the moss on the rises
+  for (let r = Math.floor((lo - 20) / 61); r * 61 < hi + 20; r++) {
+    const a = r * 61 + 40 * hash2(r, 7381 + side), up = bogUp(side, a); if (up < 0.1) continue;
+    const x = wx(a) + dir * 1.5, kind = hash2(r, 7382 + side);
+    if (kind < 0.5) {
+      for (let q = 0; q < 3; q++) {
+        const mx = x - dir * (q * 2.6 - 0.5), hh = 2.4 + 2.2 * hash2(r * 3 + q, 7383), cw = 1.6 + 1.2 * hash2(r * 3 + q, 7384);
+        c.strokeStyle = '#e8dcb0'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(mx, -a); c.lineTo(mx - dir * 0.4, -a - hh); c.stroke();
+        c.fillStyle = bogLG(0, -a - hh - cw, 0, -a - hh, ['#fff4c4', '#d8b46a', '#9a7432'], c); c.beginPath(); c.ellipse(mx - dir * 0.4, -a - hh, cw, cw * 0.7, 0, Math.PI, 0); c.fill();
+        c.strokeStyle = '#7a5a26'; c.lineWidth = 0.4; c.stroke();
+        c.fillStyle = 'rgba(255,255,240,.8)'; c.beginPath(); c.arc(mx - dir * 0.4 - cw * 0.35, -a - hh - cw * 0.35, 0.35, 0, TWO_PI); c.fill();
+      }
+    } else {
+      // a reed clump with a cattail or two
+      for (let q = 0; q < 4; q++) {
+        const L = 9 + 10 * hash2(r * 4 + q, 7385), lean = -dir * (1 + 3 * hash2(r * 4 + q, 7386)), bx = x - dir * q * 1.2;
+        c.strokeStyle = q % 2 ? '#8ab03e' : '#5e8a2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(bx, -a); c.quadraticCurveTo(bx + lean * 0.3, -a - L * 0.6, bx + lean, -a - L); c.stroke();
+        if (q === 1 || q === 3) { c.fillStyle = bogLG(bx + lean - 1.2, 0, bx + lean + 1.2, 0, ['#b07a46', '#7a4e26', '#4e3016'], c); c.beginPath(); c.ellipse(bx + lean * 0.95, -a - L + 2.2, 1.3, 3.4, lean * 0.04, 0, TWO_PI); c.fill(); c.strokeStyle = '#4a2c12'; c.lineWidth = 0.4; c.stroke(); }
+      }
+    }
+  }
+  // bracket fungi in tiers on the face (they glow faintly: see bogWallLive)
+  for (const q of bogFungi(side, lo - 20, hi + 20)) {
+    const { x, a, n, sz } = q;
+    for (let i = 0; i < n; i++) {
+      const fy = -a + i * 4.2 * sz, fw = (5.2 - i * 1.2) * sz, fh = (2.2 - i * 0.3) * sz, fx = x + (side ? -1 : 1) * fw * 0.5;
+      c.fillStyle = bogLG(0, fy - fh, 0, fy + fh * 0.6, BOGP.fungus, c);
+      c.beginPath(); c.ellipse(fx, fy, fw * 0.6 + 0.4, fh, 0, Math.PI, 0); c.quadraticCurveTo(fx, fy + fh * 0.8, fx - fw * 0.6 - 0.4, fy); c.fill();
+      c.strokeStyle = BOGP.fungusEdge; c.lineWidth = 0.6; c.stroke();
+      bogPair([[fx - fw * 0.4, fy - fh * 0.35], [fx, fy - fh * 0.55], [fx + fw * 0.4, fy - fh * 0.35]], 'rgba(120,110,40,.5)', 'rgba(255,255,220,.6)', 0.5, 0.5, c);
+      c.fillStyle = 'rgba(200,255,110,.55)'; c.beginPath(); c.ellipse(fx, fy + fh * 0.25, fw * 0.45, fh * 0.25, 0, 0, TWO_PI); c.fill();
+    }
+  }
+}
+// a root running down the bank behind its face (from aS for L, at depth d into the bank, thickness th): it dives into
+// the peat at both ends, a darker shade under it, bark body, a lit ridge, knuckles (line pairs) and a wet sheen
+function bogRoot(c, side, aS, L, d, th, seed, wav) {
+  const dir = side ? 1 : -1, rp = [];
+  for (let q = 0; q <= 1.0001; q += 1 / Math.ceil(L / 5)) {
+    const a = aS + q * L, dive = Math.pow(Math.abs(q - 0.5) * 2, 3);
+    rp.push([bogWallX(side, a) + dir * (d + wav * Math.sin(a / 19 + seed) + dive * 26), -a, th * (1 - 0.65 * dive)]);
+  }
+  const stroke = (w, colr, dx = 0, dy = 0) => { c.strokeStyle = colr; for (let i = 1; i < rp.length; i++) { c.lineWidth = Math.max(0.4, rp[i][2] * w); c.beginPath(); c.moveTo(rp[i - 1][0] + dx, rp[i - 1][1] + dy); c.lineTo(rp[i][0] + dx, rp[i][1] + dy); c.stroke(); } };
+  stroke(2.3, 'rgba(22,16,8,.38)', dir * 1.2, 1);
+  stroke(2.0, BOGP.barkEdge); stroke(1.62, '#735a38'); stroke(0.9, '#a0845a', -0.4 * th, -0.25 * th); stroke(0.3, 'rgba(255,238,196,.6)', -0.6 * th, -0.4 * th);
+  for (let i = 3; i < rp.length - 3; i += 3) {
+    const [x, y, w] = rp[i]; if (w < 1.6) continue;
+    bogPair([[x - w * 0.85, y - 0.4], [x + w * 0.85, y + 0.4]], 'rgba(40,28,14,.55)', 'rgba(255,230,170,.32)', 0.7, 0.8, c);
+  }
+  c.strokeStyle = 'rgba(220,255,170,.2)'; c.lineWidth = 0.7; c.beginPath(); rp.slice(Math.floor(rp.length * 0.25), Math.floor(rp.length * 0.5)).forEach(([x, y, w], i) => i ? c.lineTo(x - w * 0.5, y - w * 0.5) : c.moveTo(x - w * 0.5, y - w * 0.5)); c.stroke();
+}
+// the bracket fungus clusters on a side between two heights (fixed by the height alone)
+function bogFungi(side, lo, hi) {
+  const out = [];
+  for (let r = Math.floor(lo / 83); r * 83 < hi; r++) {
+    if (hash2(r, 7391 + side) < 0.5) continue;
+    const a = r * 83 + 50 * hash2(r, 7392 + side); if (bogUp(side, a) < -0.25) continue;
+    out.push({ x: bogWallX(side, a) + (side ? 0.4 : -0.4), a, n: 2 + (hash2(r, 7393 + side) < 0.5 ? 1 : 0), sz: 0.8 + 0.35 * hash2(r, 7394 + side), r });
+  }
+  return out;
+}
+function bogDrawWalls() {
+  const [X0, X1] = bogScrX();
+  for (const side of [0, 1]) {
+    // a soft olive contact shadow on the shaft side (no hard line), then the cached bank
+    bogLayer('w' + side, 1, k => {
+      let m = side ? Infinity : -Infinity;
+      for (let a = k * BOG_TH - 10; a <= (k + 1) * BOG_TH + 10; a += 6) { const x = bogWallX(side, a); m = side ? Math.min(m, x) : Math.max(m, x); }
+      return side ? [m - 16, X1] : [X0, m + 16];
+    }, (c, a0, a1, x0, x1) => {
+      // the shadow the bank casts on the haze (soft, olive)
+      const sh = []; for (let a = a0 - 6; a <= a1 + 8; a += 4) sh.push([bogWallX(side, a), a]);
+      for (const [w, al] of [[14, 0.07], [7, 0.08], [3, 0.09]]) { c.strokeStyle = `rgba(22,26,10,${al})`; c.lineWidth = w; bogPoly(sh.map(([x, a]) => [x + (side ? -w / 2 : w / 2), -a]), false, c); c.stroke(); }
+      bogDrawWall(c, side, a0, a1, x0, x1);
+    });
+  }
+  bogWallLive();
+}
+// the live bits on the banks: the fungi's faint pulsing glow and slime beads now and then dropping off
+function bogWallLive() {
+  const lo = G.camAlt - 40 - drawPad, hi = G.camAlt + viewH + 40 + drawPad, T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const side of [0, 1]) for (const q of bogFungi(side, lo, hi)) {
+    const p = 0.5 + 0.5 * Math.sin(T * 1.7 + q.r * 1.3);
+    bogGlow(sx(q.x + (side ? -5 : 5)), sy(q.a - 3), (14 + 5 * p) * s, BOGP.lime, 0.1 + 0.08 * p);
+  }
+  ctx.restore();
+  for (const side of [0, 1]) for (let r = Math.floor((lo - 60) / 95); r * 95 < hi + 60; r++) {
+    if (hash2(r, 7341 + side) < 0.55) continue;
+    const a = r * 95 + 50 * hash2(r, 7342 + side), L = 16 + 30 * hash2(r, 7343 + side), ea = a - L - 1.6, per = 3 + 3 * hash2(r, 7345), u = pmod(T / per + hash2(r, 7346), 1);
+    if (u > 0.4) continue;
+    const fall = u < 0.2 ? 0 : (u - 0.2) * per, da = 450 * fall * fall, x = sx(bogWallX(side, ea) + (side ? -1.2 : 1.2)), y = sy(ea - da), sw = u < 0.2 ? smooth(0, 0.2, u) : 1;
+    ctx.fillStyle = `rgba(200,250,90,${0.9 - fall})`; ctx.beginPath(); ctx.ellipse(x, y + 1.6 * s * sw, 1.4 * s, (1.6 + sw) * s, 0, 0, TWO_PI); ctx.fill();
+  }
+}
+
+// ---- the mire's backdrop ----
+// Calm, hazy, low in contrast: an olive haze lit yellow-green from above, a drowned forest seen up through the fog in
+// three layers (each its own parallax, all cached tiles): far bald cypresses, pale as the haze, draped in Spanish moss
+// (0.07); nearer mangroves with crooked branches and great roots arching right across the shaft, moss curtains hanging
+// from them, reeds and cattails growing on them, leafy clumps (0.17); and close trunks at the screen's edges with
+// shelf fungi and vines (0.3, drawn as the midground). Fog banks drift between the layers; fireflies, swamp bubbles and
+// spores float through it all. The haze darkens in the Deep Murk and warms toward the Bog Heart.
+MOTE_DRIFT.bogfly = [-3, -12]; MOTE_DRIFT.bogbub = [-16, -38];
+{ const base = moteKind; moteKind = function (m, a) { return bogOn() ? (m.r > 0.62 ? 'bogfly' : 'bogbub') : base(m, a); }; }
+// how deep in the murk the view is (0..1) and how near the Bog Heart (0..1)
+const bogMurk = () => G.level && G.level.murkAt ? G.level.murkAt(G.camAlt + viewH / 2) : 0;
+const bogHeartK = () => { const a = G.adv; return a && a.end ? clamp(1 - (a.end + 200 - (G.camAlt + viewH / 2)) / 1500, 0, 1) : 0; };
+// a forest layer's colours: lit, mid, shade and edge, mixed into the haze by its distance
+function bogTone(fog) {
+  const hz = BOGP.haze, m = q => bogMix(q, hz, fog);
+  return { lit: m([150, 136, 86]), mid: m([102, 96, 58]), dk: m([62, 62, 36]), edge: m([48, 46, 26]), moss: m([150, 164, 104]), mossDk: m([96, 112, 62]), leaf: m([120, 150, 60]), leafLt: m([176, 196, 96]), leafDk: m([62, 86, 34]) };
+}
+// a trunk lane: a slowly wandering column of trunk through layer space (x at layer height p, half-width)
+const bogLaneX = (L, p) => L.x + L.A * Math.sin(p / L.P + L.ph);
+const bogLaneW = (L, p) => L.w * (1 + 0.16 * Math.sin(p / (L.P * 0.53) + L.ph * 2) + 0.07 * Math.sin(p / 37 + L.ph));
+function bogTrunk(c, L, a0, a1, C) {
+  const lo = a0 - 14, hi = a1 + 14, P = [];
+  for (let p = lo; p <= hi + 6; p += 6) P.push([bogLaneX(L, p), bogLaneW(L, p), p]);
+  const g = bogLG(L.x - L.w * 1.3 - L.A, 0, L.x + L.w * 1.3 + L.A, 0, [bogCol(C.lit), bogCol(C.mid), bogCol(C.dk)], c);
+  c.beginPath(); P.forEach(([x, w, p], i) => i ? c.lineTo(x - w, -p) : c.moveTo(x - w, -p)); for (let i = P.length - 1; i >= 0; i--) c.lineTo(P[i][0] + P[i][1], -P[i][2]); c.closePath();
+  c.fillStyle = g; c.fill();
+  c.strokeStyle = bogCol(C.edge, 0.8); c.lineWidth = 1; c.stroke();
+  // bark furrows as line pairs following the trunk
+  for (const u of [-0.62, -0.28, 0.08, 0.42, 0.72]) {
+    const pp = P.map(([x, w, p]) => [x + w * (u + 0.07 * Math.sin(p / 19 + u * 9 + L.ph)), -p]);
+    bogPair(pp, bogCol(C.edge, 0.38), bogCol(C.lit, 0.22 * (1 - Math.max(0, u))), 1.1, -0.9, c);
+  }
+  // knots and hollows
+  for (let r = Math.floor(lo / 70); r * 70 < hi; r++) {
+    const j = hash2(r, L.seed + 1); if (j < 0.6) continue;
+    const p = r * 70 + 40 * hash2(r, L.seed + 2), x = bogLaneX(L, p) + bogLaneW(L, p) * (hash2(r, L.seed + 3) - 0.5) * 0.9, rr = 2 + bogLaneW(L, p) * 0.18 * hash2(r, L.seed + 4);
+    c.fillStyle = bogCol(C.dk, 0.9); c.beginPath(); c.ellipse(x, -p, rr * 0.7, rr * 1.4, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = bogCol(C.lit, 0.4); c.lineWidth = 0.9; c.beginPath(); c.ellipse(x, -p, rr * 1.1, rr * 1.8, 0, 2.2, 4.4); c.stroke();
+    c.strokeStyle = bogCol(C.edge, 0.5); c.beginPath(); c.ellipse(x, -p, rr * 1.1, rr * 1.8, 0, 5.4, 7.2); c.stroke();
+  }
+  // moss patches on the lit side
+  for (let r = Math.floor(lo / 46); r * 46 < hi; r++) {
+    if (hash2(r, L.seed + 5) < 0.45) continue;
+    const p = r * 46 + 30 * hash2(r, L.seed + 6), x = bogLaneX(L, p) - bogLaneW(L, p) * 0.8, h = 8 + 16 * hash2(r, L.seed + 7);
+    c.fillStyle = bogCol(C.moss, 0.75); c.beginPath(); c.ellipse(x + 2, -p, 3 + bogLaneW(L, p) * 0.18, h, 0.1, 0, TWO_PI); c.fill();
+    c.fillStyle = bogCol(bogLift(C.moss, 24), 0.5); c.beginPath(); c.ellipse(x + 1, -p - h * 0.3, 2, h * 0.5, 0.1, 0, TWO_PI); c.fill();
+  }
+}
+// Spanish moss: a curtain of soft strands hanging from points along a bough
+function bogDrape(c, pts, C, len, seed) {
+  pts.forEach(([x, y], i) => {
+    const L = len * (0.4 + 0.8 * hash2(i, seed)), sw = (hash2(i, seed + 1) - 0.5) * 6;
+    c.strokeStyle = bogCol(C.mossDk, 0.85); c.lineWidth = 2.2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + sw, y + L * 0.5, x + sw * 0.4, y + L); c.stroke();
+    c.strokeStyle = bogCol(C.moss, 0.8); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x - 0.6, y); c.quadraticCurveTo(x + sw - 0.6, y + L * 0.45, x + sw * 0.4 - 0.4, y + L * 0.85); c.stroke();
+    for (let q = 1; q < 4; q++) { const v = q / 4, bx = x + sw * v * 0.8, by = y + L * v; c.strokeStyle = bogCol(C.moss, 0.6); c.lineWidth = 0.7; c.beginPath(); c.moveTo(bx, by); c.lineTo(bx + (q % 2 ? 2.5 : -2.5), by + 5); c.stroke(); }
+  });
+}
+// a bough from (x0, p0) out by dx, rising by dy, thickness w0 tapering: dark edge, body, lit ridge; returns points along it
+function bogBough(c, x0, p0, dx, dy, w0, C, n = 10) {
+  const P = []; for (let i = 0; i <= n; i++) { const v = i / n; P.push([x0 + dx * v, -(p0 + dy * (2 * v - v * v) * 0.9 + dy * 0.1 * v), w0 * (1 - 0.75 * v)]); }
+  for (const [k, colr, oy] of [[1.25, bogCol(C.edge, 0.9), 0], [1, bogCol(C.mid), 0], [0.4, bogCol(C.lit, 0.8), -0.3]]) for (let i = 1; i < P.length; i++) {
+    c.strokeStyle = colr; c.lineWidth = P[i][2] * k; c.beginPath(); c.moveTo(P[i - 1][0], P[i - 1][1] + oy * P[i][2]); c.lineTo(P[i][0], P[i][1] + oy * P[i][2]); c.stroke();
+  }
+  return P;
+}
+// a leafy spray: long pointed mangrove leaves fanning and drooping from a twig end, back ones darker, each leaf lit
+// along its top with a midrib line pair
+function bogLeaves(c, x, y, r, C, seed) {
+  const n = 9, L = [];
+  for (let q = 0; q < n; q++) { const an = -2.7 + q / (n - 1) * 2.9 + (hash2(q, seed) - 0.5) * 0.3, len = r * (0.75 + 0.45 * hash2(q, seed + 1)); L.push([an, len, q % 3 === 1]); }
+  L.sort((p, q) => (p[2] ? 0 : 1) - (q[2] ? 0 : 1));
+  for (const [an0, len, back] of L) {
+    const an = an0 + 0.5 * Math.sin(an0) * 0.4, droop = 0.35 * Math.cos(an0);
+    const ex = x + Math.cos(an) * len, ey = y + Math.sin(an) * len * 0.8 + len * droop * 0.5, mx = (x + ex) / 2 + Math.cos(an + 1.57) * len * 0.12, my = (y + ey) / 2 + Math.sin(an + 1.57) * len * 0.12 + len * 0.1;
+    const w = len * 0.2, nx = -(ey - y) / len * w, ny = (ex - x) / len * w;
+    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(mx + nx, my + ny, ex, ey); c.quadraticCurveTo(mx - nx, my - ny, x, y); c.closePath();
+    c.fillStyle = back ? bogCol(C.leafDk) : bogLG(mx - nx, my - ny - w, mx + nx, my + ny + w, [bogCol(C.leafLt), bogCol(C.leaf), bogCol(C.leafDk)], c); c.fill();
+    c.strokeStyle = bogCol(bogLift(C.leafDk, -14), 0.85); c.lineWidth = 0.7; c.stroke();
+    if (!back) bogPair([[x, y], [mx, my], [ex, ey]], bogCol(C.leafDk, 0.6), bogCol(C.leafLt, 0.55), 0.6, -0.6, c);
+  }
+  c.fillStyle = bogCol(C.mid); c.beginPath(); c.arc(x, y, 1.6, 0, TWO_PI); c.fill();
+}
+const BOG_FAR = [{ x: -6, w: 12, A: 12, P: 200, ph: 0.4, seed: 7401 }, { x: 84, w: 7, A: 14, P: 230, ph: 2.1, seed: 7411 }, { x: 200, w: 8, A: 12, P: 210, ph: 4.0, seed: 7421 }, { x: 318, w: 7, A: 12, P: 190, ph: 1.2, seed: 7431 }, { x: 410, w: 13, A: 10, P: 250, ph: 5.1, seed: 7441 }];
+const BOG_MID = [{ x: 22, w: 17, A: 16, P: 220, ph: 1.0, seed: 7501 }, { x: 128, w: 10, A: 20, P: 260, ph: 3.3, seed: 7511 }, { x: 290, w: 11, A: 18, P: 240, ph: 5.2, seed: 7521 }, { x: 384, w: 18, A: 14, P: 230, ph: 0.2, seed: 7531 }];
+const BOG_NEAR = [{ x: -18, w: 30, A: 14, P: 420, ph: 2.2, seed: 7601 }, { x: 420, w: 32, A: 14, P: 400, ph: 4.4, seed: 7611 }];
+function bogDrawFar(c, a0, a1) {
+  const C = bogTone(0.7);
+  for (const L of BOG_FAR) {
+    bogTrunk(c, L, a0, a1, C);
+    // bare crooked branches, Spanish moss trailing off them
+    for (let r = Math.floor((a0 - 160) / 150); r * 150 < a1 + 60; r++) {
+      if (hash2(r, L.seed + 9) < 0.35) continue;
+      const p = r * 150 + 60 * hash2(r, L.seed + 10), d = hash2(r, L.seed + 11) < 0.5 ? -1 : 1, x = bogLaneX(L, p) + d * bogLaneW(L, p) * 0.7, len = 30 + 40 * hash2(r, L.seed + 12);
+      const P = bogBough(c, x, p, d * len, 22 + 20 * hash2(r, L.seed + 13), 5, C, 8);
+      bogDrape(c, P.slice(2).filter((q, i) => i % 2 === 0).map(([x, y]) => [x, y]), C, 26, L.seed + r);
+    }
+  }
+}
+function bogDrawMid(c, a0, a1) {
+  const C = bogTone(0.4);
+  // great roots arching across the shaft between trunks (moss curtains under them, reeds on them)
+  for (let r = Math.floor((a0 - 260) / 520); r * 520 < a1 + 160; r++) {
+    if (hash2(r, 7551) < 0.25) continue;
+    const i = hash2(r, 7552) < 0.5 ? 0 : 1, A = BOG_MID[i], B = BOG_MID[i + 2], p = r * 520 + 200 * hash2(r, 7553), dp = (hash2(r, 7554) - 0.5) * 120;
+    const xA = bogLaneX(A, p), xB = bogLaneX(B, p + dp), up = 50 + 50 * hash2(r, 7555), th = 7 + 4 * hash2(r, 7556), P = [];
+    for (let q = 0; q <= 24; q++) { const v = q / 24; P.push([lerp(xA, xB, v), -(p + dp * v + Math.sin(v * Math.PI) * up), th * (1 - 0.35 * Math.sin(v * Math.PI))]); }
+    for (const [k, colr, oy] of [[1.3, bogCol(C.edge, 0.9), 0.15], [1, bogCol(C.mid), 0], [0.45, bogCol(C.lit, 0.85), -0.28]]) for (let q = 1; q < P.length; q++) { c.strokeStyle = colr; c.lineWidth = P[q][2] * k; c.beginPath(); c.moveTo(P[q - 1][0], P[q - 1][1] + oy * P[q][2]); c.lineTo(P[q][0], P[q][1] + oy * P[q][2]); c.stroke(); }
+    for (let q = 2; q < P.length - 2; q += 3) bogPair([[P[q][0] - 1.5, P[q][1] - P[q][2] * 0.4], [P[q][0] + 1.5, P[q][1] + P[q][2] * 0.4]], bogCol(C.edge, 0.4), bogCol(C.lit, 0.3), 0.8, 0.7, c);
+    bogDrape(c, P.filter((q, k) => k > 1 && k < 23 && k % 2 === 0).map(([x, y, w]) => [x, y + w * 0.4]), C, 44, 7557 + r);
+    // reeds and a pair of cattails growing on its crown
+    for (let q = 6; q < 19; q += 3) {
+      if (hash2(r * 30 + q, 7558) < 0.4) continue;
+      const [x, y, w] = P[q];
+      for (let k = 0; k < 3; k++) { const L = 10 + 12 * hash2(r * 90 + q * 3 + k, 7559), ln = (k - 1) * 3; c.strokeStyle = bogCol(k % 2 ? C.leafLt : C.leaf, 0.9); c.lineWidth = 1.1; c.beginPath(); c.moveTo(x + k * 1.5, y - w * 0.4); c.quadraticCurveTo(x + k * 1.5 + ln * 0.3, y - L * 0.6, x + k * 1.5 + ln, y - L); c.stroke(); if (k === 1) { c.fillStyle = bogCol(bogMix([122, 80, 44], BOGP.haze, 0.4)); c.beginPath(); c.ellipse(x + 1.5 + ln * 0.9, y - L + 2, 1.5, 3.6, 0, 0, TWO_PI); c.fill(); } }
+    }
+  }
+  for (const L of BOG_MID) {
+    bogTrunk(c, L, a0, a1, C);
+    // crooked boughs with leafy clumps and moss
+    for (let r = Math.floor((a0 - 200) / 180); r * 180 < a1 + 80; r++) {
+      if (hash2(r, L.seed + 21) < 0.4) continue;
+      const p = r * 180 + 70 * hash2(r, L.seed + 22), d = L.x < 200 ? (hash2(r, L.seed + 23) < 0.75 ? 1 : -1) : (hash2(r, L.seed + 23) < 0.75 ? -1 : 1), x = bogLaneX(L, p) + d * bogLaneW(L, p) * 0.7, len = 34 + 46 * hash2(r, L.seed + 24);
+      const P = bogBough(c, x, p, d * len, 26 + 24 * hash2(r, L.seed + 25), 7, C, 10);
+      bogDrape(c, P.slice(3).filter((q, i) => i % 2 === 1), C, 30, L.seed + r * 3);
+      const [ex, ey] = P[P.length - 1]; bogLeaves(c, ex, ey, 14 + 8 * hash2(r, L.seed + 26), C, L.seed + r);
+    }
+  }
+}
+function bogDrawNear(c, a0, a1) {
+  const C = bogTone(0.22);
+  for (const L of BOG_NEAR) {
+    bogTrunk(c, L, a0, a1, C);
+    for (let r = Math.floor((a0 - 200) / 230); r * 230 < a1 + 80; r++) {
+      const j = hash2(r, L.seed + 31); if (j < 0.3) continue;
+      const p = r * 230 + 90 * hash2(r, L.seed + 32), d = L.x < 200 ? 1 : -1, x = bogLaneX(L, p) + d * bogLaneW(L, p) * 0.8;
+      if (j < 0.7) {   // a bough reaching in, a leafy clump on its end and moss under it
+        const len = 40 + 40 * hash2(r, L.seed + 33), P = bogBough(c, x, p, d * len, 20 + 20 * hash2(r, L.seed + 34), 9, C, 10);
+        bogDrape(c, P.slice(2).filter((q, i) => i % 2 === 0), C, 34, L.seed + r * 5);
+        const [ex, ey] = P[P.length - 1]; bogLeaves(c, ex, ey, 18 + 6 * hash2(r, L.seed + 35), C, L.seed + r * 7);
+      } else {   // shelf fungi stacked on the trunk
+        for (let q = 0; q < 3; q++) {
+          const fy = -(p + q * 9), fw = 9 - q * 2, fx = x + d * fw * 0.4;
+          c.fillStyle = bogLG(0, fy - 4, 0, fy + 3, [bogCol(bogMix([250, 244, 190], BOGP.haze, 0.25)), bogCol(bogMix([200, 190, 110], BOGP.haze, 0.25)), bogCol(bogMix([130, 124, 60], BOGP.haze, 0.25))], c);
+          c.beginPath(); c.ellipse(fx, fy, fw, 4, 0, Math.PI, 0); c.quadraticCurveTo(fx, fy + 3, fx - fw, fy); c.fill();
+          c.strokeStyle = bogCol(bogMix([100, 96, 40], BOGP.haze, 0.25)); c.lineWidth = 0.8; c.stroke();
+          c.strokeStyle = 'rgba(255,255,220,.45)'; c.beginPath(); c.ellipse(fx, fy - 0.5, fw * 0.7, 2.6, 0, 3.4, 4.6); c.stroke();
+        }
+      }
+      // a vine hanging down the trunk
+      if (hash2(r, L.seed + 36) < 0.5) { const vx = bogLaneX(L, p + 40) + d * bogLaneW(L, p + 40) * 0.5; c.strokeStyle = bogCol(C.leafDk); c.lineWidth = 1.6; c.beginPath(); c.moveTo(vx, -(p + 60)); c.bezierCurveTo(vx + d * 8, -(p + 20), vx - d * 6, -(p - 20), vx + d * 4, -(p - 60)); c.stroke(); for (let q = 0; q < 6; q++) { const v = q / 6, lx = vx + d * 3 * Math.sin(v * 6), ly = -(p + 60 - v * 120); c.fillStyle = bogCol(q % 2 ? C.leaf : C.leafLt); c.beginPath(); c.ellipse(lx + 2, ly, 2.6, 1.4, 0.6, 0, TWO_PI); c.fill(); } }
+    }
+  }
+}
+// the sky: the haze from its lit top to the murk below, a pale sun disc of light high on the left, then the layers
+function bogDrawBackground() {
+  bogCacheCheck();
+  const P = drawPad * s, X0 = -30 - P, X1 = cssW + 30 + P, Y0 = -30 - P, Y1 = H + 30 + P, mk = bogMurk(), T = G.t, M = bogMood();
+  const top = M.top, bot = M.bot;
+  ctx.fillStyle = bogLG(0, Y0, 0, Y1, [bogCol(top), bogCol(bogMix(top, bot, 0.55)), bogCol(bot)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  bogGlow(ox + playW * 0.22, H * 0.08, playW * 0.75, M.sun, M.sunA);
+  const [xa, xb] = bogScrX(), xr = () => [xa, xb];
+  bogLayer('far', 0.07, xr, bogDrawFar);
+  // the section's wash over the far forest, then its dead snags and a fog bank drifting across between the layers
+  ctx.fillStyle = bogCol(M.tint, M.tintA * 1.3); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  bogDrawSnags();
+  const fy = H * (0.55 + 0.25 * Math.sin(G.camAlt * 0.0013 + T * 0.05));
+  ctx.fillStyle = bogLG(0, fy - H * 0.4, 0, fy + H * 0.4, [bogCol(M.fog, 0), bogCol(M.fog, M.fogA + 0.04), bogCol(M.fog, 0)]); ctx.fillRect(X0, fy - H * 0.4, X1 - X0, H * 0.8);
+  bogLayer('mid', 0.17, xr, bogDrawMid);
+  ctx.fillStyle = bogLG(0, Y0, 0, Y1, [bogCol(top, 0.18), bogCol(M.tint, M.tintA), bogCol(bot, 0.22 + 0.25 * mk)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  bogDrawMotes();
+}
+function bogDrawMidground() {
+  const [xa, xb] = bogScrX();
+  bogLayer('near', 0.3, () => [xa, xb], bogDrawNear);
+  // the murk: a low green fog bank rolling at the bottom of the view (thick in the Deep Murk)
+  const mk = bogMurk(), T = G.t, P = drawPad * s, M = bogMood();
+  for (let k = 0; k < 2; k++) {
+    const y = H * (0.78 - k * 0.12) + Math.sin(T * 0.3 + k * 2) * 10, a = (0.06 + 0.5 * M.fogA + 0.1 * mk) * (1 - k * 0.4);
+    ctx.fillStyle = bogLG(0, y - 90, 0, y + 120, [bogCol(M.fog, 0), bogCol(bogMix(M.fog, [120, 160, 60], 0.3), a), bogCol(M.fog, a * 0.7)]);
+    ctx.fillRect(-30 - P, y - 90, cssW + 60 + 2 * P, H - y + 120 + P);
+  }
+  if (mk > 0.01) { ctx.fillStyle = `rgba(10,28,20,${0.34 * mk})`; ctx.fillRect(-30 - P, -30 - P, cssW + 60 + 2 * P, H + 60 + 2 * P); }
+  if (G.adv && G.adv.st && G.adv.st.theme === 'bog') bogDrawHeartBack();
+}
+const bogFlySprite = () => bogSprite('fly', 10, c => { c.fillStyle = bogRG(0, 0, 10, ['rgba(236,255,140,.9)', 'rgba(200,255,90,.35)', 'rgba(170,240,60,0)'], 0, c); c.beginPath(); c.arc(0, 0, 10, 0, TWO_PI); c.fill(); c.fillStyle = '#fbffd8'; c.beginPath(); c.arc(0, 0, 1.4, 0, TWO_PI); c.fill(); });
+// fireflies (a warm lime glow blinking on and off) and swamp bubbles (a lit glassy ring) rising
+function bogDrawMotes() {
+  const glow = bogFlySprite(), fl = bogMood().fly;
+  const T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const m of motes) {
+    if (m.r <= 0.62) continue;
+    const blink = Math.pow(Math.max(0, Math.sin(T * (0.9 + m.r) + m.ph * 3)), 3), x = ox + m.x * playW + Math.sin(T * 0.7 + m.ph) * 14 * s, y = m.y + Math.sin(T * 1.3 + m.ph * 2) * 6 * s;
+    bogBlit(glow, x, y, (0.5 + 0.5 * m.depth) * (0.7 + 0.5 * blink), Math.min(1, (0.25 + 0.75 * blink) * m.depth * fl));
+  }
+  ctx.restore();
+  for (const m of motes) {
+    if (m.r > 0.62) continue;
+    const x = ox + m.x * playW + Math.sin(T * 1.1 + m.ph) * 5 * s, y = m.y, r = (0.8 + m.sz * 0.7) * m.depth * s, a = 0.3 + 0.4 * m.depth;
+    ctx.strokeStyle = `rgba(214,240,150,${a})`; ctx.lineWidth = 0.8 * s; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.stroke();
+    ctx.fillStyle = `rgba(250,255,220,${a})`; ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.3, 0, TWO_PI); ctx.fill();
+  }
+}
+// the light: a soft olive vignette, slow shafts of yellow-green light slanting down from the top left, the murk's
+// darkness, and the Bog Heart's glow rising as you near the finish
+function bogDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P, mk = bogMurk(), T = G.t, M = bogMood();
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.48, Math.min(cssW, H) * 0.32, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75);
+  vg.addColorStop(0, 'rgba(24,30,10,0)'); vg.addColorStop(1, `rgba(24,30,10,${0.3 + 0.2 * mk})`); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  // the Deep Murk: a dim, cold green gloom over everything (the traps' own glows still burn through it)
+  if (mk > 0.01) { ctx.fillStyle = `rgba(12,30,22,${0.12 * mk})`; ctx.fillRect(X0, Y0, WW, HH); }
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 3; k++) {
+    const x = ox + playW * (0.12 + 0.3 * k) + Math.sin(T * 0.11 + k * 2) * 20 * s, w = playW * (0.08 + 0.05 * k), a = (0.075 + 0.03 * Math.sin(T * 0.4 + k)) * M.shaft;
+    ctx.fillStyle = bogLG(x, 0, x + w, 0, [bogCol(M.sun, 0), bogCol(M.sun, a), bogCol(M.sun, 0)]);
+    ctx.beginPath(); ctx.moveTo(x, Y0); ctx.lineTo(x + w, Y0); ctx.lineTo(x + w + H * 0.35, H + P); ctx.lineTo(x + H * 0.35, H + P); ctx.closePath(); ctx.fill();
+  }
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'bog') {
+    const y = sy(a.end + 230), k = clamp(1 - Math.abs(a.end + 230 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(230,255,150,${(0.13 + 0.14 * pay) * k})`); g.addColorStop(0.5, `rgba(190,240,90,${0.05 * k})`); g.addColorStop(1, 'rgba(190,240,90,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// Foreground: soft curtains of moss and vines hanging in front at the screen's edges (cached sprites), swaying
+function bogDrawForeground() {
+  const f = 1.3, slot = 230, b0 = G.camAlt * f, T = G.t;
+  const first = Math.floor((b0 - 300) / slot), last = Math.ceil((b0 + viewH + 300) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, 7711) < 0.4) continue;
+    const y = H - (i * slot - b0) * s;
+    if (y + 170 * s < 0 || y - 170 * s > H) continue;
+    // the section this prop belongs to (where it crosses the middle of the view) picks it
+    const fg = bogMoodAt((i * slot - viewH / 2) / f + viewH / 2).fg, kind = fg[Math.floor(hash2(i, 7713) * fg.length)];
+    const side = hash2(i, 7712) < 0.5 ? 0 : 1;
+    const sp = kind.startsWith('moss') ? bogSprite('fg' + kind[4], 80, c => bogFgArt(c, +kind[4])) : bogSprite('fgp' + kind, 80, c => bogFgProp(c, kind));
+    const x = side ? ox + playW + 6 * s : ox - 6 * s, sw = Math.sin(T * 0.8 + i) * (kind === 'cattail' ? 0.025 : 0.04);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(side ? -sw : sw); ctx.scale(side ? -1 : 1, 1); bogBlit(sp, 30 * s, 70 * s); ctx.restore();
+  }
+}
+// a foreground curtain (in a sprite 160 across, hanging from its top left corner at (-30, -70)): a mossy bough end
+// with Spanish moss and a vine hanging off it, dark and rich (it is close)
+function bogFgArt(c, v) {
+  const C = { edge: [34, 36, 16], mid: [70, 62, 36], lit: [120, 104, 64], moss: [118, 140, 70], mossDk: [64, 84, 36], leaf: [76, 120, 36], leafLt: [130, 176, 66], leafDk: [40, 66, 22] };
+  c.translate(-30, -70);
+  const P = bogBough(c, -10, -10, 50 + v * 10, -14 - v * 4, 11, C, 10);
+  bogDrape(c, P.slice(1).map(([x, y]) => [x, -y]).filter((q, i) => i % 2 === 0).map(([x, y]) => [x, -y]), C, 70 + v * 20, 7721 + v);
+  if (v !== 1) { c.strokeStyle = bogCol(C.leafDk); c.lineWidth = 2.2; c.beginPath(); c.moveTo(20, 6); c.bezierCurveTo(30, 40, 14, 70, 26, 120); c.stroke(); for (let q = 0; q < 9; q++) { const u = q / 9, lx = 20 + 8 * Math.sin(u * 5), ly = 10 + u * 110; c.fillStyle = bogRG(lx, ly, 5, [bogCol(C.leafLt), bogCol(C.leaf), bogCol(C.leafDk)], 0, c); c.beginPath(); c.ellipse(lx + 3, ly, 4.6, 2.2, 0.5 + (q % 2) * 2.2, 0, TWO_PI); c.fill(); } }
+  bogLeaves(c, P[P.length - 1][0], P[P.length - 1][1], 16, C, 7731 + v);
+}
+function bogDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const n = 4 + Math.round(16 * k * k);
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.08 + 0.84 * hash2(i, 7741)), len = (14 + 46 * hash2(i, 7742)) * (0.5 + 1.4 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 7743)) + hash2(i, 7744) * H * 2) % (H + 200)) - 100;
+    ctx.strokeStyle = bogCol([226, 255, 170], 0.04 + 0.14 * k * hash2(i, 7745)); ctx.lineWidth = 1 + 1.4 * hash2(i, 7746) * k;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+{ const base = drawBackground; drawBackground = function () { if (bogOn()) bogDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (bogOn()) bogDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (bogOn()) bogDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (bogOn()) bogDrawLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (bogOn()) bogDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (bogOn()) bogDrawForeground(); else base(); }; }
+// ---- each section's mood ----
+// The level visibly moves on: every section has its own sky, light colour, fog and tint over the backdrop, its own
+// foreground props (moss curtains, cattails, willow fronds, dead branches) and dead snags in the haze, and its own
+// stain on the banks. Blended smoothly across each boundary (see bogMoodAt).
+// top/bot: the sky; sun: the light's colour and sunA its glow; shaft: the light shafts' strength; fog/fogA: the fog
+// banks; tint/tintA: a wash over the backdrop layers; snag: how many dead trees stand in the haze; fg: the
+// foreground props; wall: a stain mixed into the banks' beds [colour, amount]; fly: fireflies' strength.
+const BOG_MOOD = [
+  // Mire Mouth: a soft gold-green morning
+  { top: [204, 198, 116], bot: [86, 98, 50], sun: [255, 238, 156], sunA: 0.26, shaft: 1.1, fog: [196, 200, 132], fogA: 0.2, tint: [220, 200, 120], tintA: 0.06, snag: 0, fg: ['moss0', 'moss1', 'cattail'], wall: [[150, 120, 70], 0.08], fly: 0.7 },
+  // Belching Flats: sulphur-yellow haze over the gas
+  { top: [214, 204, 104], bot: [110, 104, 40], sun: [255, 236, 110], sunA: 0.3, shaft: 1.0, fog: [222, 212, 120], fogA: 0.32, tint: [230, 210, 90], tintA: 0.12, snag: 0.3, fg: ['cattail', 'cattail', 'moss2'], wall: [[176, 150, 60], 0.22], fly: 0.6 },
+  // Snapper Thicket: deep lush green, close and leafy
+  { top: [138, 176, 92], bot: [40, 76, 38], sun: [214, 255, 150], sunA: 0.2, shaft: 0.9, fog: [150, 190, 110], fogA: 0.18, tint: [80, 150, 60], tintA: 0.14, snag: 0, fg: ['moss2', 'moss0', 'moss2', 'vine'], wall: [[70, 110, 40], 0.18], fly: 0.8 },
+  // Acid Spillway: acid lime and teal
+  { top: [174, 214, 112], bot: [46, 92, 60], sun: [214, 255, 120], sunA: 0.26, shaft: 1.0, fog: [190, 240, 120], fogA: 0.28, tint: [120, 220, 110], tintA: 0.12, snag: 0.2, fg: ['moss1', 'vine', 'cattail'], wall: [[120, 170, 50], 0.22], fly: 0.7 },
+  // The Sunken Willow: a golden late-afternoon breather
+  { top: [226, 196, 124], bot: [100, 92, 54], sun: [255, 214, 140], sunA: 0.4, shaft: 1.6, fog: [230, 206, 150], fogA: 0.2, tint: [250, 190, 110], tintA: 0.12, snag: 0, fg: ['willow', 'willow', 'cattail'], wall: [[170, 120, 70], 0.16], fly: 1 },
+  // Wisp Fen: blue-teal dusk, the wisps' own light stands out
+  { top: [116, 150, 150], bot: [32, 54, 60], sun: [190, 244, 226], sunA: 0.16, shaft: 0.6, fog: [150, 194, 186], fogA: 0.3, tint: [70, 130, 150], tintA: 0.2, snag: 0.9, fg: ['snag', 'cattail', 'snag', 'moss1'], wall: [[70, 100, 110], 0.26], fly: 1.4 },
+  // The Deep Murk: dark, cold, thick fog
+  { top: [86, 108, 70], bot: [24, 38, 28], sun: [180, 230, 150], sunA: 0.1, shaft: 0.4, fog: [120, 160, 110], fogA: 0.42, tint: [30, 70, 50], tintA: 0.22, snag: 1, fg: ['snag', 'moss2', 'moss0'], wall: [[40, 60, 44], 0.3], fly: 1.2 },
+  // Rotgut Gauntlet: a sickly rot, bruised plum and olive
+  { top: [160, 140, 100], bot: [58, 44, 42], sun: [240, 200, 130], sunA: 0.2, shaft: 0.8, fog: [176, 150, 120], fogA: 0.28, tint: [140, 80, 90], tintA: 0.16, snag: 0.8, fg: ['snag', 'snag', 'cattail'], wall: [[110, 70, 66], 0.24], fly: 0.6 },
+  // The Bog Heart: radiant lime-gold
+  { top: [214, 220, 136], bot: [100, 114, 60], sun: [242, 255, 176], sunA: 0.34, shaft: 1.4, fog: [214, 236, 160], fogA: 0.2, tint: [220, 240, 130], tintA: 0.1, snag: 0, fg: ['cattail', 'willow', 'moss1'], wall: [[150, 150, 70], 0.12], fly: 1.5 },
+];
+// the mood at height a (blended across a boundary over ±260)
+function bogMoodAt(a) {
+  const L = G.level, secs = L && L.sections; if (!secs) return BOG_MOOD[0];
+  let i = 0; for (let j = secs.length - 1; j >= 0; j--) if (a >= secs[j].a0) { i = j; break; }
+  const M = j => BOG_MOOD[clamp(j, 0, BOG_MOOD.length - 1)];
+  let A = M(i), B = null, k = 0;
+  if (i > 0 && a < secs[i].a0 + 260) { B = A; A = M(i - 1); k = smooth(secs[i].a0 - 260, secs[i].a0 + 260, a); }
+  else if (secs[i + 1] && a > secs[i + 1].a0 - 260) { B = M(i + 1); k = smooth(secs[i + 1].a0 - 260, secs[i + 1].a0 + 260, a); }
+  if (!B || k <= 0) return A;
+  const o = {};
+  for (const key in A) { const p = A[key], q = B[key]; o[key] = key === 'fg' ? (k < 0.5 ? p : q) : key === 'wall' ? [bogMix(p[0], q[0], k), lerp(p[1], q[1], k)] : Array.isArray(p) ? bogMix(p, q, k) : lerp(p, q, k); }
+  return o;
+}
+// the mood at the middle of the view (once a frame)
+let bogMoodF = { t: -1, a: 0, m: BOG_MOOD[0] };
+function bogMood() { if (bogMoodF.t !== G.t || bogMoodF.a !== G.camAlt) bogMoodF = { t: G.t, a: G.camAlt, m: bogMoodAt(G.camAlt + viewH / 2) }; return bogMoodF.m; }
+// a dead snag standing in the haze (a sprite 220 across): a tall bare trunk, its top snapped off, crooked bare
+// branches with twigs, a strand or two of moss
+function bogSnagArt(c, v) {
+  const C = { edge: [40, 42, 30], mid: [74, 72, 52], lit: [116, 110, 80], dk: [52, 52, 38], moss: [120, 132, 86], mossDk: [76, 88, 54] };
+  const lean = v ? -0.08 : 0.1, base = 108, top = -96 + v * 14, w0 = 12 + v * 2;
+  const P = []; for (let i = 0; i <= 16; i++) { const u = i / 16, y = lerp(base, top, u); P.push([lean * (base - y) + Math.sin(u * 5 + v) * 4, y, w0 * (1 - 0.7 * u) + (u < 0.12 ? (0.12 - u) * 50 : 0)]); }
+  c.beginPath(); P.forEach(([x, y, w], i) => i ? c.lineTo(x - w, y) : c.moveTo(x - w, y));
+  const [tx, ty, tw] = P[P.length - 1]; c.lineTo(tx - tw * 0.2, ty - 10); c.lineTo(tx + tw * 0.3, ty - 3); c.lineTo(tx + tw * 0.7, ty - 12);   // the snapped top
+  for (let i = P.length - 1; i >= 0; i--) c.lineTo(P[i][0] + P[i][2], P[i][1]); c.closePath();
+  c.fillStyle = bogLG(-w0, 0, w0, 0, [bogCol(C.lit), bogCol(C.mid), bogCol(C.dk)], c); c.fill(); c.strokeStyle = bogCol(C.edge); c.lineWidth = 1.2; c.stroke();
+  for (const u of [-0.5, 0, 0.45]) bogPair(P.map(([x, y, w]) => [x + w * u, y]), bogCol(C.edge, 0.4), bogCol(C.lit, 0.3), 1, -0.9, c);
+  for (const [u, d, len, up] of [[0.42, -1, 46, 30], [0.58, 1, 40, 26], [0.74, -1, 30, 22], [0.3, 1, 34, 14]]) {
+    const i = Math.round(u * 16), [x, y, w] = P[i], B = bogBough(c, x + d * w * 0.6, -y, d * len * (v ? 0.9 : 1), up, w * 0.55, C, 8);
+    for (let q = 3; q < B.length; q += 3) { const [bx, by] = B[q]; c.strokeStyle = bogCol(C.edge); c.lineWidth = 1.2; c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx + d * 4, by - 6, bx + d * 3, by - 12); c.stroke(); }
+    if (u > 0.5) bogDrape(c, B.slice(2).filter((q, k) => k % 2 === 0), C, 18, 7801 + i + v);
+  }
+}
+// a foreground prop (in a sprite 160 across, centred): cattails, willow fronds, a dead branch, a vine curtain (the moss
+// curtains are bogFgArt's moss0..2)
+function bogFgProp(c, kind) {
+  const C = { edge: [34, 36, 16], mid: [70, 62, 36], lit: [120, 104, 64], moss: [118, 140, 70], mossDk: [64, 84, 36], leaf: [76, 120, 36], leafLt: [130, 176, 66], leafDk: [40, 66, 22] };
+  if (kind === 'cattail') {   // a clump leaning in from the bottom of the edge: blades and three brown heads
+    for (let q = 0; q < 11; q++) {
+      const bx = -78 + q * 2.4, L = 90 + 60 * hash2(q, 7811), ln = 18 + 34 * hash2(q, 7812), w = 2.4 + 1.6 * hash2(q, 7813), x1 = bx + ln, y1 = 80 - L;
+      c.beginPath(); c.moveTo(bx - w, 82); c.quadraticCurveTo(bx + ln * 0.2, 80 - L * 0.6, x1, y1); c.quadraticCurveTo(bx + ln * 0.2 + w, 80 - L * 0.6, bx + w, 82); c.closePath();
+      c.fillStyle = bogLG(bx - w, 0, bx + w + ln * 0.3, 0, [bogCol(q % 3 ? C.leafLt : C.leaf), bogCol(C.leaf), bogCol(C.leafDk)], c); c.fill(); c.strokeStyle = bogCol(C.leafDk); c.lineWidth = 0.7; c.stroke();
+    }
+    for (const [q, L, ln] of [[2, 128, 22], [6, 112, 40], [9, 140, 30]]) {
+      const bx = -78 + q * 2.4, x1 = bx + ln, y1 = 80 - L;
+      c.strokeStyle = bogCol([84, 104, 40]); c.lineWidth = 1.8; c.beginPath(); c.moveTo(bx, 82); c.quadraticCurveTo(bx + ln * 0.3, 80 - L * 0.6, x1, y1); c.stroke();
+      const hx = lerp(bx + ln * 0.3, x1, 0.75), hy = lerp(80 - L * 0.6, y1, 0.75), an = Math.atan2(y1 - hy, x1 - hx) + Math.PI / 2;
+      c.save(); c.translate(hx, hy); c.rotate(an); c.fillStyle = bogLG(-4, 0, 4, 0, ['#b8804a', '#7c4a24', '#4a2a12'], c); c.beginPath(); c.ellipse(0, 0, 4, 11, 0, 0, TWO_PI); c.fill(); c.strokeStyle = '#4a2a12'; c.lineWidth = 0.8; c.stroke();
+      c.strokeStyle = 'rgba(255,226,180,.45)'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 0, 2.6, 9, 0, 3.4, 4.4); c.stroke(); c.restore();
+    }
+  } else if (kind === 'willow') {   // long willow fronds hanging from a bough at the top edge, each strung with slim leaves
+    const P = bogBough(c, -82, 76, 70, -10, 9, C, 10);
+    for (let q = 1; q < P.length; q++) {
+      const [x, y] = P[q], L = 70 + 70 * hash2(q, 7821), sw = (hash2(q, 7822) - 0.3) * 14;
+      c.strokeStyle = bogCol(C.leafDk); c.lineWidth = 1.1; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + sw, y + L * 0.5, x + sw * 0.5, y + L); c.stroke();
+      for (let k = 1; k < 9; k++) { const u = k / 9, lx = x + sw * u * (1 - u * 0.5) * 1.3, ly = y + L * u; c.fillStyle = bogCol(k % 2 ? C.leafLt : C.leaf); c.beginPath(); c.ellipse(lx + (k % 2 ? 2.2 : -2.2), ly, 1.4, 4.4, k % 2 ? -0.4 : 0.4, 0, TWO_PI); c.fill(); }
+    }
+  } else if (kind === 'snag') {   // a bare dead branch reaching in, twigs and a beard of moss
+    const P = bogBough(c, -84, -10, 120, 26, 12, C, 12);
+    for (let q = 3; q < P.length; q += 2) { const [x, y, w] = P[q], d = q % 4 === 1 ? -1 : 1; c.strokeStyle = bogCol(C.edge); c.lineWidth = Math.max(1, w * 0.5); c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 6, y + d * 8, x + 12, y + d * 16); c.stroke(); c.strokeStyle = bogCol(C.lit, 0.6); c.lineWidth = Math.max(0.5, w * 0.2); c.beginPath(); c.moveTo(x, y - 0.5); c.quadraticCurveTo(x + 6, y + d * 8 - 0.5, x + 12, y + d * 16 - 0.5); c.stroke(); }
+    bogDrape(c, P.slice(2, 9).filter((q, i) => i % 2 === 0).map(([x, y, w]) => [x, y + w * 0.4]), C, 40, 7831);
+  } else {   // 'vine': two leafy vines hanging straight down from the top
+    for (const [x0, L] of [[-60, 150], [-40, 120]]) {
+      c.strokeStyle = bogCol(C.leafDk); c.lineWidth = 2; c.beginPath(); c.moveTo(x0, -80); c.bezierCurveTo(x0 + 10, -30, x0 - 8, 10, x0 + 4, -80 + L); c.stroke();
+      for (let q = 0; q < 12; q++) { const u = q / 12, lx = x0 + 6 * Math.sin(u * 6), ly = -78 + u * L; c.fillStyle = bogRG(lx, ly, 6, [bogCol(C.leafLt), bogCol(C.leaf), bogCol(C.leafDk)], 0, c); c.beginPath(); c.ellipse(lx + (q % 2 ? 4 : -4), ly, 5.4, 2.6, q % 2 ? 0.6 : -0.6, 0, TWO_PI); c.fill(); c.strokeStyle = bogCol(C.leafDk, 0.8); c.lineWidth = 0.5; c.stroke(); }
+    }
+  }
+}
+// the dead snags standing in the haze between the far and middle layers (parallax 0.12), more in the gloomier sections
+function bogDrawSnags() {
+  const f = 0.12, slot = 170, base = G.camAlt * f, lo = base - 120, hi = base + viewH + 260;
+  for (let i = Math.floor(lo / slot); i * slot < hi; i++) {
+    const m = bogMoodAt((i * slot - viewH / 2) / f + viewH / 2), j = hash2(i, 7841); if (j > m.snag * 0.9) continue;
+    const side = hash2(i, 7842) < 0.5 ? 0 : 1, v = hash2(i, 7843) < 0.5 ? 0 : 1, x = ox + (side ? 300 + 80 * hash2(i, 7844) : 20 + 80 * hash2(i, 7844)) * s, y = H - (i * slot + 60 * hash2(i, 7845) - base) * s;
+    const sp = bogSprite('snag' + v, 110, c => bogSnagArt(c, v));
+    ctx.save(); ctx.globalAlpha = 0.6; ctx.translate(x, y); ctx.scale(side ? -1 : 1, 1); bogBlit(sp, 0, 0); ctx.restore();
+  }
+}
+
+// ---- the traps' art ----
+// Each in its own frame: (0, 0) at the trap's mount on the wall, x pointing into the shaft (mirrored for the right
+// wall), y down, world units. Hitboxes (bogShapes) are fitted to these drawings.
+// A gas puff (cached, three variants): a billow lit from the top left: a pale lime crown, a sickly olive body, its
+// belly shaded, its rim a darker teal-olive hue of itself (never black), a soft highlight and a sheen stroke.
+function bogPuffSprite(v) {
+  return bogSprite('gpuff' + v, 36, c => {
+    const G3 = BOGP.gas, rim = [62, 106, 44];
+    c.save(); c.beginPath(); c.arc(0, 0, 30, 0, TWO_PI); c.clip();
+    // the body: an even sickly olive-lime, a cooler shaded belly
+    c.fillStyle = bogLG(-10, -30, 10, 30, [bogCol(bogMix(G3[0], G3[1], 0.45)), bogCol(G3[1]), bogCol(bogMix(G3[1], G3[2], 0.75))], c); c.fillRect(-32, -32, 64, 64);
+    c.fillStyle = bogCol(bogMix(G3[2], rim, 0.4), 0.55); c.beginPath(); c.ellipse(8, 26, 34, 18, -0.2, 0, TWO_PI); c.fill();
+    // the lit crown: a pale cap over the top left with a soft-edged lobe line under it
+    c.fillStyle = bogRG(-8, -16, 30, [bogCol(G3[0], 0.95), bogCol(G3[0], 0.8), bogCol(G3[0], 0)], 12, c);
+    c.beginPath(); c.ellipse(-6, -13, 27 - v * 2, 19, -0.25, 0, TWO_PI); c.fill();
+    c.fillStyle = bogCol(G3[0], 0.9); c.beginPath(); c.ellipse(-7, -15, 17, 11, -0.3, 0, TWO_PI); c.fill();
+    c.strokeStyle = bogCol(rim, 0.3); c.lineWidth = 1.6; c.beginPath(); c.ellipse(-4, -10, 22, 14, -0.25, 0.25, 2.3); c.stroke();
+    // a small lobe or two in the body
+    if (v !== 1) { c.strokeStyle = bogCol(rim, 0.35); c.lineWidth = 1.3; c.beginPath(); c.arc(12, 10, 9, 3.7, 5.4); c.stroke(); }
+    if (v !== 2) { c.strokeStyle = bogCol(rim, 0.3); c.lineWidth = 1.2; c.beginPath(); c.arc(-11, 14, 8, 3.9, 5.3); c.stroke(); }
+    c.restore();
+    // the rim: a darker hue of the gas round its shaded side only (the lit side melts into the crown)
+    c.strokeStyle = bogCol(rim, 0.75); c.lineWidth = 1.5; c.beginPath(); c.arc(0, 0, 29.2, -0.5, 3.5); c.stroke();
+  });
+}
+// the gas is drawn opaque into this scratch canvas, then laid over the scene translucent (so the puffs overlap as one
+// cloud and the backdrop shows faintly through it)
+const bogFx = { cv: null, c: null };
+function bogFxCtx() {
+  const W = canvas.width, Hh = canvas.height;
+  if (!bogFx.cv) { bogFx.cv = document.createElement('canvas'); bogFx.c = bogFx.cv.getContext('2d'); }
+  if (bogFx.cv.width !== W || bogFx.cv.height !== Hh) { bogFx.cv.width = W; bogFx.cv.height = Hh; }
+  return bogFx.c;
+}
+// The column: a billowing plume. Each of the column's circles (fixed along it, so the puffs don't jump) is a cluster
+// of three puffs of different sizes, churning slowly; drawn top down so each lower billow's lit crown overlaps the
+// shaded belly of the one above. Curls of gas peel off its sides; a hot bright core glows in it near the mouth.
+function bogDrawPlume(h, st, T) {
+  const V = BOG.vent, k = st.k, lat = bogPlume(h, 0, 1), d = h.side;
+  const fx = bogFxCtx(), M = ctx.getTransform();
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const puffs = [], curls = [];
+  for (let i = lat.length - 1; i >= 0; i--) {
+    const [cx, a, r] = lat[i], hw = r / V.hit, f = (a - h.alt - V.mouth) / V.rise;
+    if (f > st.top + 0.001 || f < st.bot - 0.02) continue;
+    const grow = st.top >= 1 ? 1 : smooth(-0.02, 0.1, st.top - f), fade = st.bot > 0 ? smooth(st.bot - 0.02, st.bot + 0.16, f) : 1;
+    const g = grow * (0.6 + 0.4 * fade), al = fade, ph = T * (0.8 + 0.2 * hash2(i, 7901)) * (i % 2 ? 1 : -1) + i * 1.9;
+    const jx = (hash2(i, 7902) - 0.5) * 0.18 * hw, wob = Math.sin(T * 2.1 + i * 1.7) * hw * 0.05, ab = a + Math.sin(T * 2.6 + i) * 1.6;
+    const sL = 0.42 + 0.12 * hash2(i, 7903), sR = 0.4 + 0.12 * hash2(i, 7904), lr = hash2(i, 7905) < 0.5 ? 1 : -1;
+    // the side billows first (behind), then the main one
+    puffs.push([cx + jx + wob - lr * hw * (0.5 + 0.05 * Math.cos(ph)), ab + hw * (0.14 + 0.07 * Math.sin(ph)), hw * sL * g * (1 + 0.05 * Math.sin(ph * 1.3)), al, (i * 3) % 3]);
+    puffs.push([cx + jx + wob + lr * hw * (0.5 + 0.05 * Math.sin(ph)), ab - hw * (0.12 + 0.07 * Math.cos(ph)), hw * sR * g * (1 + 0.05 * Math.cos(ph * 1.1)), al, (i * 3 + 1) % 3]);
+    puffs.push([cx + jx * 0.4 - wob, ab + hw * 0.08, hw * 0.64 * g * (1 + 0.04 * Math.sin(ph * 0.9 + 1)), al, (i * 3 + 2) % 3]);
+    // two small billows riding on its shoulders (a lumpy top)
+    puffs.push([cx + jx - lr * hw * (0.3 + 0.04 * Math.sin(ph * 1.4)), ab - hw * (0.42 + 0.05 * Math.cos(ph)), hw * (0.3 + 0.08 * hash2(i, 7908)) * g, al, (i + 1) % 3]);
+    puffs.push([cx + jx + lr * hw * (0.16 + 0.04 * Math.cos(ph * 1.2)), ab - hw * (0.5 + 0.05 * Math.sin(ph)), hw * (0.26 + 0.08 * hash2(i, 7909)) * g, al, i % 3]);
+    if (i % 3 !== 0 && g > 0.6) curls.push([cx + jx, ab, hw, i, al]);
+  }
+  if (!puffs.length) return;
+  for (const [x, a, r] of puffs) { const X = sx(x), Y = sy(a), R = r * s * 1.05 + 4; x0 = Math.min(x0, X - R * 1.9 - 10 * s); x1 = Math.max(x1, X + R * 1.9 + 10 * s); y0 = Math.min(y0, Y - R * 1.4 - 10 * s); y1 = Math.max(y1, Y + R); }
+  // the box on the device canvas
+  const pA = M.transformPoint(new DOMPoint(x0, y0)), pB = M.transformPoint(new DOMPoint(x1, y1));
+  const bx = Math.max(0, Math.floor(Math.min(pA.x, pB.x))), by = Math.max(0, Math.floor(Math.min(pA.y, pB.y))), bw = Math.min(fx.canvas.width, Math.ceil(Math.max(pA.x, pB.x))) - bx, bh = Math.min(fx.canvas.height, Math.ceil(Math.max(pA.y, pB.y))) - by;
+  if (bw <= 0 || bh <= 0) return;
+  fx.setTransform(1, 0, 0, 1, 0, 0); fx.clearRect(bx, by, bw, bh); fx.setTransform(M); fx.globalAlpha = 1; fx.globalCompositeOperation = 'source-over';
+  const sps = [bogPuffSprite(0), bogPuffSprite(1), bogPuffSprite(2)], G3 = BOGP.gas;
+  for (const [x, a, r, al, v] of puffs) { const sp = sps[v], w = sp.n / dpr * r / 30; if (al <= 0.01 || w < 0.5) continue; fx.globalAlpha = al; fx.drawImage(sp.cv, sx(x) - w / 2, sy(a) - w / 2, w, w); }
+  fx.globalAlpha = 1;
+  // curls peeling off its sides: a trail of little billows curling up and out, growing and thinning as they go
+  for (const [cx, a, hw, i, al] of curls) {
+    const u = pmod(T * 0.4 + hash2(i, 7906), 1), sd = hash2(i, 7907) < 0.5 ? -1 : 1, L = hw * (0.55 + 0.45 * u);
+    for (let q = 0; q < 5; q++) {
+      const v = (q + 1) / 5, an = -0.2 - v * 2.4, px = cx + sd * (hw * 0.8 + v * L * 0.6 + Math.cos(an) * v * L * 0.3), pa = a + v * L * 0.5 + Math.sin(-an) * v * L * 0.2;
+      const r = hw * (0.2 - v * 0.12) * (0.7 + 0.5 * u), w = sps[0].n / dpr * r / 30, fa = al * Math.sin(u * Math.PI) * (1 - v * 0.5);
+      if (fa <= 0.02 || w < 0.5) continue; fx.globalAlpha = fa; fx.drawImage(sps[(i + q) % 3].cv, sx(px) - w / 2, sy(pa) - w / 2, w, w);
+    }
+  }
+  fx.globalAlpha = 1;
+  // lay it over the scene, translucent
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.8 * Math.min(1, 0.4 + k); ctx.drawImage(fx.canvas, bx, by, bw, bh, bx, by, bw, bh); ctx.restore();
+  // the hot core: a bright glow up the first third of the column, fading upward
+  const top = Math.min(st.top, 0.45);
+  if (top > st.bot) for (let q = 0; q < 4; q++) {
+    const f = lerp(st.bot, top, q / 3), [cx, hw] = bogPlumeAt(h, f);
+    bogGlow(sx(cx), sy(h.alt + V.mouth + f * V.rise), hw * (0.9 - q * 0.1) * s, BOGP.limeHot, (0.34 - q * 0.07) * k * (st.bot > 0 ? 1 - st.bot : 1));
+  }
+}
+// The gas vent: a peat shelf jutting from the bank (mossed on top, layered, roots under it) with a cracked mud mound on
+// it and a glowing throat. It gurgles (the throat brightens, the mound swells and trembles, bubbles swell and pop, slime
+// drips), then belches a churning column of lime gas straight up, which hangs, then lifts off and thins.
+function bogDrawVent(h) {
+  const V = BOG.vent, d = h.side, T = G.t, st = h.st || bogVentAt(h, bogVentClk(h, T)), tell = st.tell, k = st.k;
+  const X = sx(h.base), Y = sy(h.alt), mx = V.mx;
+  // a soft danger light under the column while it charges and blows
+  if (tell > 0.3 || k > 0) dangerGlow(sx(h.mx), sy(h.alt + V.mouth + 30 + 90 * st.top), 70 + 60 * st.top, 0.18 + 0.2 * tell + 0.18 * k);
+  bogGlow(sx(h.mx), sy(h.alt + V.mouth), (26 + 30 * tell + 20 * k) * s, BOGP.lime, 0.16 + 0.3 * tell + 0.15 * k);
+  ctx.save(); ctx.translate(X, Y); ctx.scale(d * s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // ---- the shelf ----
+  const shelf = () => { ctx.beginPath(); ctx.moveTo(-26, -1); ctx.bezierCurveTo(10, -3, 50, 0, 84, -2); ctx.quadraticCurveTo(97, -2, 97, 9); ctx.quadraticCurveTo(96, 19, 84, 20); ctx.bezierCurveTo(60, 23, 40, 18, 20, 21); ctx.quadraticCurveTo(0, 23, -26, 19); ctx.closePath(); };
+  // rootlets dangling under it (behind)
+  for (const [x, L] of [[14, 8], [30, 6], [52, 9], [70, 5], [82, 7]]) { ctx.strokeStyle = '#4a3a22'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, 19); ctx.quadraticCurveTo(x + 2, 19 + L * 0.6, x - 1, 19 + L); ctx.stroke(); }
+  shelf(); ctx.fillStyle = bogLG(0, -2, 0, 21, ['#8a7448', '#5e4c30', '#342a1a']); ctx.fill();
+  ctx.save(); shelf(); ctx.clip();
+  // layers of peat in it, as the bank's
+  for (const [y, w] of [[5, 1.2], [11, 1], [16, 0.9]]) bogPair([[-26, y], [10, y + 1], [40, y - 0.6], [70, y + 0.8], [98, y]], 'rgba(36,26,12,.45)', 'rgba(255,230,170,.18)', w, 0.9);
+  for (const [x, y, r] of [[8, 9, 2.4], [62, 13, 2], [40, 6, 1.6], [86, 11, 1.8]]) { ctx.fillStyle = bogRG(x - 0.6, y - 0.6, r * 1.3, ['#c4b488', '#7e7250', '#46402a']); ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); }
+  ctx.fillStyle = 'rgba(20,16,6,.3)'; ctx.fillRect(-30, 15, 130, 8);
+  ctx.restore();
+  shelf(); ctx.strokeStyle = BOGP.mudEdge; ctx.lineWidth = 1.2; ctx.stroke();
+  // moss on its top, tufted, lit
+  ctx.beginPath(); ctx.moveTo(-26, -1); ctx.bezierCurveTo(10, -3, 50, 0, 84, -2); ctx.quadraticCurveTo(95, -2, 96, 5); ctx.quadraticCurveTo(88, 3, 80, 4); ctx.bezierCurveTo(50, 5, 20, 2, -26, 4); ctx.closePath();
+  ctx.fillStyle = bogLG(0, -3, 0, 5, BOGP.moss.slice(0, 3)); ctx.fill(); ctx.strokeStyle = BOGP.mossEdge; ctx.lineWidth = 0.8; ctx.stroke();
+  for (let i = 0; i < 16; i++) { const x = -20 + i * 7 + (i % 3), L = 2 + (i * 7 % 5) * 0.7; ctx.strokeStyle = i % 2 ? '#b4dc5a' : '#7cae36'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(x, -1.5); ctx.lineTo(x - 0.8, -1.5 - L); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(240,255,190,.5)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-20, -1.6); ctx.bezierCurveTo(10, -3.4, 50, -0.6, 82, -2.6); ctx.stroke();
+  // a pair of toadstools near the bank and a reed tuft at the shelf's end
+  for (const [x, hh, w] of [[6, 6, 3.6], [11, 4, 2.6]]) { ctx.strokeStyle = '#f0e6c8'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, -1.5); ctx.lineTo(x, -1.5 - hh); ctx.stroke(); ctx.fillStyle = bogLG(0, -1.5 - hh - w, 0, -1.5 - hh, ['#ff7a5a', '#e0402a', '#9a2214']); ctx.beginPath(); ctx.ellipse(x, -1.5 - hh, w, w * 0.75, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#8a1e10'; ctx.lineWidth = 0.6; ctx.stroke(); ctx.fillStyle = '#fff6e0'; ctx.beginPath(); ctx.arc(x - w * 0.3, -1.5 - hh - w * 0.4, 0.7, 0, TWO_PI); ctx.fill(); }
+  for (let q = 0; q < 5; q++) { const x = 84 + q * 2, L = 6 + (q * 7 % 5) * 1.2, ln = (q - 2) * 1.6; ctx.strokeStyle = q % 2 ? '#8ab03e' : '#5e8a2a'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x, -2); ctx.quadraticCurveTo(x + ln * 0.3, -2 - L * 0.6, x + ln, -2 - L); ctx.stroke(); if (q === 1 || q === 3) { ctx.fillStyle = bogLG(x + ln - 1.3, 0, x + ln + 1.3, 0, ['#b07a46', '#7a4e26', '#4e3016']); ctx.beginPath(); ctx.ellipse(x + ln * 0.95, -2 - L + 2.4, 1.4, 3.6, 0, 0, TWO_PI); ctx.fill(); } }
+  // ---- the mound ----
+  const sw = 1 + tell * 0.07 + (k > 0 && st.top < 1 ? 0.05 : 0), tr = tell > 0.4 ? Math.sin(T * 55) * 0.9 * tell : 0;
+  ctx.save(); ctx.translate(mx + tr, -1); ctx.scale(sw, 1 + tell * 0.1);
+  const mound = () => { ctx.beginPath(); ctx.moveTo(-21, 0); ctx.bezierCurveTo(-19, -8, -14, -14, -10, -19); ctx.quadraticCurveTo(0, -22, 10, -19); ctx.bezierCurveTo(14, -14, 19, -8, 21, 0); ctx.closePath(); };
+  mound(); ctx.fillStyle = bogLG(-12, -20, 8, 2, BOGP.mud); ctx.fill();
+  ctx.save(); mound(); ctx.clip();
+  for (const [wx, wy, wr] of [[-13, -5, 2.8], [-6, -2.5, 2], [8, -6, 2.4], [15, -2, 1.8], [-1, -11, 1.6], [6, -14, 1.3]]) { ctx.fillStyle = bogRG(wx - wr * 0.4, wy - wr * 0.4, wr * 1.3, ['#b6a46a', '#6c5c36', '#3a3018']); ctx.beginPath(); ctx.arc(wx, wy, wr, 0, TWO_PI); ctx.fill(); }
+  bogPair([[-16, -1], [-10, -7], [-11, -12]], 'rgba(40,32,12,.6)', 'rgba(255,240,180,.3)', 0.9, 0.7);
+  bogPair([[12, -13], [10, -6], [15, -1]], 'rgba(40,32,12,.6)', 'rgba(255,240,180,.3)', 0.9, 0.7);
+  // lime slime dribbling from the lip (longer in the gurgle)
+  ctx.fillStyle = bogLG(0, -20, 0, -4, ['#e2ff7a', '#8cc82e']);
+  ctx.beginPath(); ctx.moveTo(-10, -19);
+  for (const [dx, dl] of [[-7, 6 + tell * 4], [-2, 3], [3, 9 + tell * 5], [8, 4]]) { ctx.quadraticCurveTo(dx - 2, -18, dx - 1.3, -18 + dl); ctx.arc(dx, -18 + dl, 1.3, Math.PI, 0, true); ctx.quadraticCurveTo(dx + 2, -18, dx + 2.6, -19); }
+  ctx.lineTo(10, -19); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(24,20,6,.28)'; ctx.beginPath(); ctx.ellipse(8, -3, 14, 6, 0, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  mound(); ctx.strokeStyle = BOGP.mudEdge; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,246,200,.42)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-18, -4); ctx.bezierCurveTo(-16, -10, -13, -15, -9, -18.5); ctx.stroke();
+  // the cracks glow lime from inside as it charges
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const cg = 0.15 + 0.85 * Math.max(tell, k * 0.4);
+  for (const C2 of [[[-16, -1], [-10, -7], [-11, -12]], [[12, -13], [10, -6], [15, -1]], [[-3, -16], [-1, -10], [-4, -5]]]) { bogPoly(C2); ctx.strokeStyle = bogCol(BOGP.lime, 0.5 * cg); ctx.lineWidth = 2.4; ctx.stroke(); ctx.strokeStyle = bogCol(BOGP.limeHot, 0.8 * cg); ctx.lineWidth = 0.8; ctx.stroke(); }
+  ctx.restore();
+  // a crusty rim round the throat, stained lime, lit on top
+  ctx.fillStyle = bogLG(0, -23, 0, -16, ['#c8c480', '#8a8040', '#4c4420']); ctx.beginPath(); ctx.ellipse(0, -19.2, 11.6, 4.6, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = BOGP.mudEdge; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.fillStyle = 'rgba(190,240,80,.55)'; for (const [x, w] of [[-7, 3], [2, 4], [8, 2.4]]) { ctx.beginPath(); ctx.ellipse(x, -17.4, w, 1.2, 0, 0, TWO_PI); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(255,250,210,.6)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.ellipse(0, -19.6, 10, 3.8, 0, 3.4, 4.9); ctx.stroke();
+  // the throat, brightening as it gurgles, bubbles swelling and popping in it
+  const hot = clamp(0.35 + tell * 0.65 + k * 0.4, 0, 1);
+  ctx.fillStyle = bogRG(0, -19.5, 10, [bogCol(bogMix([200, 230, 120], BOGP.limeHot, hot)), bogCol(bogMix([110, 150, 40], BOGP.lime, hot)), bogCol([60, 90, 20])]); ctx.beginPath(); ctx.ellipse(0, -19.5, 9.4, 3.4, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = '#3e5212'; ctx.lineWidth = 1; ctx.stroke();
+  for (let q = 0; q < 3; q++) {
+    const u = pmod(T * (1.1 + tell * 3.2) + q / 3, 1), bx = -4.5 + q * 4.5, br = u * (1.8 + tell * 3);
+    if (u > 0.9) continue;
+    ctx.fillStyle = `rgba(214,255,120,${0.9 - u * 0.4})`; ctx.beginPath(); ctx.arc(bx, -20 - br * 0.4, br, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,226,.75)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(bx, -20 - br * 0.4, br * 0.7, 3.6, 4.6); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.restore();
+  // ---- the gas ----
+  const sp0 = bogPuffSprite(0), sp1 = bogPuffSprite(1);
+  if (k > 0.02) {
+    bogDrawPlume(h, st, T);
+    // toxic sparkles rising in it
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let q = 0; q < 7; q++) {
+      const u = pmod(T * 0.7 + q / 7, 1); if (u < st.bot || u > st.top) continue;
+      const [cx, hw] = bogPlumeAt(h, u), x = sx(cx + Math.sin(q * 2.7 + T) * hw * 0.5), y = sy(h.alt + V.mouth + u * V.rise);
+      bogTwinkle(x, y, 3 * s, 0.6 * k * (1 - u * 0.5), [236, 255, 160]);
+    }
+    ctx.restore();
+  } else if (tell > 0) {
+    // the gurgle: little puffs escaping from the throat (low: never mistaken for the column)
+    for (let q = 0; q < 3; q++) { const u = pmod(T * 1.6 + q / 3, 1); bogBlit(q % 2 ? sp1 : sp0, sx(h.mx + Math.sin(q * 3 + T * 2) * 3), sy(h.alt + V.mouth + 4 + u * 26 * tell), (0.12 + u * 0.18) * (0.6 + tell), (1 - u) * 0.8 * tell); }
+  } else {
+    for (let q = 0; q < 2; q++) { const u = pmod(T * 0.6 + q / 2, 1); bogBlit(q ? sp1 : sp0, sx(h.mx + Math.sin(q * 3 + T) * 2), sy(h.alt + V.mouth + 2 + u * 16), 0.08 + u * 0.12, (1 - u) * 0.45); }
+  }
+}
+// The snapper plant: a fat mossy hummock on the bank, broad leaves fanning from it, a thorny stalk coiled like a spring,
+// and its head: a swollen pod with two cartoon eyes and a trap of two toothy lobes, pink inside, bristling. Lazily
+// ajar at rest, swaying; set off, it hisses, draws back, gapes wide and glares red, then lunges nearly across the
+// shaft and snaps shut, holds, and recoils.
+function bogDrawSnap(h) {
+  const Sn = BOG.snap, d = h.side, T = G.t, st = h.st || bogSnapAt(h, bogSnapTau(h, T)), [hx, ha] = st.head, tell = st.tell, PL = BOGP.plant;
+  const angry = st.ph === 'tell' || st.ph === 'lunge' || st.ph === 'hold';
+  if (angry) dangerGlow(sx(hx + d * 18), sy(ha), 52 + 30 * st.k, 0.22 + 0.25 * tell + 0.2 * st.k);
+  // ---- the hummock and its leaves ----
+  ctx.save(); ctx.translate(sx(h.base), sy(h.alt)); ctx.scale(d * s, s); ctx.translate(0, 18); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const [an, ln, w] of [[-1.1, 30, 0.34], [1.05, 28, 0.32], [-0.55, 24, 0.3], [0.5, 22, 0.3]]) {
+    ctx.save(); ctx.translate(2, -6); ctx.rotate(an + Math.sin(T * 1.3 + an * 3) * 0.05);
+    const leaf = () => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(ln * 0.5, -ln * w, ln, 0); ctx.quadraticCurveTo(ln * 0.5, ln * w, 0, 0); ctx.closePath(); };
+    leaf(); ctx.fillStyle = bogLG(0, -ln * w, 0, ln * w, [PL[0], PL[1], PL[2]]); ctx.fill(); ctx.strokeStyle = BOGP.plantEdge; ctx.lineWidth = 0.9; ctx.stroke();
+    bogPair([[1, 0], [ln * 0.9, 0]], 'rgba(36,70,14,.6)', 'rgba(236,255,180,.45)', 0.8, 0.7);
+    for (let q = 1; q < 4; q++) { const x = ln * q / 4.3; ctx.strokeStyle = 'rgba(36,70,14,.4)'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 4, -ln * w * 0.6); ctx.moveTo(x, 0); ctx.lineTo(x + 4, ln * w * 0.6); ctx.stroke(); }
+    ctx.restore();
+  }
+  const hum = () => { ctx.beginPath(); ctx.moveTo(-12, -6); ctx.bezierCurveTo(-4, -30, 20, -32, 24, -12); ctx.bezierCurveTo(26, 0, 18, 10, 4, 12); ctx.quadraticCurveTo(-8, 12, -12, 6); ctx.closePath(); };
+  hum(); ctx.fillStyle = bogLG(0, -30, 6, 12, BOGP.mud); ctx.fill();
+  ctx.save(); hum(); ctx.clip();
+  ctx.fillStyle = bogLG(0, -32, 0, -10, [BOGP.moss[0], BOGP.moss[1], BOGP.moss[2]]); ctx.beginPath(); ctx.moveTo(-14, -8); ctx.bezierCurveTo(-4, -32, 20, -34, 26, -12); ctx.quadraticCurveTo(14, -18, 8, -14); ctx.quadraticCurveTo(0, -12, -14, -4); ctx.closePath(); ctx.fill();
+  for (const [x, y, r] of [[2, -22, 2.4], [12, -24, 2], [18, -16, 1.8], [-4, -14, 1.6]]) { ctx.fillStyle = '#b6dc62'; ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); ctx.fillStyle = 'rgba(250,255,210,.55)'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.4, r * 0.35, 0, TWO_PI); ctx.fill(); }
+  ctx.fillStyle = 'rgba(20,16,6,.3)'; ctx.beginPath(); ctx.ellipse(12, 8, 16, 7, 0, 0, TWO_PI); ctx.fill();
+  ctx.restore();
+  hum(); ctx.strokeStyle = BOGP.mudEdge; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.restore();
+  // ---- the stalk ----
+  const P = bogSnapStalk(h, st, 12);
+  const pass = (w, colr, oy = 0) => { for (let i = 1; i < P.length; i++) { const v = i / P.length; ctx.strokeStyle = colr; ctx.lineWidth = w * (1.1 - 0.3 * v) * s; ctx.beginPath(); ctx.moveTo(sx(P[i - 1][0]), sy(P[i - 1][1]) + oy * s); ctx.lineTo(sx(P[i][0]), sy(P[i][1]) + oy * s); ctx.stroke(); } };
+  ctx.lineCap = 'round'; pass(10.4, BOGP.plantEdge); pass(7.8, PL[2]); pass(4.6, PL[1], -1); pass(1.6, 'rgba(236,255,170,.8)', -2.4);
+  for (let i = 2; i < P.length - 1; i += 2) {
+    const [x, a] = P[i], X = sx(x), Y = sy(a), sd = i % 4 ? 1 : -1;
+    ctx.fillStyle = '#e4f0a0'; ctx.strokeStyle = '#6a8a2a'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); ctx.moveTo(X - 2 * s, Y + sd * 3 * s); ctx.lineTo(X + d * 1.5 * s, Y + sd * 7.5 * s); ctx.lineTo(X + 2 * s, Y + sd * 3 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  // ---- the head ----
+  const sway = st.ph === 'idle' || st.ph === 'rest' ? Math.sin(T * 1.6 + h.alt) * 0.08 : 0, shake = tell > 0.3 ? Math.sin(T * 60) * 0.05 * tell : 0;
+  ctx.save(); ctx.translate(sx(hx), sy(ha)); ctx.scale(d * s, s); ctx.rotate(sway + shake); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  bogSnapHead(T, st.gape, tell, angry, h);
+  ctx.restore();
+  // the snap: a burst of strokes round the jaws as they slam
+  if (st.ph === 'hold' && st.v < 0.18) {
+    const u = st.v / 0.18, cx = sx(hx + d * 30), cy = sy(ha);
+    ctx.save(); ctx.strokeStyle = `rgba(255,255,226,${0.9 * (1 - u)})`; ctx.lineWidth = 2 * s; ctx.lineCap = 'round';
+    for (let i = 0; i < 7; i++) { const an = -1.3 + i * 0.43, r0 = (16 + u * 12) * s, r1 = r0 + 9 * s; ctx.beginPath(); ctx.moveTo(cx + d * Math.cos(an) * r0, cy + Math.sin(an) * r0); ctx.lineTo(cx + d * Math.cos(an) * r1, cy + Math.sin(an) * r1); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+// the snapper's head in its frame (facing +x): the pod (r 17 round the origin) and the jaws hinged at its front
+function bogSnapHead(T, gape, tell, angry, h) {
+  const PL = BOGP.plant, M = BOGP.maw, a = 0.05 + 0.24 * gape;
+  // the mouth between the lobes
+  ctx.fillStyle = bogRG(16, 0, 22 * (0.4 + gape), M);
+  ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(6 + Math.cos(-a) * 28, Math.sin(-a) * 28); ctx.quadraticCurveTo(38, 0, 6 + Math.cos(a) * 28, Math.sin(a) * 28); ctx.closePath(); ctx.fill();
+  if (gape > 0.4) { ctx.fillStyle = 'rgba(214,255,120,.85)'; ctx.beginPath(); ctx.ellipse(22, Math.sin(a) * 14 + 3 + Math.sin(T * 3) * 1.2, 1.4, 2.8, 0, 0, TWO_PI); ctx.fill(); }
+  for (const up of [true, false]) {
+    const k = up ? -1 : 1;
+    ctx.save(); ctx.translate(6, 0); ctx.rotate(k * a);
+    // teeth along the lip, pointing at the other lobe
+    ctx.fillStyle = '#fdf8da'; ctx.strokeStyle = '#a8984a'; ctx.lineWidth = 0.5;
+    for (let i = 0; i < 6; i++) { const tx = 3 + i * 4.4; ctx.beginPath(); ctx.moveTo(tx - 1.6, k * 0.6); ctx.lineTo(tx + 0.6, -k * (3.6 + (i % 2) * 1.4)); ctx.lineTo(tx + 1.8, k * 0.6); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    const lobe = () => { ctx.beginPath(); ctx.moveTo(-1, 0); ctx.bezierCurveTo(3, k * 12, 22, k * 12, 29, k * 1.5); ctx.lineTo(-1, k * 0.8); ctx.closePath(); };
+    lobe(); ctx.fillStyle = bogLG(0, k * 11, 0, 0, up ? [PL[0], PL[1], PL[2]] : [PL[2], PL[1], '#90d044']); ctx.fill();
+    ctx.save(); lobe(); ctx.clip();
+    ctx.fillStyle = bogLG(0, k * 4.5, 0, 0, ['rgba(232,64,96,0)', 'rgba(236,70,100,.95)']); ctx.fillRect(-2, Math.min(0, k * 4.5), 34, 4.5);
+    ctx.strokeStyle = 'rgba(40,90,16,.5)'; ctx.lineWidth = 0.7; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(1, 0); ctx.quadraticCurveTo(6 + i * 5, k * (10 - i), 11 + i * 4.5, k * 3); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(150,40,90,.5)'; for (const [x, y, r] of [[9, 8, 1.6], [16, 8.6, 1.3], [22, 5.4, 1], [5, 5, 1]]) { ctx.beginPath(); ctx.arc(x, k * y, r, 0, TWO_PI); ctx.fill(); }
+    ctx.restore();
+    lobe(); ctx.strokeStyle = BOGP.plantEdge; ctx.lineWidth = 1.1; ctx.stroke();
+    // bristles along the outer edge
+    ctx.strokeStyle = '#b8e868'; ctx.lineWidth = 0.9;
+    for (let i = 0; i < 6; i++) { const u = 0.2 + i * 0.13, bx = lerp(2, 27, u), by = k * (11 * Math.sin(u * Math.PI) + 1.2); ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 2.4, by + k * 4); ctx.stroke(); }
+    if (up) { ctx.strokeStyle = 'rgba(250,255,220,.6)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(5, -6.5); ctx.quadraticCurveTo(14, -10, 22, -7); ctx.stroke(); }
+    ctx.restore();
+  }
+  // the pod: a swollen bulb, spotted, lit top left
+  const pod = () => { ctx.beginPath(); ctx.ellipse(-3, 0, 15, 13.5, 0, 0, TWO_PI); };
+  pod(); ctx.fillStyle = bogRG(-8, -7, 20, [PL[0], PL[1], PL[2], PL[3]]); ctx.fill();
+  ctx.save(); pod(); ctx.clip();
+  ctx.fillStyle = 'rgba(150,40,90,.45)'; for (const [x, y, r] of [[-10, 4, 2], [-4, 8, 1.6], [2, 5, 1.3], [-12, -3, 1.2]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill(); }
+  bogPair([[-14, 2], [-6, 5], [4, 3]], 'rgba(30,70,12,.4)', 'rgba(230,255,170,.3)', 0.8, 0.7);
+  ctx.restore();
+  pod(); ctx.strokeStyle = BOGP.plantEdge; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(250,255,220,.6)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(-3, 0, 11, 10, 0, 3.6, 4.6); ctx.stroke();
+  // two cartoon eyes on top: drowsy and yellow at rest, wide and red set off, a brow frowning when it means it
+  const open = angry ? 1 : 0.55 + 0.1 * Math.sin(T * 0.7 + h.alt), iris = angry ? '#ff4a3c' : '#ffd23a', look = angry ? 1.4 : 0.6;
+  for (const [ex, ey, er] of [[-7, -9, 4.4], [2, -10.5, 3.8]]) {
+    ctx.fillStyle = '#fbfff0'; ctx.beginPath(); ctx.ellipse(ex, ey, er, er * (0.5 + 0.5 * open), 0, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = '#3a6416'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.ellipse(ex, ey, er, er * (0.5 + 0.5 * open), 0, 0, TWO_PI); ctx.clip();
+    ctx.fillStyle = iris; ctx.beginPath(); ctx.arc(ex + look, ey + 0.4, er * 0.62, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#2a0e08'; ctx.beginPath(); ctx.ellipse(ex + look * 1.3, ey + 0.4, er * 0.22, er * 0.5, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex + look - er * 0.25, ey - er * 0.25, er * 0.2, 0, TWO_PI); ctx.fill();
+    // the lid
+    if (open < 0.95) { ctx.fillStyle = PL[1]; ctx.fillRect(ex - er - 1, ey - er - 1, er * 2 + 2, er * (1 - open) * 1.3 + 0.5); }
+    ctx.restore();
+    if (angry) { ctx.strokeStyle = BOGP.plantEdge; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(ex - er, ey - er - 0.5); ctx.lineTo(ex + er * 0.9, ey - er * 0.4); ctx.stroke(); }
+  }
+}
+// The acid spout: a fat hollow mangrove root growing out of the bank, bark furrowed and mossed, its open end a dark
+// rim with lime acid welling in it. It dribbles a thin stream that drops away at once; then it spits (the mouth glows,
+// drops fly), surges, and its throw sweeps out right across to the far wall, sizzling where it splashes, then ebbs.
+function bogDrawSpout(h) {
+  const Sp = BOG.spout, d = h.side, T = G.t, st = h.st || bogSpoutAt(h, T), tell = st.tell, surge = st.k;
+  const { pts, hit } = bogStream(h, st.v, a => d > 0 ? rightWall(a) : leftWall(a));
+  if (tell > 0.2 || surge > 0.1) dangerGlow(sx(lerp(h.base, h.far, 0.5 * surge + 0.1)), sy(h.alt - 30), 60 + 70 * surge, 0.16 + 0.2 * tell + 0.2 * surge);
+  // ---- the stream: a dark rim, a lime body, a hot core and a sheen, beads running down it ----
+  if (pts.length > 1) {
+    const path = () => { ctx.beginPath(); pts.forEach(([x, a], i) => i ? ctx.lineTo(sx(x), sy(a)) : ctx.moveTo(sx(x), sy(a))); };
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    bogGlow(sx(pts[0][0] + d * 6), sy(pts[0][1]), (22 + 14 * surge) * s, BOGP.lime, 0.2 + 0.2 * surge);
+    path(); ctx.strokeStyle = BOGP.acidEdge; ctx.lineWidth = 16 * s; ctx.stroke();
+    path(); ctx.strokeStyle = BOGP.acid[2]; ctx.lineWidth = 13.4 * s; ctx.stroke();
+    path(); ctx.strokeStyle = BOGP.acid[1]; ctx.lineWidth = 9 * s; ctx.stroke();
+    path(); ctx.strokeStyle = BOGP.acid[0]; ctx.lineWidth = 3.4 * s; ctx.stroke();
+    ctx.beginPath(); pts.forEach(([x, a], i) => { const X = sx(x) - 2.6 * s, Y = sy(a) - 3.2 * s; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.strokeStyle = 'rgba(255,255,236,.75)'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    // beads of acid running along it
+    const n = pts.length - 1;
+    for (let q = 0; q < 5; q++) {
+      const u = pmod(T * 1.6 + q / 5, 1), f = u * n, i = Math.min(n - 1, Math.floor(f)), e = f - i, x = lerp(pts[i][0], pts[i + 1][0], e), a = lerp(pts[i][1], pts[i + 1][1], e);
+      ctx.fillStyle = 'rgba(250,255,200,.9)'; ctx.beginPath(); ctx.arc(sx(x), sy(a), 2.4 * s, 0, TWO_PI); ctx.fill();
+    }
+    // the splash on the far wall: a bright spatter fanned against it; else the stream's end breaking into spray
+    const [ex, ea] = pts[pts.length - 1];
+    if (hit) {
+      bogGlow(sx(ex), sy(ea), 30 * s, BOGP.lime, 0.35);
+      ctx.fillStyle = BOGP.acid[1];
+      for (let q = 0; q < 6; q++) { const an = (q / 5 - 0.5) * 2.2 + Math.sin(T * 9 + q) * 0.15, L = (7 + 6 * Math.abs(Math.sin(T * 7 + q * 2))) * s; ctx.beginPath(); ctx.ellipse(sx(ex) - d * Math.cos(an) * L * 0.7, sy(ea) + Math.sin(an) * L, 2.6 * s, 1.6 * s, an, 0, TWO_PI); ctx.fill(); }
+    } else {
+      for (let q = 0; q < 5; q++) { const u = pmod(T * 2.2 + q / 5, 1), x = sx(ex + (q - 2) * 3 * u), y = sy(ea - 4 - u * 18); ctx.fillStyle = `rgba(214,255,110,${0.8 * (1 - u)})`; ctx.beginPath(); ctx.arc(x, y, (2.2 - u) * s, 0, TWO_PI); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  // ---- the root ----
+  ctx.save(); ctx.translate(sx(h.base), sy(h.alt)); ctx.scale(d * s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const body = () => { ctx.beginPath(); ctx.moveTo(-18, -16); ctx.bezierCurveTo(4, -17, 26, -14, 42, -13); ctx.lineTo(42, 13); ctx.bezierCurveTo(26, 14, 4, 16, -18, 16); ctx.closePath(); };
+  body(); ctx.fillStyle = bogLG(0, -16, 0, 16, BOGP.bark); ctx.fill();
+  ctx.save(); body(); ctx.clip();
+  for (const y of [-8, -2, 5, 10]) bogPair([[-18, y], [6, y + 0.6], [24, y - 0.4], [44, y * 0.92]], 'rgba(50,34,18,.5)', 'rgba(255,236,190,.3)', 0.9, 0.8);
+  for (const x of [8, 26]) bogPair([[x - 1, -15], [x + 1, -5], [x - 0.5, 6], [x + 1, 15]], 'rgba(50,34,18,.55)', 'rgba(255,236,190,.35)', 1, 0.9);
+  ctx.fillStyle = 'rgba(30,20,10,.3)'; ctx.fillRect(-20, 8, 70, 10);
+  ctx.restore();
+  body(); ctx.strokeStyle = BOGP.barkEdge; ctx.lineWidth = 1.2; ctx.stroke();
+  // moss along its top, a slime dribble down its side
+  ctx.fillStyle = bogLG(0, -18, 0, -11, BOGP.moss.slice(0, 3)); ctx.beginPath(); ctx.moveTo(-18, -16); ctx.bezierCurveTo(4, -17.5, 22, -15, 34, -14); ctx.quadraticCurveTo(26, -10, 14, -12); ctx.quadraticCurveTo(0, -10, -18, -11); ctx.closePath(); ctx.fill(); ctx.strokeStyle = BOGP.mossEdge; ctx.lineWidth = 0.7; ctx.stroke();
+  for (let i = 0; i < 9; i++) { const x = -14 + i * 5.4; ctx.strokeStyle = i % 2 ? '#b4dc5a' : '#7cae36'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x, -16); ctx.lineTo(x - 0.8, -18.5 - (i % 3)); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,240,200,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-14, -12.5); ctx.bezierCurveTo(4, -13.5, 24, -11, 38, -10.5); ctx.stroke();
+  // the open end: a thick bark rim, the dark hollow, acid welling in it (glowing in the spit and the surge)
+  const hot = clamp(0.3 + tell * 0.7 + surge, 0, 1);
+  ctx.fillStyle = bogLG(36, -14, 50, 14, ['#c8ae84', '#86683e', '#4c3820']); ctx.beginPath(); ctx.ellipse(43, 0, 6, 14, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = BOGP.barkEdge; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.fillStyle = '#2a1e0e'; ctx.beginPath(); ctx.ellipse(44, 0.5, 3.6, 10, 0, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = bogRG(45, 3, 9, [bogCol(bogMix([190, 220, 110], BOGP.limeHot, hot)), bogCol(bogMix([90, 130, 30], BOGP.lime, hot)), 'rgba(60,90,20,.9)']); ctx.beginPath(); ctx.ellipse(44.6, 3, 2.8, 6.4, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,248,210,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.ellipse(43, 0, 4.6, 12, 0, 3.5, 4.4); ctx.stroke();
+  // the rim's chewed edge: a few notches
+  ctx.strokeStyle = 'rgba(60,40,20,.7)'; ctx.lineWidth = 0.7; for (const y of [-11, -4, 6, 11]) { ctx.beginPath(); ctx.moveTo(40.5, y); ctx.lineTo(43, y + 1); ctx.stroke(); }
+  ctx.restore();
+}
+// A will-o'-wisp: a mischievous little swamp spirit of lime flame. A plump teardrop body that licks up into three
+// flickering tongues, layered like a real flame (a green outer flame, a lime middle, a white-hot heart), its edge a
+// darker teal-green of itself; little flame arms that wave; big expressive eyes that follow you and blink, and a
+// small round mouth. An ember tail streams behind it, longer as it drifts. When it catches your scent it flares
+// brighter, its brows knit, its eyes narrow to slits and it grins.
+function bogDrawWisp(h) {
+  const W = BOG.wisp, T = G.t, [x, a] = bogWispPos(h, T), X = sx(x), Y = sy(a), ch = h.chase ? 1 : 0, v = h.wv || 0;
+  h.glowE = lerp(h.glowE || 0, ch, 0.08); const e = h.glowE, C = BOGP.wisp, rim = [44, 120, 74];
+  // the ember tail: where it has been, streaming down and back
+  const tr = h.trail || (h.trail = []); if (!tr.length || tr[0][2] !== T) { tr.unshift([x, a, T]); if (tr.length > 16) tr.pop(); }
+  dangerGlow(X, Y, 50 + 16 * e, 0.12 + 0.2 * e);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  bogGlow(X, Y - 4 * s, (62 + 18 * e) * s, C[1], 0.26 + 0.2 * e);
+  const pts = tr.map(([tx, ta], q) => [sx(tx) + Math.sin(T * 5 + q * 0.8) * q * 0.35 * s, sy(ta - q * 3.2) + 14 * s, q]);
+  for (let q = pts.length - 1; q >= 1; q--) { const [px, py] = pts[q], u = q / pts.length; bogGlow(px, py, (13 - 9 * u) * s, bogMix(C[1], [255, 200, 90], u * 0.5), 0.34 * (1 - u)); }
+  // the tail itself: a tapering ribbon of flame licking down and back from its bottom
+  if (pts.length > 3) {
+    const R = pts.map(([px, py, q]) => [px, py - 4 * s + Math.sin(T * 9 + q) * 0.8 * s, (11 - q * 0.62) * s]).filter(p => p[2] > 0.6);
+    ctx.beginPath(); R.forEach(([px, py, w], q) => q ? ctx.lineTo(px - w, py) : ctx.moveTo(px - w, py)); for (let q = R.length - 1; q >= 0; q--) ctx.lineTo(R[q][0] + R[q][2], R[q][1]); ctx.closePath();
+    ctx.fillStyle = bogLG(0, R[0][1], 0, R[R.length - 1][1] + 6 * s, [bogCol(C[0], 0.7), bogCol(C[1], 0.45), bogCol([255, 200, 90], 0)]); ctx.fill();
+  }
+  // embers drifting off the tail
+  for (let q = 0; q < 6; q++) {
+    const u = pmod(T * (0.6 + 0.1 * q) + q / 6, 1), p = pts[Math.min(pts.length - 1, Math.floor(u * (pts.length - 1)))]; if (!p) break;
+    const ex = p[0] + Math.sin(q * 3.1 + T * 2) * (4 + 10 * u) * s, ey = p[1] + u * 14 * s;
+    ctx.fillStyle = bogCol(bogMix([250, 255, 190], [255, 190, 90], u), 0.9 * (1 - u)); ctx.beginPath(); ctx.arc(ex, ey, (1.8 - u) * s, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+  ctx.save(); ctx.translate(X, Y); ctx.scale(s, s); ctx.rotate(clamp(-v / 900, -0.18, 0.18)); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const fl = q => Math.sin(T * (7 + q) + h.alt * 0.01 + q * 2), sq = 1 + 0.04 * Math.sin(T * 5.2 + h.alt);
+  ctx.scale(1 / sq, sq);
+  // the flame's outline at scale k (tongues shrink into the heart)
+  const flame = (k, up) => {
+    ctx.beginPath(); ctx.moveTo(-19 * k, 3 * k);
+    ctx.bezierCurveTo(-19 * k, -8 * k, -14 * k, -13 * k, -11 * k, (-19 - 3 * fl(0) * up) * k); ctx.quadraticCurveTo(-8 * k, -12 * k, -4 * k, -15 * k);
+    ctx.quadraticCurveTo(-2 * k, (-25 - 3 * fl(1) * up) * k, 1 * k, (-33 - 2.5 * fl(1) * up) * k); ctx.quadraticCurveTo(4 * k, -20 * k, 6 * k, -16 * k);
+    ctx.quadraticCurveTo(10 * k, -15 * k, 13 * k, (-22 - 3 * fl(2) * up) * k); ctx.bezierCurveTo(18 * k, -12 * k, 19 * k, -6 * k, 19 * k, 3 * k);
+    ctx.bezierCurveTo(19 * k, 14 * k, 10 * k, 20 * k, 0, 20 * k); ctx.bezierCurveTo(-10 * k, 20 * k, -19 * k, 14 * k, -19 * k, 3 * k); ctx.closePath();
+  };
+  // little flame arms, waving (behind the body)
+  for (const sd of [-1, 1]) {
+    const w = Math.sin(T * 4 + sd) * 0.3 + (e > 0.5 ? -0.3 : 0.2) * sd;
+    ctx.save(); ctx.translate(sd * 15, 10); ctx.rotate(sd * (1.75 + w));
+    ctx.beginPath(); ctx.moveTo(-4.4, 0); ctx.quadraticCurveTo(-4, -7, -1, -10); ctx.quadraticCurveTo(1, -12.5, 2.6, -10.5); ctx.quadraticCurveTo(1, -9.5, 1.6, -7.5); ctx.quadraticCurveTo(4.6, -5, 4.4, 0); ctx.closePath();
+    ctx.fillStyle = bogLG(0, -13, 0, 0, [bogCol(C[0]), bogCol(C[1]), bogCol(C[2])]); ctx.fill(); ctx.strokeStyle = bogCol(rim, 0.8); ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+  const hot = 0.8 + 0.2 * e;
+  flame(1, 1); ctx.fillStyle = bogRG(-4, -2, 28, [bogCol(bogMix(C[1], C[0], 0.4)), bogCol(C[1], hot), bogCol(C[2]), bogCol(bogMix(C[2], rim, 0.5))]); ctx.fill();
+  ctx.strokeStyle = bogCol(rim, 0.9); ctx.lineWidth = 1.4; ctx.stroke();
+  // the middle flame and the white-hot heart
+  ctx.save(); ctx.translate(0, 4); flame(0.74, 1.3); ctx.fillStyle = bogRG(-3, 2, 20, [bogCol(C[0]), bogCol(bogMix(C[0], C[1], 0.5), 0.9), bogCol(C[1], 0.2)]); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(0, 8); flame(0.44, 1.6); ctx.fillStyle = bogRG(-1, 3, 12, ['rgba(255,255,246,.98)', 'rgba(250,255,214,.8)', bogCol(C[0], 0)]); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bogRG(0, 8, 13, ['rgba(255,255,220,.55)', 'rgba(230,255,160,.2)', 'rgba(230,255,160,0)']); ctx.beginPath(); ctx.arc(0, 8, 13, 0, TWO_PI); ctx.fill(); ctx.restore();
+  // a glossy rim light on the lit side, a soft shade on the other
+  ctx.strokeStyle = 'rgba(255,255,236,.75)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.ellipse(-2, 4, 14.5, 13.5, 0, 3.3, 4.5); ctx.stroke();
+  ctx.strokeStyle = bogCol(rim, 0.35); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(0, 4, 15.5, 14.5, 0, 0.2, 1.4); ctx.stroke();
+  // sparks flickering off its tongues
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let q = 0; q < 5; q++) { const u = pmod(T * (0.9 + q * 0.2) + q / 5, 1), x0 = (q - 2) * 6 + Math.sin(T * 3 + q) * 2, y0 = -20 - u * 18; ctx.fillStyle = bogCol([240, 255, 190], 0.85 * (1 - u)); ctx.beginPath(); ctx.arc(x0, y0, 1.5 * (1 - u * 0.5), 0, TWO_PI); ctx.fill(); }
+  ctx.restore();
+  // the face: big eyes that follow you (and blink), brows that knit when it chases, cheeks, a mouth
+  const P = G.p, lx = clamp((P.x - x) / 120, -1, 1) * 1.6, ly = clamp((a - P.alt) / 260, -1, 1) * 1.4;
+  const blink = pmod(T + h.ph * 7, 3.6) < 0.12 ? 0.15 : 1, eh = lerp(5.4, 3.0, e) * blink;
+  for (const [ex, k] of [[-6.6, -1], [6.6, 1]]) {
+    ctx.save(); ctx.translate(ex, 2);
+    ctx.fillStyle = bogCol([28, 84, 54], 0.92); ctx.beginPath(); ctx.ellipse(0, 0, 4, eh, 0, 0, TWO_PI); ctx.fill();
+    if (blink > 0.5) {
+      ctx.fillStyle = 'rgba(250,255,214,.95)'; ctx.beginPath(); ctx.arc(lx, ly * 0.6, 1.9 - 0.5 * e, 0, TWO_PI); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(lx - 1.2, ly * 0.6 - 1.5, 0.8, 0, TWO_PI); ctx.fill();
+    }
+    // the brow: lifted and curious at rest, knitted down toward the middle in the chase
+    const eo = lerp(5.4, 3.0, e); ctx.strokeStyle = bogCol([28, 84, 54], 0.85); ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(-k * 3.8, -eo - lerp(3.8, 0.4, e)); ctx.lineTo(k * 4, -eo - lerp(2.6, 4.2, e)); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const sd of [-1, 1]) { ctx.fillStyle = bogRG(sd * 11, 9, 4, ['rgba(255,220,150,.55)', 'rgba(255,220,150,0)']); ctx.beginPath(); ctx.arc(sd * 11, 9, 4, 0, TWO_PI); ctx.fill(); } ctx.restore();
+  ctx.fillStyle = bogCol([28, 84, 54], 0.88);
+  if (e < 0.5) { ctx.beginPath(); ctx.ellipse(0, 11, 2.2, 2.6, 0, 0, TWO_PI); ctx.fill(); }
+  else { ctx.beginPath(); ctx.moveTo(-5.5, 9.5); ctx.quadraticCurveTo(0, 16, 5.5, 9.5); ctx.quadraticCurveTo(0, 12, -5.5, 9.5); ctx.fill(); ctx.fillStyle = 'rgba(250,255,220,.95)'; for (const tx of [-2.6, 2.6]) { ctx.beginPath(); ctx.moveTo(tx - 1.1, 10.4); ctx.lineTo(tx, 12.4); ctx.lineTo(tx + 1.1, 10.4); ctx.fill(); } }
+  ctx.restore();
+}
+Object.assign(DRAW, { bogVent: bogDrawVent, bogSnap: bogDrawSnap, bogSpout: bogDrawSpout, bogWisp: bogDrawWisp });
+// the bog's loose bits: drops, leaves, bubbles and gas wisps (in front of the traps)
+function bogDrawBits() {
+  const B = G.bogBits; if (!B || !B.length) return;
+  for (const q of B) {
+    const X = sx(q.x), Y = sy(q.a), u = q.life / q.max; if (Y < -20 || Y > H + 20) continue;
+    if (q.kind === 'drop') { ctx.fillStyle = `rgba(206,252,96,${0.95 * Math.min(1, u * 2)})`; ctx.beginPath(); ctx.arc(X, Y, q.r * s, 0, TWO_PI); ctx.fill(); ctx.fillStyle = `rgba(255,255,230,${0.8 * u})`; ctx.beginPath(); ctx.arc(X - q.r * 0.3 * s, Y - q.r * 0.3 * s, q.r * 0.35 * s, 0, TWO_PI); ctx.fill(); }
+    else if (q.kind === 'leaf') { ctx.save(); ctx.translate(X, Y); ctx.rotate(q.rot); ctx.fillStyle = `rgba(140,200,70,${Math.min(1, u * 2)})`; ctx.beginPath(); ctx.ellipse(0, 0, q.r * 1.4 * s, q.r * 0.6 * s, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = `rgba(50,90,20,${Math.min(1, u * 2)})`; ctx.lineWidth = 0.6 * s; ctx.stroke(); ctx.restore(); }
+    else if (q.kind === 'bubble' || q.kind === 'fly') { ctx.strokeStyle = `rgba(226,255,160,${0.8 * u})`; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.arc(X, Y, q.r * s, 0, TWO_PI); ctx.stroke(); ctx.fillStyle = `rgba(255,255,230,${0.8 * u})`; ctx.beginPath(); ctx.arc(X - q.r * 0.35 * s, Y - q.r * 0.35 * s, q.r * 0.3 * s, 0, TWO_PI); ctx.fill(); }
+    else if (q.kind === 'wisp') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; bogGlow(X, Y, q.r * (1.6 - u * 0.6) * s, BOGP.wisp[1], 0.3 * u); ctx.restore(); }
+    else { const r = q.r * (1.8 - u) * s; ctx.fillStyle = `rgba(200,230,140,${0.28 * u})`; ctx.beginPath(); ctx.arc(X, Y, r, 0, TWO_PI); ctx.fill(); }
+  }
+}
+{ const base = drawHazards; drawHazards = function () { base(); if (bogOn()) bogDrawBits(); }; }
+
+// ---- the Bog Heart: the finish ----
+// Over the landing two ancient mangrove roots climb out of the banks and arch together high over the shaft, mossed,
+// bearded with Spanish moss and studded with glowing shelf fungi, framing the hollow heart of the mire: under the arch
+// a huge old hollow cypress stump, standing in a mossy mound, holds a still pool brimming with glowing lime water, lily pads on it, cattails round it, and
+// rising from its middle the Bog Heart itself, a huge lotus, pink and cream, its core glowing; the old Toad King sits
+// on a lily pad beside it in his crown of toadstools. On the clear the lotus opens wide and blazes, the king croaks and
+// fireflies swirl up out of the pool. The arch, the knot and the pool's rim are drawn once into a cached canvas; the
+// lotus, the king, the water's glow and the fireflies live on top. (All backdrop: nothing here has a hitbox.)
+const BOG_HEART = { top: 520, pool: 172, lotusX: 200 };
+// a cached world rectangle [x0, x1] × [a0, a1] (drawn in world units, y = -altitude)
+function bogRect(id, x0, x1, a0, a1, draw) {
+  let sp = bogCache.sprites[id]; if (sp) return sp;
+  const sd = s * dpr, cv = document.createElement('canvas'); cv.width = Math.ceil((x1 - x0) * sd); cv.height = Math.ceil((a1 - a0) * sd);
+  const c = cv.getContext('2d'); c.setTransform(sd, 0, 0, sd, -x0 * sd, a1 * sd); c.lineJoin = 'round'; c.lineCap = 'round'; draw(c);
+  return (bogCache.sprites[id] = { cv, x0, a1, w: cv.width / dpr, h: cv.height / dpr });
+}
+function bogDrawHeartBack() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, HB = BOG_HEART;
+  if (sy(E + HB.top + 40) > H + 40 || sy(E - 260) < -40) return;
+  const r = bogRect('heart', -40, 440, E - 260, E + HB.top + 40, c => bogHeartArt(c, E));
+  ctx.drawImage(r.cv, ox + r.x0 * s, sy(r.a1), r.w, r.h);
+  bogHeartLive(E);
+}
+function bogHeartArt(c, E) {
+  const HB = BOG_HEART, C = { edge: [52, 40, 22], mid: [104, 84, 52], lit: [168, 142, 96], moss: [160, 184, 100], mossDk: [92, 116, 52], leaf: [104, 160, 50], leafLt: [176, 214, 96], leafDk: [52, 90, 28] };
+  const [L, R] = walls(E + 40), cx = HB.lotusX, pa = E + HB.pool;
+  // the hollow behind the arch: a deep green-gold glow fading into the haze
+  c.fillStyle = bogRG(cx, -(pa + 90), 230, ['rgba(214,236,130,.55)', 'rgba(150,180,80,.32)', 'rgba(110,130,60,0)'], 0, c); c.beginPath(); c.arc(cx, -(pa + 90), 230, 0, TWO_PI); c.fill();
+  // the arch: two great roots out of the banks meeting high in the middle, a knot where they twist together
+  for (const side of [-1, 1]) {
+    const x0 = side < 0 ? L - 10 : R + 10, P = [];
+    for (let q = 0; q <= 30; q++) { const v = q / 30, an = v * Math.PI / 2; P.push([lerp(x0, cx + side * 6, 1 - Math.cos(an)), -(E - 30 + (HB.top - 30) * Math.sin(an)), 30 - 14 * v]); }
+    for (const [k, colr, oy] of [[1.15, bogCol(C.edge), 0.1], [1, bogCol(C.mid), 0], [0.55, bogCol(bogMix(C.mid, C.lit, 0.5)), -0.18], [0.22, bogCol(C.lit, 0.9), -0.33]]) for (let q = 1; q < P.length; q++) { c.strokeStyle = colr; c.lineWidth = P[q][2] * k; c.beginPath(); c.moveTo(P[q - 1][0], P[q - 1][1] + oy * P[q][2]); c.lineTo(P[q][0], P[q][1] + oy * P[q][2]); c.stroke(); }
+    // bark furrows across it, moss riding its back, Spanish moss hanging from its underside, fungi on its flank
+    for (let q = 2; q < P.length - 1; q += 2) { const [x, y, w] = P[q], nx = P[q + 1][0] - P[q - 1][0], ny = P[q + 1][1] - P[q - 1][1], l = Math.hypot(nx, ny) || 1; bogPair([[x - ny / l * w * 0.45, y + nx / l * w * 0.45], [x + ny / l * w * 0.45, y - nx / l * w * 0.45]], bogCol(C.edge, 0.45), bogCol(C.lit, 0.35), 1, 1, c); }
+    for (let q = 3; q < P.length - 2; q += 1) { const [x, y, w] = P[q]; c.fillStyle = bogCol(q % 2 ? C.moss : bogLift(C.moss, 18), 0.95); c.beginPath(); c.ellipse(x + side * 1.5, y - w * 0.42, w * 0.38, w * 0.2, 0, 0, TWO_PI); c.fill(); }
+    bogDrape(c, P.slice(4, 27).filter((q, i) => i % 2 === 0).map(([x, y, w]) => [x, y + w * 0.45]), C, 58, 7801 + side);
+    for (const q of [9, 16, 22]) {
+      const [x, y, w] = P[q];
+      for (let i = 0; i < 3; i++) {
+        const fy = y + w * 0.1 + i * 5, fw = 9 - i * 2.2, fx = x - side * (w * 0.2);
+        c.fillStyle = bogLG(0, fy - 4, 0, fy + 3, BOGP.fungus, c); c.beginPath(); c.ellipse(fx, fy, fw, 3.6, 0, Math.PI, 0); c.quadraticCurveTo(fx, fy + 3, fx - fw, fy); c.fill();
+        c.strokeStyle = BOGP.fungusEdge; c.lineWidth = 0.7; c.stroke();
+        c.fillStyle = 'rgba(210,255,110,.6)'; c.beginPath(); c.ellipse(fx, fy + 1, fw * 0.6, 1.2, 0, 0, TWO_PI); c.fill();
+      }
+    }
+  }
+  // the knot at the crown: the two roots twisted together, a leafy crown sprouting out of it
+  const ky = -(E + HB.top - 32);
+  c.fillStyle = bogRG(cx - 6, ky - 6, 26, [bogCol(C.lit), bogCol(C.mid), bogCol(C.edge)], 0, c); c.beginPath(); c.ellipse(cx, ky, 24, 17, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = bogCol(C.edge); c.lineWidth = 1.2; c.stroke();
+  bogPair([[cx - 18, ky - 4], [cx - 4, ky + 6], [cx + 14, ky - 8]], bogCol(C.edge, 0.6), bogCol(C.lit, 0.5), 1.4, 1.1, c);
+  bogPair([[cx - 14, ky + 9], [cx + 2, ky - 3], [cx + 18, ky + 5]], bogCol(C.edge, 0.6), bogCol(C.lit, 0.5), 1.2, 1.1, c);
+  bogLeaves(c, cx - 22, ky - 14, 18, C, 7811); bogLeaves(c, cx + 24, ky - 12, 16, C, 7812); bogLeaves(c, cx, ky - 22, 20, C, 7813);
+  // the pool rests on the ground: a huge old hollow cypress stump rising out of a mossy mound under the arch, its
+  // buttress roots spreading to both banks, its hollowed top brimming with the glowing pool
+  const bw = 120, by = -pa, yb = -(E - 72), sw0 = bw + 6;
+  const half = (side, v) => { const y = lerp(by + 4, yb, v); return [cx + side * (sw0 + 10 * Math.sin(v * Math.PI * 0.9) + 46 * Math.pow(v, 3)), y]; };
+  const stump = () => { c.beginPath(); for (let q = 0; q <= 16; q++) { const [x, y] = half(-1, q / 16); q ? c.lineTo(x, y) : c.moveTo(x, y); } for (let q = 16; q >= 0; q--) { const [x, y] = half(1, q / 16); c.lineTo(x, y); } c.closePath(); };
+  // buttress roots out to the banks (behind the trunk)
+  for (const side of [-1, 1]) for (const [v0, reach, th] of [[0.62, 1, 15], [0.8, 0.7, 12]]) {
+    const [x0, y0] = half(side, v0), xw = side < 0 ? L - 6 : R + 6, x1 = lerp(x0, xw, reach), P = [];
+    for (let q = 0; q <= 10; q++) { const u = q / 10; P.push([lerp(x0 - side * 12, x1, u), lerp(y0, yb + 4, Math.pow(u, 0.7)) - 8 * Math.sin(u * Math.PI), th * (1 - 0.55 * u)]); }
+    for (const [k, colr, oy] of [[1.2, BOGP.barkEdge, 0.1], [1, '#6e5634', 0], [0.5, '#9a7e54', -0.25], [0.18, 'rgba(255,236,190,.6)', -0.36]]) for (let q = 1; q < P.length; q++) { c.strokeStyle = colr; c.lineWidth = P[q][2] * k; c.beginPath(); c.moveTo(P[q - 1][0], P[q - 1][1] + oy * P[q][2]); c.lineTo(P[q][0], P[q][1] + oy * P[q][2]); c.stroke(); }
+    for (let q = 2; q < P.length - 1; q += 2) bogPair([[P[q][0] - 2, P[q][1] - P[q][2] * 0.45], [P[q][0] + 2, P[q][1] + P[q][2] * 0.45]], 'rgba(50,34,18,.5)', 'rgba(255,236,190,.3)', 0.9, 0.8, c);
+  }
+  // the trunk: lit from the top left, bark ridges as line pairs following its shape
+  stump(); c.fillStyle = bogLG(cx - sw0 - 30, 0, cx + sw0 + 30, 0, ['#a88c62', '#7a6242', '#56442a', '#342818'], c); c.fill();
+  c.save(); stump(); c.clip();
+  for (let q = 0; q < 13; q++) { const u = (q + 0.5) / 13 * 2 - 1, P = []; for (let k = 0; k <= 12; k++) { const v = k / 12, [xl] = half(-1, v), [xr] = half(1, v), y = lerp(by + 4, yb, v); P.push([lerp(xl, xr, (u + 1) / 2) + 2 * Math.sin(v * 7 + q), y]); } bogPair(P, 'rgba(44,30,14,.5)', `rgba(255,236,190,${0.28 * (1 - (u + 1) / 2) + 0.05})`, 1.4, -1.1, c); }
+  c.fillStyle = bogLG(0, by, 0, by + 30, ['rgba(20,14,6,.45)', 'rgba(20,14,6,0)'], c); c.fillRect(cx - 200, by, 400, 30);   // the rim's shadow on the bark
+  // a hollow in its side, glowing with fireflies
+  const hx = cx + 20, hy = by + 120;
+  c.fillStyle = bogLG(0, hy - 34, 0, hy + 30, ['#1e1a0c', '#2e2c12', '#3e4a18'], c); c.beginPath(); c.moveTo(hx - 20, hy + 30); c.bezierCurveTo(hx - 24, hy - 10, hx - 10, hy - 36, hx, hy - 36); c.bezierCurveTo(hx + 10, hy - 36, hx + 24, hy - 10, hx + 20, hy + 30); c.closePath(); c.fill();
+  c.fillStyle = bogRG(hx, hy + 10, 30, ['rgba(220,255,120,.6)', 'rgba(160,220,60,.22)', 'rgba(120,180,40,0)'], 0, c); c.fill();
+  c.strokeStyle = '#8e7450'; c.lineWidth = 4; c.stroke(); c.strokeStyle = BOGP.barkEdge; c.lineWidth = 1.2; c.stroke();
+  for (const [fx, fy] of [[-8, 4], [6, -12], [10, 14], [-2, 20]]) { c.fillStyle = bogRG(hx + fx, hy + fy, 4, ['rgba(250,255,200,1)', 'rgba(200,255,90,.4)', 'rgba(200,255,90,0)'], 0, c); c.beginPath(); c.arc(hx + fx, hy + fy, 4, 0, TWO_PI); c.fill(); }
+  // moss running down from its shoulders, bracket fungi on its flank
+  for (const side of [-1, 1]) for (let q = 0; q < 9; q++) { const v = q / 9 * 0.55, [x, y] = half(side, v), w = 9 - q * 0.7; c.fillStyle = q % 2 ? '#8cb846' : '#a8d058'; c.beginPath(); c.ellipse(x - side * w * 0.6, y, w, 5, 0, 0, TWO_PI); c.fill(); }
+  c.restore();
+  stump(); c.strokeStyle = BOGP.barkEdge; c.lineWidth = 1.4; c.stroke();
+  for (const [v, side] of [[0.3, -1], [0.45, -1], [0.38, 1]]) {
+    const [x, y] = half(side, v);
+    for (let i = 0; i < 3; i++) { const fy = y + i * 6, fw = 12 - i * 3, fx = x - side * fw * 0.3; c.fillStyle = bogLG(0, fy - 5, 0, fy + 3, BOGP.fungus, c); c.beginPath(); c.ellipse(fx, fy, fw, 4.2, 0, Math.PI, 0); c.quadraticCurveTo(fx, fy + 3.4, fx - fw, fy); c.fill(); c.strokeStyle = BOGP.fungusEdge; c.lineWidth = 0.7; c.stroke(); c.fillStyle = 'rgba(210,255,110,.6)'; c.beginPath(); c.ellipse(fx, fy + 1, fw * 0.6, 1.3, 0, 0, TWO_PI); c.fill(); }
+  }
+  // the ground under it all: dark peat banked between the walls, fading into the murk below
+  c.fillStyle = bogLG(0, yb - 10, 0, yb + 190, ['#4a5a26', '#34361c', 'rgba(36,40,22,.0)'], c); c.fillRect(L - 30, yb - 10, R - L + 60, 200);
+  for (let q = 0; q < 9; q++) { const x = lerp(L, R, (q + 0.5) / 9), y = yb + 30 + 40 * hash2(q, 7863); c.fillStyle = bogRG(x - 2, y - 2, 6, ['#a89a70', '#6a5e40', '#3a3422'], 0, c); c.beginPath(); c.ellipse(x, y, 5 + 3 * hash2(q, 7864), 3.4, 0, 0, TWO_PI); c.fill(); }
+  // the mossy mound it stands in: lumpy cushions, lit tops, ferns and toadstools
+  for (let q = 0; q < 15; q++) { const u = q / 14, x = lerp(L - 10, R + 10, u), r = 18 + 12 * hash2(q, 7861), y = yb - 6 + 6 * hash2(q, 7862); c.fillStyle = bogRG(x - r * 0.3, y - r * 0.5, r * 1.3, ['#b8dc66', '#76a634', '#3e6a1c'], 0, c); c.beginPath(); c.arc(x, y, r, Math.PI, 0); c.closePath(); c.fill(); c.strokeStyle = BOGP.mossEdge; c.lineWidth = 1; c.beginPath(); c.arc(x, y, r, Math.PI, 0); c.stroke(); c.strokeStyle = 'rgba(240,255,190,.5)'; c.lineWidth = 1.4; c.beginPath(); c.arc(x, y, r * 0.8, 3.5, 4.6); c.stroke(); }
+  for (const [x, hh, w] of [[cx - 96, 9, 5], [cx - 88, 6, 3.6], [cx + 104, 8, 4.6]]) { c.strokeStyle = '#f0e6c8'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, yb - 16); c.lineTo(x, yb - 16 - hh); c.stroke(); c.fillStyle = bogLG(0, yb - 16 - hh - w, 0, yb - 16 - hh, ['#ff7a5a', '#e0402a', '#9a2214'], c); c.beginPath(); c.ellipse(x, yb - 16 - hh, w, w * 0.75, 0, Math.PI, 0); c.closePath(); c.fill(); c.strokeStyle = '#8a1e10'; c.lineWidth = 0.6; c.stroke(); }
+  // the bark lip round the hollowed top
+  c.fillStyle = bogLG(0, by - 10, 0, by + 12, ['#b49c76', '#7a6446', '#46382a'], c); c.beginPath(); c.ellipse(cx, by + 1, bw + 10, 15, 0, 0, TWO_PI); c.fill(); c.strokeStyle = BOGP.barkEdge; c.lineWidth = 1.2; c.stroke();
+  // its mossy rim and the pool on it
+  c.fillStyle = bogLG(0, by - 8, 0, by + 8, BOGP.moss.slice(0, 3), c); c.beginPath(); c.ellipse(cx, by, bw + 4, 12, 0, 0, TWO_PI); c.fill(); c.strokeStyle = BOGP.mossEdge; c.lineWidth = 1; c.stroke();
+  for (let q = 0; q < 26; q++) { const an = q / 26 * TWO_PI, x = cx + Math.cos(an) * (bw + 2), y = by + Math.sin(an) * 11; c.fillStyle = q % 2 ? '#b8dc62' : '#8cb846'; c.beginPath(); c.arc(x, y, 3.2, 0, TWO_PI); c.fill(); }
+  c.fillStyle = bogRG(cx - 20, by - 3, bw, ['#e8ffb0', '#a8e04a', '#5a9a22'], 0, c); c.beginPath(); c.ellipse(cx, by, bw - 8, 7.5, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#4c7c18'; c.lineWidth = 0.9; c.stroke();
+  // cattails and reeds round the pool
+  for (const [x, n] of [[cx - bw + 6, 5], [cx + bw - 10, 6], [cx - 70, 3], [cx + 84, 3]]) for (let q = 0; q < n; q++) {
+    const bx = x + q * 3.4, L2 = 30 + 26 * hash2(q, x | 0), ln = (q - n / 2) * 2.4;
+    c.strokeStyle = q % 2 ? '#8ab03e' : '#5e8a2a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(bx, by + 2); c.quadraticCurveTo(bx + ln * 0.4, by - L2 * 0.6, bx + ln, by - L2); c.stroke();
+    if (q % 2 === 0) { c.fillStyle = bogLG(bx + ln - 2, 0, bx + ln + 2, 0, ['#b8804a', '#7a4e26', '#4a2e14'], c); c.beginPath(); c.ellipse(bx + ln * 0.96, by - L2 + 5, 2.4, 6.4, ln * 0.03, 0, TWO_PI); c.fill(); c.strokeStyle = '#4a2c12'; c.lineWidth = 0.6; c.stroke(); }
+  }
+}
+// a lily pad lying flat (an ellipse with its notch), lit, veined
+function bogLilyPad(x, y, r, rot = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.32);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r, rot + 0.25, rot + TWO_PI - 0.25); ctx.closePath();
+  ctx.fillStyle = bogRG(-r * 0.3, -r * 0.4, r * 1.3, ['#b6e45e', '#5e9e2a', '#2e5a14']); ctx.fill();
+  ctx.strokeStyle = '#2a5212'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.strokeStyle = 'rgba(40,80,16,.5)'; ctx.lineWidth = 1.2; for (let q = 0; q < 7; q++) { const an = rot + 0.6 + q * 0.8; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(an) * r * 0.85, Math.sin(an) * r * 0.85); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(240,255,190,.55)'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 3.5, 4.6); ctx.stroke();
+  ctx.restore();
+}
+function bogHeartLive(E) {
+  const a = G.adv, HB = BOG_HEART, T = G.t, pay = a.clearT >= 0 ? smooth(0, 1.2, a.clearT) : 0, pa = E + HB.pool, cx = HB.lotusX, X = sx(cx), Y = sy(pa);
+  const beat = Math.pow(Math.max(0, Math.sin(T * 2.4)), 6);
+  // the pool's light, pulsing like a heartbeat (bright on the clear)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  bogGlow(X, Y - 40 * s, (150 + 40 * pay) * s, BOGP.lime, 0.16 + 0.08 * beat + 0.25 * pay);
+  bogGlow(X, Y - 70 * s, (70 + 30 * pay) * s, [255, 230, 240], 0.1 + 0.06 * beat + 0.3 * pay);
+  ctx.restore();
+  // ripples on the pool
+  for (let q = 0; q < 2; q++) { const u = pmod(T * 0.4 + q / 2, 1); ctx.strokeStyle = `rgba(250,255,210,${0.5 * (1 - u)})`; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.ellipse(X, Y, (20 + 80 * u) * s, (2 + 5 * u) * s, 0, 0, TWO_PI); ctx.stroke(); }
+  bogLilyPad(sx(cx + 72), Y + 1 * s, 20 * s, 0.4); bogLilyPad(sx(cx - 70), Y + 1 * s, 36 * s, 2.6); bogLilyPad(sx(cx + 14), Y + 1 * s, 30 * s, 1.2);
+  // the Toad King on the left pad, the lotus in the middle
+  ctx.save(); ctx.translate(sx(cx - 70), Y - 1 * s); ctx.scale(1.6 * s, 1.6 * s); bogToadKing(T, a.clearT); ctx.restore();
+  ctx.save(); ctx.translate(sx(cx + 14), Y - 2 * s); ctx.scale(s, s); bogLotus(T, pay, beat); ctx.restore();
+  // fireflies swirling round the heart (a swarm rising out of it on the clear)
+  const fly = bogFlySprite();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const n = 14 + Math.round(16 * pay);
+  for (let q = 0; q < n; q++) {
+    const j = hash2(q, 7851), u = pmod(T * (0.06 + 0.05 * j) + j, 1), an = T * (0.5 + j) + q * 2.1, rr = 40 + 120 * hash2(q, 7852);
+    const fx = X + Math.cos(an) * rr * s, fy = Y - (30 + (pay > 0 ? u * 420 : 60 + 140 * hash2(q, 7853) + 20 * Math.sin(an))) * s, bl = Math.pow(Math.max(0, Math.sin(T * (1.4 + j) + q)), 2);
+    bogBlit(fly, fx, fy, 0.6 + 0.5 * bl, 0.3 + 0.7 * bl);
+  }
+  ctx.restore();
+}
+// the lotus (in its frame: its base at the origin on the pad, world units): layers of petals, pink tipped, cream
+// based, opening wider on the clear, a glowing seed core
+function bogLotus(T, pay, beat) {
+  const open = 0.55 + 0.45 * pay;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; bogGlow(0, -40, 56 + 20 * pay, BOGP.lime, 0.25 + 0.15 * beat + 0.3 * pay); ctx.restore();
+  const petal = (an, len, w, back) => {
+    ctx.save(); ctx.translate(0, -26); ctx.rotate(an);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-w, -len * 0.35, -w * 0.7, -len * 0.85, 0, -len); ctx.bezierCurveTo(w * 0.7, -len * 0.85, w, -len * 0.35, 0, 0); ctx.closePath();
+    ctx.fillStyle = bogLG(0, -len, 0, 0, back ? ['#f27aa6', '#e8a4c4', '#c88aa8'] : ['#ff8ab8', '#ffd2e4', '#fff6ea']); ctx.fill();
+    ctx.strokeStyle = back ? '#a44a72' : '#c45a86'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,80,120,.4)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(0, -len * 0.85); ctx.stroke();
+    if (!back) { ctx.strokeStyle = 'rgba(255,255,250,.7)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-w * 0.35, -len * 0.25); ctx.quadraticCurveTo(-w * 0.5, -len * 0.6, -w * 0.15, -len * 0.85); ctx.stroke(); }
+    ctx.restore();
+  };
+  // stem and its leaf under the bloom
+  ctx.strokeStyle = '#3a6a18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -24); ctx.stroke();
+  ctx.strokeStyle = '#7ab83a'; ctx.lineWidth = 3.6; ctx.stroke();
+  for (let q = 0; q < 7; q++) { const an = (q - 3) * 0.4 * (0.8 + open * 0.7); petal(an, 40 + (q % 2) * 4, 13, true); }
+  for (let q = 0; q < 6; q++) { const an = (q - 2.5) * 0.3 * (0.7 + open * 0.8); petal(an, 36 - Math.abs(q - 2.5) * 2, 11, false); }
+  // the glowing seed core
+  ctx.fillStyle = bogRG(-3, -34, 13, ['#fbffd0', '#d6f25a', '#7aa21e']); ctx.beginPath(); ctx.ellipse(0, -32, 11, 6.5, 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = '#5a7a14'; ctx.lineWidth = 0.9; ctx.stroke();
+  for (let q = 0; q < 7; q++) { const x = (q - 3) * 2.8, y = -33 + Math.abs(q - 3) * 0.6; ctx.fillStyle = `rgba(255,255,200,${0.6 + 0.4 * beat})`; ctx.beginPath(); ctx.arc(x, y, 1.2, 0, TWO_PI); ctx.fill(); }
+  // three petals of the front row folded across the core
+  for (let q = 0; q < 3; q++) petal((q - 1) * 0.42 * (0.6 + open), 26, 10, false);
+  if (pay > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; bogTwinkle(0, -46, 14 * pay * (0.8 + 0.2 * Math.sin(T * 6)), 0.9 * pay, [255, 255, 220]); ctx.restore(); }
+}
+// the Toad King (in his frame: sat on his pad at the origin, facing right toward the lotus): a fat warty toad, olive
+// above, cream below, gold eyes, a wide smile, a gold crown with three gems, a collar of moss and a cattail sceptre;
+// his throat sac swells and pulses as he croaks on the clear (and swells softly as he breathes)
+function bogToadKing(T, clearT) {
+  const on = clearT >= 0 ? smooth(0, 0.25, clearT) : 0, pulse = Math.pow(0.5 + 0.5 * Math.sin((clearT || 0) * 8), 2);
+  const croak = on * (0.35 + 0.65 * pulse) * (1 - 0.45 * smooth(2.5, 4, clearT)), breathe = 1 + 0.03 * Math.sin(T * 1.8), blink = pmod(T, 4.3) < 0.14;
+  const ED = '#34561a', ED2 = '#4a6e22';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // hind legs folded either side, webbed toes
+  for (const k of [-1, 1]) {
+    ctx.fillStyle = bogRG(k * 15 - 3, -9, 15, ['#a6c85c', '#5e8a2c', '#34561a']); ctx.beginPath(); ctx.ellipse(k * 16, -6, 12, 8, k * 0.3, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = ED; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(250,255,200,.4)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(k * 16 - 2, -8, 8, 5, k * 0.3, 3.4, 4.6); ctx.stroke();
+    ctx.fillStyle = '#7aa63a'; ctx.beginPath(); ctx.moveTo(k * 17, 0); for (let q = 0; q < 3; q++) { ctx.quadraticCurveTo(k * (20 + q * 2.6), 1.6, k * (21.5 + q * 2.6), -0.5); } ctx.lineTo(k * 17, -2.5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = ED; ctx.lineWidth = 0.8; ctx.stroke();
+  }
+  // the body
+  ctx.save(); ctx.scale(breathe, 1 / breathe);
+  const body = () => { ctx.beginPath(); ctx.moveTo(-21, -2); ctx.bezierCurveTo(-25, -21, -14, -35, 0, -36); ctx.bezierCurveTo(14, -35, 25, -21, 21, -2); ctx.quadraticCurveTo(0, 3, -21, -2); ctx.closePath(); };
+  body(); ctx.fillStyle = bogRG(-8, -29, 36, ['#bcd86c', '#729e34', '#40641c']); ctx.fill();
+  ctx.save(); body(); ctx.clip();
+  ctx.fillStyle = bogLG(0, -19, 0, 0, ['#f6ecbc', '#dccc8a', '#b8a666']); ctx.beginPath(); ctx.ellipse(3, -4, 15, 12, 0, 0, TWO_PI); ctx.fill();
+  for (const y of [-11, -6.5, -2]) bogPair([[-8, y], [3, y + 1.2], [14, y]], 'rgba(150,130,70,.45)', 'rgba(255,255,230,.5)', 0.8, 0.8);
+  // warts: lit domes with a darker rim of their own olive
+  for (const [x, y, r] of [[-13, -23, 2.6], [-7, -29, 1.9], [10, -27, 2.2], [16, -17, 1.8], [-17, -13, 2], [4, -31, 1.5], [-3, -24, 1.4], [13, -21, 1.3], [-11, -17, 1.5], [-19, -7, 1.6], [18, -9, 1.5], [7, -22, 1.2]]) {
+    ctx.fillStyle = bogRG(x - r * 0.35, y - r * 0.35, r * 1.3, ['#e2f294', '#86b040', '#4c701e']); ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(60,92,28,.7)'; ctx.lineWidth = 0.6; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,230,.8)'; ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.4, r * 0.32, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+  body(); ctx.strokeStyle = ED; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = 'rgba(250,255,210,.6)'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(-18, -12); ctx.bezierCurveTo(-19, -23, -12, -31, -3, -33); ctx.stroke();
+  ctx.restore();
+  // the throat sac: a glossy cream bubble under his chin
+  const sr = 3 + 12 * croak + 1.2 * Math.max(0, Math.sin(T * 1.8));
+  if (sr > 3.5) {
+    ctx.fillStyle = bogRG(6 - sr * 0.3, -12 - sr * 0.4, sr * 1.3, ['#fffbe6', '#f4e2a6', '#cdb062']); ctx.beginPath(); ctx.ellipse(7, -9 + sr * 0.2, sr * 1.1, sr * 0.85, 0, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = '#a88a44'; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,160,90,.5)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.ellipse(7, -9 + sr * 0.2, sr * 0.7, sr * 0.5, 0, 0.3, 2.6); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.ellipse(7 - sr * 0.45, -9 - sr * 0.3, sr * 0.3, sr * 0.18, -0.5, 0, TWO_PI); ctx.fill();
+  }
+  // the collar: a ruff of moss round his shoulders
+  for (let q = 0; q < 9; q++) { const u = q / 8, x = lerp(-19, 19, u), y = -25 + 9 * Math.pow(u * 2 - 1, 2) - 1; if (x > 1 && x < 13) continue; ctx.fillStyle = q % 2 ? '#a6d058' : '#7cae36'; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#3e6418'; ctx.lineWidth = 0.6; ctx.stroke(); }
+  // front feet, the right one gripping a cattail sceptre
+  ctx.strokeStyle = '#6a7a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(17, 1); ctx.lineTo(23, -40); ctx.stroke(); ctx.strokeStyle = 'rgba(230,240,160,.6)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(16.6, 0); ctx.lineTo(22.6, -40); ctx.stroke();
+  ctx.save(); ctx.translate(23.6, -45); ctx.rotate(0.14); ctx.fillStyle = bogLG(-3.4, 0, 3.4, 0, ['#c08a50', '#7c4a24', '#4a2a12']); ctx.beginPath(); ctx.ellipse(0, 0, 3.4, 8.5, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#4a2a12'; ctx.lineWidth = 0.7; ctx.stroke(); ctx.strokeStyle = 'rgba(255,226,180,.5)'; ctx.beginPath(); ctx.ellipse(0, 0, 2, 7, 0, 3.4, 4.4); ctx.stroke(); ctx.strokeStyle = '#6a7a2a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, -8.5); ctx.lineTo(0.4, -13); ctx.stroke(); ctx.restore();
+  for (const x of [-8, 16]) { ctx.fillStyle = bogRG(x - 1, -2, 5, ['#a6cc5a', '#78a238', '#4e7222']); ctx.beginPath(); ctx.ellipse(x, -1, 5, 2.6, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = ED; ctx.lineWidth = 0.9; ctx.stroke(); }
+  // the smile
+  ctx.strokeStyle = ED; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-13, -19); ctx.quadraticCurveTo(2, -11 - 2 * croak, 17, -20); ctx.stroke();
+  ctx.strokeStyle = 'rgba(250,255,210,.4)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-11, -17.6); ctx.quadraticCurveTo(2, -9.8, 15, -18.4); ctx.stroke();
+  // the eyes: big gold domes with slit pupils looking at the lotus, lids that blink
+  for (const [ex, ey] of [[-8, -34], [9, -35]]) {
+    ctx.fillStyle = bogRG(ex - 1, ey - 2, 7.4, ['#cce474', '#729e34', '#40641c']); ctx.beginPath(); ctx.arc(ex, ey, 6.8, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = ED; ctx.lineWidth = 1; ctx.stroke();
+    if (blink) { ctx.strokeStyle = ED; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(ex - 4, ey); ctx.quadraticCurveTo(ex, ey + 2, ex + 4, ey); ctx.stroke(); continue; }
+    ctx.fillStyle = bogRG(ex - 1, ey - 1, 5.2, ['#fff4a8', '#f2b830', '#b0700c']); ctx.beginPath(); ctx.arc(ex + 0.4, ey, 4.7, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#8a5a10'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = '#3a2410'; ctx.beginPath(); ctx.ellipse(ex + 1.5, ey, 3.1, 1.3, 0, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex - 1, ey - 1.7, 1.2, 0, TWO_PI); ctx.fill();
+    // a heavy upper lid, half lowered (regal)
+    ctx.fillStyle = bogLG(0, ey - 7, 0, ey - 1, ['#a8c85e', '#6a9630']); ctx.beginPath(); ctx.arc(ex, ey, 6.8, Math.PI * 1.05, Math.PI * 1.95); ctx.quadraticCurveTo(ex, ey - 1.4, ex - 6.6, ey - 1.6); ctx.closePath(); ctx.fill(); ctx.strokeStyle = ED2; ctx.lineWidth = 0.8; ctx.stroke();
+  }
+  // the crown: a gold band with five points and three gems, tilted a little, lit top left
+  ctx.save(); ctx.translate(0.5, -41); ctx.rotate(-0.08);
+  const crown = () => { ctx.beginPath(); ctx.moveTo(-12, 1); ctx.lineTo(-13, -7); ctx.lineTo(-9, -3.4); ctx.lineTo(-6, -11); ctx.lineTo(-2.6, -4); ctx.lineTo(0, -14); ctx.lineTo(2.6, -4); ctx.lineTo(6, -11); ctx.lineTo(9, -3.4); ctx.lineTo(13, -7); ctx.lineTo(12, 1); ctx.quadraticCurveTo(0, 3, -12, 1); ctx.closePath(); };
+  crown(); ctx.fillStyle = bogLG(-8, -14, 8, 2, ['#fff4b0', '#f4c848', '#c48a1c', '#8a5a10']); ctx.fill(); ctx.strokeStyle = '#8a5a10'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.fillStyle = bogLG(0, -3, 0, 2, ['#ffe680', '#c48a1c']); ctx.beginPath(); ctx.moveTo(-12, -2); ctx.quadraticCurveTo(0, 0, 12, -2); ctx.lineTo(12, 1); ctx.quadraticCurveTo(0, 3, -12, 1); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#8a5a10'; ctx.lineWidth = 0.6; ctx.stroke();
+  for (const [x, y] of [[-6, -11], [0, -14], [6, -11], [-13, -7], [13, -7]]) { ctx.fillStyle = '#fff8d0'; ctx.beginPath(); ctx.arc(x, y, 1.1, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = '#a8761a'; ctx.lineWidth = 0.4; ctx.stroke(); }
+  for (const [x, cols, r] of [[0, ['#ffb0b8', '#e02a48', '#7a0c22'], 2.2], [-7, ['#c8ffd0', '#2ab868', '#0c5a2c'], 1.6], [7, ['#c8f0ff', '#2a88d8', '#0c3a7a'], 1.6]]) {
+    ctx.fillStyle = bogRG(x - r * 0.4, -0.6 - r * 0.4, r * 1.4, cols); ctx.beginPath(); ctx.ellipse(x, -0.4, r, r * 1.15, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = cols[2]; ctx.lineWidth = 0.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(x - r * 0.35, -0.8 - r * 0.4, r * 0.3, 0, TWO_PI); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,230,.75)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-11.6, -1.4); ctx.lineTo(-12.4, -6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-5.4, -9.6); ctx.lineTo(-3, -4.6); ctx.stroke();
+  if (clearT >= 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; bogTwinkle(0, -14, 6 * on * (0.7 + 0.3 * Math.sin(T * 7)), 0.8 * on, [255, 240, 180]); ctx.restore(); }
+  ctx.restore();
+}
+// The landing: two mangrove roots grow out of the banks and meet under you, a mat of moss on top with lily pads and
+// little toadstools on it, rootlets trailing beneath. (Decoration only: nothing here has a hitbox.)
+function bogDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E);
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, T = G.t;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const wxw = side < 0 ? L : R, root = wxw + side * 34, tip = lerp(wxw - side * 10, meet - side * 2, e), X0 = sx(root), X1 = sx(tip);
+    if (Math.abs(X1 - X0) < 2) continue;
+    const xa = Math.min(X0, X1), xb = Math.max(X0, X1);
+    // rootlets trailing beneath
+    for (let q = 0; q < 6; q++) { const x = lerp(X0, X1, (q + 0.5) / 6), L2 = (8 + 10 * hash2(q, side + 9)) * s; ctx.strokeStyle = '#4a3820'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.moveTo(x, y + 14 * s); ctx.quadraticCurveTo(x + 3 * s, y + 14 * s + L2 * 0.6, x - 1 * s, y + 14 * s + L2); ctx.stroke(); }
+    // the root itself, rounded at its tip, bark lit along its top
+    ctx.beginPath(); ctx.moveTo(X0, y - 1 * s); ctx.lineTo(X1, y - 1 * s); ctx.quadraticCurveTo(X1 - side * 10 * s, y + 8 * s, X1, y + 16 * s); ctx.lineTo(X0, y + 16 * s); ctx.closePath();
+    ctx.fillStyle = bogLG(0, y - 1 * s, 0, y + 16 * s, BOGP.bark); ctx.fill(); ctx.strokeStyle = BOGP.barkEdge; ctx.lineWidth = 1.1 * s; ctx.stroke();
+    for (const yy of [5, 10]) bogPair([[xa + 2 * s, y + yy * s], [xb - 6 * s, y + (yy + 0.5) * s]], 'rgba(50,34,18,.5)', 'rgba(255,236,190,.3)', 0.9 * s, 0.8 * s);
+    for (let q = 1; q < 5; q++) { const x = lerp(X0, X1, q / 5); bogPair([[x, y + 1 * s], [x + 1.5 * s, y + 14 * s]], 'rgba(50,34,18,.5)', 'rgba(255,236,190,.3)', 0.9 * s, 0.8 * s); }
+    // the moss mat on top, tufted
+    ctx.fillStyle = bogLG(0, y - 4 * s, 0, y + 3 * s, BOGP.moss.slice(0, 3)); ctx.beginPath(); ctx.moveTo(X0, y + 2 * s); ctx.lineTo(X0, y - 3 * s);
+    for (let q = 0; q <= 10; q++) { const x = lerp(X0, X1 - side * 4 * s, q / 10); ctx.lineTo(x, y - (3 + 1.4 * Math.sin(q * 2.3 + side)) * s); }
+    ctx.lineTo(X1 - side * 4 * s, y + 2.5 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = BOGP.mossEdge; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    for (let q = 0; q < 14; q++) { const x = lerp(X0, X1 - side * 6 * s, q / 14); ctx.strokeStyle = q % 2 ? '#b4dc5a' : '#7cae36'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(x, y - 3 * s); ctx.lineTo(x - 0.8 * s, y - (5.5 + (q % 3)) * s); ctx.stroke(); }
+    if (e > 0.5) { const lx = lerp(X0, X1, 0.55); bogLilyPad(lx, y - 3 * s, 11 * s, side > 0 ? 0.6 : 2.4); }
+    // a toadstool pair near the bank
+    const tx = lerp(X0, X1, 0.18);
+    for (const [dx, hh, w] of [[0, 6, 3.6], [4.4, 4, 2.6]]) { ctx.strokeStyle = '#f4ecd0'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.moveTo(tx + dx * s, y - 3 * s); ctx.lineTo(tx + dx * s, y - (3 + hh) * s); ctx.stroke(); ctx.fillStyle = bogLG(0, y - (3 + hh + w) * s, 0, y - (3 + hh) * s, ['#ff7a5a', '#e0402a', '#9a2214']); ctx.beginPath(); ctx.ellipse(tx + dx * s, y - (3 + hh) * s, w * s, w * 0.75 * s, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#8a1e10'; ctx.lineWidth = 0.6 * s; ctx.stroke(); ctx.fillStyle = '#fff6e0'; ctx.beginPath(); ctx.arc(tx + (dx - w * 0.3) * s, y - (3 + hh + w * 0.4) * s, 0.7 * s, 0, TWO_PI); ctx.fill(); }
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (bogOn()) bogDrawDeck(); else base(); }; }
+// the clear: fireflies bursting up out of the pool, lime sparks off the landing, the king's croak
+function bogHeartBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  const pa = a.end + BOG_HEART.pool;
+  for (let k = 0; k < 36; k++) { const an = Math.PI * (0.15 + 0.7 * Math.random()), v = 80 + Math.random() * 220; puff(BOG_HEART.lotusX + (Math.random() - 0.5) * 160, pa + Math.random() * 30, Math.cos(an) * v, Math.sin(an) * v, 1 + Math.random() * 0.8, 1.6 + Math.random() * 1.6, 'ember', k % 3 ? [220, 255, 120] : [255, 250, 200]); }
+  for (let k = 0; k < 8; k++) puff(lerp(80, 320, Math.random()), pa + 40 + Math.random() * 200, 0, 20, 0.7, 14 + Math.random() * 8, 'star');
+  sfx('bcroak'); setTimeout(() => sfx('bjar'), 380);
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (bogOn() && !boss) bogHeartBurst(); }; }
+
+// ---- firefly jars: three in daring spots, worth a big coin each, and the stage's jar mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'jar') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.bogJars = (st.bogJars || 0) + 1, of = advGoalN('bogJars');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Firefly jar ${n}/${of}!` : 'Firefly jar!', '#e6ff8a', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [220, 255, 140];
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(an) * 170, Math.sin(an) * 170, 0.7, 2.2, 'ember', k % 3 ? [220, 255, 110] : [255, 250, 200]); }
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#e6ff8a', big: true, sub: 'firefly jar' });
+  vibrate([20, 30, 20]); sfx('bjar');
+}; }
+// The firefly jar (inside its pickup circle): a round glass jar, green-tinted, stoppered with a cork tied with twine,
+// a handful of fireflies glowing and wandering inside it, the glass lit by them and catching the light on its
+// shoulder; it glows warm lime and bobs.
+function bogDrawJarArt(t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2, gl = 0.6 + 0.25 * Math.sin(t * 3.1 + ph), GL = BOGP.glass;
+  bogGlow(0, bob, 42, BOGP.lime, 0.3 * gl + 0.1);
+  ctx.save(); ctx.translate(0, bob); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const jar = () => { ctx.beginPath(); ctx.moveTo(-6, -9); ctx.bezierCurveTo(-13, -8, -13, -2, -12, 4); ctx.bezierCurveTo(-11, 12, -6, 14, 0, 14); ctx.bezierCurveTo(6, 14, 11, 12, 12, 4); ctx.bezierCurveTo(13, -2, 13, -8, 6, -9); ctx.closePath(); };
+  // the glass's back, the fireflies inside, then its front
+  jar(); ctx.fillStyle = bogRG(-3, 0, 16, [bogCol(GL[1], 0.55), bogCol(GL[2], 0.6), bogCol(bogLift(GL[2], -30), 0.7)]); ctx.fill();
+  ctx.save(); jar(); ctx.clip();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  bogGlow(0, 3, 14, BOGP.lime, 0.5 * gl);
+  for (let q = 0; q < 5; q++) { const an = t * (1.3 + q * 0.3) + q * 2.1 + ph, x = Math.cos(an) * (4 + q * 1.2), y = 3 + Math.sin(an * 1.3) * 6, b = Math.pow(Math.max(0, Math.sin(t * (2 + q) + q)), 2); bogGlow(x, y, 5, [230, 255, 120], 0.5 + 0.5 * b); ctx.fillStyle = `rgba(255,255,220,${0.6 + 0.4 * b})`; ctx.beginPath(); ctx.arc(x, y, 1.1, 0, TWO_PI); ctx.fill(); }
+  ctx.restore();
+  ctx.restore();
+  jar(); ctx.strokeStyle = bogCol(bogLift(GL[2], -36)); ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(-9, -3); ctx.bezierCurveTo(-10, 2, -9, 7, -6, 10); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(8, 2); ctx.lineTo(8.5, 7); ctx.stroke();
+  // the neck's rim and the cork, twine wound round the neck with a loop on top
+  ctx.fillStyle = bogLG(0, -11, 0, -8, ['#e8f8ee', '#9ccab4']); ctx.beginPath(); ctx.ellipse(0, -9.5, 7.4, 2.2, 0, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = bogCol(bogLift(GL[2], -30)); ctx.lineWidth = 0.8; ctx.stroke();
+  const cork = () => { ctx.beginPath(); ctx.moveTo(-5, -9.5); ctx.lineTo(-5.6, -15); ctx.quadraticCurveTo(0, -17, 5.6, -15); ctx.lineTo(5, -9.5); ctx.closePath(); };
+  cork(); ctx.fillStyle = bogLG(-5, 0, 5, 0, BOGP.cork); ctx.fill(); ctx.strokeStyle = BOGP.corkEdge; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.fillStyle = 'rgba(90,54,24,.6)'; for (const [x, y] of [[-2, -13], [2, -12], [0.5, -14.6]]) { ctx.beginPath(); ctx.arc(x, y, 0.6, 0, TWO_PI); ctx.fill(); }
+  ctx.strokeStyle = BOGP.twine; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(-7, -8.2); ctx.quadraticCurveTo(0, -6.6, 7, -8.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-5, -15.4); ctx.bezierCurveTo(-4, -21, 4, -21, 5, -15.4); ctx.stroke();
+  ctx.restore();
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'jar')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'jar');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'jar') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); bogDrawJarArt(G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the jar mission and the snapper mission (stars), and the jar count on the HUD under the others
+ADV_GOALS.bogJars = { text: g => `Find all ${g.n} firefly jars`, done: (r, g) => (r.stats.bogJars || 0) >= g.n, any: true, prog: (g, st) => `${st.bogJars || 0}/${g.n}` };
+ADV_GOALS.bogOneBite = { text: () => 'Never let a snapper bite twice', done: r => r.clear && !r.stats.bogBitten, prog: (g, st) => st.bogBitten ? `bitten twice ${st.bogBitten}×` : '' };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st), g = goals.find(q => q.k === 'bogJars'); if (!g) return;
+  const before = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  const n = G.stats.bogJars || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * before, txt = `${n}/${g.n}`;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(txt).width;
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,30,6,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#e6ff8a' : '#f2ffd0'; ctx.fillText(txt, xr, y);
+  ctx.translate(xr - tw - 13, y); ctx.scale(0.55, 0.55); bogDrawJarArt(G.t, 0);
+  ctx.restore();
+}; }
+// The stage on the island: level 7 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'bog' || (G.level && G.level.bog)) return;
+  G.level = createBogLevel(G.seed, st); G.bogBits = []; G.bogGillPop = 0;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The Bog Heart ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the bog's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRB = { BOG, BOG_STAGE, bogShapes, bogDanger, bogVentAt, bogVentClk, bogSnapAt, bogSnapTau, bogSpoutAt, bogStream, bogWispPos, bogWispStep, bogSnapCycle, bogPlume, createBogLevel, bogAxolotl, cache: bogCache, scr: (x, a) => [sx(x), sy(a)], walls: a => walls(a), cssW: () => cssW };
 // (game slot: Murk Mire, island level 7)
 // ---------- the Hidden Lagoon (island level 11): its look, traps, golden conchs, the cascades' sweep and sounds ----------
 // The stage's shaft and traps are laid out by createLagoonLevel (LEVELGEN); here they come alive and get drawn. While it
