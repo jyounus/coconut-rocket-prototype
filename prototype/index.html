@@ -9754,6 +9754,409 @@ const ADV_LAB = { name: 'Kooky Lab', theme: 'lab', seed: 'isl-27-lab', reward: 2
   goals: [{ k: 'finish', text: 'Reach the Great Tank' }, { k: 'labPotions', n: 3 }, { k: 'labNoShrink' }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Kooky Lab, island level 27)
+/* LEVELGEN:BEGIN */
+// ---------- Pipe Organ Cavern (island level 28): the stage, its traps' shapes and its layout ----------
+// An authored stage like the Clockwork Tower (see createClockworkLevel): the cave's narthex, then one new trap at a time,
+// each taught alone and slow before it is combined (the Trumpet Gallery, the Drum Loft, the Cymbal Nave, Falling
+// Notes), a breather (the Choir Rest), Fortissimo (the gauntlet), then the Grand Organ and its finish. Its own shaft
+// (basalt columns that step in and out, the cave's organ built into them), its own traps and its own look (G.theme
+// 'organ', see the organ drawing).
+// The twist: the cave IS the music. Every trap plays on one beat (ORGAN.beat s), the bars four beats long: learn the
+// tune and the cave becomes a rhythm. The traps' clocks read the cave's time (G.organT in play).
+// The traps (every one leaves a lane or a timing that the widest pilot fits through; nothing ever moves up at you):
+// - organPipe (Pipe Blast): a rank of three trumpet pipes "en chamade" on a carved windchest in a wall, bells into the
+//   shaft. Every P beats they light up one after another (`tell` beats: the order the notes will come), then blow, one
+//   after another (an arpeggio, bottom up or top down): each trumpet shoots a jet of hard gold notes straight across to
+//   `reach` and stops. Only ever sideways. The windchest, the trumpets and the jets hurt.
+// - organDrum (Drum Bounce): a copper kettle drum on a basalt ledge. Its calfskin head throbs on every beat; touch it
+//   and it boings you up the shaft (harder right on the beat). Not lethal: the shaft above a drum is always clear for
+//   the boing; the kettle and its ledge are solid.
+// - organCymbal (Cymbal Clash): two giant cymbals on arms, one on each wall, parked face-on against the walls. Every P
+//   beats they shiver (`tell` beats), then on the beat they swing in like a toy monkey's and crash together in the
+//   middle of the shaft, ring, and swing back. Only ever sideways. Discs, arms and pivots hurt.
+// - organNotes (Falling Notes, this stage's own): a music staff of light strung across the shaft between two gilded
+//   clefs. On every step of its tune a note forms on the staff (a glowing ghost, a beat ahead) and drops: a hard gold
+//   note falling `drop` and bursting into sparks. Only ever down; at most two of its four columns at once.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const ORGAN = {
+  beat: 0.75,                                         // the cave's beat (s): everything plays on it; a bar is 4 beats
+  panel: 104, step: 5,                                // the walls' basalt column drums: pitch and how far each steps in
+  pipe: { n: 3, dy: 40, chest: 18, hh: 64, tube: 4.5, bellX: 42, bellR: 11, mouth: 50, reach: 160, jetR: 13, J: 0.25, life: 0.62, tell: 1, ease: 340 },
+  drum: { out: 116, kx: 60, kr: 44, head: 54, lift: 800, beatLift: 960, win: 0.14, cap: 520, decay: 0.7, clear: 600 },
+  cymbal: { piv: 24, R: 34, th: 6, tilt: 0.36, arm: 5, T: { tell: 1, swing: 0.26, hold: 0.4, back: 0.8 }, ease: 360 },
+  notes: { n: 4, g: 1500, drop: 340, headR: 11, stem: 30, ease: 420 },
+  chiliGap: 470, end: 380,
+};
+const ORGAN_TYPES = new Set(['organPipe', 'organDrum', 'organCymbal', 'organNotes']);
+// The stage, bottom to top (as CLOCKWORK_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). P and every are in beats; ph shifts a trap by whole beats.
+// fork: that trap guards a golden tuning fork (3 in all, the stage's collectible). pat: a staff's tune (columns 0..3
+// left to right; an array is a chord).
+const ORGAN_STAGE = [
+  { name: 'The Narthex', w: 376, len: 1000, calm: true },
+  { name: 'Trumpet Gallery', w: 374, beats: [[520, 'pipe', { side: 1, P: 4 }], [500, 'pipe', { side: -1, P: 4, ph: 2, dir: -1 }], [540, 'pipePair', { P: 4 }],
+    [720, 'pipe', { side: 1, P: 4, ph: 1, dir: -1 }], [540, 'pipePair', { P: 4, ph: 1, fork: true }], [740, 'pipeStack', { P: 4, ph: 3 }], [700, 'pipePair', { P: 4, ph: 3 }]], tail: 640 },
+  { name: 'Drum Loft', w: 374, beats: [[520, 'drum', { side: 1 }], [720, 'drum', { side: -1 }], [720, 'pipeDrum', { P: 4 }],
+    [940, 'drum', { side: 1 }], [720, 'pipeDrum', { P: 4, ph: 2 }], [940, 'drum', { side: -1 }], [720, 'pipeDrum', { P: 4, ph: 1 }]], tail: 940 },
+  { name: 'Cymbal Nave', w: 374, beats: [[560, 'cymbal', { P: 4 }], [560, 'cymbal', { P: 4, ph: 2 }], [600, 'cymbalPipe', { P: 4 }],
+    [760, 'pipeCymbal', { P: 4, ph: 1 }], [700, 'cymbal', { P: 4, ph: 3, fork: true }], [600, 'cymbalPipe', { P: 4, ph: 2 }], [760, 'pipeCymbal', { P: 4, ph: 3 }]], tail: 640 },
+  { name: 'Falling Notes', w: 372, beats: [[760, 'notes', { every: 2, pat: [0, 2, 1, 3] }], [800, 'notes', { every: 1, pat: [3, 1, 2, 0] }],
+    [820, 'notesPipe', { every: 1, pat: [0, 1, 2, 3], P: 4 }], [860, 'notesCymbal', { every: 1, pat: [3, 2, 1, 0], P: 4, fork: true }],
+    [820, 'notes', { every: 1, pat: [0, 3, 1, 2, [0, 3], 1, 2, 1] }], [860, 'notesPipe', { every: 1, pat: [2, 0, 3, 1], P: 4, ph: 2 }]], tail: 640 },
+  { name: 'The Choir Rest', w: 384, len: 1400, calm: true },
+  { name: 'Fortissimo', w: 370, beats: [[540, 'pipePair', { P: 4, ph: 1 }], [780, 'cymbal', { P: 4, ph: 2 }], [800, 'notesPipe', { every: 1, pat: [1, 3, 0, 2], P: 4, ph: 1 }],
+    [720, 'pipeDrum', { P: 4, ph: 3 }], [940, 'cymbalPipe', { P: 4, ph: 1 }], [900, 'notes', { every: 1, pat: [[0, 2], 3, 1, [1, 3], 0, 2] }],
+    [520, 'pipeStack', { P: 4, ph: 2 }], [760, 'pipeDrum', { P: 4, ph: 0 }], [1240, 'notesCymbal', { every: 2, pat: [2, 0, 3, 1], P: 4, ph: 2 }], [640, 'pipeCymbal', { P: 4, ph: 3 }],
+    [760, 'pipePair', { P: 4, ph: 2 }], [700, 'drum', { side: -1 }], [1010, 'notesPipe', { every: 1, pat: [3, 0, 2, 1, [0, 3], 2], P: 4, ph: 3 }],
+    [800, 'cymbalPipe', { P: 4, ph: 3 }], [760, 'pipePair', { P: 4, ph: 1 }], [700, 'cymbal', { P: 4, ph: 1 }]], tail: 760 },
+  { name: 'The Grand Organ', w: 384, len: 900, calm: true, finish: true },
+];
+// the stage's finish height, from the layout alone
+const organEnd = () => { let y = 0; for (const sec of ORGAN_STAGE) { if (sec.finish) return y + ORGAN.end; y += sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail; } return y; };
+const organEaseIn = x => { x = clamp(x, 0, 1); return x * x * x; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// A trap's own time in beats since its cycle began (0 .. P)
+const organU = (h, t, P) => pmod(t / ORGAN.beat - (h.ph || 0), P);
+// The pipe rank on its clock: the tell (0..1), each trumpet's light (0..1) and jet (tail and front, 0..1 of the way
+// from its bell to `reach`), in the order it plays (dir 1: bottom up)
+function organPipeState(h, t) {
+  const X = ORGAN.pipe, u = organU(h, t, h.P), blast = X.J * (X.n - 1) + X.life, rest = h.P - X.tell - blast;
+  const st = { tell: 0, lit: [0, 0, 0], jets: [], u, blowing: 0 };
+  let v = u - rest;
+  if (v < 0) return st;
+  const ord = i => (h.dir || 1) > 0 ? i : X.n - 1 - i;   // trumpet i plays ord(i)-th
+  if (v < X.tell) { st.tell = v / X.tell; for (let i = 0; i < X.n; i++) st.lit[i] = clamp((st.tell - ord(i) * 0.26) * 4, 0, 1); return st; }
+  v -= X.tell; st.blowing = 1;
+  for (let i = 0; i < X.n; i++) {
+    const w = v - ord(i) * X.J;
+    if (w < 0) { st.lit[i] = 1; continue; }
+    if (w >= X.life) continue;
+    st.lit[i] = 1 - w / X.life;
+    const front = 1 - (1 - clamp(w / 0.1, 0, 1)) ** 2, tail = smooth(X.life - 0.22, X.life, w);
+    st.jets.push({ i, front, tail, w });
+  }
+  return st;
+}
+// a trumpet's height (i 0 bottom .. n-1 top) and a jet's x at fraction f of its throw
+const organPipeY = (h, i) => h.alt + (i - (ORGAN.pipe.n - 1) / 2) * ORGAN.pipe.dy;
+const organJetX = (h, f) => { const X = ORGAN.pipe; return h.base + h.side * (X.mouth + (X.reach - X.mouth) * f); };
+function organPipeShapes(S, h, st, kind) {
+  const X = ORGAN.pipe, d = h.side, b = h.base, A = h.alt;
+  S.push({ k: 'b', x0: Math.min(b - d * 4, b + d * X.chest), x1: Math.max(b - d * 4, b + d * X.chest), a0: A - X.hh - 26, a1: A + X.hh });   // the windchest on its corbel
+  S.push({ k: 'c', x: b + d * 6, a: A + X.hh + 10, r: 7 });                                                                          // its gilt finial
+  for (let i = 0; i < X.n; i++) {
+    const y = organPipeY(h, i);
+    S.push({ k: 's', x0: b + d * X.chest, a0: y, x1: b + d * (X.bellX - 6), a1: y, r: X.tube });                   // a trumpet's tube
+    S.push({ k: 'c', x: b + d * X.bellX, a: y, r: X.bellR });                                                       // its bell
+  }
+  if (kind === 'body') return S;
+  for (const j of st.jets) {
+    if (j.front - j.tail < 0.01) continue;
+    const y = organPipeY(h, j.i);
+    S.push({ k: 's', x0: organJetX(h, j.tail), a0: y, x1: organJetX(h, j.front), a1: y, r: X.jetR });
+  }
+  return S;
+}
+// The drum (no clock: it throbs on the cave's beat, see the drawing). Its solid parts: the ledge and the kettle; its head
+// (kind 'head') boings, never kills
+function organDrumShapes(S, h, kind) {
+  const X = ORGAN.drum, d = h.side, b = h.base, A = h.alt;
+  if (kind === 'head') { S.push({ k: 's', x0: b + d * (X.kx - X.kr + 2), a0: A + X.head, x1: b + d * (X.kx + X.kr - 2), a1: A + X.head, r: 7 }); return S; }
+  S.push({ k: 'b', x0: Math.min(b - d * 6, b + d * X.out), x1: Math.max(b - d * 6, b + d * X.out), a0: A - 16, a1: A });   // the ledge
+  S.push({ k: 's', x0: b + d * (X.kx - 18), a0: A + 26, x1: b + d * (X.kx + 18), a1: A + 26, r: 24 });                                    // the kettle
+  S.push({ k: 's', x0: b + d * 2, a0: A - 38, x1: b + d * 34, a1: A - 20, r: 6 });                                      // the corbel under the ledge
+  if (kind === 'bot') S.push({ k: 's', x0: b + d * (X.kx - X.kr + 2), a0: A + X.head, x1: b + d * (X.kx + X.kr - 2), a1: A + X.head, r: 7 });
+  return S;
+}
+// The cymbals on their clock: the tell (0..1), the arms' swing (0 parked face-on against the walls .. pi/2 crashed)
+function organCymbalState(h, t) {
+  const T = ORGAN.cymbal.T, u = organU(h, t, h.P), rest = h.P - T.tell - T.swing - T.hold - T.back;
+  if (u < rest) return { tell: 0, th: 0, u };
+  let v = u - rest;
+  if (v < T.tell) return { tell: v / T.tell, th: 0, u };
+  v -= T.tell;
+  if (v < T.swing) return { tell: 1, th: organEaseIn(v / T.swing) * Math.PI / 2, u, swinging: 1 };
+  v -= T.swing;
+  if (v < T.hold) return { tell: 0, th: Math.PI / 2, u, crash: v / T.hold };
+  v -= T.hold;
+  return { tell: 0, th: Math.PI / 2 * (1 - smooth(0, 1, v / T.back)), u, back: 1 };
+}
+// one cymbal (e -1 the left wall's, 1 the right's) at swing th: its pivot, its disc's centre and half-extents
+function organCymbalDisc(h, e, th) {
+  const X = ORGAN.cymbal, d = e < 0 ? 1 : -1, W = e < 0 ? h.L : h.R, P = W + d * X.piv, sn = Math.sin(th), cs = Math.cos(th);
+  return { d, W, P, cx: P + d * h.arm * sn, ex: X.R * (cs * (1 - X.tilt) + X.tilt), ey: X.R };
+}
+function organCymbalShapes(S, h, st, kind) {
+  const X = ORGAN.cymbal, A = h.alt;
+  for (const e of [-1, 1]) {
+    const q = organCymbalDisc(h, e, kind === 'body' ? 0 : st.th);
+    S.push({ k: 'c', x: q.W + q.d * 9, a: A, r: 12 });                               // the pivot's bracket
+    if (kind === 'body') continue;
+    const r = Math.min(q.ex, q.ey), half = q.ey - r;
+    S.push(half > 0.5 ? { k: 's', x0: q.cx, a0: A - half, x1: q.cx, a1: A + half, r } : { k: 'c', x: q.cx, a: A, r });   // the disc
+    if (Math.abs(q.cx - q.P) > 4) S.push({ k: 's', x0: q.P, a0: A, x1: q.cx, a1: A, r: X.arm });                           // the arm
+  }
+  return S;
+}
+// The staff on its clock: the notes forming (a beat ahead of their drop) and falling. Step k of the tune drops at
+// beat (k * every + ph + 1); a step is a column or a chord of columns.
+function organNoteCols(h) { const X = ORGAN.notes, out = []; for (let i = 0; i < X.n; i++) out.push(h.L + (h.R - h.L) * (i + 0.5) / X.n); return out; }
+function organNotesState(h, t) {
+  const X = ORGAN.notes, B = ORGAN.beat, ev = h.every, len = h.pat.length, fallT = Math.sqrt(2 * X.drop / X.g);
+  const n = t / B - (h.ph || 0) - 1, k1 = Math.floor(n / ev), out = { forming: [], falling: [] };
+  for (let k = k1 - Math.ceil(fallT / (ev * B)) - 1; k <= k1 + 1; k++) {
+    const step = h.pat[pmod(k, len)], cols = Array.isArray(step) ? step : [step], tau = (n - k * ev) * B;   // s since its drop
+    for (const i of cols) {
+      if (tau < 0 && tau > -B) out.forming.push({ i, f: 1 + tau / B, k });
+      else if (tau >= 0 && tau < fallT) out.falling.push({ i, tau, a: h.alt - 0.5 * X.g * tau * tau, k });
+    }
+  }
+  return out;
+}
+// a falling note's head and stem (it falls stem up, head first)
+function organNoteShapes(S, x, a) {
+  const X = ORGAN.notes;
+  S.push({ k: 'c', x, a, r: X.headR });
+  S.push({ k: 's', x0: x + 8, a0: a + 3, x1: x + 8, a1: a + X.stem, r: 3.6 });
+  return S;
+}
+function organNotesShapes(S, h, st, kind) {
+  const cols = h.cols || organNoteCols(h);
+  S.push({ k: 'c', x: h.L + 8, a: h.alt + 4, r: 10 }, { k: 'c', x: h.R - 8, a: h.alt + 4, r: 10 });   // the clefs' brackets
+  S.push({ k: 's', x0: h.L + 11, a0: h.alt + 10, x1: h.L + 13, a1: h.alt + 34, r: 7 }, { k: 's', x0: h.R - 12, a0: h.alt + 10, x1: h.R - 14, a1: h.alt + 18, r: 9 });   // the clefs
+  if (kind === 'body') return S;
+  for (const f of st.falling) organNoteShapes(S, cols[f.i], f.a);
+  return S;
+}
+
+// Every collision shape of an organ trap at time t (the cave's clock), fitted to its drawing. kind: undefined for the
+// lethal ones, 'body' the parts that never move (a windchest, a kettle and its ledge, the cymbals' brackets, the clefs);
+// 'bot' adds a drum's head (for planners that won't use a boing).
+function organShapes(h, t, S = [], kind) {
+  if (h.type === 'organPipe') organPipeShapes(S, h, organPipeState(h, t), kind);
+  else if (h.type === 'organDrum') organDrumShapes(S, h, kind);
+  else if (h.type === 'organCymbal') organCymbalShapes(S, h, organCymbalState(h, t), kind);
+  else if (h.type === 'organNotes') organNotesShapes(S, h, organNotesState(h, t), kind);
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): every jet at full length, a drum and its head, both
+// cymbals all along their swing, every note column all the way down.
+function organDanger(h) {
+  const S = [];
+  if (h.type === 'organPipe') organPipeShapes(S, h, { jets: [0, 1, 2].map(i => ({ i, tail: 0, front: 1 })) }, undefined);
+  else if (h.type === 'organDrum') { organDrumShapes(S, h); organDrumShapes(S, h, 'head'); }
+  else if (h.type === 'organCymbal') for (let k = 0; k <= 10; k++) organCymbalShapes(S, h, { th: k / 10 * Math.PI / 2 }, undefined);
+  else if (h.type === 'organNotes') {
+    const cols = h.cols || organNoteCols(h), X = ORGAN.notes;
+    organNotesShapes(S, h, { falling: [] }, undefined);
+    for (const x of cols) { S.push({ k: 's', x0: x, a0: h.alt + 4, x1: x, a1: h.alt - X.drop, r: X.headR }); S.push({ k: 's', x0: x + 8, a0: h.alt + X.stem, x1: x + 8, a1: h.alt - X.drop, r: 3.6 }); }
+  }
+  return S;
+}
+// A basalt column drum in a wall (for the shaft's relief and its drawing): drum i on a side starts at height `a0` and
+// stands `d` in from the wall's line (0, step or 2 steps)
+function organPanel(i, side, seed) {
+  const C = ORGAN, j = hash2(i, (seed & 0xffff) + 421 + side * 23);
+  return { a0: i * C.panel + (hash2(i, (seed & 0xffff) + 423 + side * 29) - 0.5) * 44, d: j < 0.38 ? 0 : j < 0.74 ? C.step : 2 * C.step, j };
+}
+
+// The Pipe Organ Cavern's shaft, laid out in full from ORGAN_STAGE (the seed only nudges looks and sides). It answers
+// the same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createOrganLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0x0A6A9) >>> 0), C0 = ORGAN;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [];
+  let y = 0;
+  for (const sec of ORGAN_STAGE) {
+    const len = sec.calm ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+    secs.push({ ...sec, a0: y, a1: y + len }); y += len;
+  }
+  const topA = y, endAt = organEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the columns' relief on a side: each basalt drum stands 0, one or two steps in from the wall's line, the step
+  // between two drums a short chamfer (never steeper than RULES.maxWallSlope); eased flat where a trap is mounted (so
+  // it sits on a flat face) and over the launch
+  const flatK = (a, side) => { let k = 0; for (const f of flats) if (f.side === side && a > f.a0 - 60 && a < f.a1 + 60) k = Math.max(k, smooth(f.a0 - 60, f.a0, a) * (1 - smooth(f.a1, f.a1 + 60, a))); return k; };
+  const panelOf = (a, side) => { let i = Math.floor(a / C0.panel); if (a < organPanel(i, side, seed).a0) i--; else if (a >= organPanel(i + 1, side, seed).a0) i++; return i; };
+  const reliefAt = (a, side) => {
+    const i = panelOf(a, side), P = organPanel(i, side, seed), N = organPanel(i + 1, side, seed), Q = organPanel(i - 1, side, seed);
+    let d = P.d;
+    if (a < P.a0 + 7) d = lerp(Q.d, P.d, smooth(P.a0 - 7, P.a0 + 7, a));
+    else if (a > N.a0 - 7) d = lerp(P.d, N.d, smooth(N.a0 - 7, N.a0 + 7, a));
+    return d * smooth(380, 620, a) * (1 - flatK(a, side));
+  };
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function oWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function oOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = oWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1, side) => { if (side <= 0) flats.push({ a0, a1, side: 1 }); if (side >= 0) flats.push({ a0, a1, side: 0 }); };
+  const pick = () => (rng() < 0.5 ? 1 : -1);
+  const wallOf = d => d > 0 ? -1 : 1;   // (a trap on the left wall, d 1, flattens side 0)
+  const P0 = C0.pipe, D0 = C0.drum, Y0 = C0.cymbal, N0 = C0.notes;
+  const make = {
+    pipe(A, o) {
+      const d = o.side || pick(); flat(A - P0.hh - 6, A + P0.hh + 6, wallOf(d));
+      return [{ type: 'organPipe', side: d, alt: A, P: o.P || 4, ph: o.ph || 0, dir: o.dir || (rng() < 0.5 ? 1 : -1), lo: A - P0.hh, hi: A + P0.hh, ease: P0.ease, fork: !!o.fork }];
+    },
+    pipePair(A, o) {   // ranks on facing walls 240 apart, two beats out of step: one blows while the other lights up
+      const d = pick(), p0 = o.ph || 0;
+      return [...make.pipe(A, { side: d, P: o.P, ph: p0, dir: 1, fork: o.fork }), ...make.pipe(A + 240, { side: -d, P: o.P, ph: p0 + 2, dir: -1 })];
+    },
+    pipeStack(A, o) {  // two ranks on one wall 190 apart, a beat apart: a rising scale
+      const d = pick(), p0 = o.ph || 0;
+      return [...make.pipe(A, { side: d, P: o.P, ph: p0, dir: 1 }), ...make.pipe(A + 190, { side: d, P: o.P, ph: p0 + 1, dir: 1 })];
+    },
+    drum(A, o) {
+      const d = o.side || pick(); flat(A - 50, A + 80, wallOf(d));
+      return [{ type: 'organDrum', side: d, alt: A, lo: A - 46, hi: A + D0.head + 8, ease: 0 }];
+    },
+    pipeDrum(A, o) {   // a pipe rank, a drum on the far wall above it (boing over the jets' far end)
+      const d = pick();
+      return [...make.pipe(A, { side: d, P: o.P, ph: o.ph }), ...make.drum(A + 220, { side: -d })];
+    },
+    cymbal(A, o) {
+      flat(A - 50, A + 50, 0);
+      return [{ type: 'organCymbal', side: 0, alt: A, P: o.P || 4, ph: o.ph || 0, lo: A - Y0.R - 2, hi: A + Y0.R + 2, ease: Y0.ease, fork: !!o.fork }];
+    },
+    cymbalPipe(A, o) { // a cymbal gate, a pipe rank above it
+      const d = pick();
+      return [...make.cymbal(A, { P: o.P, ph: o.ph, fork: o.fork }), ...make.pipe(A + 300, { side: d, P: o.P, ph: (o.ph || 0) + 1 })];
+    },
+    pipeCymbal(A, o) { // a pipe rank, a cymbal gate above it
+      const d = pick();
+      return [...make.pipe(A, { side: d, P: o.P, ph: o.ph }), ...make.cymbal(A + 300, { P: o.P, ph: (o.ph || 0) + 2 })];
+    },
+    notes(A, o) {      // a staff at A: its notes fall `drop` below it
+      flat(A - 30, A + 30, 0);
+      return [{ type: 'organNotes', side: 0, alt: A, every: o.every || 1, ph: o.ph || 0, pat: o.pat || [0, 2, 1, 3], lo: A - N0.drop - N0.headR - 4, hi: A + 30, ease: N0.ease, fork: !!o.fork }];
+    },
+    notesPipe(A, o) {  // a staff, a pipe rank half way down its fall
+      const d = pick();
+      return [...make.pipe(A - 170, { side: d, P: o.P, ph: (o.ph || 0) + 1 }), ...make.notes(A, { every: o.every, pat: o.pat, ph: o.ph, fork: o.fork })];
+    },
+    notesCymbal(A, o) { // a staff, a cymbal gate half way down its fall
+      return [...make.cymbal(A - 180, { P: o.P, ph: (o.ph || 0) + 1 }), ...make.notes(A, { every: o.every, pat: o.pat, ph: o.ph, fork: o.fork })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, organ: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.calm) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known: wall positions (a cymbal's arm meets its twin's in the middle; a
+  // staff's four columns spread across the opening)
+  for (const b of beats) for (const h of b.hs) {
+    const [L, R] = oOpening(h.lo - 4, h.hi + 4);
+    h.L = L; h.R = R; h.base = h.side > 0 ? L : R;
+    if (h.type === 'organPipe') h.x = h.base + h.side * 30;
+    else if (h.type === 'organDrum') h.x = h.base + h.side * D0.kx;
+    else { h.x = (L + R) / 2; h.base = L; }
+    if (h.type === 'organCymbal') h.arm = (R - L) / 2 - Y0.piv - Y0.R * Y0.tilt - 0.5;
+    if (h.type === 'organNotes') h.cols = organNoteCols(h);
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, organDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let d = Infinity; for (const h of near(a, 200)) for (const q of dangerOf(h)) d = Math.min(d, shapeDist(q, x, a)); return d; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = oWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = oWalls(a); return (l + r) / 2; };
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = oWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  const column = (x, a0, n, step = 38, o = {}) => { for (let k = 0; k < n; k++) add(x, a0 + k * step, 'coco', o); };
+  // the middle of the lane on the far side of a trap reaching `reach` out from its wall
+  const farLane = (h, reach, a) => { const [l, r] = oWalls(a), e = h.base + h.side * reach; return h.side > 0 ? (e + r) / 2 : (l + e) / 2; };
+  for (const sc of secs) if (sc.calm) {
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.6);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + C0.end - 120, 0.5);
+    else {   // the Choir Rest: a treble staff's worth of coconuts (five lines of three, a big coin on the middle line), then a weave
+      const cA = sc.a0 + 300, cx = mid(cA);
+      for (let k = 0; k < 5; k++) for (let q = -1; q <= 1; q++) add(cx + q * 70 + (k % 2 ? 35 : 0) - 17, cA + k * 46, k === 2 && q === 0 ? 'gold' : 'coco', { clear: -Infinity });
+      weave(sc.a0 + 640, sc.a1 - 90, 0.8, 3);
+    }
+  }
+  // each trap's coconuts show the way (the open lane past it, a column up through a drum's boing, a column down a free
+  // stave line); a trap guarding a fork keeps it as the dare
+  let forks = 0;
+  for (const b of beats) {
+    for (const h of b.hs) {
+      if (h.type === 'organPipe') column(farLane(h, P0.reach + P0.jetR + 4, h.alt), h.alt - 40, 3, 40, { clear: 30 });
+      else if (h.type === 'organDrum') column(h.base + h.side * D0.kx, h.alt + D0.head + 120, 5, 46, { clear: 30 });
+      else if (h.type === 'organCymbal') column(mid(h.alt), h.alt + 80, 2, 42, { clear: 30 });
+      else { const [l, r] = oWalls(h.alt - 200), x = (l + r) / 2; column(x, h.alt - N0.drop + 40, 3, 50, { clear: 26 }); }
+      if (h.fork) {
+        let fx, fa;
+        if (h.type === 'organPipe') { fx = organJetX(h, 0.55); fa = organPipeY(h, 1); }
+        else if (h.type === 'organCymbal') { fx = (h.L + h.R) / 2; fa = h.alt; }
+        else { fx = h.cols[1]; fa = h.alt - 150; }
+        fruit.push({ x: fx, alt: fa, kind: 'organFork', fork: true, clear: -Infinity }); forks++;
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(h => h.hi)) + 70, a1 = Math.min(...next.hs.map(h => h.lo)) - 90; if (a1 - a0 > 60) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the tower's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const c of [RULES.pickup.clear, 30]) { for (let d = 0; d < 140 && !got; d += 8) { const xx = [m - d, m + d].find(x => fits(x, a, CHILI_R, c)); if (xx != null) { spots.push({ x: xx, a, c }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= C0.chiliGap + 130; j++) if (spots[j].a - last >= C0.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < C0.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: oWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, organ: true, sections: secs, beats, top: topA, forks,
+    reliefAt, panelOf,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 28): its own shaft (createOrganLevel), the organ look (G.theme), its missions (the
+// grand organ, 3 golden tuning forks, boing off 4 drums) and its length in metres (from the layout).
+const ADV_ORGAN = { name: 'Pipe Organ Cavern', theme: 'organ', seed: 'isl-28-organ', reward: 250, target: 0, len: organEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: 'Reach the grand organ' }, { k: 'organFork', n: 3 }, { k: 'organDrum', n: 4 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Pipe Organ Cavern, island level 28)
 // (LEVELGEN slot: Pinball Palace, island level 29)
 // (LEVELGEN slot: Candy Caverns, island level 30)
@@ -38497,7 +38900,7 @@ const ISLAND = {
     { id: 25, name: 'Gull Cliffs', region: 'cliffs', pilot: 'penguin', perk: 'Gulls ignore a fellow seabird', stage: 'cliffs' },
     { id: 26, name: 'Clockwork Tower', region: 'clockwork', pilot: 'robot', perk: 'A wind-up key pauses time for a second', stage: 'clockwork' },
     { id: 27, name: 'Kooky Lab', region: 'lab', pilot: 'axolotl', perk: 'Too slippery for the slime to stick', stage: 'lab' },
-    { id: 28, name: 'Pipe Organ Cavern', region: 'organ', pilot: 'firefly', perk: 'Glows to the beat and shows the next blast' },
+    { id: 28, name: 'Pipe Organ Cavern', region: 'organ', pilot: 'firefly', perk: 'Glows to the beat and shows the next blast', stage: 'organ' },
     { id: 29, name: 'Pinball Palace', region: 'pinball', pilot: 'hamster', perk: 'The turbo ball rolls off bumpers' },
     { id: 30, name: 'Candy Caverns', region: 'candy', pilot: 'bear', perk: 'Licks the chocolate off fast' },
     { id: 31, name: 'Cheddar Caverns', region: 'cheese', pilot: 'dachshund', perk: 'One bark and the cat paw pulls back' },
@@ -38577,6 +38980,7 @@ ADV_STAGES.cascade = ADV_CASCADE;   // (island level 24, Cascade Falls: see crea
 ADV_STAGES.clockwork = ADV_CLOCKWORK;   // (island level 26, Clockwork Tower: see createClockworkLevel)
 ADV_STAGES.cliffs = ADV_CLIFFS;   // (island level 25, Gull Cliffs: see createCliffsLevel)
 ADV_STAGES.lab = ADV_LAB;   // (island level 27, Kooky Lab: see createLabLevel)
+ADV_STAGES.organ = ADV_ORGAN;   // (island level 28, Pipe Organ Cavern: see createOrganLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -66723,6 +67127,1593 @@ function drawLabkForeground() {
 { const base = drawForeground; drawForeground = function () { if (labkOn()) drawLabkForeground(); else base(); }; }
 { const base = stageClear; stageClear = function (boss) { base(boss); if (labkOn() && !boss) labkTankBurst(); }; }
 // (game slot: Kooky Lab, island level 27)
+// ---------- the Pipe Organ Cavern (island level 28): its look, traps, tuning forks and sounds ----------
+// The stage's shaft and traps are laid out by createOrganLevel (LEVELGEN); here they come alive and get drawn. While it
+// runs G.theme is 'organ': a cathedral of a cave at violet dusk, its basalt columns grown into a giant gold pipe organ,
+// lavender light through a rose window of rock high above, candles in the choir, music notes drifting up like sparks,
+// and the whole cave playing one tune (nothing of it shows anywhere else: Daily and Practice never set a theme).
+// Art as the rest of the game: cartoony, 2-3 stop gradients lit from the top left, every edge a darker shade of its own
+// colour (never black), detail as line pairs (a dark furrow under a lit ridge), sheen strokes and soft glows.
+// The cave's clock: every trap reads G.organT (seconds, advanced with the game while the stage runs); the walls' pipe
+// mouths, the backdrop's far organ and the motes pulse on its beat too. Every trap's sound is a note of the tune.
+// Performance: everything static (the walls' columns, the backdrop's layers, windchests, kettles, cymbals, the finish's
+// organ) is drawn once into cached canvases at the screen's pixel density (tiles down the height, rendered a little ahead
+// of the camera, one per frame) and blitted; notes, sparks and rings are blits of cached sprites, capped in number.
+const ORGAN_P = {
+  gold: ['#fff3c0', '#ecb84e', '#9c6424', '#6a3e16'], goldR: [[255, 243, 192], [236, 184, 78], [156, 100, 36], [106, 62, 22]],
+  old: ['#f0d6a0', '#bc8e4a', '#704a28', '#4a2e1a'],
+  basalt: ['#a99ad8', '#7262a6', '#443872', '#2e2454'], basaltR: [[169, 154, 216], [114, 98, 166], [68, 56, 114], [46, 36, 84]],
+  oak: ['#ac6244', '#723a2a', '#44221c', '#2e1412'],
+  ivory: ['#fffbf0', '#f0e6ce', '#cbb894'], ebony: ['#5e4e72', '#30264a', '#1c142e'],
+  copper: ['#ffcaa2', '#d47c4a', '#8c4226', '#5e2818'], steel: ['#f6f8fc', '#b0b6c8', '#62687e', '#42465c'],
+  ruby: ['#ffb0c0', '#e0405c', '#8c1830', '#5a0c1e'],
+  lav: [206, 182, 255], warm: [255, 214, 140], rose: [236, 176, 255], candle: [255, 196, 110],
+  pal: { bgTop: [92, 74, 150], bgBot: [30, 22, 62], far: [80, 64, 132], far2: [66, 52, 116], wall: [74, 62, 118], wallIn: [24, 18, 44], rim: [255, 214, 140] },
+};
+const organOn = () => !!(G && G.theme === 'organ');
+{ const base = pal; pal = function (key, a) { return organOn() && ORGAN_P.pal[key] ? ORGAN_P.pal[key].slice() : base(key, a); }; }
+// gradient helpers in a context (the main one unless given): evenly spread colour stops
+function organLG(x0, y0, x1, y1, cols, c = ctx) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+function organRG(x, y, r, cols, c = ctx, r0 = 0) { const g = c.createRadialGradient(x, y, r0, x, y, Math.max(r, r0 + 0.01)); cols.forEach((q, i) => g.addColorStop(i / (cols.length - 1), q)); return g; }
+const organCol = (c, a = 1) => a >= 1 ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const organHex = h => h.slice(1, 7).match(/../g).map(x => parseInt(x, 16));
+const organLift = (c, k) => c.map(v => clamp(v + k, 0, 255));
+function organCirc(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.01, r), 0, TWO_PI); }
+function organEll(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TWO_PI); }
+// a sheen stroke on a round thing (an arc of white on its lit upper left)
+function organSheen(c, x, y, r, a = 0.5, from = 3.6, to = 4.7) { c.save(); c.strokeStyle = `rgba(255,255,245,${a})`; c.lineWidth = Math.max(0.6, r * 0.14); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.7, from, to); c.stroke(); c.restore(); }
+// a four-point twinkle (additive)
+function organTwinkle(c, x, y, r, a, col = [255, 240, 214]) {
+  if (a < 0.03 || r < 0.3) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = organCol(col, Math.min(1, a));
+  c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * 0.22, y - r * 0.22); c.lineTo(x + r, y); c.lineTo(x + r * 0.22, y + r * 0.22); c.lineTo(x, y + r); c.lineTo(x - r * 0.22, y + r * 0.22); c.lineTo(x - r, y); c.lineTo(x - r * 0.22, y - r * 0.22); c.closePath(); c.fill();
+  c.restore();
+}
+// a fresh offscreen canvas of w × h css px at the screen's density (drawn in css px: the transform is set)
+function organCanvas(w, h) {
+  const cv = document.createElement('canvas'), k = dpr;
+  cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+  const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, 0, 0); c.lineJoin = 'round'; c.lineCap = 'round';
+  return { cv, c, w, h };
+}
+// everything cached depends on the screen's size and density and on the shaft: a new key drops it all
+const ORGAN_CACHE = { key: '', walls: new Map(), layers: new Map(), sprites: new Map() };
+function organCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${G.seed}`;
+  if (ORGAN_CACHE.key !== key) { ORGAN_CACHE.key = key; ORGAN_CACHE.walls.clear(); ORGAN_CACHE.layers.clear(); ORGAN_CACHE.sprites.clear(); }
+}
+// a cached sprite by name, made by draw(c) on a w × h css-px canvas the first time it is asked for
+function organSprite(name, w, h, draw) {
+  let sp = ORGAN_CACHE.sprites.get(name);
+  if (!sp) { sp = organCanvas(w, h); draw(sp.c, sp.w, sp.h); ORGAN_CACHE.sprites.set(name, sp); }
+  return sp;
+}
+// A cached piece of art in screen orientation drawn at the screen's scale in world units round its origin (y down),
+// covering x0..x1, y0..y1; blitted with organBlit(sp, X, Y) at the origin's screen point
+function organPiece(name, x0, x1, y0, y1, draw) {
+  let sp = ORGAN_CACHE.sprites.get(name);
+  if (!sp) {
+    sp = organCanvas((x1 - x0) * s, (y1 - y0) * s); sp.ax = -x0 * s; sp.ay = -y0 * s;
+    sp.c.translate(sp.ax, sp.ay); sp.c.scale(s, s); draw(sp.c);
+    ORGAN_CACHE.sprites.set(name, sp);
+  }
+  return sp;
+}
+const organBlit = (sp, X, Y) => ctx.drawImage(sp.cv, X - sp.ax, Y - sp.ay, sp.w, sp.h);
+// a soft additive glow blitted from a cached disc (cheap: no gradient built per frame)
+function organGlow(x, y, r, col, a, c = ctx) {
+  if (a < 0.004 || r < 0.5) return;
+  const sp = organSprite('glow' + col.join(','), 64, 64, cc => { cc.fillStyle = organRG(32, 32, 32, [organCol(col, 1), organCol(col, 0.32), organCol(col, 0)], cc); cc.fillRect(0, 0, 64, 64); });
+  c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a); c.drawImage(sp.cv, x - r, y - r, r * 2, r * 2); c.restore();
+}
+// the cave's time, its beat (1 right on it, fading through the beat), the bar's downbeat, and how loud something at
+// height a sounds (0 off screen)
+const organT = () => (G && G.organT) || 0;
+const organBeatK = (off = 0) => { const B = ORGAN.beat, u = pmod(organT() + off, B) / B; return Math.exp(-u * 6); };
+const organBarK = () => { const B = ORGAN.beat * 4, u = pmod(organT(), B) / B; return Math.exp(-u * 9); };
+const organVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+// is the pilot the firefly (he glows to the beat and shows the next blast: the perk)?
+const organFirefly = () => { const pl = pilot(); return !!(pl && ((pl.character && pl.character.id === 'firefly') || pl.id === 'firefly')); };
+
+// ---- shared parts (drawn in c's frame, units as given) ----
+// a domed stud / rivet, lit from the top left
+function organStud(c, x, y, r, C = ORGAN_P.gold) {
+  c.fillStyle = 'rgba(40,20,40,.4)'; organCirc(c, x + r * 0.35, y + r * 0.45, r); c.fill();
+  c.fillStyle = organRG(x - r * 0.4, y - r * 0.4, r * 1.5, [C[0], C[1], C[2]], c); organCirc(c, x, y, r); c.fill();
+  c.fillStyle = 'rgba(255,255,240,.85)'; organCirc(c, x - r * 0.35, y - r * 0.35, r * 0.32); c.fill();
+}
+// a glossy music note (0 a quaver, 1 two beamed quavers, 2 a crotchet), its head's centre at (0, 0), stem up; size k
+// (head about 4.6k wide); C the metal
+function organNoteArt(c, k, kind = 0, C = ORGAN_P.gold) {
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  const head = (hx, hy) => {
+    c.save(); c.translate(hx, hy); c.rotate(-0.42);
+    c.fillStyle = organRG(-1.6 * k, -1.4 * k, 5.2 * k, [C[0], C[1], C[2]], c); organEll(c, 0, 0, 4.6 * k, 3.3 * k); c.fill();
+    c.strokeStyle = C[3]; c.lineWidth = 0.55 * k; c.stroke();
+    c.fillStyle = 'rgba(255,255,240,.85)'; organEll(c, -1.7 * k, -1.2 * k, 1.5 * k, 0.75 * k); c.fill();
+    c.restore();
+  };
+  const stem = (x, y0, y1) => { c.fillStyle = organLG(x - 0.8 * k, 0, x + 0.9 * k, 0, [C[0], C[1], C[2]], c); c.fillRect(x - 0.8 * k, y1, 1.7 * k, y0 - y1); c.strokeStyle = C[3]; c.lineWidth = 0.4 * k; c.strokeRect(x - 0.8 * k, y1, 1.7 * k, y0 - y1); };
+  if (kind === 1) {
+    stem(3.6 * k, -0.5 * k, -15 * k); stem(13.6 * k, -2.5 * k, -17 * k);
+    c.fillStyle = organLG(0, -17 * k, 0, -12 * k, [C[0], C[1], C[2]], c); c.beginPath(); c.moveTo(2.8 * k, -15 * k); c.lineTo(14.4 * k, -17.6 * k); c.lineTo(14.4 * k, -14 * k); c.lineTo(2.8 * k, -11.4 * k); c.closePath(); c.fill(); c.strokeStyle = C[3]; c.lineWidth = 0.45 * k; c.stroke();
+    head(0, 0); head(10 * k, -2 * k);
+  } else {
+    stem(3.6 * k, -0.5 * k, -15.5 * k);
+    if (kind === 0) { c.fillStyle = organLG(4 * k, -16 * k, 9 * k, -6 * k, [C[0], C[1], C[2]], c); c.beginPath(); c.moveTo(4.2 * k, -15.5 * k); c.quadraticCurveTo(10 * k, -11 * k, 8.6 * k, -5 * k); c.quadraticCurveTo(8 * k, -9.6 * k, 4.2 * k, -10.6 * k); c.closePath(); c.fill(); c.strokeStyle = C[3]; c.lineWidth = 0.45 * k; c.stroke(); }
+    head(0, 0);
+  }
+  c.restore();
+}
+// a cached note sprite (a little glow, the note): k css px per unit; drawn centred on its head
+function organNoteSprite(kind, k, mute = 0) {
+  return organSprite(`note${kind}_${k}_${mute}`, 34 * k, 34 * k, c => {
+    const C = mute ? ORGAN_P.gold.map(h => organCol(organHex(h).map((v, i) => lerp(v, [120, 96, 170][i], mute)))) : ORGAN_P.gold;
+    c.translate(10 * k, 24 * k); organNoteArt(c, k, kind, C);
+  });
+}
+const organNoteBlit = (sp, k, x, y, sc = 1, rot = 0, c = ctx) => { if (rot) { c.save(); c.translate(x, y); c.rotate(rot); c.drawImage(sp.cv, -10 * k * sc, -24 * k * sc, 34 * k * sc, 34 * k * sc); c.restore(); } else c.drawImage(sp.cv, x - 10 * k * sc, y - 24 * k * sc, 34 * k * sc, 34 * k * sc); };
+
+// ---- the cave's own particles: little notes flung about, gold sparks, rings of sound ----
+function organFx(kind, x, a, vx, va, life, size, o = {}) {
+  const D = G.organFx || (G.organFx = []); if (D.length > 120) D.shift();
+  D.push({ kind, x, a, vx, va, life, max: life, size, rot: (Math.random() - 0.5) * 0.8, w: (Math.random() - 0.5) * 6, v: (Math.random() * 3) | 0, ...o });
+}
+function updateOrganFx(dt) {
+  const D = G.organFx; if (!D) return;
+  for (let i = D.length - 1; i >= 0; i--) {
+    const q = D[i]; q.life -= dt; if (q.life <= 0) { D.splice(i, 1); continue; }
+    if (q.kind === 'note') { q.vx *= 1 - dt * 1.6; q.va = q.va * (1 - dt * 1.4) + 40 * dt; }
+    else if (q.kind === 'spark') { q.va -= 520 * dt; q.vx *= 1 - dt * 0.8; }
+    q.x += q.vx * dt; q.a += q.va * dt; q.rot += q.w * dt * 0.3;
+  }
+}
+function drawOrganFx() {
+  const D = G.organFx; if (!D || !D.length) return;
+  for (const q of D) {
+    const y = sy(q.a); if (y < -50 || y > H + 50) continue;
+    const t = q.life / q.max, x = sx(q.x);
+    if (q.kind === 'note') {
+      const sp = organNoteSprite(q.v % 2, 1), sc = q.size * s / 10;
+      ctx.globalAlpha = Math.min(1, t * 2.2); organNoteBlit(sp, 1, x, y, sc, q.rot); ctx.globalAlpha = 1;
+    } else if (q.kind === 'ring') {
+      const u = 1 - t, r = q.size * (0.3 + u) * s;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = organCol(q.col || [255, 226, 170], 0.4 * t); ctx.lineWidth = (2 * t + 0.5) * s;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * (q.flat || 0.5), 0, 0, TWO_PI); ctx.stroke(); ctx.restore();
+    } else {   // a spark: a short hot streak along its flight
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,${200 + 50 * t | 0},${130 * t | 0},${t})`; ctx.lineWidth = q.size * s; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - q.vx * 0.025 * s, y + q.va * 0.025 * s); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+// ---- sounds (synth): every trap plays notes of the cave's tune (C major: the staff's columns are C E G C) ----
+const ORGAN_SCALE = [72, 76, 79, 84];
+const ORGAN_SFX = {
+  // the cave's beat: a soft felt tick, and on each bar's downbeat a low organ pedal note
+  obeat: (t, B, v) => { vTone(B, t, 1900, { type: 'triangle', v: 0.012 * v, dur: 0.03 }); vNoise(B, t, { f: 2600, q: 5, v: 0.012 * v, dur: 0.015 }); },
+  obar: (t, B, v) => { vTone(B, t, mf(36), { type: 'triangle', v: 0.05 * v, dur: 0.9, a: 0.04, lp: 500 }); vTone(B, t, mf(48), { type: 'sine', v: 0.025 * v, dur: 0.8, a: 0.04 }); },
+  // a pipe rank drawing breath: a reedy swell rising under the lights
+  otell: (t, B, v) => { vTone(B, t, mf(55), { f2: mf(60), glide: 0.7, type: 'sawtooth', lp: 900, v: 0.025 * v, dur: 0.75, a: 0.4 }); vNoise(B, t, { type: 'highpass', f: 3000, f2: 5000, v: 0.025 * v, dur: 0.7, a: 0.4 }); },
+  // one trumpet's blast: a bright reed note (n picks the note of the arpeggio) with a chiff of air
+  otoot: (t, B, v, o) => { const m = [67, 72, 76][o.n || 0] + ((o.dir || 1) > 0 ? 0 : -5); vTone(B, t, mf(m), { type: 'sawtooth', lp: 2600, lp2: 1200, lpT: 0.4, q: 2, v: 0.06 * v, dur: 0.42, a: 0.012 }); vTone(B, t, mf(m + 12), { type: 'square', lp: 3000, v: 0.018 * v, dur: 0.3, a: 0.01 }); vNoise(B, t, { f: 4200, q: 2, v: 0.04 * v, dur: 0.05 }); },
+  // a drum's boing: a timpani thump with the skin's pitch springing up (higher on the beat)
+  oboing: (t, B, v, o) => { vTone(B, t, 98, { f2: 62, glide: 0.3, type: 'sine', v: 0.16 * v, dur: 0.5 }); vNoise(B, t, { type: 'lowpass', f: 700, v: 0.1 * v, dur: 0.12 }); vTone(B, t + 0.02, o.hit ? 330 : 260, { f2: o.hit ? 1100 : 700, glide: 0.22, type: 'triangle', v: 0.05 * v, dur: 0.28, vib: [18, 30] }); if (o.hit) vTone(B, t + 0.08, mf(84), { type: 'sine', v: 0.05, dur: 0.5 }); },
+  // the cymbals' shiver as they wind up, and their crash
+  oshiver: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 6500, v: 0.035 * v, dur: 0.7, a: 0.4 }); vTone(B, t, 2400, { type: 'sine', v: 0.008 * v, dur: 0.7, a: 0.4, vib: [11, 60] }); },
+  ocrash: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 3200, v: 0.18 * v, dur: 1.3, a: 0.003 }); vNoise(B, t, { type: 'bandpass', f: 5200, q: 1.4, v: 0.1 * v, dur: 0.9 }); for (const [f, g] of [[620, 0.03], [1130, 0.025], [1710, 0.02], [2390, 0.014]]) vTone(B, t, f, { type: 'square', lp: 4000, v: g * v, dur: 0.9 }); vTone(B, t, 120, { f2: 70, glide: 0.12, type: 'sine', v: 0.06 * v, dur: 0.18 }); },
+  // a note forming on the staff (a glassy ping on its column's pitch) and its drop (the same note, warm and round)
+  oform: (t, B, v, o) => { vTone(B, t, mf(ORGAN_SCALE[o.n || 0] + 12), { type: 'sine', v: 0.018 * v, dur: 0.5, a: 0.25 }); },
+  odrop: (t, B, v, o) => { const f = mf(ORGAN_SCALE[o.n || 0]); vTone(B, t, f, { type: 'triangle', v: 0.06 * v, dur: 0.6 }); vTone(B, t, f * 2, { type: 'sine', v: 0.02 * v, dur: 0.4 }); vTone(B, t, f * 3, { type: 'sine', v: 0.008 * v, dur: 0.2 }); },
+  opop: (t, B, v) => { vNoise(B, t, { type: 'highpass', f: 5200, v: 0.03 * v, dur: 0.12 }); },
+  // a golden tuning fork: its pure A ringing with a shimmer above, then a little run
+  ofork: (t, B) => { vTone(B, t, 880, { type: 'sine', v: 0.08, dur: 1.6, a: 0.005 }); vTone(B, t, 1760, { type: 'sine', v: 0.02, dur: 0.6 }); [81, 85, 88, 93].forEach((m, i) => vTone(B, t + 0.08 + i * 0.06, mf(m), { type: 'triangle', v: 0.04, dur: 0.4 })); },
+  // the grand organ's chord at the top: full organ, C major over a pedal C, swelling then ringing
+  ochord: (t, B) => { for (const [m, v] of [[36, 0.07], [48, 0.06], [60, 0.05], [64, 0.045], [67, 0.045], [72, 0.04], [76, 0.03], [79, 0.025], [84, 0.02]]) { vTone(B, t, mf(m), { type: 'sawtooth', lp: 1800, v: v * 0.6, dur: 2.6, a: 0.08 }); vTone(B, t, mf(m), { type: 'sine', v, dur: 2.8, a: 0.06 }); } vNoise(B, t, { type: 'lowpass', f: 1200, v: 0.05, dur: 0.3 }); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = ORGAN_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + (o.delay || 0) + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+
+// ---- the traps at play ----
+CAUSES.organPipe = 'Blasted by a trumpet pipe';
+CAUSES.organDrum = 'Crashed into a kettle drum';
+CAUSES.organCymbal = 'Clapped between the cymbals';
+CAUSES.organNotes = 'Bonked by a falling note';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'organPipe' ? [255, 214, 120] : cause === 'organDrum' ? [255, 160, 110] : cause === 'organCymbal' ? [255, 236, 150] : cause === 'organNotes' ? [214, 186, 255] : base(cause); }; }
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!ORGAN_TYPES.has(h.type)) return base(h);
+  return organShapes(h, organT()).map(shrinkShape);
+}; }
+// the cave's clock runs with the game
+{ const base = updateHazards; updateHazards = function (dt) {
+  if (G.level && G.level.organ) { G.organT = (G.organT || 0) + dt; updateOrganTraps(dt); updateOrganFx(dt); }
+  base(dt);
+}; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.organ) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && ORGAN_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// The drum's boing: touching a drum's head springs you up the shaft (harder right on the beat). For a moment the
+// rocket's top speed is lifted (easing back over ORGAN.drum.decay s) so the boing carries.
+function organBoing(h) {
+  const p = G.p, X = ORGAN.drum, B = ORGAN.beat, ph = pmod(organT(), B), hit = Math.min(ph, B - ph) < X.win, v = hit ? X.beatLift : X.lift;
+  p.vy = Math.max(p.vy, v); p.squash = 1; p.invuln = Math.max(p.invuln, 0.12);
+  G.organBoing = { t: 0, cap: v };
+  h.hitT = 0; h.cool = 0.45; h.hits = (h.hits || 0) + 1;
+  if (!h.counted) { h.counted = true; G.stats.organDrum = (G.stats.organDrum || 0) + 1; }
+  const n = G.stats.organDrum || 0, of = advGoalN('organDrum');
+  chainEvent(hit ? 'On the beat! BOING!' : of && n <= of ? `Boing! ${n}/${of}` : 'Boing!', hit ? '#ffe08a' : '#e6d4ff', 1.2);
+  sfx('oboing', { v: 1, hit });
+  G.shake = Math.max(G.shake, hit ? 4 : 2.5); vibrate(hit ? [20, 20, 30] : 18);
+  const hx = h.base + h.side * X.kx, ha = h.alt + X.head;
+  for (let k = 0; k < 3; k++) organFx('ring', hx, ha + k * 10, 0, 60 + k * 50, 0.5 + k * 0.1, 40 + k * 14, { flat: 0.28, col: hit ? [255, 230, 160] : [230, 210, 255] });
+  for (let k = 0; k < (hit ? 7 : 4); k++) organFx('note', hx + (Math.random() - 0.5) * 50, ha + 10, (Math.random() - 0.5) * 160, 160 + Math.random() * 180, 1.1, 9 + Math.random() * 4);
+  puff(hx, ha, 0, 40, 0.4, 16, 'whoosh');
+}
+{ const base = update; update = function (dt) {
+  const b = G && organOn() && G.state === 'play' ? G.organBoing : null;
+  if (!b) { if (G && G.organBoing && G.state !== 'play') G.organBoing = null; return base(dt); }
+  b.t += dt;
+  const k = 1 - b.t / ORGAN.drum.decay;
+  if (k <= 0) { G.organBoing = null; return base(dt); }
+  const m0 = cfg.maxUp; cfg.maxUp = Math.max(m0, m0 + (b.cap - m0) * k * k);
+  try { base(dt); } finally { cfg.maxUp = m0; }
+}; }
+function updateOrganTraps(dt) {
+  const top = G.camAlt + viewH, T = organT(), play = G.state === 'play';
+  let any = false;
+  for (const h of G.hazards) {
+    if (!ORGAN_TYPES.has(h.type)) continue;
+    const vis = h.hi > G.camAlt - 80 && h.lo < top + 80, v = vis ? organVol(h.alt) : 0;
+    if (vis) any = true;
+    if (h.type === 'organPipe') {
+      const st = organPipeState(h, T), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('otell', { v });
+      if (vis) for (const j of st.jets) if (!was.jets.some(q => q.i === j.i)) {
+        const ord = (h.dir || 1) > 0 ? j.i : ORGAN.pipe.n - 1 - j.i;
+        sfx('otoot', { v: v * 0.9, n: ord, dir: h.dir });
+        const y = organPipeY(h, j.i), bx = h.base + h.side * ORGAN.pipe.bellX;
+        organFx('ring', bx + h.side * 8, y, h.side * 120, 0, 0.35, 16, { flat: 1.6, col: [255, 236, 190] });
+        for (let k = 0; k < 2; k++) organFx('note', bx + h.side * 10, y + (k - 0.5) * 10, h.side * (420 + Math.random() * 160), (Math.random() - 0.5) * 40, 0.4, 10);
+      }
+      h.st = st;
+    } else if (h.type === 'organDrum') {
+      h.hitT = (h.hitT ?? 9) + dt; h.cool = Math.max(0, (h.cool || 0) - dt);
+      if (play && h.cool <= 0 && Math.abs(h.alt + ORGAN.drum.head - G.p.alt) < 170 && organShapes(h, T, [], 'head').map(shrinkShape).some(shapeHits)) organBoing(h);
+    } else if (h.type === 'organCymbal') {
+      const st = organCymbalState(h, T), was = h.st || st;
+      if (vis && st.tell > 0 && !(was.tell > 0)) sfx('oshiver', { v });
+      if (vis && st.crash != null && was.crash == null) {
+        sfx('ocrash', { v });
+        if (Math.abs(h.alt - G.p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 3.5);
+        const mx = (h.L + h.R) / 2;
+        for (let k = 0; k < 3; k++) organFx('ring', mx, h.alt, 0, 0, 0.5 + k * 0.12, 50 + k * 26, { flat: 0.62, col: [255, 236, 170] });
+        for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI + 0.3; organFx('spark', mx, h.alt, Math.cos(an) * 260, Math.sin(an) * 220 + 60, 0.45, 1.8); }
+        for (let k = 0; k < 4; k++) { const an = -Math.PI / 2 + (k - 1.5) * 0.7; organFx('note', mx, h.alt + 10, Math.cos(an) * 200, -Math.sin(an) * 200, 1, 10); }
+      }
+      h.st = st;
+    } else if (h.type === 'organNotes') {
+      const st = organNotesState(h, T), was = h.st || { forming: [], falling: [] };
+      if (vis) {
+        for (const f of st.forming) if (!was.forming.some(q => q.k === f.k && q.i === f.i)) sfx('oform', { v: v * 0.8, n: f.i });
+        for (const f of st.falling) if (!was.falling.some(q => q.k === f.k && q.i === f.i)) sfx('odrop', { v: v * 0.9, n: f.i });
+        for (const f of was.falling) if (!st.falling.some(q => q.k === f.k && q.i === f.i)) {   // it reached the end of its fall: a burst of sparks
+          const x = h.cols[f.i], a = h.alt - ORGAN.notes.drop;
+          sfx('opop', { v: v * 0.6 });
+          organFx('ring', x, a, 0, 0, 0.4, 22, { flat: 0.5, col: [226, 206, 255] });
+          for (let k = 0; k < 6; k++) { const an = k / 6 * TWO_PI; organFx('spark', x, a, Math.cos(an) * 140, Math.sin(an) * 120 + 40, 0.4, 1.4); }
+        }
+      }
+      h.st = st;
+    }
+  }
+  // the cave's beat: a felt tick on every beat, the pedal note on each bar, while its organ is in sight
+  const bi = Math.floor(T / ORGAN.beat);
+  if (bi !== G.organBi) { G.organBi = bi; if (any && play) sfx(bi % 4 ? 'obeat' : 'obar', { v: 1 }); }
+}
+// ---- the cave's traps, drawn (each to its hitbox shapes) ----
+// Pieces are cached in screen orientation (light always from the top left; a piece for the right wall is mirrored in
+// its geometry only), drawn at the screen's scale in world units round the trap's wall point, y down.
+// a cylinder's shading across its width (light along the top or left): for tubes, rods, pipes
+function organTube(c, x0, y0, x1, y1, C) { return organLG(x0, y0, x1, y1, [C[1], C[0], C[1], C[2]], c); }
+// carved oak with grain lines and a gilt-edged inset panel (c's frame; x0 < x1)
+function organOakPanel(c, x0, y0, x1, y1, r = 3) {
+  const O = ORGAN_P.oak, G0 = ORGAN_P.old;
+  c.fillStyle = organLG(x0, y0, x1, y1, [O[0], O[1], O[2]], c); c.beginPath(); c.roundRect(x0, y0, x1 - x0, y1 - y0, r); c.fill();
+  c.strokeStyle = O[3]; c.lineWidth = 0.9; c.stroke();
+  c.save(); c.beginPath(); c.roundRect(x0, y0, x1 - x0, y1 - y0, r); c.clip();
+  c.strokeStyle = 'rgba(40,14,10,.35)'; c.lineWidth = 0.6; c.beginPath();
+  for (let q = 1; q < 5; q++) { const gx = x0 + (x1 - x0) * q / 5; c.moveTo(gx, y0); c.bezierCurveTo(gx + 1.5, y0 + (y1 - y0) * 0.35, gx - 1.5, y0 + (y1 - y0) * 0.65, gx + 0.8, y1); }
+  c.stroke();
+  c.strokeStyle = 'rgba(255,200,170,.25)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x0 + 1, y1 - 2); c.lineTo(x0 + 1, y0 + 1); c.lineTo(x1 - 2, y0 + 1); c.stroke();
+  c.restore();
+  const ix0 = x0 + 3, iy0 = y0 + 4, ix1 = x1 - 3, iy1 = y1 - 4;
+  if (ix1 - ix0 > 6 && iy1 - iy0 > 10) {
+    c.strokeStyle = G0[3]; c.lineWidth = 1.6; c.strokeRect(ix0, iy0, ix1 - ix0, iy1 - iy0);
+    c.strokeStyle = G0[1]; c.lineWidth = 0.9; c.strokeRect(ix0, iy0, ix1 - ix0, iy1 - iy0);
+    c.strokeStyle = 'rgba(255,240,200,.7)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(ix0 - 0.4, iy1); c.lineTo(ix0 - 0.4, iy0 - 0.4); c.lineTo(ix1, iy0 - 0.4); c.stroke();
+  }
+}
+// a small gothic arch carved into c (cx, top..bot, half width hw): dark glazing glowing lavender, a gilt frame, a trefoil
+function organGothic(c, cx, top, bot, hw, glow = 0.35) {
+  const G0 = ORGAN_P.old;
+  const arch = () => { c.beginPath(); c.moveTo(cx - hw, bot); c.lineTo(cx - hw, top + hw * 1.3); c.quadraticCurveTo(cx - hw, top + hw * 0.3, cx, top); c.quadraticCurveTo(cx + hw, top + hw * 0.3, cx + hw, top + hw * 1.3); c.lineTo(cx + hw, bot); c.closePath(); };
+  arch(); c.fillStyle = organLG(0, top, 0, bot, [`rgba(190,160,255,${glow + 0.2})`, `rgba(90,60,160,${glow})`, 'rgba(36,20,60,.9)'], c); c.fill();
+  arch(); c.strokeStyle = G0[3]; c.lineWidth = 2.2; c.stroke(); c.strokeStyle = G0[1]; c.lineWidth = 1.1; c.stroke();
+  const ty = top + hw * 1.15; c.strokeStyle = 'rgba(255,236,190,.8)'; c.lineWidth = 0.7;
+  for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TWO_PI / 3; organCirc(c, cx + Math.cos(a) * hw * 0.3, ty + Math.sin(a) * hw * 0.3, hw * 0.28); c.stroke(); }
+  c.beginPath(); c.moveTo(cx, ty + hw * 0.55); c.lineTo(cx, bot); c.stroke();
+}
+
+// ---- Pipe Blast ----
+// the windchest and its trumpets (unlit): a carved oak chest on a basalt corbel, gilt crest and trim, a gothic panel;
+// three gold trumpets out of it, each with a collar and a flared bell, mouths dark until they light
+function organPipeChest(d) {
+  const X = ORGAN.pipe, P = ORGAN_P, n = X.n;
+  return organPiece('pipeChest' + d, d > 0 ? -12 : -X.bellX - X.bellR - 6, d > 0 ? X.bellX + X.bellR + 6 : 12, -X.hh - 24, X.hh + 30, c => {
+    const xa = Math.min(-d * 6, d * X.chest), xb = Math.max(-d * 6, d * X.chest);
+    // the basalt corbel under it, into the wall, and a gilt finial on top
+    c.fillStyle = organLG(0, X.hh, 0, X.hh + 28, [P.basalt[1], P.basalt[2], P.basalt[3]], c);
+    c.beginPath(); c.moveTo(-d * 8, X.hh - 2); c.lineTo(d * X.chest, X.hh - 2); c.lineTo(d * (X.chest - 3), X.hh + 6); c.lineTo(-d * 1, X.hh + 26); c.lineTo(-d * 8, X.hh + 26); c.closePath(); c.fill();
+    c.strokeStyle = P.basalt[3]; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(220,206,255,.5)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-d * 6, X.hh - 1); c.lineTo(d * (X.chest - 1), X.hh - 1); c.stroke();
+    c.fillStyle = organLG(0, -X.hh - 22, 0, -X.hh, [P.gold[0], P.gold[1], P.gold[2]], c);
+    c.beginPath(); c.moveTo(xa - 2, -X.hh + 1); c.lineTo(xb + 2, -X.hh + 1); c.lineTo((xa + xb) / 2 + 3, -X.hh - 8); c.quadraticCurveTo((xa + xb) / 2 + 6, -X.hh - 16, (xa + xb) / 2, -X.hh - 22); c.quadraticCurveTo((xa + xb) / 2 - 6, -X.hh - 16, (xa + xb) / 2 - 3, -X.hh - 8); c.closePath(); c.fill();
+    c.strokeStyle = P.gold[3]; c.lineWidth = 0.8; c.stroke();
+    organStud(c, (xa + xb) / 2, -X.hh - 12, 2.2, P.ruby);
+    // the chest
+    c.fillStyle = 'rgba(20,10,30,.35)'; c.beginPath(); c.roundRect(xa + 2, -X.hh + 3, xb - xa, X.hh * 2, 3); c.fill();
+    organOakPanel(c, xa, -X.hh, xb, X.hh, 3);
+    organGothic(c, (xa + xb) / 2, -X.hh + 10, -X.hh + 34, (xb - xa) / 2 - 5, 0.3);
+    c.fillStyle = organLG(xa, 0, xb, 0, [P.gold[1], P.gold[0], P.gold[2]], c); for (const yy of [-X.hh, X.hh - 4]) { c.fillRect(xa - 1, yy, xb - xa + 2, 4); c.strokeStyle = P.gold[3]; c.lineWidth = 0.5; c.strokeRect(xa - 1, yy, xb - xa + 2, 4); }
+    // the trumpets (from the chest's face out to their bells), bottom one drawn last (nearest)
+    for (let i = n - 1; i >= 0; i--) {
+      const y = -(i - (n - 1) / 2) * X.dy, x0 = d * X.chest, bx = d * X.bellX;
+      // the tube
+      c.fillStyle = 'rgba(30,14,30,.35)'; c.fillRect(Math.min(x0, bx), y - X.tube + 2, Math.abs(bx - x0), X.tube * 2);
+      c.fillStyle = organTube(c, 0, y - X.tube, 0, y + X.tube, P.gold); c.fillRect(Math.min(x0, bx), y - X.tube, Math.abs(bx - x0), X.tube * 2);
+      c.strokeStyle = P.gold[3]; c.lineWidth = 0.6; c.strokeRect(Math.min(x0, bx), y - X.tube, Math.abs(bx - x0), X.tube * 2);
+      c.fillStyle = 'rgba(255,255,236,.7)'; c.fillRect(Math.min(x0, bx), y - X.tube * 0.55, Math.abs(bx - x0), 0.9);
+      // a collar ring and the socket in the chest
+      for (const cx of [d * (X.chest + 2), d * (X.chest + 12)]) { c.fillStyle = organTube(c, 0, y - X.tube - 1.6, 0, y + X.tube + 1.6, P.gold); c.fillRect(cx - 1.8, y - X.tube - 1.6, 3.6, X.tube * 2 + 3.2); c.strokeStyle = P.gold[3]; c.lineWidth = 0.5; c.strokeRect(cx - 1.8, y - X.tube - 1.6, 3.6, X.tube * 2 + 3.2); }
+      // the flared bell
+      const bR = X.bellR, b0 = bx - d * 9;
+      c.fillStyle = organLG(0, y - bR, 0, y + bR, [P.gold[1], P.gold[0], P.gold[1], P.gold[2]], c);
+      c.beginPath(); c.moveTo(b0, y - X.tube); c.quadraticCurveTo(bx - d * 2, y - X.tube, bx + d * 2, y - bR); c.lineTo(bx + d * 2, y + bR); c.quadraticCurveTo(bx - d * 2, y + X.tube, b0, y + X.tube); c.closePath(); c.fill();
+      c.strokeStyle = P.gold[3]; c.lineWidth = 0.7; c.stroke();
+      c.strokeStyle = 'rgba(255,255,236,.8)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(b0 + d * 1, y - X.tube + 0.8); c.quadraticCurveTo(bx - d * 2, y - X.tube, bx + d * 1.4, y - bR + 1.4); c.stroke();
+      // the mouth (dark) and its rolled rim
+      c.fillStyle = organRG(bx + d * 2, y, bR, ['#2a1420', '#43202c', '#5a2e30'], c); organEll(c, bx + d * 2.4, y, 2.4, bR - 0.6); c.fill();
+      c.strokeStyle = P.gold[0]; c.lineWidth = 1.1; c.beginPath(); c.ellipse(bx + d * 2.4, y, 2.4, bR - 0.6, 0, d > 0 ? -1.7 : 1.4, d > 0 ? 1.7 : 4.9); c.stroke();
+      c.strokeStyle = P.gold[3]; c.lineWidth = 0.5; organEll(c, bx + d * 2.4, y, 2.9, bR); c.stroke();
+    }
+    // gilt studs down the chest's face
+    for (const yy of [-X.hh + 44, -X.hh + 64, X.hh - 16]) organStud(c, (xa + xb) / 2, yy, 1.6);
+  });
+}
+// one jet in flight (screen px): a band of bright air from tail to front with streamers, a pressure ring at its front
+// and gold notes riding it
+function organJetDraw(h, j, y, T) {
+  const X = ORGAN.pipe, d = h.side, x0 = sx(organJetX(h, j.tail)), x1 = sx(organJetX(h, j.front)), r = X.jetR * s, k = Math.min(1, j.w / 0.08) * (1 - smooth(X.life - 0.12, X.life, j.w));
+  if (Math.abs(x1 - x0) < 2) return;
+  const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  // a soft band of rushing air: bright at its core, fading out at its edges and toward the bell
+  ctx.fillStyle = organLG(0, y - r * 1.15, 0, y + r * 1.15, ['rgba(255,226,170,0)', `rgba(255,232,190,${0.32 * k})`, `rgba(255,248,226,${0.62 * k})`, `rgba(255,232,190,${0.32 * k})`, 'rgba(255,226,170,0)']);
+  ctx.fillRect(xa, y - r * 1.15, xb - xa, r * 2.3);
+  ctx.fillStyle = `rgba(255,252,236,${0.5 * k})`; ctx.beginPath(); ctx.ellipse((xa + xb) / 2, y, (xb - xa) / 2, r * 0.3, 0, 0, TWO_PI); ctx.fill();
+  // puffs of air billowing round the front
+  for (let q = 0; q < 3; q++) { const px = x1 - d * (q * 0.22) * (x1 - x0) * 0.5, pr = r * (0.9 - q * 0.2); organGlow(px, y + Math.sin(T * 20 + q * 2) * r * 0.3, pr * 1.4, [255, 240, 214], 0.35 * k); }
+  // streamers: curling white lines along the band
+  ctx.lineCap = 'round'; ctx.lineWidth = 1.3 * s;
+  for (let q = 0; q < 4; q++) {
+    const yy = y + (q - 1.5) * r * 0.5, ph = T * 18 + q * 1.7, sl = (xb - xa) * (0.35 + 0.15 * (q % 2)), sx0 = xa + pmod(ph * 20 * s, Math.max(1, xb - xa - sl * 0.5));
+    ctx.strokeStyle = `rgba(255,255,250,${0.6 * k})`; ctx.beginPath(); ctx.moveTo(sx0, yy); ctx.bezierCurveTo(sx0 + sl * 0.3, yy - 3 * s, sx0 + sl * 0.7, yy + 3 * s, Math.min(xb, sx0 + sl), yy); ctx.stroke();
+  }
+  ctx.restore();
+  // the pressure ring at the front, and the notes riding the jet
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,240,210,${0.35 * k})`; ctx.lineWidth = 1.4 * s;
+  ctx.beginPath(); ctx.ellipse(x1, y, (3 + 3 * j.front) * s, r * 1.05, 0, -Math.PI / 2, Math.PI / 2, d < 0); ctx.stroke(); ctx.restore();
+  organGlow(x1, y, 26 * s, [255, 226, 160], 0.5 * k);
+  const sp = organNoteSprite(0, 1), sp2 = organNoteSprite(1, 1);
+  for (let q = 0; q < 3; q++) {
+    const u = j.tail + (j.front - j.tail) * pmod(0.2 + q * 0.33 + j.w * 2.4, 1), xx = sx(organJetX(h, u));
+    organNoteBlit(q % 2 ? sp2 : sp, 1, xx - 4 * s, y + (q - 1) * 3 * s + 4 * s, s * 0.95, Math.sin(T * 9 + q) * 0.2);
+  }
+}
+function drawOrganPipe(h) {
+  organCacheCheck();
+  const X = ORGAN.pipe, d = h.side, T = organT(), st = h.st || organPipeState(h, T), wallX = sx(h.base), Y = sy(h.alt);
+  // the firefly's perk: the path of the next blast traced in his light a bar ahead, brightening as it comes (the order
+  // the trumpets will play shown by a spark running along the first jet)
+  if (organFirefly() && !st.blowing) {
+    const blast = X.J * (X.n - 1) + X.life, rest = h.P - X.tell - blast, toGo = rest - st.u + (st.tell > 0 ? -st.tell * X.tell : 0), k = st.tell > 0 ? 1 : clamp(1 - toGo / 3, 0, 1);
+    if (k > 0.02) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (let i = 0; i < X.n; i++) {
+        const y = sy(organPipeY(h, i)), ord = (h.dir || 1) > 0 ? i : X.n - 1 - i, xa = sx(organJetX(h, 0)), xb = sx(organJetX(h, 1));
+        ctx.strokeStyle = `rgba(255,236,140,${(0.16 + 0.22 * (ord === 0 ? 1 : 0.5)) * k})`; ctx.lineWidth = 2 * s; ctx.setLineDash([3 * s, 6 * s]); ctx.lineDashOffset = -T * 40 * s;
+        ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xb, y); ctx.stroke();
+        ctx.setLineDash([]); ctx.strokeStyle = `rgba(255,236,140,${0.35 * k})`; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(xb, y - X.jetR * s); ctx.lineTo(xb, y + X.jetR * s); ctx.stroke();
+        if (ord === 0) { const u = pmod(T * 1.4, 1); organGlow(lerp(xa, xb, u), y, 9 * s, [255, 236, 140], 0.7 * k); }
+      }
+      ctx.restore();
+    }
+  }
+  // the jets first (the trumpets sit over their roots)
+  for (const j of st.jets) organJetDraw(h, j, sy(organPipeY(h, j.i)), T);
+  organBlit(organPipeChest(d), wallX, Y);
+  // the bells lighting in turn: glowing mouths, a quiver as each one draws breath
+  for (let i = 0; i < X.n; i++) {
+    const L = st.lit[i]; if (L < 0.03) continue;
+    const y = sy(organPipeY(h, i)), bx = wallX + d * (X.bellX + 2.4) * s, q = st.tell > 0 ? 0.75 + 0.25 * Math.sin(G.t * 34 + i) : 1;
+    organGlow(bx + d * 4 * s, y, (22 + 10 * L) * s, [255, 220, 150], 0.55 * L * q);
+    ctx.fillStyle = organCol([255, 236 - 30 * (1 - L), 180 - 60 * (1 - L)], 0.35 + 0.6 * L); organEll(ctx, bx, y, 2.2 * s, (X.bellR - 1.4) * s); ctx.fill();
+  }
+}
+
+// ---- Drum Bounce ----
+// the ledge and the kettle (no head): a basalt column cap jutting from the wall on a corbel, gilt edging along its lip;
+// a copper kettle on three gold legs, lathe bands and tension rods with gilt tuning handles
+function organDrumBody(d) {
+  const X = ORGAN.drum, P = ORGAN_P, cx = d * X.kx, R = X.kr;
+  return organPiece('drumBody' + d, d > 0 ? -14 : -X.out - 10, d > 0 ? X.out + 10 : 14, -X.head - 14, 52, c => {
+    const xa = Math.min(-d * 8, d * X.out), xb = Math.max(-d * 8, d * X.out);
+    // the corbel: a stack of short basalt columns stepping back into the wall under the ledge
+    for (let q = 0; q < 3; q++) {
+      const w = 38 - q * 12, y0 = 16 + q * 9, xq0 = Math.min(-d * 8, d * w), xq1 = Math.max(-d * 8, d * w);
+      c.fillStyle = organLG(xq0, y0, xq1, y0 + 11, [P.basalt[1], P.basalt[2], P.basalt[3]], c); c.fillRect(xq0, y0, xq1 - xq0, 9);
+      c.strokeStyle = P.basalt[3]; c.lineWidth = 0.7; c.strokeRect(xq0, y0, xq1 - xq0, 9);
+      c.strokeStyle = 'rgba(214,200,255,.4)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(xq0, y0 + 0.6); c.lineTo(xq1, y0 + 0.6); c.stroke();
+      for (let k = 1; k < 4; k++) { const gx = lerp(xq0, xq1, k / 4); c.strokeStyle = 'rgba(30,20,60,.5)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(gx, y0 + 1); c.lineTo(gx, y0 + 8); c.stroke(); }
+    }
+    // the ledge: a hexagonal column's cap seen from the side (lit top bevel, a front face, chipped corner)
+    c.fillStyle = 'rgba(20,10,40,.35)'; c.fillRect(xa + 2, 2, xb - xa, 18);
+    c.fillStyle = organLG(0, 0, 0, 16, [P.basalt[0], P.basalt[1], P.basalt[2]], c); c.beginPath(); c.moveTo(xa, 0); c.lineTo(xb - (d > 0 ? 4 : 0), 0); c.lineTo(xb, d > 0 ? 4 : 0); c.lineTo(xb, 16); c.lineTo(xa, 16); c.closePath(); c.fill();
+    c.strokeStyle = P.basalt[3]; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = organLG(0, -1, 0, 4, ['#e6dcff', P.basalt[0]], c); c.fillRect(xa, -1, xb - xa - 2, 4);
+    for (let k = 1; k < 5; k++) { const gx = lerp(xa, xb, k / 5); c.strokeStyle = 'rgba(30,20,60,.55)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(gx, 3); c.lineTo(gx + 1, 15); c.stroke(); c.strokeStyle = 'rgba(214,200,255,.35)'; c.beginPath(); c.moveTo(gx + 1, 3); c.lineTo(gx + 2, 15); c.stroke(); }
+    c.strokeStyle = P.old[1]; c.lineWidth = 1.4; c.beginPath(); c.moveTo(xa, 13); c.lineTo(xb, 13); c.stroke();
+    c.strokeStyle = P.old[0]; c.lineWidth = 0.5; c.beginPath(); c.moveTo(xa, 12.3); c.lineTo(xb, 12.3); c.stroke();
+    // the legs
+    c.lineCap = 'round';
+    for (const f of [-0.7, 0, 0.7]) { const lx = cx + f * R * 0.62; c.strokeStyle = P.gold[3]; c.lineWidth = 3.2; c.beginPath(); c.moveTo(lx, -8); c.lineTo(cx + f * R * 0.9, -1); c.stroke(); c.strokeStyle = P.gold[1]; c.lineWidth = 1.8; c.stroke(); }
+    // the kettle: a copper bowl, lit from the top left, two lathe bands
+    const bowl = () => { c.beginPath(); c.moveTo(cx - R, -X.head + 4); c.bezierCurveTo(cx - R, -14, cx - R * 0.55, -4, cx, -4); c.bezierCurveTo(cx + R * 0.55, -4, cx + R, -14, cx + R, -X.head + 4); c.closePath(); };
+    bowl(); c.fillStyle = organLG(cx - R, 0, cx + R, 0, [P.copper[2], P.copper[0], P.copper[1], P.copper[2], P.copper[3]], c); c.fill();
+    c.strokeStyle = P.copper[3]; c.lineWidth = 1; c.stroke();
+    c.save(); bowl(); c.clip();
+    for (const [yy, w] of [[-30, 1.1], [-16, 0.9]]) { c.strokeStyle = 'rgba(110,40,20,.55)'; c.lineWidth = w; c.beginPath(); c.moveTo(cx - R, yy); c.quadraticCurveTo(cx, yy + 5, cx + R, yy); c.stroke(); c.strokeStyle = 'rgba(255,220,190,.45)'; c.lineWidth = w * 0.6; c.beginPath(); c.moveTo(cx - R, yy - 1); c.quadraticCurveTo(cx, yy + 4, cx + R, yy - 1); c.stroke(); }
+    c.fillStyle = organLG(0, -X.head, 0, -4, ['rgba(255,255,255,0)', 'rgba(60,16,10,.25)'], c); c.fillRect(cx - R, -X.head, R * 2, X.head);
+    c.restore();
+    c.strokeStyle = 'rgba(255,236,214,.75)'; c.lineWidth = 2.2; c.beginPath(); c.moveTo(cx - R * 0.66, -X.head + 9); c.quadraticCurveTo(cx - R * 0.66, -18, cx - R * 0.32, -10); c.stroke();
+    // polish: a crisp specular spot, a reflected rim of warm light along the bowl's shadowed side
+    c.fillStyle = 'rgba(255,250,240,.9)'; organEll(c, cx - R * 0.5, -X.head + 14, 3.4, 6, 0.25); c.fill(); c.fillStyle = 'rgba(255,250,240,.6)'; organEll(c, cx - R * 0.42, -X.head + 24, 1.6, 2.4, 0.25); c.fill();
+    c.strokeStyle = 'rgba(255,190,140,.45)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(cx + R * 0.9, -X.head + 10); c.quadraticCurveTo(cx + R * 0.86, -16, cx + R * 0.4, -7); c.stroke();
+    // tension rods with gilt tuning handles round the rim
+    for (const f of [-0.86, -0.43, 0, 0.43, 0.86]) {
+      const x = cx + f * R; c.strokeStyle = P.gold[2]; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, -X.head + 4); c.lineTo(x * 0.92 + cx * 0.08, -X.head + 18); c.stroke();
+      c.fillStyle = organLG(x - 2, -X.head - 2, x + 2, -X.head + 4, [P.gold[0], P.gold[2]], c); c.beginPath(); c.roundRect(x - 2, -X.head - 1, 4, 5, 1); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.4; c.stroke();
+    }
+  });
+}
+function drawOrganDrum(h) {
+  organCacheCheck();
+  const X = ORGAN.drum, d = h.side, wallX = sx(h.base), Y = sy(h.alt), cx = wallX + d * X.kx * s, hy = sy(h.alt + X.head), R = X.kr;
+  const bk = organBeatK(), hit = h.hitT ?? 9, boing = hit < 0.6 ? Math.exp(-hit * 6) * Math.cos(hit * 30) : 0, k = Math.max(bk * 0.45, Math.abs(boing));
+  // the throb: a warm glow and rings rising off the head on every beat (bigger after a boing)
+  organGlow(cx, hy, (44 + 26 * k) * s, [255, 210, 150], 0.14 + 0.32 * k);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 2; i++) { const u = pmod(organT() / ORGAN.beat + i * 0.5, 1); ctx.strokeStyle = `rgba(255,236,200,${0.42 * (1 - u) * (0.5 + 0.5 * bk)})`; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.ellipse(cx, hy - u * 30 * s, R * (0.8 + u * 0.35) * s, (5 + u * 3) * s, 0, 0, TWO_PI); ctx.stroke(); }
+  ctx.restore();
+  organBlit(organDrumBody(d), wallX, Y);
+  // the gilt hoop and the calfskin head, flexing on the beat and springing hard after a boing
+  const P = ORGAN_P, flex = (1.2 * bk + 4 * Math.max(0, boing)) * s, dip = -3 * Math.min(0, boing) * s;
+  ctx.fillStyle = organLG(0, hy - 7 * s, 0, hy + 7 * s, [P.gold[0], P.gold[1], P.gold[2]]); organEll(ctx, cx, hy + 1 * s, (R + 2) * s, 7 * s); ctx.fill();
+  ctx.strokeStyle = P.gold[3]; ctx.lineWidth = 0.9 * s; ctx.stroke();
+  ctx.fillStyle = organRG(cx - 10 * s, hy - 4 * s, R * s, k > 0.5 ? ['#ffffff', '#fff3d8', '#ead0a4'] : ['#fffaf0', '#f2e4c8', '#d6ba8e']);
+  ctx.beginPath(); ctx.ellipse(cx, hy - 0.5 * s + dip * 0.3, (R - 1) * s, Math.max(1, 5.2 * s - flex * 0.3 + dip), 0, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(190,150,100,.55)'; ctx.lineWidth = 0.7 * s;
+  for (let i = 0; i < 2; i++) { const u = pmod(organT() / ORGAN.beat + i * 0.5, 1); ctx.beginPath(); ctx.ellipse(cx, hy - 0.5 * s, (R - 4) * u * s, 4.4 * u * s, 0, 0, TWO_PI); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; organEll(ctx, cx - 11 * s, hy - 2 * s, 7 * s, 1.2 * s, -0.05); ctx.fill();
+  // after a boing: the skin's spring lines flicking up
+  if (boing > 0.05) {
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = `rgba(255,250,232,${0.9 * boing})`; ctx.lineWidth = 2.2 * s;
+    for (const e of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(cx + e * 13 * s, hy - 8 * s); ctx.quadraticCurveTo(cx + e * 17 * s, hy - 28 * s, cx + e * 10 * s, hy - (44 + 10 * (1 - boing)) * s); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+// ---- Cymbal Clash ----
+// a cymbal seen face-on (radius R, its centre at the middle): spun bronze-gold with lathe rings (lit ridge, dark
+// furrow), a domed bell and a bolt; drawn once and squashed sideways as it turns edge-on
+function organCymbalFace() {
+  const R = ORGAN.cymbal.R, P = ORGAN_P;
+  return organPiece('cymbalFace', -R - 2, R + 2, -R - 2, R + 2, c => {
+    c.fillStyle = organRG(-R * 0.35, -R * 0.4, R * 1.5, [P.gold[0], P.gold[1], '#cf9338', P.gold[2]], c); organCirc(c, 0, 0, R); c.fill();
+    c.strokeStyle = P.gold[3]; c.lineWidth = 1; c.stroke();
+    for (let q = 0; q < 9; q++) { const r = R * (0.92 - q * 0.075); c.strokeStyle = q % 2 ? 'rgba(140,84,24,.4)' : 'rgba(255,240,190,.4)'; c.lineWidth = 0.7; organCirc(c, 0, 0, r); c.stroke(); }
+    c.strokeStyle = 'rgba(255,252,230,.85)'; c.lineWidth = 2.6; c.beginPath(); c.arc(0, 0, R * 0.78, 3.5, 4.5); c.stroke();
+    c.strokeStyle = 'rgba(255,252,230,.45)'; c.lineWidth = 4; c.beginPath(); c.arc(0, 0, R * 0.5, 3.7, 4.3); c.stroke();
+    c.strokeStyle = 'rgba(110,60,16,.45)'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, R * 0.84, 0.3, 1.5); c.stroke();
+    // the domed bell in the middle and its bolt
+    c.fillStyle = organRG(-3, -3, 10, [P.gold[0], P.gold[1], P.gold[2]], c); organCirc(c, 0, 0, 9); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = 'rgba(255,255,240,.85)'; organEll(c, -3, -3.4, 3, 1.6, -0.6); c.fill();
+    organStud(c, 0, 0, 2.6, P.steel);
+  });
+}
+// the pivot's bracket on a wall: a gilt rosette plate with a hinge knuckle (the arm turns on it)
+function organCymbalBracket(d) {
+  const P = ORGAN_P, X = ORGAN.cymbal;
+  return organPiece('cymBracket' + d, d > 0 ? -6 : -X.piv - 8, d > 0 ? X.piv + 8 : 6, -26, 26, c => {
+    c.fillStyle = 'rgba(20,10,30,.35)'; c.beginPath(); c.ellipse(d * 9 + 1.5, 2, 11, 14, 0, 0, TWO_PI); c.fill();
+    c.fillStyle = organLG(-12, -14, 12, 14, [P.gold[0], P.gold[1], P.gold[2]], c); c.beginPath(); c.ellipse(d * 8, 0, 10, 13, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = P.gold[3]; c.lineWidth = 0.9; c.stroke();
+    for (let i = 0; i < 8; i++) { const a = i * TWO_PI / 8; c.fillStyle = organRG(d * 8 + Math.cos(a) * 5 - 1, Math.sin(a) * 7 - 1, 5, [P.gold[0], P.gold[1], P.gold[2]], c); organEll(c, d * 8 + Math.cos(a) * 5, Math.sin(a) * 7, 3, 2, a); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.4; c.stroke(); }
+    // the knuckle the arm turns on
+    c.fillStyle = organTube(c, 0, -6, 0, 6, P.steel); c.fillRect(Math.min(d * 8, d * X.piv), -5, Math.abs(X.piv - 8), 10); c.strokeStyle = P.steel[3]; c.lineWidth = 0.6; c.strokeRect(Math.min(d * 8, d * X.piv), -5, Math.abs(X.piv - 8), 10);
+    organStud(c, d * X.piv, 0, 5, P.gold); organStud(c, d * 8, 0, 3, P.ruby);
+  });
+}
+function drawOrganCymbal(h) {
+  organCacheCheck();
+  const X = ORGAN.cymbal, T = organT(), st = h.st || organCymbalState(h, T), Y = sy(h.alt), face = organCymbalFace();
+  const shiver = st.tell > 0 ? Math.sin(G.t * 70) * 1.2 * st.tell * s : 0, mid = sx((h.L + h.R) / 2);
+  // a soft warning warmth between them as they wind up (kept low: the discs themselves must read)
+  if (st.tell > 0 || st.swinging) organGlow(mid, Y, 50 * s, [255, 210, 120], 0.1 + 0.12 * st.tell);
+  for (const e of [-1, 1]) {
+    const q = organCymbalDisc(h, e, st.th), px = sx(q.P), cx = sx(q.cx) + shiver * e, sn = Math.sin(st.th), P = ORGAN_P;
+    // the arm (it swings out of the wall and across): a slim gilt rod behind the disc
+    if (sn > 0.02) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = P.gold[3]; ctx.lineWidth = (X.arm * 1.6 + 1.2) * s; ctx.beginPath(); ctx.moveTo(px, Y); ctx.lineTo(cx, Y); ctx.stroke();
+      ctx.strokeStyle = P.gold[1]; ctx.lineWidth = X.arm * 1.6 * s; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,250,226,.7)'; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.moveTo(px, Y - X.arm * 0.4 * s); ctx.lineTo(cx, Y - X.arm * 0.4 * s); ctx.stroke();
+    }
+    organBlit(organCymbalBracket(q.d), sx(q.W), Y);
+    // the disc: the face-on brass sprite turned about its upright (squashed to its tilt), the rim's thickness showing
+    // on the far side as it turns, a sheen sweeping across it
+    const ew = q.ex / X.R, rx = q.ex * s, ry = X.R * s;
+    if (ew < 0.97) {
+      ctx.fillStyle = organLG(cx - rx, 0, cx + rx, 0, [P.gold[2], P.gold[3], '#4a2a0c']); organEll(ctx, cx - q.d * 3.2 * s * (1 - ew), Y, rx, ry); ctx.fill();
+      ctx.strokeStyle = P.gold[1]; ctx.lineWidth = 1 * s; ctx.beginPath(); ctx.ellipse(cx - q.d * 3.2 * s * (1 - ew), Y, rx, ry, 0, q.d > 0 ? Math.PI * 0.5 : -Math.PI * 0.5, q.d > 0 ? Math.PI * 1.5 : Math.PI * 0.5); ctx.stroke();
+    }
+    ctx.drawImage(face.cv, cx - (X.R + 2) * ew * s, Y - (X.R + 2) * s, (X.R + 2) * 2 * ew * s, (X.R + 2) * 2 * s);
+    {
+      const sw = st.swinging || st.crash != null ? pmod(G.t * 2.2, 1) : pmod(G.t * 0.35 + e * 0.3, 1), bx = cx - rx + sw * rx * 2.4 - rx * 0.2;
+      ctx.save(); organEll(ctx, cx, Y, rx, ry); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = organLG(bx - 9 * s, Y - ry, bx + 9 * s, Y + ry, ['rgba(255,250,220,0)', 'rgba(255,250,220,.55)', 'rgba(255,250,220,0)']);
+      ctx.beginPath(); ctx.moveTo(bx - 8 * s, Y - ry); ctx.lineTo(bx + 4 * s, Y - ry); ctx.lineTo(bx + 8 * s, Y + ry); ctx.lineTo(bx - 4 * s, Y + ry); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    // the tell: a glint running round the rim as it shivers
+    if (st.tell > 0) { const a = G.t * 9; organTwinkle(ctx, cx + Math.cos(a) * X.R * 0.75 * ew * s, Y + Math.sin(a) * X.R * 0.75 * s, (5 + 4 * st.tell) * s, 0.8 * st.tell); }
+    // the ring-out after a crash: shimmer rings round each disc, the face trembling with light
+    if (st.crash != null || st.back) {
+      const since = st.crash != null ? st.crash * ORGAN.cymbal.T.hold : ORGAN.cymbal.T.hold + 0.3, k = Math.exp(-since * 2.4);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let r = 0; r < 3; r++) { const u = pmod(G.t * 3 + r / 3, 1); ctx.strokeStyle = `rgba(255,242,200,${0.5 * k * (1 - u)})`; ctx.lineWidth = 1.4 * s; organEll(ctx, cx, Y, rx + (4 + 18 * u) * s, ry + (4 + 18 * u) * s); ctx.stroke(); }
+      ctx.restore();
+      organGlow(cx, Y, ry * 1.3, [255, 236, 180], 0.3 * k * (0.7 + 0.3 * Math.sin(G.t * 40)));
+    }
+  }
+  // the crash itself: a brief bright flash and a burst of short rays where the rims meet
+  if (st.crash != null && st.crash < 0.5) {
+    const u = st.crash / 0.5, k = 1 - u;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,248,214,${0.8 * k})`; ctx.lineWidth = 2 * s; ctx.lineCap = 'round'; ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const aa = i * TWO_PI / 10 + 0.3, r0 = (12 + 20 * u) * s, r1 = (22 + 34 * u) * s; ctx.moveTo(mid + Math.cos(aa) * r0, Y + Math.sin(aa) * r0 * 1.3); ctx.lineTo(mid + Math.cos(aa) * r1, Y + Math.sin(aa) * r1 * 1.3); }
+    ctx.stroke(); ctx.restore();
+    organGlow(mid, Y, (30 + 30 * u) * s, [255, 236, 170], 0.55 * k);
+  }
+}
+
+// ---- Falling Notes ----
+// a gilded clef bracket on a wall (screen orientation, the wall at x 0, into the shaft toward +d): a treble clef on
+// the left wall, a bass clef on the right, each on a scrolled gilt corbel
+function organClef(d) {
+  const P = ORGAN_P;
+  return organPiece('clef' + d, d > 0 ? -6 : -26, d > 0 ? 26 : 6, -40, 30, c => {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    // the corbel (into the wall)
+    c.fillStyle = organLG(0, 10, 0, 28, [P.old[0], P.old[1], P.old[2]], c); c.beginPath(); c.moveTo(-d * 4, 8); c.lineTo(d * 16, 8); c.quadraticCurveTo(d * 14, 18, d * 4, 26); c.lineTo(-d * 4, 28); c.closePath(); c.fill();
+    c.strokeStyle = P.old[3]; c.lineWidth = 0.8; c.stroke();
+    c.strokeStyle = 'rgba(255,240,200,.6)'; c.lineWidth = 0.7; c.beginPath(); c.arc(d * 7, 18, 3.4, 0, 5); c.stroke();
+    const stroke = (path, w) => { c.strokeStyle = P.gold[3]; c.lineWidth = w + 1.6; path(); c.stroke(); c.strokeStyle = P.gold[1]; c.lineWidth = w; path(); c.stroke(); c.strokeStyle = 'rgba(255,250,220,.75)'; c.lineWidth = w * 0.35; c.save(); c.translate(-0.6, -0.6); path(); c.stroke(); c.restore(); };
+    if (d > 0) {   // a treble clef
+      stroke(() => { c.beginPath(); c.moveTo(9, 6); c.bezierCurveTo(9, -10, 17, -18, 14, -32); c.bezierCurveTo(12, -40, 5, -30, 8, -20); c.bezierCurveTo(11, -8, 20, -6, 18, 2); c.bezierCurveTo(16, 8, 4, 8, 4, 0); c.bezierCurveTo(4, -6, 12, -8, 13, -2); }, 2.4);
+      organStud(c, 6, 9, 2.6, P.gold);
+    } else {       // a bass clef
+      stroke(() => { c.beginPath(); c.moveTo(-6, -16); c.bezierCurveTo(-6, -24, -18, -24, -18, -14); c.bezierCurveTo(-18, -2, -10, 4, -4, 8); }, 2.6);
+      organStud(c, -7, -16, 3, P.gold); organStud(c, -22, -20, 1.6, P.gold); organStud(c, -22, -10, 1.6, P.gold);
+    }
+  });
+}
+function drawOrganNotes(h) {
+  organCacheCheck();
+  const X = ORGAN.notes, T = organT(), st = h.st || organNotesState(h, T), Y = sy(h.alt), xl = sx(h.L + 14), xr = sx(h.R - 14), bk = organBeatK(), cols = h.cols;
+  // the firefly's perk: the next note's column traced down in his light
+  if (organFirefly()) for (const f of st.forming) {
+    const x = sx(cols[f.i]);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,236,140,${0.4 * f.f})`; ctx.lineWidth = 2 * s; ctx.setLineDash([3 * s, 7 * s]); ctx.lineDashOffset = T * 50 * s;
+    ctx.beginPath(); ctx.moveTo(x, Y + 6 * s); ctx.lineTo(x, sy(h.alt - X.drop)); ctx.stroke(); ctx.restore();
+  }
+  // the staff of light: five lines between the clefs, swaying a little and brightening on the beat
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let q = 0; q < 5; q++) {
+    const yy = Y + (q - 2) * 5.4 * s;
+    ctx.strokeStyle = `rgba(232,214,255,${0.32 + 0.3 * bk})`; ctx.lineWidth = 1.3 * s; ctx.beginPath();
+    for (let x = xl; x <= xr + 1; x += 14 * s) { const w = Math.sin((x - xl) * 0.02 / s + T * 2 + q * 0.4) * 1.6 * s * Math.sin(Math.PI * (x - xl) / Math.max(1, xr - xl)); x === xl ? ctx.moveTo(x, yy + w) : ctx.lineTo(x, yy + w); }
+    ctx.stroke();
+  }
+  organGlow((xl + xr) / 2, Y, (xr - xl) * 0.45, [200, 170, 255], 0.08 + 0.1 * bk);
+  ctx.restore();
+  organBlit(organClef(1), sx(h.L), Y); organBlit(organClef(-1), sx(h.R), Y);
+  // the notes forming on the staff: ghost outlines growing into gold, a beat before they drop
+  const NK = 2.2, sp = organNoteSprite(2, NK), spB = sp;
+  for (const f of st.forming) {
+    const x = sx(cols[f.i]), k = f.f;
+    organGlow(x, Y, (16 + 14 * k) * s, [255, 226, 170], 0.25 + 0.4 * k);
+    ctx.globalAlpha = 0.15 + 0.55 * k * k; organNoteBlit(sp, NK, x, Y, s * (0.55 + 0.45 * k), Math.sin(G.t * 20) * 0.08 * k); ctx.globalAlpha = 1;
+  }
+  // the falling notes: solid gold, a streak of light above each, wobbling as they drop
+  for (const f of st.falling) {
+    const x = sx(cols[f.i]), y = sy(f.a), v = X.g * f.tau;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = organLG(0, y - Math.min(90, v * 0.09) * s, 0, y, ['rgba(255,236,190,0)', 'rgba(255,236,190,.42)']); ctx.fillRect(x - 6 * s, y - Math.min(90, v * 0.09) * s, 12 * s, Math.min(90, v * 0.09) * s);
+    ctx.restore();
+    organGlow(x, y, 22 * s, [255, 220, 150], 0.35);
+    organNoteBlit(sp, NK, x, y, s, Math.sin(f.tau * 14 + f.i) * 0.08);
+  }
+}
+DRAW.organPipe = drawOrganPipe; DRAW.organDrum = drawOrganDrum; DRAW.organCymbal = drawOrganCymbal; DRAW.organNotes = drawOrganNotes;
+// ---- the cave's scene ----
+// Walls: the cave's basalt columns, each relief panel one stacked drum of a hexagonal column (two facets showing, a
+// chamfered joint between drums, a chip here and there), standing in a carved oak organ case whose gilt façade pipes
+// rise behind them (seen on wider screens). Along the shaft a real lip: an oak moulding capped with a gilt bead. Set into
+// most drums something that changes with the section (candle sconces in the Narthex, little flue pipes in the Trumpet
+// Gallery, copper bosses in the Drum Loft, gilt rosettes in the Cymbal Nave, carved staves in Falling Notes, oak
+// tracery in the Choir Rest, ivory stop knobs with ruby lamps in Fortissimo). Flames flicker, pipe mouths and stop lamps
+// glow on the beat (live, from a list each tile keeps). All drawn once into cached tiles (ORGAN_TILE high) and blitted.
+const ORGAN_TILE = 200;
+const ORGAN_DECOR = { 'The Narthex': 'candle', 'Trumpet Gallery': 'pipes', 'Drum Loft': 'boss', 'Cymbal Nave': 'rose', 'Falling Notes': 'staff', 'The Choir Rest': 'oak', 'Fortissimo': 'stops', 'The Grand Organ': 'pipes' };
+function organSecName(a) {
+  const S = G.level && G.level.sections; if (!S) return 'The Narthex';
+  let n = S[0].name; for (const q of S) if (a >= q.a0) n = q.name; return n;
+}
+const organDecorAt = a => ORGAN_DECOR[organSecName(a)] || 'candle';
+// Each section's light and colour: the backdrop's gradient (top, middle, bottom), a multiply tint laid over the layers,
+// the colour of its light pools, how strong they are, and stars (the starry vault over Falling Notes)
+const ORGAN_MOOD = {
+  'The Narthex':     { g: [[132, 92, 104], [84, 56, 82], [34, 22, 42]], tint: [255, 214, 176], pool: [255, 190, 110], pk: 0.2 },
+  'Trumpet Gallery': { g: [[78, 106, 170], [44, 60, 122], [16, 22, 54]], tint: [176, 204, 255], pool: [196, 220, 255], pk: 0.18 },
+  'Drum Loft':       { g: [[140, 82, 70], [86, 46, 56], [34, 16, 28]], tint: [255, 176, 140], pool: [255, 150, 96], pk: 0.2 },
+  'Cymbal Nave':     { g: [[132, 136, 162], [78, 80, 110], [28, 28, 46]], tint: [222, 226, 244], pool: [236, 240, 255], pk: 0.17 },
+  'Falling Notes':   { g: [[44, 44, 108], [26, 24, 74], [8, 8, 30]], tint: [140, 140, 220], pool: [176, 166, 255], pk: 0.15, stars: 1 },
+  'The Choir Rest':  { g: [[128, 86, 72], [76, 48, 58], [30, 18, 30]], tint: [255, 206, 160], pool: [255, 200, 120], pk: 0.22 },
+  'Fortissimo':      { g: [[128, 40, 64], [76, 20, 46], [28, 6, 20]], tint: [255, 136, 146], pool: [255, 96, 90], pk: 0.18 },
+  'The Grand Organ': { g: [[150, 112, 84], [92, 64, 70], [36, 24, 36]], tint: [255, 226, 176], pool: [255, 214, 140], pk: 0.22 },
+};
+// the mood at height a, eased across 300 units at each section's start
+function organMoodAt(a) {
+  const S = G.level && G.level.sections, D = ORGAN_MOOD['The Narthex'];
+  if (!S) return D;
+  let i = 0; for (let k = 0; k < S.length; k++) if (a >= S[k].a0) i = k;
+  const cur = ORGAN_MOOD[S[i].name] || D, prev = i > 0 ? ORGAN_MOOD[S[i - 1].name] || D : cur, k = smooth(S[i].a0 - 150, S[i].a0 + 150, a);
+  if (k >= 1 || prev === cur) return cur;
+  const L = (x, y) => Array.isArray(x) ? x.map((v, j) => Array.isArray(v) ? L(v, y[j]) : lerp(v, y[j], k)) : lerp(x, y, k);
+  return { g: L(prev.g, cur.g), tint: L(prev.tint, cur.tint), pool: L(prev.pool, cur.pool), pk: L(prev.pk, cur.pk), stars: lerp(prev.stars || 0, cur.stars || 0, k) };
+}
+const organSpan = () => { const pad = viewH * 0.22 + 60; return [-ox / s - pad, (cssW - ox) / s + pad]; };
+function organWallTile(side, k) {
+  const C = ORGAN_CACHE.walls, key = side + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = organRenderWallTile(side, k); C.set(key, t);
+  while (C.size > 34) C.delete(C.keys().next().value);
+  return t;
+}
+// a candle flame (screen px at (x, y) its base, r its height): a cached teardrop, flickering, with a warm glow
+function organFlame(x, y, r, ph, k = 1, c = ctx) {
+  const sp = organSprite('flame', 24, 48, cc => {
+    cc.fillStyle = organRG(12, 34, 20, ['rgba(255,250,220,1)', 'rgba(255,214,110,1)', 'rgba(255,140,60,.9)', 'rgba(255,110,40,0)'], cc);
+    cc.beginPath(); cc.moveTo(12, 2); cc.bezierCurveTo(16, 16, 22, 26, 20, 36); cc.quadraticCurveTo(18, 46, 12, 46); cc.quadraticCurveTo(6, 46, 4, 36); cc.bezierCurveTo(2, 26, 8, 16, 12, 2); cc.fill();
+    cc.fillStyle = 'rgba(255,255,245,.95)'; organEll(cc, 12, 37, 3.4, 6); cc.fill();
+    cc.fillStyle = 'rgba(120,150,255,.55)'; organEll(cc, 12, 44, 3, 2); cc.fill();
+  });
+  const fl = 0.86 + 0.14 * Math.sin(G.t * 13 + ph) * Math.sin(G.t * 7.3 + ph * 2), w = r * 0.5, h = r * fl;
+  organGlow(x, y - h * 0.55, r * 2.6, ORGAN_P.candle, 0.22 * k, c);
+  c.save(); c.translate(x, y); c.rotate(Math.sin(G.t * 3 + ph) * 0.06); c.drawImage(sp.cv, -w / 2, -h, w, h); c.restore();
+}
+// ---- what is set into a column drum (c in tile px, (x, y) the spot, k = s, dir into the wall) ----
+function organDecorCandle(c, x, y, k, dir) {
+  const P = ORGAN_P;
+  // a little gilt sconce: a back plate on the column, a drip pan and an ivory candle (its flame is live)
+  c.fillStyle = 'rgba(20,10,40,.4)'; organEll(c, x + 1.2 * k, y + 1.6 * k, 4.4 * k, 9 * k); c.fill();
+  c.fillStyle = organLG(x - 4 * k, y - 9 * k, x + 4 * k, y + 9 * k, [P.gold[0], P.gold[1], P.gold[2]], c); organEll(c, x, y, 4 * k, 8.6 * k); c.fill();
+  c.strokeStyle = P.gold[3]; c.lineWidth = 0.6 * k; c.stroke();
+  c.fillStyle = organLG(0, y - 2 * k, 0, y + 1 * k, [P.gold[0], P.gold[2]], c); organEll(c, x - dir * 3 * k, y - 0.6 * k, 5.4 * k, 1.6 * k); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.5 * k; c.stroke();
+  c.fillStyle = organLG(x - dir * 3 * k - 1.8 * k, 0, x - dir * 3 * k + 1.8 * k, 0, [P.ivory[0], P.ivory[1], P.ivory[2]], c); c.fillRect(x - dir * 3 * k - 1.8 * k, y - 11 * k, 3.6 * k, 10.4 * k);
+  c.fillStyle = 'rgba(255,255,250,.9)'; organEll(c, x - dir * 3 * k - 1 * k, y - 10.4 * k, 0.9 * k, 1.8 * k); c.fill();
+}
+function organDecorPipes(c, x, y, k, dir, n = 3) {
+  const P = ORGAN_P;
+  // a niche in the column with little gold flue pipes standing in it, their mouths a dark slit under a lit lip
+  c.fillStyle = organLG(0, y - 22 * k, 0, y + 22 * k, ['rgba(20,12,40,.75)', 'rgba(40,26,70,.6)'], c); c.beginPath(); c.roundRect(x - 7 * k, y - 22 * k, 14 * k, 44 * k, [7 * k, 7 * k, 2 * k, 2 * k]); c.fill();
+  c.strokeStyle = 'rgba(214,200,255,.4)'; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x + 7 * k, y + 21 * k); c.lineTo(x + 7 * k, y - 15 * k); c.stroke();
+  for (let i = 0; i < n; i++) {
+    const px = x + (i - (n - 1) / 2) * 4.2 * k, top = y - (14 - Math.abs(i - (n - 1) / 2) * 5) * k, w = 1.8 * k;
+    c.fillStyle = organLG(px - w, 0, px + w, 0, [P.gold[1], P.gold[0], P.gold[2]], c); c.fillRect(px - w, top, w * 2, y + 21 * k - top);
+    c.strokeStyle = P.gold[3]; c.lineWidth = 0.4 * k; c.strokeRect(px - w, top, w * 2, y + 21 * k - top);
+    const my = y + 10 * k; c.fillStyle = '#2a1830'; c.beginPath(); c.moveTo(px - w * 0.8, my + 2.4 * k); c.lineTo(px, my - 0.4 * k); c.lineTo(px + w * 0.8, my + 2.4 * k); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,250,220,.8)'; c.lineWidth = 0.4 * k; c.beginPath(); c.moveTo(px - w * 0.8, my - 0.6 * k); c.lineTo(px, my - 2.6 * k); c.lineTo(px + w * 0.8, my - 0.6 * k); c.stroke();
+  }
+}
+function organDecorBoss(c, x, y, k) {
+  const P = ORGAN_P, r = 6.5 * k;
+  c.fillStyle = 'rgba(20,10,40,.4)'; organCirc(c, x + 1.2 * k, y + 1.4 * k, r + 2 * k); c.fill();
+  c.strokeStyle = organLG(x - r, y - r, x + r, y + r, [P.gold[0], P.gold[1], P.gold[2]], c); c.lineWidth = 2.4 * k; organCirc(c, x, y, r + 0.6 * k); c.stroke();
+  c.fillStyle = organRG(x - r * 0.4, y - r * 0.4, r * 1.4, [P.copper[0], P.copper[1], P.copper[2]], c); organCirc(c, x, y, r - 0.6 * k); c.fill();
+  c.strokeStyle = 'rgba(110,40,20,.5)'; c.lineWidth = 0.6 * k; organCirc(c, x, y, r * 0.55); c.stroke();
+  for (let i = 0; i < 6; i++) { const a = i * TWO_PI / 6; organStud(c, x + Math.cos(a) * (r + 0.6 * k), y + Math.sin(a) * (r + 0.6 * k), 0.9 * k); }
+  organSheen(c, x, y, r, 0.6);
+}
+function organRosette(c, x, y, r, k, C = ORGAN_P.gold) {
+  for (let i = 0; i < 8; i++) {
+    const a = i * TWO_PI / 8 + 0.2, px = x + Math.cos(a) * r * 0.55, py = y + Math.sin(a) * r * 0.55;
+    c.fillStyle = organRG(px - r * 0.15, py - r * 0.15, r * 0.5, [C[0], C[1], C[2]], c); organEll(c, px, py, r * 0.42, r * 0.22, a); c.fill();
+    c.strokeStyle = C[3]; c.lineWidth = 0.4 * k; c.stroke();
+  }
+  c.fillStyle = organRG(x - r * 0.12, y - r * 0.12, r * 0.4, ['#ffb0c0', '#e0405c', '#8c1830'], c); organCirc(c, x, y, r * 0.26); c.fill();
+  c.fillStyle = 'rgba(255,255,255,.8)'; organCirc(c, x - r * 0.08, y - r * 0.1, r * 0.07); c.fill();
+}
+function organDecorStaff(c, x, y, k, j) {
+  // five gilt lines inlaid up the column and a carved note on them
+  const P = ORGAN_P;
+  for (let q = 0; q < 5; q++) { const xx = x + (q - 2) * 2.4 * k; c.strokeStyle = 'rgba(60,30,30,.5)'; c.lineWidth = 0.9 * k; c.beginPath(); c.moveTo(xx + 0.4 * k, y - 26 * k); c.lineTo(xx + 0.4 * k, y + 26 * k); c.stroke(); c.strokeStyle = P.gold[1]; c.lineWidth = 0.6 * k; c.beginPath(); c.moveTo(xx, y - 26 * k); c.lineTo(xx, y + 26 * k); c.stroke(); }
+  c.save(); c.translate(x - 2 * k, y + (j - 0.5) * 16 * k); c.rotate(-Math.PI / 2); organNoteArt(c, 0.8 * k, (j * 3) | 0); c.restore();
+}
+function organDecorStop(c, x, y, k) {
+  // an ivory stop knob on an ebony shank, its face engraved (the lamp beside it is live)
+  const P = ORGAN_P, r = 5 * k;
+  c.fillStyle = 'rgba(20,10,40,.45)'; organCirc(c, x + 1.4 * k, y + 1.6 * k, r + 1.4 * k); c.fill();
+  c.fillStyle = organLG(x - r, y - r, x + r, y + r, P.ebony, c); organCirc(c, x, y, r + 1.4 * k); c.fill();
+  c.fillStyle = organRG(x - r * 0.4, y - r * 0.4, r * 1.3, P.ivory, c); organCirc(c, x, y, r); c.fill();
+  c.strokeStyle = 'rgba(150,120,80,.6)'; c.lineWidth = 0.5 * k; organCirc(c, x, y, r * 0.66); c.stroke();
+  c.fillStyle = 'rgba(110,80,60,.65)'; c.fillRect(x - r * 0.4, y - 0.4 * k, r * 0.8, 0.8 * k);
+  organSheen(c, x, y, r, 0.7);
+}
+function organRenderWallTile(side, k) {
+  const a0 = k * ORGAN_TILE - 4, a1 = (k + 1) * ORGAN_TILE + 4, dir = side ? 1 : -1, wx = a => side ? rightWall(a) : leftWall(a), P = ORGAN_P, L = G.level;
+  const rel = a => (L && L.reliefAt ? L.reliefAt(a, side) : 0), bx = a => wx(a) + dir * rel(a);
+  let reach = side ? Infinity : -Infinity;
+  for (let a = a0; a <= a1; a += 4) reach = side ? Math.min(reach, wx(a)) : Math.max(reach, wx(a));
+  const [s0, s1] = organSpan(), xa = side ? reach - 18 : s0, xb = side ? s1 : reach + 18;
+  const sp = organCanvas((xb - xa) * s, (a1 - a0) * s), c = sp.c;
+  sp.xa = xa; sp.a1 = a1; sp.live = [];
+  const X = x => (x - xa) * s, Y = a => (a1 - a) * s, A0 = a0 - 70, A1 = a1 + 70, seed = (G.level && G.level.seed) || 0;
+  const pts = [], bpts = []; for (let a = A0; a <= A1 + 3; a += 3) { pts.push([X(wx(a)), Y(a), a]); bpts.push([X(bx(a)), Y(a), a]); }
+  const at = (a, d) => [X(wx(a) + dir * d), Y(a)], atB = (a, d) => [X(bx(a) + dir * d), Y(a)];
+  const trace = (off = 0, from = A0, to = A1 + 3, list = pts) => { c.beginPath(); let first = true; for (const [x, y, a] of list) { if (a < from - 1.5 || a > to + 1.5) continue; const xx = x + dir * off * s; first ? c.moveTo(xx, y) : c.lineTo(xx, y); first = false; } };
+  const edge = side ? X(xb) + 40 : X(xa) - 40;
+  const body = () => { c.beginPath(); c.moveTo(edge, Y(A0)); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(edge, Y(A1 + 3)); c.closePath(); };
+  body(); c.fillStyle = 'rgb(44,32,76)'; c.fill();
+  c.save(); body(); c.clip();
+  const fl = organDecorAt((a0 + a1) / 2);
+  // ---- deep in the wall (wide screens): the oak organ case and its gilt façade pipes, straight up the cave's line
+  {
+    const O = P.oak;
+    // the case's pilaster: carved oak with a gilt bead each side
+    c.lineWidth = 16 * s; c.strokeStyle = O[2]; trace(34, A0, A1 + 3, bpts); c.stroke();
+    c.lineWidth = 12 * s; c.strokeStyle = O[1]; trace(34, A0, A1 + 3, bpts); c.stroke();
+    c.lineWidth = 1 * s; c.strokeStyle = 'rgba(255,200,170,.3)'; trace(side ? 30 : 38, A0, A1 + 3, bpts); c.stroke();
+    for (const o of [26.5, 41.5]) { c.lineWidth = 2.2 * s; c.strokeStyle = P.gold[2]; trace(o, A0, A1 + 3, bpts); c.stroke(); c.lineWidth = 1 * s; c.strokeStyle = P.gold[0]; trace(o - dir * 0.3, A0, A1 + 3, bpts); c.stroke(); }
+    // gilt façade pipes behind (a flat of pipes, their mouths in a gentle V across the flat)
+    const flat0 = 48, pw = 9, gap = 3, n = 9;
+    c.fillStyle = 'rgb(30,20,52)'; { c.beginPath(); const p0 = atB(A0, flat0 - 4), p1 = atB(A1, flat0 - 4); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.lineTo(edge, p1[1]); c.lineTo(edge, p0[1]); c.closePath(); c.fill(); }
+    for (let i = 0; i < n; i++) {
+      const off = flat0 + i * (pw * 2 + gap) + pw, dk = 0.12 * i;   // further into the wall: deeper in the gloom
+      c.lineWidth = pw * 2 * s; c.lineCap = 'butt';
+      const [px0] = atB((a0 + a1) / 2, off - pw), [px1] = atB((a0 + a1) / 2, off + pw), xl = Math.min(px0, px1), xr = Math.max(px0, px1);
+      c.strokeStyle = organLG(xl, 0, xr, 0, [organCol(organLift(P.goldR[1], -40 * dk)), organCol(organLift(P.goldR[0], -60 * dk)), organCol(organLift(P.goldR[1], -50 * dk)), organCol(organLift(P.goldR[2], -30 * dk))], c);
+      trace(off, A0, A1 + 3, bpts); c.stroke(); c.lineCap = 'round';
+      c.lineWidth = 0.8 * s; c.strokeStyle = P.gold[3]; trace(off - pw, A0, A1 + 3, bpts); c.stroke(); trace(off + pw, A0, A1 + 3, bpts); c.stroke();
+      // a mouth on this pipe in this tile (the façade's V repeats every 600 up the cave)
+      const ma = Math.floor((a0 + a1) / 2 / 600) * 600 + 300 + Math.abs(i - 4) * 26 - 60;
+      if (ma > A0 && ma < A1) {
+        const [mx, my] = atB(ma, off), w = pw * 0.7 * s;
+        c.fillStyle = '#24142e'; c.beginPath(); c.moveTo(mx - w, my + 4 * s); c.lineTo(mx, my - 3 * s); c.lineTo(mx + w, my + 4 * s); c.lineTo(mx + w, my + 7 * s); c.lineTo(mx - w, my + 7 * s); c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(255,248,214,.85)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(mx - w, my + 2.4 * s); c.lineTo(mx, my - 4.6 * s); c.lineTo(mx + w, my + 2.4 * s); c.stroke();
+        sp.live.push({ type: 'mouth', x: bx(ma) + dir * off, a: ma - 4, j: i / n });
+      }
+    }
+  }
+  // ---- the columns: one drum per relief panel (lavender lit facet toward the shaft, a shadowed facet behind)
+  if (L && L.panelOf) {
+    for (let i = L.panelOf(A0, side) - 1; i <= L.panelOf(A1, side) + 1; i++) {
+      const Pn = organPanel(i, side, seed), Nn = organPanel(i + 1, side, seed), pa0 = Pn.a0 + 1.5, pa1 = Nn.a0 - 1.5, j = Pn.j, dp = 25;
+      if (pa1 < A0 - 40 || pa0 > A1 + 40) continue;
+      const tone = (j * 7.3) % 1, drum = () => { trace(0, pa0, pa1); const [xe, ye] = atB(pa1, dp), [xs, ys] = atB(pa0, dp); c.lineTo(xe, ye); c.lineTo(xs, ys); c.closePath(); };
+      const [tx, ty] = at(pa1, 0), [ux, uy] = atB(pa0, dp);
+      const T0 = tone < 0.33 ? ['#b0a2e2', '#6c5ca2', '#2e2456'] : tone < 0.66 ? ['#b8aae6', '#7464aa', '#32285c'] : ['#a698da', '#64569a', '#2a2050'];
+      drum(); c.fillStyle = organLG(side ? tx : ux, ty, side ? ux : tx, uy, side ? T0 : [T0[2], T0[1], T0[0]], c); c.fill();
+      c.save(); drum(); c.clip();
+      // the facets: a ridge between the near facet and the far one (a lit line over a dark furrow), the far facet darker
+      { c.strokeStyle = 'rgba(30,20,60,.5)'; c.lineWidth = 9 * s; trace(18 + 4.5, pa0 - 3, pa1 + 3, bpts); c.stroke();
+        c.strokeStyle = 'rgba(24,16,50,.65)'; c.lineWidth = 1.2 * s; trace(13.5, pa0 - 3, pa1 + 3, bpts); c.stroke();
+        c.strokeStyle = 'rgba(214,202,255,.42)'; c.lineWidth = 0.9 * s; trace(12.5, pa0 - 3, pa1 + 3, bpts); c.stroke(); }
+      // the joint's chamfer under the drum above (dark) and the lit top of this drum's chamfer
+      { const [x0, y0] = at(pa1, 0), [x1, y1] = atB(pa1, dp); c.strokeStyle = 'rgba(20,12,44,.55)'; c.lineWidth = 3 * s; c.beginPath(); c.moveTo(x0, y0 + 1.4 * s); c.lineTo(x1, y1 + 1.4 * s); c.stroke(); }
+      { const [x0, y0] = at(pa0, 0), [x1, y1] = atB(pa0, dp); c.fillStyle = organLG(0, y0 - 10 * s, 0, y0, ['rgba(30,20,60,0)', 'rgba(30,20,60,.35)'], c); c.fillRect(Math.min(x0, x1) - 4, y0 - 10 * s, Math.abs(x1 - x0) + 8, 10 * s); }
+      // a chip off the drum's corner and a few hairline cracks (lit edge, dark crack)
+      if (j > 0.55) { const ca = lerp(pa0, pa1, 0.2 + 0.6 * hash2(i, seed + 811)), [cx, cy] = at(ca, 0); c.fillStyle = 'rgba(40,28,80,.85)'; c.beginPath(); c.moveTo(cx, cy - 6 * s); c.lineTo(cx + dir * 5 * s, cy - 1 * s); c.lineTo(cx, cy + 4 * s); c.closePath(); c.fill(); c.strokeStyle = 'rgba(220,210,255,.5)'; c.lineWidth = 0.7 * s; c.beginPath(); c.moveTo(cx, cy - 6 * s); c.lineTo(cx + dir * 5 * s, cy - 1 * s); c.stroke(); }
+      for (let q = 0; q < 2; q++) { const h = hash2(i * 3 + q, seed + 813 + side); if (h > 0.5) continue; const ca = lerp(pa0, pa1, 0.15 + 0.7 * h * 2), [cx, cy] = at(ca, 3 + 8 * h); c.strokeStyle = 'rgba(28,18,56,.6)'; c.lineWidth = 0.8 * s; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + dir * 4 * s, cy + 5 * s); c.lineTo(cx + dir * 3 * s, cy + 11 * s); c.stroke(); c.strokeStyle = 'rgba(214,202,255,.3)'; c.beginPath(); c.moveTo(cx - 0.8 * s, cy - 0.6 * s); c.lineTo(cx + dir * 3.2 * s, cy + 4.4 * s); c.stroke(); }
+      // what is set into it
+      const ma = (pa0 + pa1) / 2, [mx, my] = at(ma, 7), pick = hash2(i, seed + 731 + side), room = pa1 - pa0;
+      if (room > 50) {
+        if (fl === 'candle' && pick < 0.45) { organDecorCandle(c, mx, my + 6 * s, s, dir); sp.live.push({ type: 'flame', x: wx(ma) + dir * 7 - dir * 3, a: ma + 5, j }); }
+        else if (fl === 'pipes' && pick < 0.7) { organDecorPipes(c, mx, my, s, dir); sp.live.push({ type: 'mouth', x: wx(ma) + dir * 7, a: ma - 11, j, small: 1 }); }
+        else if (fl === 'boss' && pick < 0.6) organDecorBoss(c, mx, my, s);
+        else if (fl === 'rose' && pick < 0.6) organRosette(c, mx, my, 9 * s, s);
+        else if (fl === 'staff' && pick < 0.7) organDecorStaff(c, mx, my, s, j);
+        else if (fl === 'oak' && pick < 0.7) { organOakPanel(c, mx - 6 * s, my - 22 * s, mx + 6 * s, my + 22 * s, 2 * s); organGothic(c, mx, my - 16 * s, my + 8 * s, 4 * s, 0.4); if (pick < 0.3) { organDecorCandle(c, mx, my + 34 * s, s, dir); sp.live.push({ type: 'flame', x: wx(ma) + dir * 4, a: ma - 29, j }); } }
+        else if (fl === 'stops' && pick < 0.85) { organDecorStop(c, mx, my - 8 * s, s); organDecorStop(c, mx, my + 8 * s, s); sp.live.push({ type: 'lamp', x: wx(ma) + dir * 7, a: ma + 22, j }); }
+      }
+      c.restore();
+      drum(); c.strokeStyle = 'rgba(40,28,80,.9)'; c.lineWidth = 0.9 * s; c.stroke();
+    }
+  }
+  c.restore();
+  // ---- the lip: an oak moulding along the shaft capped with a gilt bead (lit where it faces up)
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.lineWidth = 12 * s; c.strokeStyle = P.oak[3]; trace(6); c.stroke();
+  c.lineWidth = 10 * s; c.strokeStyle = P.oak[1]; trace(6); c.stroke();
+  c.lineWidth = 3 * s; c.strokeStyle = P.oak[0]; trace(side ? 4.6 : 7.4); c.stroke();
+  c.lineWidth = 1 * s; c.strokeStyle = 'rgba(255,200,170,.45)'; trace(side ? 3.6 : 8.4); c.stroke();
+  c.lineWidth = 1.4 * s; c.strokeStyle = 'rgba(40,16,14,.5)'; trace(10.6); c.stroke();
+  c.lineWidth = 5.4 * s; c.strokeStyle = P.gold[3]; trace(2.2); c.stroke();
+  c.lineWidth = 4.2 * s; c.strokeStyle = P.gold[1]; trace(2.2); c.stroke();
+  c.lineWidth = 1.6 * s; c.strokeStyle = P.gold[0]; trace(side ? 1.6 : 2.8); c.stroke();
+  c.lineWidth = 0.8 * s; c.strokeStyle = 'rgba(255,255,236,.95)'; trace(side ? 1.2 : 3.2); c.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], slope = (x1 - x0) * dir;
+    if (slope <= 0.3 * s) continue;
+    c.strokeStyle = `rgba(255,248,214,${clamp(slope / s * 0.4, 0, 0.9)})`; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+  }
+  // gilt studs along the moulding
+  for (let a = Math.ceil(A0 / 34) * 34; a < A1; a += 34) { const [x, y] = at(a, 7); organStud(c, x, y, 1.5 * s); }
+  return sp;
+}
+function drawOrganWalls() {
+  organCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, T = ORGAN_TILE, bk = organBeatK();
+  for (const side of [0, 1]) for (let k = Math.floor(bot / T); k * T < top; k++) {
+    const t = organWallTile(side, k);
+    ctx.drawImage(t.cv, ox + t.xa * s, sy(t.a1), t.w, t.h);
+    for (const q of t.live) {
+      const y = sy(q.a); if (y < -30 || y > H + 30) continue;
+      const x = sx(q.x);
+      if (q.type === 'flame') organFlame(x, y, 9 * s, q.j * 20);
+      else if (q.type === 'mouth') organGlow(x, y, (q.small ? 9 : 12) * s, [255, 226, 160], (q.small ? 0.35 : 0.25) * organBeatK(-q.j * 0.2));
+      else if (q.type === 'lamp') { const on = q.j > 0.5 ? bk : organBeatK(ORGAN.beat / 2); organGlow(x, y, 8 * s, [255, 90, 110], 0.2 + 0.6 * on); ctx.fillStyle = organCol([255, 120 + 100 * on, 140 + 80 * on]); organCirc(ctx, x, y, 1.8 * s); ctx.fill(); }
+    }
+  }
+  // render one tile ahead each frame (above the screen, where you are heading)
+  const k1 = Math.floor((top + 40) / T);
+  for (let k = k1; k <= k1 + 2; k++) { let done = false; for (const side of [0, 1]) if (!ORGAN_CACHE.walls.has(side + ':' + k)) { organWallTile(side, k); done = true; break; } if (done) break; }
+}
+
+// ---- the backdrop: the cavern's nave rising into violet dusk (calm, hazed, lower in contrast). Three parallax layers
+// drawn once per tile and blitted: the far (0.06) great basalt column clusters, a rose window of rock with lavender
+// light pouring through, far organ towers whose mouths glow on the beat, gothic rock arches; the middle (0.18) hexagonal
+// columns with stone balconies and candles, ribbons of a staff strung between them; the near (0.38) each section's set
+// dressing on basalt ledges (candelabra, trumpets en chamade, timpani, hanging cymbals, a staff with big notes, choir
+// stalls, stop jambs with lamps). Flames flicker, mouths and lamps pulse on the beat.
+const ORGAN_LAYERS = [{ f: 0.06, LT: 600, id: 0 }, { f: 0.18, LT: 480, id: 1 }, { f: 0.38, LT: 420, id: 2 }];
+const ORGAN_HAZE = [70, 56, 120];
+const organMix = (C, k) => C.map(q => { const v = typeof q !== 'string' ? q : q[0] === '#' ? organHex(q) : q.match(/\d+/g).slice(0, 3).map(Number); return organCol(v.map((x, i) => lerp(x, ORGAN_HAZE[i], k))); });
+function organLayerTile(L, k) {
+  const C = ORGAN_CACHE.layers, key = L.id + ':' + k;
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  const [x0, x1] = organSpan(), pa0 = k * L.LT - 3, pa1 = (k + 1) * L.LT + 3;
+  t = organCanvas((x1 - x0) * s, (pa1 - pa0) * s); t.xa = x0; t.pa1 = pa1;
+  const X = x => (x - x0) * s, Y = pa => (pa1 - pa) * s;
+  t.c.lineJoin = 'round'; t.c.lineCap = 'round';
+  const col = { live: [] };
+  for (let kk = k - 1; kk <= k + 1; kk++) organDrawLayer(t.c, L, kk, X, Y, x0, x1, col);
+  t.live = col.live.filter(g => g.a >= pa0 - 160 && g.a < pa1 + 160 && Math.floor(g.a / L.LT) === k);
+  { t.c.globalCompositeOperation = 'source-atop'; t.c.fillStyle = ['rgba(90,84,112,.48)', 'rgba(90,84,112,.34)', 'rgba(90,84,112,.26)'][L.id]; t.c.fillRect(0, 0, t.w, t.h); t.c.globalCompositeOperation = 'source-over'; }
+  C.set(key, t); while (C.size > 24) C.delete(C.keys().next().value);
+  return t;
+}
+// a hexagonal basalt column standing straight up (c tile px; x its middle, w half its width; yA top, yB bottom px):
+// a lit facet, a face, a shadowed facet, drum joints every `dj` px
+function organHexColumn(c, x, yA, yB, w, k, mute, dj = 0, ph = 0) {
+  const B = organMix(ORGAN_P.basalt, mute);
+  c.fillStyle = organLG(x - w, 0, x + w, 0, [organMix(['#e4dcff'], mute)[0], B[0], B[1], B[2], B[3], organMix(['#1a1236'], mute)[0]], c); c.fillRect(x - w, yA, w * 2, yB - yA);
+  c.strokeStyle = B[3]; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x - w, yA); c.lineTo(x - w, yB); c.moveTo(x + w, yA); c.lineTo(x + w, yB); c.stroke();
+  c.strokeStyle = organMix(['#e0d6ff'], mute)[0]; c.globalAlpha = 0.5; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x - w * 0.45, yA); c.lineTo(x - w * 0.45, yB); c.stroke(); c.globalAlpha = 1;
+  c.strokeStyle = B[3]; c.globalAlpha = 0.6; c.beginPath(); c.moveTo(x + w * 0.45, yA); c.lineTo(x + w * 0.45, yB); c.stroke(); c.globalAlpha = 1;
+  if (dj > 0) for (let y = yA + pmod(ph, dj); y < yB; y += dj) {
+    c.strokeStyle = B[3]; c.lineWidth = 1.4 * k; c.beginPath(); c.moveTo(x - w, y); c.lineTo(x - w * 0.45, y + 2 * k); c.lineTo(x + w * 0.45, y + 2 * k); c.lineTo(x + w, y); c.stroke();
+    c.strokeStyle = organMix(['#e0d6ff'], mute)[0]; c.globalAlpha = 0.45; c.lineWidth = 0.8 * k; c.beginPath(); c.moveTo(x - w, y + 1.4 * k); c.lineTo(x - w * 0.45, y + 3.4 * k); c.lineTo(x + w * 0.45, y + 3.4 * k); c.stroke(); c.globalAlpha = 1;
+  }
+}
+// a flat of organ pipes in an oak case with a gothic crest (c tile px; x its middle, y its foot; w half width, h height)
+function organPipeFlat(c, x, y, w, h, k, mute, n = 7) {
+  const O = organMix(ORGAN_P.oak, mute), Gd = organMix(ORGAN_P.gold, mute);
+  // the case: a plinth, two towers and a crest
+  c.fillStyle = organLG(0, y - h * 0.3, 0, y, [O[0], O[1], O[2]], c); c.fillRect(x - w - 6 * k, y - h * 0.28, w * 2 + 12 * k, h * 0.28);
+  c.strokeStyle = O[3]; c.lineWidth = 0.8 * k; c.strokeRect(x - w - 6 * k, y - h * 0.28, w * 2 + 12 * k, h * 0.28);
+  for (const e of [-1, 1]) { c.fillStyle = organLG(x + e * w - 6 * k, 0, x + e * w + 6 * k, 0, [O[0], O[1], O[2]], c); c.fillRect(x + e * w - 6 * k, y - h * 1.05, 12 * k, h * 1.05); c.strokeStyle = O[3]; c.strokeRect(x + e * w - 6 * k, y - h * 1.05, 12 * k, h * 1.05); c.fillStyle = organLG(0, y - h * 1.2, 0, y - h * 1.05, [Gd[0], Gd[1], Gd[2]], c); c.beginPath(); c.moveTo(x + e * w - 7 * k, y - h * 1.05); c.lineTo(x + e * w, y - h * 1.2); c.lineTo(x + e * w + 7 * k, y - h * 1.05); c.closePath(); c.fill(); }
+  // the pipes, tallest in the middle (a V of mouths)
+  const pw = (w * 2 - 8 * k) / n;
+  for (let i = 0; i < n; i++) {
+    const px = x - w + 4 * k + pw * (i + 0.5), u = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2), top = y - h * (1 - 0.3 * u), r = pw * 0.42;
+    c.fillStyle = organLG(px - r, 0, px + r, 0, [Gd[1], Gd[0], Gd[1], Gd[2]], c); c.fillRect(px - r, top, r * 2, y - h * 0.28 - top);
+    c.fillStyle = Gd[2]; organEll(c, px, top, r, r * 0.35); c.fill();
+    const my = y - h * 0.28 - h * (0.12 + 0.1 * (1 - u)); c.fillStyle = organMix(['#24142e'], mute * 0.5)[0]; c.beginPath(); c.moveTo(px - r * 0.8, my + r); c.lineTo(px, my - r * 0.5); c.lineTo(px + r * 0.8, my + r); c.lineTo(px + r * 0.8, my + r * 1.6); c.lineTo(px - r * 0.8, my + r * 1.6); c.closePath(); c.fill();
+  }
+  c.strokeStyle = Gd[2]; c.lineWidth = 1.6 * k; c.beginPath(); c.moveTo(x - w, y - h * 0.28); c.lineTo(x + w, y - h * 0.28); c.stroke();
+}
+function organRoseWindow(c, x, y, r, k) {
+  // an opening in the rock high in the nave, tracery of stone, lavender and rose light pouring through
+  c.fillStyle = organRG(x, y, r * 2.6, ['rgba(230,200,255,.4)', 'rgba(200,160,255,.12)', 'rgba(200,160,255,0)'], c); organCirc(c, x, y, r * 2.6); c.fill();
+  c.fillStyle = organRG(x - r * 0.25, y - r * 0.3, r * 1.1, ['#fff4ff', '#e8c8ff', '#b88ae8', '#8a5cc4'], c); organCirc(c, x, y, r); c.fill();
+  const B = organMix(ORGAN_P.basalt, 0.25);
+  c.strokeStyle = B[2]; c.lineWidth = 3.2 * k;
+  for (let i = 0; i < 12; i++) { const a = i * TWO_PI / 12; c.beginPath(); c.moveTo(x + Math.cos(a) * r * 0.22, y + Math.sin(a) * r * 0.22); c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); c.stroke(); organCirc(c, x + Math.cos(a + 0.26) * r * 0.66, y + Math.sin(a + 0.26) * r * 0.66, r * 0.17); c.stroke(); }
+  organCirc(c, x, y, r * 0.22); c.stroke(); organCirc(c, x, y, r * 0.45); c.lineWidth = 2 * k; c.stroke();
+  c.strokeStyle = B[1]; c.lineWidth = 9 * k; organCirc(c, x, y, r + 4 * k); c.stroke();
+  c.strokeStyle = organMix(['#e6dcff'], 0.3)[0]; c.lineWidth = 1.6 * k; c.beginPath(); c.arc(x, y, r + 7 * k, 3.4, 5.0); c.stroke();
+}
+// a basalt ledge reaching in from beyond a screen edge (exx the edge, d2 into the shaft, top at ty px, out the reach px)
+function organLedge(c, exx, d2, ty, out, k, mute = 0) {
+  const B = organMix(ORGAN_P.basalt, mute);
+  c.fillStyle = organLG(0, ty, 0, ty + 60 * k, [B[1], B[2], B[3]], c);
+  c.beginPath(); c.moveTo(exx, ty); c.lineTo(exx + d2 * out, ty); c.lineTo(exx + d2 * out, ty + 12 * k); c.lineTo(exx + d2 * out * 0.4, ty + 54 * k); c.lineTo(exx, ty + 60 * k); c.closePath(); c.fill();
+  c.strokeStyle = B[3]; c.lineWidth = 0.8 * k; c.stroke();
+  c.strokeStyle = organMix(['#e6dcff'], mute)[0]; c.lineWidth = 1.2 * k; c.beginPath(); c.moveTo(exx, ty + 0.8 * k); c.lineTo(exx + d2 * out, ty + 0.8 * k); c.stroke();
+  for (let q = 1; q < 5; q++) { const xx = exx + d2 * out * q / 5; c.strokeStyle = B[3]; c.lineWidth = 0.7 * k; c.beginPath(); c.moveTo(xx, ty + 1 * k); c.lineTo(xx, ty + 12 * k); c.stroke(); }
+  const Gd = organMix(ORGAN_P.gold, mute); c.strokeStyle = Gd[1]; c.lineWidth = 1.4 * k; c.beginPath(); c.moveTo(exx, ty + 9.5 * k); c.lineTo(exx + d2 * out, ty + 9.5 * k); c.stroke();
+}
+function organCandelabra(c, x, y, k, n, t, a, mute = 0) {
+  // a gilt candelabrum standing on a ledge (y its foot), its candles' flames live
+  const Gd = organMix(ORGAN_P.gold, mute), I = organMix(ORGAN_P.ivory, mute);
+  c.fillStyle = organLG(x - 7 * k, 0, x + 7 * k, 0, [Gd[0], Gd[1], Gd[2]], c); c.beginPath(); c.moveTo(x - 8 * k, y); c.quadraticCurveTo(x - 2 * k, y - 6 * k, x - 1.5 * k, y - 30 * k); c.lineTo(x + 1.5 * k, y - 30 * k); c.quadraticCurveTo(x + 2 * k, y - 6 * k, x + 8 * k, y); c.closePath(); c.fill(); c.strokeStyle = Gd[3]; c.lineWidth = 0.6 * k; c.stroke();
+  const arms = [];
+  for (let i = 0; i < n; i++) arms.push((i - (n - 1) / 2) * 13 * k);
+  c.strokeStyle = Gd[2]; c.lineWidth = 2.6 * k; c.beginPath(); for (const ax of arms) { c.moveTo(x, y - 30 * k); c.quadraticCurveTo(x + ax, y - 30 * k, x + ax, y - 40 * k + Math.abs(ax) * 0.2); } c.stroke();
+  c.strokeStyle = Gd[0]; c.lineWidth = 0.9 * k; c.stroke();
+  for (const ax of arms) {
+    const cx = x + ax, cy = y - 40 * k + Math.abs(ax) * 0.2;
+    c.fillStyle = Gd[1]; organEll(c, cx, cy, 4 * k, 1.4 * k); c.fill();
+    c.fillStyle = organLG(cx - 2 * k, 0, cx + 2 * k, 0, I, c); c.fillRect(cx - 2 * k, cy - 14 * k, 4 * k, 13 * k);
+    t.live.push({ type: 'flame', xpx: cx, a: a + (y - cy + 14 * k) / s, r: 8 * k / s, j: hash2(cx | 0, 77) });
+  }
+}
+function organDrawLayer(c, L, k, X, Y, x0, x1, t) {
+  const id = L.id, LT = L.LT, base = k * LT, wa = (base + LT / 2) / L.f, fl = organDecorAt(wa), h = (q, n = 0) => hash2(k * 7 + n, 4100 + id * 37 + q);
+  if (id === 0) {
+    // the far nave: clusters of great columns up both sides, one feature a slot (a rose window, an organ tower, an arch)
+    for (const [px, w] of [[18, 26], [70, 18], [336, 20], [384, 28]]) organHexColumn(c, X(px), Y(base + LT + 10), Y(base - 10), w * s, s, 0.4, 0);
+    const kind = pmod(k, 3), fx = 200 + (h(2) - 0.5) * 90, fa = base + 260 + 80 * h(3);
+    if (kind === 0) { organRoseWindow(c, X(fx), Y(fa), (64 + 14 * h(4)) * s, s); t.live.push({ type: 'rose', x: fx, a: fa, r: 70 }); }
+    else if (kind === 1) {
+      organPipeFlat(c, X(fx), Y(fa - 160), 70 * s, 230 * s, s, 0.38, 9);
+      // its foot on a rock shelf between the columns
+      organLedge(c, X(x0 - 20), 1, Y(fa - 160), (fx - x0 + 100) * s, s, 0.4);
+      for (let i = 0; i < 9; i++) { const u = Math.abs(i - 4) / 4; t.live.push({ type: 'fmouth', x: fx - 70 + 4 + (140 - 8) / 9 * (i + 0.5), a: fa - 160 + 230 * 0.28 + 230 * (0.12 + 0.1 * (1 - u)) - 2, j: i / 9 }); }
+    } else {
+      // a gothic arch of rock between two columns, the next chamber glowing through it, stalactites on its soffit
+      const ax = X(fx), ay = Y(fa + 140), aw = 92 * s, B = organMix(ORGAN_P.basalt, 0.4);
+      c.fillStyle = organLG(0, ay, 0, ay + 300 * s, ['rgba(200,170,255,.38)', 'rgba(140,110,210,.2)', 'rgba(90,70,150,0)'], c);
+      c.beginPath(); c.moveTo(ax - aw, ay + 300 * s); c.lineTo(ax - aw, ay + aw * 0.9); c.quadraticCurveTo(ax - aw, ay, ax, ay - aw * 0.4); c.quadraticCurveTo(ax + aw, ay, ax + aw, ay + aw * 0.9); c.lineTo(ax + aw, ay + 300 * s); c.closePath(); c.fill();
+      c.strokeStyle = B[2]; c.lineWidth = 16 * s; c.stroke(); c.strokeStyle = B[1]; c.lineWidth = 10 * s; c.stroke();
+      c.strokeStyle = organMix(['#e6dcff'], 0.4)[0]; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(ax - aw - 5 * s, ay + 300 * s); c.lineTo(ax - aw - 5 * s, ay + aw * 0.9); c.quadraticCurveTo(ax - aw - 5 * s, ay - 5 * s, ax, ay - aw * 0.4 - 6 * s); c.stroke();
+      for (let q = 0; q < 7; q++) { const u = (q + 0.5) / 7, sx0 = ax - aw * 0.8 + aw * 1.6 * u, sy0 = ay - aw * 0.4 + Math.abs(u - 0.5) * 2 * aw * 0.7 + 10 * s, l = (14 + 22 * hash2(q, k + 4170)) * s; c.fillStyle = organLG(sx0 - 4 * s, 0, sx0 + 4 * s, 0, [B[0], B[1], B[2]], c); c.beginPath(); c.moveTo(sx0 - 4 * s, sy0 - 6 * s); c.lineTo(sx0, sy0 + l); c.lineTo(sx0 + 4 * s, sy0 - 6 * s); c.closePath(); c.fill(); }
+    }
+  } else if (id === 1) {
+    // the middle: two hexagonal columns rising the whole way, a stone balcony on one with candles, a staff's ribbon of
+    // light slung between them with a few notes on it
+    const cA = 112 + 14 * Math.sin(k * 1.3), cB = 292 + 12 * Math.cos(k * 1.7);
+    organHexColumn(c, X(cA), Y(base + LT + 10), Y(base - 10), 15 * s, s, 0.26, 96 * s, (k * 37) % 96 * s);
+    organHexColumn(c, X(cB), Y(base + LT + 10), Y(base - 10), 13 * s, s, 0.26, 84 * s, (k * 53) % 84 * s);
+    const by = base + 80 + 260 * h(1), bxc = h(2) < 0.5 ? cA : cB, e = bxc === cA ? -1 : 1;
+    if (h(6) < 0.6) { organLedge(c, X(bxc), -e, Y(by), 56 * s, s, 0.24); organLedge(c, X(bxc), e, Y(by), 40 * s, s, 0.24); organCandelabra(c, X(bxc - e * 30), Y(by), s * 0.8, 3, t, by, 0.22); }
+    else { // a tall rank of pipes standing on a ledge against the column
+      organLedge(c, X(bxc), -e, Y(by), 70 * s, s, 0.24); organPipeFlat(c, X(bxc - e * 36), Y(by), 30 * s, 120 * s, s, 0.34, 5); }
+    if (h(3) < 0.5 && fl !== 'staff') {
+      const ry = base + 40 + 360 * h(4), sag = 30 + 30 * h(5);
+      for (let q = 0; q < 5; q++) {
+        const yy = Y(ry) + (q - 2) * 4 * s; c.strokeStyle = `rgba(226,206,255,${0.32 - q * 0.02})`; c.lineWidth = 1.3 * s;
+        c.beginPath(); c.moveTo(X(cA + 15), yy); c.quadraticCurveTo(X((cA + cB) / 2), yy + sag * s, X(cB - 13), yy); c.stroke();
+      }
+      for (let q = 0; q < 3; q++) { const u = 0.25 + q * 0.25, nx = lerp(cA + 15, cB - 13, u), ny = Y(ry) + 2 * u * (1 - u) * sag * s * 1.0 + (q - 1) * 4 * s; c.save(); c.translate(X(nx), ny); organNoteArt(c, 1.5 * s, q % 3, organMix(ORGAN_P.gold, 0.3)); c.restore(); }
+    }
+  } else {
+    // the near: each section's set dressing, twice a slot (alternating walls), each on a basalt ledge from beyond the edge
+    for (let q = 0; q < 2; q++) {
+      const hq = (qq, n = 0) => hash2(k * 7 + n + q * 3, 4100 + id * 37 + qq + q * 11);
+      const side = (hash2(k, 4150) < 0.5) !== (q === 1) ? 0 : 1, dd = side ? -1 : 1, a = base + 60 + q * 210 + 100 * hq(2), exx = side ? x1 + 20 : x0 - 20, wx0 = side ? 400 : 0;
+      const ty = Y(a), out = (70 + 40 * hq(3) + Math.abs(exx - wx0)) * s;
+      organLedge(c, X(exx), dd, ty, out, s, 0.12);
+      const ix = X(wx0 + dd * (34 + 20 * hq(4)));
+      if (fl === 'candle') organCandelabra(c, ix, ty, s, 5, t, a, 0.1);
+      else if (fl === 'pipes') {
+        // a little positive organ standing on the ledge: an oak case with a gilt-pipe front and a crest
+        organPipeFlat(c, ix + dd * 30 * s, ty, 30 * s, 92 * s, s, 0.3, 5);
+      } else if (fl === 'boss') {
+        // a great bass drum stood on its rim on the ledge: a calfskin face in a gilt hoop, red rope tension zigzags
+        const r = 34 * s, cx = ix + dd * 26 * s, cy = ty - r, Gd = organMix(ORGAN_P.gold, 0.3), Rb = organMix(ORGAN_P.ruby, 0.3);
+        c.fillStyle = organLG(cx - r, 0, cx + r, 0, organMix(['#8c3a3c', '#5e2228', '#3a141c'], 0.3), c); organEll(c, cx + dd * 8 * s, cy, r * 0.5, r); c.fill();
+        c.fillStyle = organRG(cx - r * 0.3, cy - r * 0.3, r * 1.2, organMix(['#fff6e4', '#eedcba', '#c8ac80'], 0.3), c); organCirc(c, cx, cy, r); c.fill();
+        c.strokeStyle = Gd[2]; c.lineWidth = 5 * s; organCirc(c, cx, cy, r); c.stroke(); c.strokeStyle = Gd[0]; c.lineWidth = 1.2 * s; c.beginPath(); c.arc(cx, cy, r + 1, 3.4, 4.9); c.stroke();
+        c.strokeStyle = Rb[1]; c.lineWidth = 1.4 * s; c.beginPath(); for (let i = 0; i <= 12; i++) { const a = i / 12 * TWO_PI, rr = i % 2 ? r * 0.82 : r * 0.98; c.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } c.stroke();
+        organRosette(c, cx, cy, 10 * s, s, Gd);
+        t.live.push({ type: 'throb', xpx: cx, a: a + 34, r: 30 });
+      } else if (fl === 'rose') {
+        // a gilt harp standing on the ledge (its strings catch the light)
+        const Gd = organMix(ORGAN_P.gold, 0.3), hx = ix + dd * 16 * s, H2 = 110 * s;
+        c.lineCap = 'round';
+        c.strokeStyle = Gd[3]; c.lineWidth = 7 * s; c.beginPath(); c.moveTo(hx, ty - 4 * s); c.lineTo(hx, ty - H2); c.stroke(); c.strokeStyle = Gd[1]; c.lineWidth = 5 * s; c.stroke();
+        c.strokeStyle = Gd[3]; c.lineWidth = 6 * s; c.beginPath(); c.moveTo(hx, ty - H2); c.bezierCurveTo(hx + dd * 30 * s, ty - H2 - 18 * s, hx + dd * 50 * s, ty - H2 * 0.6, hx + dd * 70 * s, ty - 18 * s); c.stroke(); c.strokeStyle = Gd[1]; c.lineWidth = 4 * s; c.stroke();
+        c.strokeStyle = organMix(['#e8b070'], 0.3)[0]; c.lineWidth = 5 * s; c.beginPath(); c.moveTo(hx + dd * 70 * s, ty - 18 * s); c.lineTo(hx, ty - 6 * s); c.stroke();
+        c.strokeStyle = 'rgba(255,246,220,.5)'; c.lineWidth = 0.7 * s; c.beginPath(); for (let i = 1; i < 9; i++) { const u = i / 9, xx = hx + dd * 70 * s * u, top = ty - H2 + (H2 - 18 * s) * u * u * 0.9 - 8 * s * (1 - u); c.moveTo(xx, top + 4 * s); c.lineTo(xx, ty - 6 * s - 12 * s * u); } c.stroke();
+        organStud(c, hx, ty - H2 - 2 * s, 4 * s, Gd);
+      } else if (fl === 'staff') {
+        // a big carved staff stand: two oak posts on the ledge and a gilt staff with notes between
+        const O = organMix(ORGAN_P.oak, 0.12);
+        for (const e of [0, 1]) { const px = ix + dd * e * 70 * s; c.fillStyle = organLG(px - 3 * s, 0, px + 3 * s, 0, [O[0], O[1], O[2]], c); c.fillRect(px - 3 * s, ty - 70 * s, 6 * s, 70 * s); organStud(c, px, ty - 72 * s, 4 * s, organMix(ORGAN_P.gold, 0.12)); }
+        for (let i = 0; i < 5; i++) { c.strokeStyle = organMix(ORGAN_P.gold, 0.12)[1]; c.lineWidth = 1.2 * s; c.beginPath(); c.moveTo(ix, ty - 62 * s + i * 6 * s); c.lineTo(ix + dd * 70 * s, ty - 62 * s + i * 6 * s); c.stroke(); }
+        for (let i = 0; i < 3; i++) { c.save(); c.translate(ix + dd * (16 + i * 20) * s, ty - 40 * s - i * 6 * s); organNoteArt(c, 1.4 * s, i % 3, organMix(ORGAN_P.gold, 0.1)); c.restore(); }
+      } else if (fl === 'oak') {
+        // a choir stall: an oak pew with a carved back and two candles
+        organOakPanel(c, Math.min(ix, ix + dd * 90 * s), ty - 46 * s, Math.max(ix, ix + dd * 90 * s), ty - 12 * s, 3 * s);
+        const O = organMix(ORGAN_P.oak, 0.1); c.fillStyle = organLG(0, ty - 14 * s, 0, ty, [O[0], O[2]], c); c.fillRect(Math.min(ix, ix + dd * 96 * s), ty - 14 * s, 96 * s, 6 * s);
+        for (const e of [0.2, 0.8]) { const cx = ix + dd * 90 * e * s; organGothic(c, cx, ty - 44 * s, ty - 18 * s, 7 * s, 0.4); }
+        organCandelabra(c, ix + dd * 104 * s, ty, s * 0.7, 1, t, a, 0.1);
+      } else if (fl === 'stops') {
+        // a stop jamb: an oak panel with rows of ivory knobs, a ruby lamp over each row
+        organOakPanel(c, Math.min(ix, ix + dd * 40 * s), ty - 66 * s, Math.max(ix, ix + dd * 40 * s), ty, 3 * s);
+        organGothic(c, ix + dd * 20 * s, ty - 62 * s, ty - 44 * s, 8 * s, 0.35);
+        for (let r = 0; r < 2; r++) for (let q2 = 0; q2 < 2; q2++) organDecorStop(c, ix + dd * (12 + q2 * 16) * s, ty - 30 * s + r * 16 * s, s * 0.8);
+        t.live.push({ type: 'lamp', xpx: ix + dd * 20 * s, a: a + 40, j: hq(6) });
+      }
+    }
+  }
+}
+function drawOrganBackground() {
+  organCacheCheck();
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, bk = organBeatK();
+  const M = organMoodAt(G.camAlt + viewH * 0.5);
+  ctx.fillStyle = organLG(0, 0, 0, H, M.g.map(c => organCol(c))); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  organGlow(ox + playW * 0.5, -H * 0.1, playW * 1.2, M.pool, 0.14);
+  if (M.stars > 0.02) drawOrganStars(M.stars);
+  for (const Ly of ORGAN_LAYERS) {
+    const base = G.camAlt * Ly.f, pa0 = base - drawPad - 20, pa1 = base + viewH + drawPad + 20;
+    for (let k = Math.floor(pa0 / Ly.LT); k * Ly.LT < pa1; k++) {
+      const t = organLayerTile(Ly, k), y = H - (t.pa1 - base) * s, tx = ox + t.xa * s;
+      ctx.drawImage(t.cv, tx, y, t.w, t.h);
+      for (const g of t.live) {
+        const yy = H - (g.a - base) * s, x = g.xpx != null ? tx + g.xpx : sx(g.x);
+        if (yy < Y0 - 80 || yy > Y1 + 80) continue;
+        if (g.type === 'flame') organFlame(x, yy, g.r * s * (Ly.id === 2 ? 1 : 0.8), g.j * 30, Ly.id === 2 ? 1 : 0.6);
+        else if (g.type === 'fmouth') organGlow(x, yy, 12 * s, [255, 220, 160], 0.3 * organBeatK(-g.j * 0.3));
+        else if (g.type === 'rose') organGlow(x, yy, g.r * 2 * s, [226, 190, 255], 0.12 + 0.08 * organBarK());
+        else if (g.type === 'throb') organGlow(x, yy, g.r * 1.6 * s, [255, 200, 150], 0.18 * bk);
+        else if (g.type === 'lamp') { const on = g.j > 0.5 ? bk : organBeatK(ORGAN.beat / 2); organGlow(x, yy, 10 * s, [255, 90, 110], 0.2 + 0.5 * on); }
+      }
+    }
+    if (Ly.id === 0) drawOrganShafts();
+  }
+  // the backdrop sits back in the gloom so the traps (full-strength gold and copper) read first
+  // the section's own light: the layers tinted to its colour, soft pools of its light hanging in the nave, the far
+  // corners sinking into its shade (so the lit basalt stands out against the dark)
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = organCol(M.tint); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.restore();
+  { const slot = 560, f = 0.14, base = G.camAlt * f, first = Math.floor((base - 300) / slot), last = Math.ceil((base + viewH + 300) / slot);
+    for (let i = first; i <= last; i++) { const y = H - (i * slot - base) * s, x = ox + playW * (0.18 + 0.64 * hash2(i, 4901)), r = (150 + 90 * hash2(i, 4902)) * s; organGlow(x, y, r, M.pool, M.pk * (0.75 + 0.25 * Math.sin(G.t * 0.6 + i))); } }
+  ctx.fillStyle = organCol(M.g[2], 0.26); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  drawOrganMotes();
+}
+// the starry vault (Falling Notes): pinpricks of light in the cave roof far above, twinkling to the beat
+function drawOrganStars(k) {
+  const f = 0.03, base = G.camAlt * f, bk = organBeatK();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 46; i++) {
+    const x = ox + playW * hash2(i, 4951), yy = pmod(hash2(i, 4952) * 900 + base * s, 900) / 900 * (H + 40) - 20, tw = 0.5 + 0.5 * Math.sin(G.t * (1 + hash2(i, 4953) * 2) + i);
+    const r = (0.8 + 1.4 * hash2(i, 4954)) * s;
+    ctx.fillStyle = `rgba(236,230,255,${k * (0.35 + 0.45 * tw)})`; ctx.beginPath(); ctx.arc(x, yy, r, 0, TWO_PI); ctx.fill();
+    if (i % 7 === 0) organTwinkle(ctx, x, yy, (4 + 3 * tw + 3 * bk) * s, k * 0.6 * tw);
+  }
+  ctx.restore();
+}
+// lavender shafts of light falling slantwise through the nave from the rose windows above, motes turning in them
+function drawOrganShafts() {
+  const sp = organSprite('shaft', 90, 400, c => {
+    c.fillStyle = organLG(0, 0, 90, 0, ['rgba(226,200,255,0)', 'rgba(226,200,255,.5)', 'rgba(244,230,255,.85)', 'rgba(226,200,255,.5)', 'rgba(226,200,255,0)'], c); c.fillRect(0, 0, 90, 400);
+    c.globalCompositeOperation = 'destination-in'; c.fillStyle = organLG(0, 0, 0, 400, ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, 90, 400);
+    // the tracery's shadows: the light comes through in rays
+    c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.3)'; for (let x = 14; x < 90; x += 22) c.fillRect(x, 0, 6, 400);
+  });
+  const T = G.t;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 2; i++) {
+    const x = ox + playW * (0.32 + 0.38 * i) + Math.sin(T * 0.1 + i * 2) * 14 * s, ang = (i ? -1 : 1) * 0.22, w = (84 + 24 * i) * s, h = H * 1.25, al = 0.08 + 0.03 * Math.sin(T * 0.5 + i);
+    ctx.save(); ctx.translate(x, -H * 0.1); ctx.rotate(ang); ctx.globalAlpha = al; ctx.drawImage(sp.cv, -w / 2, 0, w, h); ctx.globalAlpha = 1;
+    for (let q = 0; q < 7; q++) { const u = pmod(T * (0.03 + 0.02 * hash2(q, 4701 + i)) + hash2(q, 4702 + i), 1), my = u * h * 0.85, mx = (hash2(q, 4703 + i) - 0.5) * w * 0.6 + Math.sin(T * 0.8 + q) * 4 * s; organTwinkle(ctx, mx, my, (2 + 2 * hash2(q, 4704)) * s, Math.sin(u * Math.PI) * (0.35 + 0.5 * Math.max(0, Math.sin(T * 2.2 + q * 1.7)) ** 4), [240, 226, 255]); }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// motes: lavender sparkles drifting up, and every so often a tiny gold note among them
+MOTE_DRIFT.onote = [-8, -30];
+{ const base = moteKind; moteKind = function (m, a) { return organOn() ? 'onote' : base(m, a); }; }
+function drawOrganMotes() {
+  const bk = organBeatK(), sp = organNoteSprite(0, 1, 0.25);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const m of motes) {
+    const x = ox + m.x * playW + Math.sin(G.t * 0.7 + m.ph) * 7 * s, y = m.y, tw = 0.4 + 0.6 * Math.max(0, Math.sin(G.t * 2 + m.ph * 3)) ** 3;
+    if (m.sz > 0.82) { ctx.globalAlpha = 0.5 * m.depth * (0.6 + 0.4 * bk); organNoteBlit(sp, 1, x, y, s * (0.5 + 0.4 * m.depth), Math.sin(G.t + m.ph) * 0.3); ctx.globalAlpha = 1; continue; }
+    const r = (0.7 + m.sz * 1.0) * m.depth * s;
+    ctx.fillStyle = `rgba(222,204,255,${0.5 * m.depth * tw * (0.7 + 0.3 * bk)})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+  }
+  ctx.restore();
+}
+// the midground (0.55): basalt column stubs reaching in from beyond the screen edge, a candle burning on each
+function organStubSprite() {
+  return organSprite('stub', 200, 120, c => {
+    c.translate(150, 40); const B = ORGAN_P.basalt;
+    // a broken-off hexagonal column lying into the screen: its end face (a hexagon) lit, its side facets behind
+    c.fillStyle = organLG(0, -16, 0, 16, [B[1], B[2], B[3]], c); c.fillRect(-150, -16, 150, 32); c.strokeStyle = B[3]; c.lineWidth = 0.8; c.strokeRect(-150, -16, 150, 32);
+    c.strokeStyle = 'rgba(220,210,255,.5)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(-150, -15.2); c.lineTo(-4, -15.2); c.stroke();
+    c.strokeStyle = B[3]; c.lineWidth = 1; c.beginPath(); c.moveTo(-150, 2); c.lineTo(-6, 2); c.stroke();
+    for (let x = -130; x < 0; x += 36) { c.strokeStyle = B[3]; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, -16); c.lineTo(x + 2, 16); c.stroke(); c.strokeStyle = 'rgba(220,210,255,.35)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x + 1.4, -16); c.lineTo(x + 3.4, 16); c.stroke(); }
+    c.fillStyle = organLG(-8, -18, 14, 18, ['#c4b8ee', B[0], B[1]], c); c.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TWO_PI / 6 + Math.PI / 6; c.lineTo(Math.cos(a) * 9, Math.sin(a) * 18); } c.closePath(); c.fill(); c.strokeStyle = B[2]; c.lineWidth = 0.9; c.stroke();
+    // a candle stuck in wax on the stub
+    c.fillStyle = 'rgba(255,250,236,.9)'; c.beginPath(); c.moveTo(-34, -16); c.quadraticCurveTo(-28, -22, -22, -16); c.closePath(); c.fill();
+    c.fillStyle = organLG(-31, 0, -25, 0, ORGAN_P.ivory, c); c.fillRect(-31, -38, 6, 22);
+    c.fillStyle = 'rgba(255,255,255,.8)'; organEll(c, -29.6, -37.4, 1.4, 2.4); c.fill();
+  });
+}
+function drawOrganMidground() {
+  organCacheCheck();
+  const f = 0.55, slot = 300, baseA = G.camAlt * f, first = Math.floor((baseA - 200) / slot), last = Math.ceil((baseA + viewH + 200) / slot);
+  for (let i = first; i <= last; i++) {
+    const r = hash2(i, 4401); if (r < 0.45) continue;
+    const side = hash2(i, 4402) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, sp = organStubSprite();
+    if (y + 80 * s < -20 || y - 80 * s > H) continue;
+    const nose = (4 + 18 * r) * s, x = side ? cssW - nose : nose;
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.translate(x, y); if (side) ctx.scale(-1, 1);
+    ctx.drawImage(sp.cv, -150 * s, -40 * s, 200 * s, 120 * s); ctx.restore();
+    organFlame(side ? x + 28 * s : x - 28 * s, y - 38 * s, 10 * s, i * 3);
+  }
+}
+// speed: gold and lavender glints streaking past along the walls
+function drawOrganSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(6 * k); i++) {
+    const j = hash2(i + side * 31, 51), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 52) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(walls(a)[side]) + (side ? -1 : 1) * (6 + 14 * j) * s, len = (24 + 110 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = organCol(j < 0.6 ? [255, 214, 140] : [222, 204, 255], (0.05 + 0.18 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.6 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: gilt lanterns hanging on long chains in front at the screen edges from beyond the top, swaying on the beat
+function organLanternSprite(v) {
+  return organSprite('lantern' + v, 40, 330, c => {
+    c.translate(20, 0); const Gd = ORGAN_P.gold, L = 220 + 60 * hash2(v, 4501), n = Math.floor(L / 7);
+    for (let q = 0; q < n; q++) {
+      const y = q * 7;
+      if (q % 2) { c.fillStyle = organLG(-1.5, 0, 1.5, 0, [Gd[0], Gd[2]], c); c.fillRect(-1.4, y - 4, 2.8, 8); }
+      else { c.strokeStyle = Gd[3]; c.lineWidth = 3; c.beginPath(); c.ellipse(0, y, 3.2, 4.6, 0, 0, TWO_PI); c.stroke(); c.strokeStyle = Gd[1]; c.lineWidth = 1.8; c.stroke(); c.strokeStyle = 'rgba(255,250,220,.7)'; c.lineWidth = 0.7; c.beginPath(); c.ellipse(0, y, 3.2, 4.6, 0, 3.4, 4.6); c.stroke(); }
+    }
+    const ey = n * 7 + 2;
+    // the lantern: a gilt cap, lavender glass panes with a candle glow inside, a gilt base and finial
+    c.fillStyle = organLG(-12, 0, 12, 0, [Gd[0], Gd[1], Gd[2]], c); c.beginPath(); c.moveTo(-3, ey); c.lineTo(3, ey); c.lineTo(13, ey + 10); c.lineTo(-13, ey + 10); c.closePath(); c.fill(); c.strokeStyle = Gd[3]; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = organLG(0, ey + 10, 0, ey + 40, ['rgba(255,240,210,.95)', 'rgba(236,190,255,.85)', 'rgba(150,110,220,.9)'], c); c.beginPath(); c.moveTo(-11, ey + 10); c.lineTo(11, ey + 10); c.lineTo(9, ey + 40); c.lineTo(-9, ey + 40); c.closePath(); c.fill();
+    c.strokeStyle = Gd[2]; c.lineWidth = 1.6; c.beginPath(); c.moveTo(0, ey + 10); c.lineTo(0, ey + 40); c.stroke(); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(-9, ey + 12, 2.4, 24);
+    c.fillStyle = organLG(-10, 0, 10, 0, [Gd[0], Gd[1], Gd[2]], c); c.fillRect(-11, ey + 40, 22, 4); c.beginPath(); c.moveTo(-6, ey + 44); c.lineTo(6, ey + 44); c.lineTo(0, ey + 54); c.closePath(); c.fill(); c.strokeStyle = Gd[3]; c.lineWidth = 0.7; c.stroke();
+  });
+}
+function drawOrganForeground() {
+  organCacheCheck();
+  const f = 1.3, slot = 380, baseA = G.camAlt * f, T = organT(), first = Math.floor((baseA - 320) / slot), last = Math.ceil((baseA + viewH + 300) / slot);
+  for (let i = first; i <= last; i++) {
+    if (hash2(i, 4511) < 0.55) continue;
+    const side = hash2(i, 4512) < 0.5 ? 0 : 1, y = H - (i * slot - baseA) * s, v = 1 + (i & 3), sp = organLanternSprite(v);
+    if (y + 330 * s < -20 || y - 20 > H) continue;
+    const x = side ? ox + playW - 6 * s : ox + 6 * s, sw = Math.sin(T * Math.PI / ORGAN.beat / 2 + i) * 0.035, sc = s * 1.15;
+    ctx.save(); ctx.translate(x, y - 340 * s); ctx.rotate(sw); ctx.scale(sc, sc); ctx.drawImage(sp.cv, -20, 0, 40, 330); ctx.restore();
+    const L = 220 + 60 * hash2(v, 4501), ly = Math.floor(L / 7) * 7 + 27, lx = x - Math.sin(sw) * ly * sc;
+    organGlow(lx, y - 340 * s + Math.cos(sw) * ly * sc, 40 * s, ORGAN_P.candle, 0.18 + 0.08 * organBeatK());
+  }
+}
+// The cave's light: a violet vignette, lavender from the rose windows above, the grand organ blazing as you near it;
+// and the firefly's perk: his glow pulsing out on every beat.
+function drawOrganLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.35, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.75);
+  vg.addColorStop(0, 'rgba(24,12,48,0)'); vg.addColorStop(1, 'rgba(24,12,48,.36)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const tG = ctx.createLinearGradient(0, 0, 0, H * 0.45); tG.addColorStop(0, 'rgba(210,180,255,.08)'); tG.addColorStop(1, 'rgba(210,180,255,0)'); ctx.fillStyle = tG; ctx.fillRect(X0, Y0, WW, H * 0.45 + P);
+  ctx.restore();
+  const a = G.adv;
+  if (a && a.end) {
+    const y = sy(a.end + 260), k = clamp(1 - Math.abs(a.end + 260 - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? Math.min(1, a.clearT * 1.5) * Math.max(0.4, 1 - a.clearT * 0.25) : 0;
+    if (k > 0.01) organGlow(cssW / 2, y, Math.max(cssW, H) * 0.75, [255, 214, 150], (0.12 + 0.18 * pay) * k);
+  }
+  if (organFirefly() && G.p && (G.state === 'play' || G.state === 'clear')) {
+    const bk = organBeatK(), px = sx(G.p.x), py = sy(G.p.alt);
+    organGlow(px, py, (70 + 40 * bk) * s, [255, 236, 130], 0.1 + 0.22 * bk);
+    if (bk > 0.3) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,240,150,${0.35 * (bk - 0.3)})`; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.arc(px, py, (40 + 60 * (1 - bk)) * s, 0, TWO_PI); ctx.stroke(); ctx.restore(); }
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (organOn()) drawOrganBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (organOn()) drawOrganMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (organOn()) drawOrganWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { base(); if (organOn()) drawOrganLight(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (organOn()) drawOrganSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (organOn()) drawOrganForeground(); else base(); }; }
+{ const base = drawHazards; drawHazards = function () { base(); if (organOn()) drawOrganFx(); }; }
+// ---- the finish: the Grand Organ ----
+// The shaft opens into the cavern's heart: a vaulted chamber of basalt columns with a great rose window of rock at its
+// crown pouring lavender light, and filling its back the Grand Organ itself, three towers of gilt pipes in a carved oak
+// case with gothic crests, its pipe mouths breathing light on the beat. Across the chamber on basalt corbels runs the
+// organ loft, an oak gallery with a gilt rail, and on it the console: three manuals of ivory and ebony keys, banks of
+// stop knobs, a music desk with a score. At it sits Maestro Bat, the cave's organist, in his tailcoat, bobbing to the
+// beat with his wings on the keys. Clear the stage and he throws his wings up and the whole organ sounds a full chord:
+// every pipe mouth blazes, notes burst out of the towers and gold sparks rain down. The deck: two catwalks of piano keys
+// (ivory planks with raised ebony keys) sliding out of the walls to meet under you.
+const ORGAN_FIN = { loft: 104, console: 104, organ0: 124, organH: 156, rose: 470, roseR: 74, cs: 1.25, bat: 1.75 };
+function organTowers(mid, xl, xr) {
+  // the three towers' middles, half widths and heights (world units; the middle one tallest)
+  const w = xr - xl;
+  return [[mid - w * 0.31, w * 0.15, 0.78], [mid, w * 0.17, 1], [mid + w * 0.31, w * 0.15, 0.78]];
+}
+function organChamberRender(E) {
+  const key = 'chamber' + E; let sp = ORGAN_CACHE.sprites.get(key); if (sp) return sp;
+  const A0 = E - 120, A1 = E + 900, F = ORGAN_FIN, P = ORGAN_P;
+  let xl = Infinity, xr = -Infinity; for (let a = A0; a <= A1; a += 10) { xl = Math.min(xl, leftWall(a)); xr = Math.max(xr, rightWall(a)); }
+  const xa = xl - 24, xb = xr + 24;
+  sp = organCanvas((xb - xa) * s, (A1 - A0) * s); sp.xa = xa; sp.a1 = A1; sp.mouths = [];
+  const c = sp.c, X = x => (x - xa) * s, Y = a => (A1 - a) * s, mid = (xl + xr) / 2;
+  const inside = () => { c.beginPath(); for (let a = A0; a <= A1; a += 8) c.lineTo(X(leftWall(a) - 3), Y(a)); for (let a = A1; a >= A0; a -= 8) c.lineTo(X(rightWall(a) + 3), Y(a)); c.closePath(); };
+  c.save(); inside(); c.clip();
+  // the vault: deep violet up high, lifting toward the lit organ
+  c.fillStyle = organLG(0, Y(A1), 0, Y(E), ['#1e1440', '#3a2a6a', '#5a4690', '#3c2e6a'], c); c.fillRect(0, 0, sp.w, sp.h);
+  // ribs of the vault converging overhead (basalt, lit along their left edge)
+  for (let i = -3; i <= 3; i++) {
+    const x0 = mid + i * 30, x1 = mid + i * 150, B = P.basalt;
+    c.strokeStyle = B[3]; c.lineWidth = 16 * s; c.beginPath(); c.moveTo(X(x0), Y(A1 - 60)); c.quadraticCurveTo(X(x1), Y(A1 - 120), X(x1 * 1.05 - mid * 0.05), Y(A1 - 360)); c.stroke();
+    c.strokeStyle = B[2]; c.lineWidth = 11 * s; c.stroke();
+    c.strokeStyle = 'rgba(214,200,255,.35)'; c.lineWidth = 1.4 * s; c.beginPath(); c.moveTo(X(x0) - 5 * s, Y(A1 - 60)); c.quadraticCurveTo(X(x1) - 5 * s, Y(A1 - 120), X(x1 * 1.05 - mid * 0.05) - 5 * s, Y(A1 - 360)); c.stroke();
+  }
+  // the rose window at the crown, light pouring down from it
+  const rx = X(mid), ry = Y(E + F.rose), rr = F.roseR * s;
+  c.fillStyle = organLG(0, ry, 0, Y(E), ['rgba(230,200,255,.28)', 'rgba(200,170,255,.1)', 'rgba(200,170,255,0)'], c);
+  c.beginPath(); c.moveTo(rx - rr * 0.8, ry); c.lineTo(rx + rr * 0.8, ry); c.lineTo(rx + rr * 2.4, Y(E)); c.lineTo(rx - rr * 2.4, Y(E)); c.closePath(); c.fill();
+  organRoseWindow(c, rx, ry, rr, s);
+  // clustered columns up both sides, rising into the vault's ribs
+  for (const e of [-1, 1]) for (const [o, w] of [[16, 15], [44, 11]]) organHexColumn(c, X(e < 0 ? xl + o : xr - o), Y(A1), Y(E - 40), w * s, s, 0.05 + o / 300, 110 * s, 20 * s);
+  // ---- the Grand Organ: three towers of gilt pipes in a carved oak case
+  const o0 = E + F.organ0, oh = F.organH, towers = organTowers(mid, xl, xr), O = P.oak;
+  // the case's body behind the pipes: dark oak panels with gothic tracery
+  c.fillStyle = organLG(0, Y(o0 + oh), 0, Y(o0), [O[2], O[3], '#200c10'], c); c.fillRect(X(xl + 30), Y(o0 + oh * 0.78), X(xr - 30) - X(xl + 30), Y(o0) - Y(o0 + oh * 0.78));
+  for (let i = 0; i < 8; i++) { const gx = lerp(xl + 46, xr - 46, (i + 0.5) / 8); organGothic(c, X(gx), Y(o0 + oh * 0.7), Y(o0 + oh * 0.46), 9 * s, 0.28); }
+  for (const [tx, tw, th] of towers) {
+    const top = o0 + oh * th, n = Math.max(5, Math.round(tw / 9)), pw = (tw * 2 - 8) / n;
+    // the tower's case: two carved oak posts with gilt crockets and a pointed crest with a finial
+    for (const e of [-1, 1]) {
+      const px = X(tx + e * (tw + 4));
+      c.fillStyle = organLG(px - 6 * s, 0, px + 6 * s, 0, [O[0], O[1], O[2]], c); c.fillRect(px - 6 * s, Y(top + 20), 12 * s, Y(o0 - 30) - Y(top + 20));
+      c.strokeStyle = O[3]; c.lineWidth = 0.9 * s; c.strokeRect(px - 6 * s, Y(top + 20), 12 * s, Y(o0 - 30) - Y(top + 20));
+      for (let a = top - 20; a > o0; a -= 60) organStud(c, px, Y(a), 2.6 * s);
+      c.fillStyle = organLG(0, Y(top + 44), 0, Y(top + 20), [P.gold[0], P.gold[1], P.gold[2]], c); c.beginPath(); c.moveTo(px - 7 * s, Y(top + 20)); c.lineTo(px, Y(top + 46)); c.lineTo(px + 7 * s, Y(top + 20)); c.closePath(); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.7 * s; c.stroke();
+    }
+    // the crest: a pointed gilt gable over the tower with a trefoil and a finial
+    c.fillStyle = organLG(0, Y(top + 70), 0, Y(top + 10), [P.gold[0], P.gold[1], P.gold[2]], c);
+    c.beginPath(); c.moveTo(X(tx - tw - 6), Y(top + 12)); c.quadraticCurveTo(X(tx - tw * 0.4), Y(top + 30), X(tx), Y(top + 66)); c.quadraticCurveTo(X(tx + tw * 0.4), Y(top + 30), X(tx + tw + 6), Y(top + 12)); c.closePath(); c.fill(); c.strokeStyle = P.gold[3]; c.lineWidth = 0.9 * s; c.stroke();
+    c.fillStyle = 'rgba(40,20,40,.55)'; for (let i = 0; i < 3; i++) { const an = -Math.PI / 2 + i * TWO_PI / 3; organCirc(c, X(tx) + Math.cos(an) * 5 * s, Y(top + 34) + Math.sin(an) * 5 * s, 4 * s); c.fill(); }
+    organStud(c, X(tx), Y(top + 70), 4 * s, P.ruby);
+    // the pipes, a V of lengths, mouths in a matching V; the tower's lit side on the left
+    for (let i = 0; i < n; i++) {
+      const px = tx - tw + 4 + pw * (i + 0.5), u = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2), ptop = top - oh * 0.16 * u, r = pw * 0.42, foot = o0 + 10;
+      const xL = X(px - r), xR = X(px + r);
+      c.fillStyle = 'rgba(20,10,30,.4)'; c.fillRect(xL + 2 * s, Y(ptop), xR - xL, Y(foot) - Y(ptop));
+      c.fillStyle = organLG(xL, 0, xR, 0, [P.gold[1], P.gold[0], P.gold[1], P.gold[2], P.gold[3]], c); c.fillRect(xL, Y(ptop), xR - xL, Y(foot) - Y(ptop));
+      c.strokeStyle = P.gold[3]; c.lineWidth = 0.6 * s; c.strokeRect(xL, Y(ptop), xR - xL, Y(foot) - Y(ptop));
+      c.fillStyle = organLG(xL, 0, xR, 0, [P.gold[2], P.gold[3]], c); organEll(c, X(px), Y(ptop), r * s, r * 0.3 * s); c.fill();
+      // the foot's cone into the case
+      c.fillStyle = organLG(xL, 0, xR, 0, [P.gold[1], P.gold[2], P.gold[3]], c); c.beginPath(); c.moveTo(xL, Y(foot + 30)); c.lineTo(xR, Y(foot + 30)); c.lineTo(X(px + r * 0.3), Y(foot)); c.lineTo(X(px - r * 0.3), Y(foot)); c.closePath(); c.fill();
+      const ma = foot + 30 + (ptop - foot - 30) * (0.42 + 0.14 * (1 - u)), my = Y(ma), mw = r * 0.8 * s;
+      c.fillStyle = '#26142e'; c.beginPath(); c.moveTo(X(px) - mw, my + 5 * s); c.lineTo(X(px), my - 4 * s); c.lineTo(X(px) + mw, my + 5 * s); c.lineTo(X(px) + mw, my + 9 * s); c.lineTo(X(px) - mw, my + 9 * s); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(255,250,224,.9)'; c.lineWidth = 0.9 * s; c.beginPath(); c.moveTo(X(px) - mw, my + 3 * s); c.lineTo(X(px), my - 6 * s); c.lineTo(X(px) + mw, my + 3 * s); c.stroke();
+      c.fillStyle = 'rgba(255,255,240,.6)'; c.fillRect(X(px - r * 0.55), Y(ptop) + 3 * s, 1.2 * s, Y(foot + 40) - Y(ptop));
+      sp.mouths.push([px, ma + 2, (i / n + tx * 0.01) % 1]);
+    }
+    // the impost: a gilt-edged oak rail across the tower's feet
+    c.fillStyle = organLG(0, Y(o0 + 10), 0, Y(o0 - 30), [O[0], O[1], O[2]], c); c.fillRect(X(tx - tw - 10), Y(o0 + 10), X(tx + tw + 10) - X(tx - tw - 10), Y(o0 - 30) - Y(o0 + 10));
+    c.strokeStyle = P.gold[1]; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(X(tx - tw - 10), Y(o0 + 10)); c.lineTo(X(tx + tw + 10), Y(o0 + 10)); c.stroke();
+  }
+  // ---- the organ loft: an oak gallery on basalt corbels with a gilt rail (the console stands on it, live)
+  const ly = Y(E + F.loft);
+  for (const e of [-1, 1]) {
+    const wx = X(e < 0 ? xl : xr), B = P.basalt;
+    c.fillStyle = organLG(0, ly, 0, ly + 60 * s, [B[1], B[2], B[3]], c); c.beginPath(); c.moveTo(wx, ly + 12 * s); c.lineTo(wx - e * 70 * s, ly + 12 * s); c.lineTo(wx - e * 66 * s, ly + 22 * s); c.lineTo(wx - e * 10 * s, ly + 74 * s); c.lineTo(wx, ly + 74 * s); c.closePath(); c.fill(); c.strokeStyle = B[3]; c.lineWidth = 1 * s; c.stroke();
+    c.strokeStyle = 'rgba(214,200,255,.45)'; c.lineWidth = 1 * s; c.beginPath(); c.moveTo(wx, ly + 13 * s); c.lineTo(wx - e * 70 * s, ly + 13 * s); c.stroke();
+  }
+  organOakPanel(c, X(xl), ly, X(xr), ly + 14 * s, 2 * s);
+  c.fillStyle = organLG(0, ly - 2 * s, 0, ly + 2 * s, [P.gold[0], P.gold[2]], c); c.fillRect(X(xl), ly - 2 * s, X(xr) - X(xl), 3.4 * s);
+  c.restore();
+  // fade the bottom into the shaft below
+  c.globalCompositeOperation = 'destination-in'; c.fillStyle = organLG(0, Y(E - 120), 0, Y(A1), ['rgba(0,0,0,0)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,0,0,.6)', 'rgba(0,0,0,0)'], c); c.fillRect(0, 0, sp.w, sp.h); c.globalCompositeOperation = 'source-over';
+  sp.xl = xl; sp.xr = xr; sp.mid = mid;
+  ORGAN_CACHE.sprites.set(key, sp);
+  return sp;
+}
+// the console (world units, (0, 0) the middle of its foot on the loft, y up negative): an oak case with three manuals of
+// keys stepped back, stop knobs in banks each side, a music desk with an open score, a bench in front
+function organConsoleArt() {
+  const P = ORGAN_P, O = P.oak;
+  return organPiece('console', -80, 80, -96, 4, c => {
+    // the case
+    c.fillStyle = 'rgba(20,10,30,.4)'; c.fillRect(-62, -88, 128, 90);
+    organOakPanel(c, -64, -90, 64, 0, 4);
+    organGothic(c, -40, -84, -58, 9, 0.3); organGothic(c, 40, -84, -58, 9, 0.3);
+    // the music desk and its score (two pages, a few lines of notes)
+    c.fillStyle = organLG(0, -86, 0, -60, [O[0], O[1]], c); c.beginPath(); c.moveTo(-26, -60); c.lineTo(-22, -86); c.lineTo(22, -86); c.lineTo(26, -60); c.closePath(); c.fill(); c.strokeStyle = O[3]; c.lineWidth = 0.8; c.stroke();
+    for (const e of [-1, 1]) { c.fillStyle = organLG(0, -84, 0, -64, ['#fffaf0', '#efe2c4'], c); c.beginPath(); c.moveTo(e * 1, -64); c.lineTo(e * 1, -84); c.quadraticCurveTo(e * 10, -86, e * 20, -84); c.lineTo(e * 22, -64); c.quadraticCurveTo(e * 11, -66, e * 1, -64); c.closePath(); c.fill(); c.strokeStyle = '#c8b28a'; c.lineWidth = 0.5; c.stroke();
+      c.strokeStyle = 'rgba(80,60,90,.55)'; c.lineWidth = 0.35; for (const yy of [-80, -73]) for (let q = 0; q < 5; q++) { c.beginPath(); c.moveTo(e * 3, yy + q * 1.1); c.lineTo(e * 20, yy + q * 1.1); c.stroke(); }
+      c.fillStyle = '#4a3a5a'; for (let q = 0; q < 4; q++) { organEll(c, e * (6 + q * 3.6), -78 + (q % 3) * 0.8, 0.9, 0.7); c.fill(); organEll(c, e * (5 + q * 3.8), -71 - (q % 2) * 1.1, 0.9, 0.7); c.fill(); } }
+    // the three manuals, stepped (each a row of ivory keys with ebony keys over them)
+    for (let m = 0; m < 3; m++) {
+      const y = -52 + m * 12, w = 52 - m * 3;
+      c.fillStyle = organLG(0, y - 3, 0, y + 6, [O[1], O[3]], c); c.fillRect(-w - 4, y - 3, w * 2 + 8, 9);
+      c.fillStyle = organLG(0, y, 0, y + 5, P.ivory, c); c.fillRect(-w, y, w * 2, 5);
+      c.strokeStyle = 'rgba(150,120,90,.6)'; c.lineWidth = 0.3; c.beginPath(); for (let x = -w; x <= w; x += 3.4) { c.moveTo(x, y); c.lineTo(x, y + 5); } c.stroke();
+      c.fillStyle = P.ebony[1]; for (let i = 0, x = -w + 2.2; x < w - 2; x += 3.4, i++) if ([0, 1, 3, 4, 5].includes(i % 7)) c.fillRect(x, y, 2, 3);
+      c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(-w, y, w * 2, 0.6);
+    }
+    // banks of stop knobs each side of the manuals
+    for (const e of [-1, 1]) for (let r = 0; r < 3; r++) organDecorStop(c, e * 57, -50 + r * 13, 0.9);
+    // the pedalboard's front rail and the bench
+    c.fillStyle = organLG(0, -6, 0, 0, [P.gold[0], P.gold[2]], c); c.fillRect(-64, -4, 128, 3);
+    c.fillStyle = organLG(0, -20, 0, -12, [O[0], O[2]], c); c.beginPath(); c.roundRect(-30, -20, 60, 7, 2); c.fill(); c.strokeStyle = O[3]; c.lineWidth = 0.7; c.stroke();
+    for (const e of [-1, 1]) { c.fillStyle = organLG(e * 26 - 2, 0, e * 26 + 2, 0, [O[1], O[3]], c); c.fillRect(e * 26 - 2, -13, 4, 13); }
+  });
+}
+// Maestro Bat ((0, 0) where he sits on the bench, world units, y down): a round violet-grey bat in a tailcoat and a gold
+// bow tie, big pointed ears with pink insides, round spectacles, wings as hands on the keys. bob: his head on the beat;
+// wing: how high his wings are lifted (0 playing .. 1 thrown up); pay: the clear's glow.
+function organBat(T, bob, wing, pay) {
+  const P = ORGAN_P, fur = ['#a89cc8', '#7a6ca4', '#4c4076', '#362c5a'], coat = ['#4a3a6e', '#2c2048', '#1c1432'];
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the tailcoat's tails over the bench
+  ctx.fillStyle = organLG(-12, 0, 12, 0, coat, ctx); ctx.beginPath(); ctx.moveTo(-12, -6); ctx.quadraticCurveTo(-16, 6, -13, 16); ctx.lineTo(-5, 12); ctx.lineTo(0, -2); ctx.lineTo(5, 12); ctx.lineTo(13, 16); ctx.quadraticCurveTo(16, 6, 12, -6); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#140e26'; ctx.lineWidth = 0.6; ctx.stroke();
+  // the body: a round coat with a white shirt front and a gold bow tie
+  ctx.fillStyle = organRG(-4, -20, 20, coat, ctx); organEll(ctx, 0, -14, 14, 15); ctx.fill(); ctx.strokeStyle = '#1a1230'; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.fillStyle = organLG(0, -26, 0, -4, ['#ffffff', '#e8e2f2'], ctx); ctx.beginPath(); ctx.moveTo(-5, -26); ctx.lineTo(5, -26); ctx.lineTo(2, -4); ctx.lineTo(-2, -4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = organLG(-5, -28, 5, -24, [P.gold[0], P.gold[1], P.gold[2]], ctx); ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(-6, -29); ctx.lineTo(-6, -23); ctx.closePath(); ctx.moveTo(0, -26); ctx.lineTo(6, -29); ctx.lineTo(6, -23); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.gold[3]; ctx.lineWidth = 0.4; ctx.stroke();
+  organCirc(ctx, 0, -26, 1.6); ctx.fillStyle = P.gold[1]; ctx.fill();
+  // the wings: an arm (shoulder, elbow, wrist) and three long finger bones fanning from the wrist, a violet membrane
+  // stretched between them in scallops; on the keys while he plays, flung up and spread on the clear
+  for (const e of [-1, 1]) {
+    const up = wing, play = Math.sin(T * 14 + e * 1.7) * 2 * (1 - up);
+    const sh = [e * 10, -20], el = [e * lerp(19, 20, up), lerp(-12, -34, up)], wr = [e * lerp(16, 30, up), lerp(-3 + play, -50, up)];
+    const fingers = [0, 1, 2].map(k => { const a = lerp(-Math.PI / 2 - 0.3, -Math.PI / 2 + 0.2, up) + e * (0.5 + k * 0.45) * lerp(0.55, 1, up), L = lerp(10, 22, up) - k * 2.4; return [wr[0] + e * Math.abs(Math.cos(a)) * L, wr[1] + Math.sin(a) * L * (up > 0.5 ? 1 : -0.35)]; });
+    // the membrane: shoulder, along the arm, finger tip to finger tip in scallops, back to the body's side
+    ctx.fillStyle = organLG(sh[0], sh[1], wr[0], wr[1], ['#6c5c98', '#4a3c74', '#2e2450']);
+    ctx.beginPath(); ctx.moveTo(sh[0], sh[1]); ctx.lineTo(el[0], el[1]); ctx.lineTo(wr[0], wr[1]); ctx.lineTo(fingers[0][0], fingers[0][1]);
+    let prev = fingers[0];
+    for (const f of [fingers[1], fingers[2]]) { const mx = (prev[0] + f[0]) / 2, my = (prev[1] + f[1]) / 2; ctx.quadraticCurveTo(lerp(mx, wr[0], 0.35), lerp(my, wr[1], 0.35), f[0], f[1]); prev = f; }
+    ctx.quadraticCurveTo(lerp(prev[0], sh[0], 0.5), lerp(prev[1], sh[1] + 8, 0.5) + 4, e * 9, -8); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#241a40'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = 'rgba(200,170,255,.18)'; ctx.beginPath(); ctx.moveTo(sh[0], sh[1]); ctx.lineTo(el[0], el[1]); ctx.lineTo(wr[0], wr[1]); ctx.lineTo(fingers[0][0], fingers[0][1]); ctx.closePath(); ctx.fill();
+    // the bones: arm and fingers (lit fur colour), a little thumb claw at the wrist
+    ctx.strokeStyle = fur[2]; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(sh[0], sh[1]); ctx.lineTo(el[0], el[1]); ctx.lineTo(wr[0], wr[1]); ctx.stroke();
+    ctx.strokeStyle = fur[0]; ctx.lineWidth = 0.9; ctx.stroke();
+    for (const f of fingers) { ctx.strokeStyle = fur[2]; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(wr[0], wr[1]); ctx.lineTo(f[0], f[1]); ctx.stroke(); ctx.strokeStyle = fur[0]; ctx.lineWidth = 0.45; ctx.stroke(); }
+    ctx.fillStyle = fur[1]; organCirc(ctx, wr[0], wr[1], 1.8); ctx.fill();
+    ctx.fillStyle = '#efe6ff'; ctx.beginPath(); ctx.moveTo(wr[0], wr[1] - 1.5); ctx.lineTo(wr[0] - e * 2.4, wr[1] - 3.6); ctx.lineTo(wr[0] - e * 0.4, wr[1] + 0.2); ctx.closePath(); ctx.fill();
+  }
+  // the head, bobbing: round, big ears with pink insides, spectacles, a smile with two little fangs
+  ctx.save(); ctx.translate(0, -38 - bob * 2); ctx.rotate(Math.sin(T * Math.PI / ORGAN.beat) * 0.08 * (1 - wing));
+  for (const e of [-1, 1]) {
+    ctx.fillStyle = organLG(e * 4, -22, e * 12, -4, [fur[0], fur[1], fur[2]], ctx); ctx.beginPath(); ctx.moveTo(e * 3, -8); ctx.quadraticCurveTo(e * 6, -24, e * 13, -26); ctx.quadraticCurveTo(e * 14, -14, e * 11, -5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = fur[3]; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillStyle = organLG(e * 6, -20, e * 10, -8, ['#ffc4d8', '#e888a8'], ctx); ctx.beginPath(); ctx.moveTo(e * 6, -9); ctx.quadraticCurveTo(e * 8, -19, e * 11.5, -21); ctx.quadraticCurveTo(e * 11.5, -13, e * 9.5, -7); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = organRG(-4, -5, 14, [fur[0], fur[1], fur[2]], ctx); organEll(ctx, 0, 0, 11, 10); ctx.fill(); ctx.strokeStyle = fur[3]; ctx.lineWidth = 0.7; ctx.stroke();
+  // a wild white tuft of maestro's hair, flicking on the beat
+  { const fl = Math.sin(T * Math.PI / ORGAN.beat) * 0.12 + wing * 0.25;
+    ctx.save(); ctx.translate(0, -8); ctx.rotate(fl);
+    ctx.fillStyle = organLG(-8, -14, 8, 0, ['#ffffff', '#e4dcf4', '#b8acd4']);
+    ctx.beginPath(); ctx.moveTo(-7, 1); ctx.quadraticCurveTo(-12, -6, -9, -12); ctx.quadraticCurveTo(-6, -8, -4, -9); ctx.quadraticCurveTo(-4, -17, 1, -19); ctx.quadraticCurveTo(0, -12, 3, -11); ctx.quadraticCurveTo(7, -16, 12, -14); ctx.quadraticCurveTo(8, -9, 9, -4); ctx.quadraticCurveTo(10, -1, 7, 1); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#9a8cbc'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.strokeStyle = 'rgba(150,136,190,.7)'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(-3, -1); ctx.quadraticCurveTo(-3, -9, 0, -15); ctx.moveTo(3, -1); ctx.quadraticCurveTo(5, -7, 9, -11); ctx.stroke();
+    ctx.restore(); }
+  ctx.fillStyle = organRG(0, 4, 7, ['#d8cce8', '#b0a2cc'], ctx); organEll(ctx, 0, 4, 6, 4.4); ctx.fill();
+  // spectacles and eyes (closed in bliss on the clear)
+  for (const e of [-1, 1]) {
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; organCirc(ctx, e * 4.6, -1.4, 3.6); ctx.fill();
+    if (wing > 0.4) { ctx.strokeStyle = '#2a1e40'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(e * 4.6, -1, 1.8, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+    else { ctx.fillStyle = '#2a1e40'; organCirc(ctx, e * 4.6, -1.2, 1.6); ctx.fill(); ctx.fillStyle = '#fff'; organCirc(ctx, e * 4.6 - 0.5, -1.8, 0.55); ctx.fill(); }
+    ctx.strokeStyle = P.gold[2]; ctx.lineWidth = 0.8; organCirc(ctx, e * 4.6, -1.4, 3.6); ctx.stroke();
+  }
+  ctx.strokeStyle = P.gold[2]; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(-1, -1.6); ctx.quadraticCurveTo(0, -2.6, 1, -1.6); ctx.stroke();
+  ctx.fillStyle = '#5a3a5a'; organEll(ctx, 0, 2.6, 1.6, 1); ctx.fill();
+  ctx.strokeStyle = '#3a2440'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(0, 4.2, wing > 0.4 ? 3.4 : 2.6, 0.25, Math.PI - 0.25); ctx.stroke();
+  ctx.fillStyle = '#fff'; for (const e of [-1, 1]) { ctx.beginPath(); ctx.moveTo(e * 1.6, 6.6); ctx.lineTo(e * 2.4, 6.4); ctx.lineTo(e * 2, 8.2); ctx.closePath(); ctx.fill(); }
+  organSheen(ctx, 0, 0, 11, 0.45);
+  ctx.restore();
+  ctx.restore();
+}
+function drawOrganDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = organT(), F = ORGAN_FIN, P = ORGAN_P;
+  if (y < -260 || y - (900 * s) > H + 200) return;
+  organCacheCheck();
+  const ch = organChamberRender(E), ct = a.clearT >= 0 ? a.clearT : -1, pay = ct >= 0 ? Math.min(1, ct * 1.6) : 0, bk = organBeatK();
+  ctx.drawImage(ch.cv, ox + ch.xa * s, sy(ch.a1), ch.w, ch.h);
+  ctx.save(); ctx.beginPath(); for (let al = E - 120; al <= E + 900; al += 10) ctx.lineTo(sx(leftWall(al) - 3), sy(al)); for (let al = E + 900; al >= E - 120; al -= 10) ctx.lineTo(sx(rightWall(al) + 3), sy(al)); ctx.closePath(); ctx.clip();
+  // the pipe mouths breathing light on the beat; blazing on the clear's chord
+  const chord = ct >= 0 ? Math.min(1, ct * 3) * Math.max(0.35, 1 - ct * 0.18) : 0;
+  for (const [mx, ma, j] of ch.mouths) { const yy = sy(ma); if (yy < -40 || yy > H + 40) continue; organGlow(sx(mx), yy, (10 + 14 * chord) * s, [255, 226, 160], 0.18 * organBeatK(-j * 0.4) + 0.6 * chord); }
+  organGlow(sx(ch.mid), sy(E + F.rose), F.roseR * 2.4 * s, [226, 196, 255], 0.14 + 0.1 * organBarK() + 0.3 * pay);
+  // the console and Maestro Bat on the loft
+  const cx = sx(ch.mid), cy = sy(E + F.loft);
+  ctx.save(); ctx.translate(cx, cy); ctx.save(); ctx.scale(F.cs, F.cs); organBlit(organConsoleArt(), 0, 0); ctx.restore();
+  const wing = ct >= 0 ? smooth(0, 0.25, ct) * (ct < 1.6 ? 1 : 0.7 + 0.3 * Math.cos((ct - 1.6) * 6)) : 0;
+  ctx.translate(0, -14 * F.cs * s); ctx.scale(s * F.bat, s * F.bat); organBat(G.t, bk, wing, pay); ctx.restore();
+  // the chord: notes bursting out of the towers and gold sparks raining down
+  if (pay > 0) {
+    const sp = organNoteSprite(1, 1.6), sp2 = organNoteSprite(0, 1.6);
+    for (let q = 0; q < 24; q++) {
+      const u = pmod(G.t * (0.25 + 0.15 * hash2(q, 4811)) + hash2(q, 4812), 1), tw = organTowers(ch.mid, ch.xl, ch.xr)[q % 3];
+      const x = tw[0] + (hash2(q, 4813) - 0.5) * tw[1] * 2.4 + Math.sin(u * 6 + q) * 14, al = E + F.organ0 + F.organH * tw[2] * 0.7 + u * 280, a2 = Math.min(1, pay * 2) * Math.sin(u * Math.PI);
+      if (q % 3) { ctx.globalAlpha = a2; organNoteBlit(q % 2 ? sp : sp2, 1.6, sx(x), sy(al), s, Math.sin(G.t * 2 + q) * 0.3); ctx.globalAlpha = 1; }
+      else organTwinkle(ctx, sx(x), sy(E + 760 - u * 700), 5 * s, a2, [255, 236, 170]);
+    }
+  }
+  ctx.restore();
+  // ---- the deck: two catwalks of piano keys (ivory planks with raised ebony keys) sliding out of the walls to meet
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const X0 = sx(side < 0 ? L - 12 : R + 12), X1 = sx(lerp(side < 0 ? L + 16 : R - 16, meet, e)), th = 12 * s, xa = Math.min(X0, X1), w = Math.abs(X1 - X0);
+    // a gilt bracket under it into the wall
+    ctx.fillStyle = organLG(0, y, 0, y + 40 * s, [P.gold[1], P.gold[2], P.gold[3]]); ctx.beginPath(); ctx.moveTo(X0, y + th); ctx.lineTo(X0 - side * 34 * s, y + th); ctx.quadraticCurveTo(X0 - side * 10 * s, y + th + 10 * s, X0, y + th + 40 * s); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.gold[3]; ctx.lineWidth = 0.8 * s; ctx.stroke();
+    // the oak key bed and the ivory keys on it
+    ctx.fillStyle = organLG(0, y + 4 * s, 0, y + th, [P.oak[1], P.oak[2]]); ctx.fillRect(xa, y + 5 * s, w, th - 5 * s);
+    ctx.strokeStyle = P.oak[3]; ctx.lineWidth = 0.8 * s; ctx.strokeRect(xa, y + 5 * s, w, th - 5 * s);
+    ctx.fillStyle = organLG(0, y - 2 * s, 0, y + 6 * s, P.ivory); ctx.beginPath(); ctx.roundRect(xa, y - 2 * s, w, 8 * s, 1.5 * s); ctx.fill(); ctx.strokeStyle = P.ivory[2]; ctx.lineWidth = 0.6 * s; ctx.stroke();
+    ctx.strokeStyle = 'rgba(150,120,90,.55)'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); for (let x = X0 + (side < 0 ? 1 : -1) * 9 * s; side < 0 ? x < X1 : x > X1; x += (side < 0 ? 1 : -1) * 9 * s) { ctx.moveTo(x, y - 2 * s); ctx.lineTo(x, y + 6 * s); } ctx.stroke();
+    // the ebony keys, raised (every key but the third and seventh of each octave)
+    let i = 0; for (let x = X0 + (side < 0 ? 1 : -1) * 6.5 * s; side < 0 ? x < X1 - 3 * s : x > X1 + 3 * s; x += (side < 0 ? 1 : -1) * 9 * s, i++) {
+      if (i % 7 === 2 || i % 7 === 6) continue;
+      ctx.fillStyle = organLG(0, y - 6 * s, 0, y, P.ebony); ctx.beginPath(); ctx.roundRect(x - 2.6 * s, y - 6 * s, 5.2 * s, 6 * s, 1 * s); ctx.fill();
+      ctx.fillStyle = 'rgba(210,196,255,.5)'; ctx.fillRect(x - 2 * s, y - 5.6 * s, 4 * s, 0.9 * s);
+    }
+    ctx.fillStyle = 'rgba(255,255,250,.85)'; ctx.fillRect(xa + 2 * s, y - 1.6 * s, w - 4 * s, 0.9 * s);
+  }
+  ctx.restore();
+}
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (organOn()) drawOrganDeck(); else base(); }; }
+// the payoff: the full organ's chord, notes and sparks bursting up round you, a warm flash
+function organClearBurst() {
+  const a = G.adv, p = G.p;
+  for (let k = 0; k < 14; k++) { const an = k / 14 * TWO_PI; organFx('note', p.x, a.end + 40, Math.cos(an) * 240, Math.sin(an) * 240 + 160, 1.4, 11 + 3 * (k % 3)); }
+  for (let k = 0; k < 18; k++) { const an = k / 18 * TWO_PI; organFx('spark', p.x, a.end + 40, Math.cos(an) * 300, Math.sin(an) * 300 + 100, 0.6, 2.2); }
+  for (let k = 0; k < 3; k++) organFx('ring', p.x, a.end + 40, 0, 0, 0.6 + k * 0.15, 60 + k * 40, { flat: 0.7, col: [255, 230, 170] });
+  puff(p.x, a.end + 30, 0, 40, 0.7, 22, 'star');
+  sfx('ochord');
+  G.flashCol = [255, 226, 170];
+}
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (organOn() && !boss) organClearBurst(); }; }
+// ---- golden tuning forks: three in daring spots (in a trumpet's blast, between the cymbals, under a staff's notes),
+// worth a big coin each, and the stage's fork and drum missions ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'organFork') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.organFork = (st.organFork || 0) + 1, of = advGoalN('organFork');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Tuning fork ${n}/${of}!` : 'Golden tuning fork!', '#ffe08a', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 226, 160];
+  for (let k = 0; k < 14; k++) { const an = k / 14 * TWO_PI; puff(f.x, f.alt, Math.cos(an) * 190, Math.sin(an) * 190, 0.55, 2.4, 'ember', k % 3 ? [255, 214, 120] : [240, 226, 255]); }
+  for (let k = 0; k < 3; k++) organFx('ring', f.x, f.alt, 0, 0, 0.5 + k * 0.15, 30 + k * 22, { flat: 1, col: [255, 236, 190] });
+  for (let k = 0; k < 6; k++) { const an = k / 6 * TWO_PI + 0.3; organFx('note', f.x, f.alt, Math.cos(an) * 150, Math.sin(an) * 150 + 120, 1.1, 10 + (k % 2) * 2); }
+  puff(f.x, f.alt, 0, 30, 0.6, 18, 'star');
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe08a', big: true, sub: 'tuning fork' });
+  vibrate([20, 30, 20]); sfx('ofork');
+}; }
+// The golden tuning fork (inside its pickup circle, (0, 0) its middle): two long tines on a rounded yoke, a stem with a
+// ball foot, lit from the top left; its tines shimmering as it hums, rings of sound pulsing off it, a warm glow, bobbing
+function drawOrganForkArt(t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2, gl = 0.6 + 0.25 * Math.sin(t * 3.1 + ph), Gd = ['#fff6c8', '#ffd860', '#d8a020', '#8a5a08'], hum = Math.sin(t * 60) * 0.5;
+  organGlow(0, bob, 40, [255, 214, 120], 0.34 * gl + 0.1);
+  ctx.save(); ctx.translate(0, bob); ctx.rotate(-0.32); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the hum: rings off the tines' tips
+  const u = pmod(t * 1.6 + ph, 1);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,240,200,${0.5 * (1 - u)})`; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(0, -10, 6 + u * 12, 3 + u * 6, 0, 0, TWO_PI); ctx.stroke(); ctx.restore();
+  // the tines and yoke (one path: a U), then the stem and ball
+  const tine = (x0, dx) => { ctx.beginPath(); ctx.moveTo(x0, 2); ctx.lineTo(x0 + dx, -17); ctx.stroke(); };
+  for (const [w, col] of [[4.4, Gd[3]], [3, null]]) {
+    ctx.lineWidth = w;
+    for (const e of [-1, 1]) { ctx.strokeStyle = col || organLG(e * 5 - 2, 0, e * 5 + 2, 0, [Gd[0], Gd[1], Gd[2]]); tine(e * 4.6, e * hum); }
+    ctx.strokeStyle = col || organLG(0, 0, 0, 8, [Gd[1], Gd[2]]); ctx.beginPath(); ctx.arc(0, 2, 4.6, 0, Math.PI); ctx.stroke();
+    ctx.strokeStyle = col || organLG(-2, 0, 2, 0, [Gd[0], Gd[1], Gd[2]]); ctx.beginPath(); ctx.moveTo(0, 6.6); ctx.lineTo(0, 16); ctx.stroke();
+  }
+  ctx.fillStyle = organRG(-1.2, 16.4, 4, [Gd[0], Gd[1], Gd[2]]); organCirc(ctx, 0, 17.5, 3); ctx.fill(); ctx.strokeStyle = Gd[3]; ctx.lineWidth = 0.7; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,240,.85)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-5.4, 0); ctx.lineTo(-5.4 - hum, -15); ctx.stroke();
+  ctx.restore();
+  const v = (t * 0.7 + ph) % 1, a = Math.sin(v * Math.PI);
+  organTwinkle(ctx, 7, -12 + bob, 6 * a, 0.9 * a);
+}
+{ const base = drawPickups; drawPickups = function () {
+  if (!G.fruit.some(f => f.kind === 'organFork')) return base();
+  const all = G.fruit; G.fruit = all.filter(f => f.kind !== 'organFork');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'organFork') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    ctx.save(); ctx.translate(sx(f.x), y); ctx.scale(s, s); drawOrganForkArt(G.t, f.alt * 0.05 + f.x * 0.01); ctx.restore();
+  }
+}; }
+// the fork and drum missions (stars), and their counts on the HUD under the others
+ADV_GOALS.organFork = { text: g => `Find all ${g.n} golden tuning forks`, done: (r, g) => (r.stats.organFork || 0) >= g.n, any: true, prog: (g, st) => `${st.organFork || 0}/${g.n}` };
+ADV_GOALS.organDrum = { text: g => `Boing off ${g.n} different drums`, done: (r, g) => (r.stats.organDrum || 0) >= g.n, any: true, prog: (g, st) => `${st.organDrum || 0}/${g.n}` };
+function organDrumIcon() {
+  // a little kettle drum for the HUD (centred, about 20 across)
+  const P = ORGAN_P;
+  ctx.fillStyle = organLG(-10, 0, 10, 0, [P.copper[1], P.copper[0], P.copper[2]]); ctx.beginPath(); ctx.moveTo(-10, -4); ctx.bezierCurveTo(-10, 4, -5, 8, 0, 8); ctx.bezierCurveTo(5, 8, 10, 4, 10, -4); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.copper[3]; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.fillStyle = organLG(0, -7, 0, -1, ['#fffaf0', '#e4cc9c']); organEll(ctx, 0, -4, 10.5, 3.2); ctx.fill(); ctx.strokeStyle = P.gold[2]; ctx.lineWidth = 1.2; ctx.stroke();
+}
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv; if (!a || !a.st || a.st.theme !== 'organ') return;
+  const goals = advGoalList(a.lv, a.st);
+  let row = goals.filter(q => (q.k === 'coconuts' && q.n) || q.k === 'idols' || q.k === 'time').length;
+  for (const k of ['organFork', 'organDrum']) {
+    const g = goals.find(q => q.k === k); if (!g) continue;
+    const n = G.stats[k] || 0, got = n >= g.n, xr = Math.min(cssW - 16, ox + playW - 6), y = safeTop + 70 + 24 * row, txt = `${Math.min(n, g.n)}/${g.n}`;
+    ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(26,14,40,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = got ? '#ffe9a0' : '#efe2ff'; ctx.fillText(txt, xr, y);
+    ctx.translate(xr - tw - 13, y); ctx.scale(0.62, 0.62);
+    if (k === 'organFork') drawOrganForkArt(G.t, 0); else organDrumIcon();
+    ctx.restore();
+    row++;
+  }
+}; }
+// The stage on the island: level 28 plays it (its own shaft replaces the one advStart lays out, as the temple's does)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'organ' || (G.level && G.level.organ)) return;
+  G.level = createOrganLevel(G.seed, st); G.organT = 0; G.organFx = []; G.organBoing = null; G.organBi = null;
+  G.level.marks.push({ alt: G.adv.end - 560, name: 'The grand organ ahead!', zone: 0 });
+}; }
+// play-testing hook (only with ?debug in the URL): the cave's shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) {
+  window.CRO = { ORGAN, ORGAN_STAGE, organShapes, organDanger, organPipeState, organCymbalState, organNotesState, createOrganLevel, cache: ORGAN_CACHE, scr: (x, a) => [sx(x), sy(a)] };
+  // what killed you, at the moment it did (the cave's clock, the pilot's capsules, the trap's shapes)
+  const base = die; die = function (cause, h) {
+    if (organOn()) try { const R = q => q.k === 'c' ? [q.x, q.a, q.r].map(Math.round) : q.k === 's' ? [q.x0, q.a0, q.x1, q.a1, q.r].map(Math.round) : ['b', q.x0, q.x1, q.a0, q.a1].map(v => typeof v === 'number' ? Math.round(v) : v); window.CRO.lastDie = { cause, T: G.organT, t: G.t, p: [G.p.x, G.p.alt, G.p.vy].map(Math.round), caps: pCaps.map(c => [c.x0, c.a0, c.x1, c.a1, c.r].map(Math.round)), S: h && hazardShapes && h.type ? hazardShapes(h).map(R) : null, stack: new Error().stack.split('\n').slice(1, 5).join(' | ') }; } catch (e) { window.CRO.lastDie = String(e); }
+    return base.apply(this, arguments);
+  };
+}
 // (game slot: Pipe Organ Cavern, island level 28)
 // (game slot: Pinball Palace, island level 29)
 // (game slot: Candy Caverns, island level 30)
