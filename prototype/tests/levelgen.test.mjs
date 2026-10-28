@@ -4444,6 +4444,173 @@ const cheeseStats = { seeds: 0, traps: 0, searches: 0, worst: 0, mice: 0, pick: 
 }
 const cheeseSummary = () => `PASS: Cheddar Caverns: ${cheeseStats.seeds} layouts × ${cheeseStats.len} m, only its own traps (${Object.entries(cheeseStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${cheeseStats.minW.toFixed(0)}+ wide, wall slope ${cheeseStats.slope.toFixed(2)} (max ${CH.RULES.maxWallSlope}); open lanes past mousetraps ${cheeseStats.lane.cheeseTrap.toFixed(0)}+, wheel shelves ${cheeseStats.lane.cheeseWheel.toFixed(0)}+, paws ${cheeseStats.lane.cheesePaw.toFixed(0)}+, parked graters ${cheeseStats.lane.cheeseGrater.toFixed(0)}+ (minLane ${CH.RULES.minLane}); wheels never fall through anything; ${cheeseStats.tunnels} tunnels, exits ${cheeseStats.exitClear.toFixed(0)}+ clear; beats ${cheeseStats.beatGap.toFixed(0)}+ apart; pickups ${cheeseStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${cheeseStats.traps} beats and ${cheeseStats.mice} mouselings (reach and escape, ${cheeseStats.baitSpots} with a safe spot to spring the trap) flown by the widest pilot in ${cheeseStats.searches} searches, the slowest pass ${cheeseStats.worst.toFixed(1)} s`;
 // (test slot: Cheddar Caverns, island level 31)
+// ---------- Adventure: Toybox Tower (island level 32), an authored stage with its own traps ----------
+// As the clockwork tower's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move sides and looks), then every beat and every golden teddy flown by a time-space search for the widest
+// pilot on the traps' own clocks from several start phases (a popping jack, marching soldiers and a dropping yo-yo
+// count as solid exactly when the game kills on them; a spinning top, which only knocks you away, counts as solid always).
+const TB = new Function(regions.join('\n') + '\nreturn { createToyboxLevel, toyboxShapes, toyboxDanger, toyboxEnd, toyboxCycle, toyboxJackState, toyboxMarchState, toyboxStack, toyboxRelief, TOYBOX, TOYBOX_STAGE, TOYBOX_TYPES, ADV_TOYBOX, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const toyboxStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { toyboxJack: Infinity, toyboxMarch: Infinity, toyboxTop: Infinity, toyboxYoyo: Infinity }, len: 0, kinds: {}, beatGap: Infinity };
+{
+  const R = TB.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = TB.ADV_TOYBOX;
+  const tfail = (rule, d) => fail('toybox: ' + rule, d);
+  if (st0.theme !== 'toybox' || !(st0.reward > 0)) tfail('the tower is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'toyboxTeddy' && g.n === 3) || !st0.goals.some(g => g.k === 'toyboxDodge')) tfail('three missions: the music box, 3 golden teddies and dodging every top', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * TB.UNITS_PER_M - TB.toyboxEnd()) > 1e-6) tfail('the stage length matches its layout', `${st0.len}`);
+  if (!(TB.TOYBOX.march.salute > 0)) tfail('the soldiers salute Bolt', '');
+  // the stage's order: jacks, then the march, then the tops, then the yo-yos, each taught alone; never faster than taught
+  // (a smaller P is faster for a jack or a yo-yo, a bigger v for a march or a top)
+  {
+    const fam = { jack: 'jack', jackPair: 'jack', march: 'march', marchPair: 'march', marchJack: 'march', top: 'top', topPair: 'top', topJack: 'top', topMarch: 'top', yoyo: 'yoyo', yoyoPair: 'yoyo', yoyoJack: 'yoyo', yoyoTop: 'yoyo', yoyoMarch: 'yoyo' };
+    const firsts = {}, seen = [];
+    for (const sec of TB.TOYBOX_STAGE) if (!sec.calm) for (const [, kind, o] of sec.beats) {
+      const b = fam[kind]; if (!b) { tfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) tfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if ((o.P && firsts[b].P && o.P > firsts[b].P) || (o.v && firsts[b].v && o.v < firsts[b].v)) tfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'jack,march,top,yoyo') tfail('the tower teaches jacks, the march, tops, then yo-yos', seen.join());
+    if (!TB.TOYBOX_STAGE.some(sec => sec.calm && !sec.finish && sec !== TB.TOYBOX_STAGE[0])) tfail('the tower has a breather', '');
+    if (!TB.TOYBOX_STAGE[TB.TOYBOX_STAGE.length - 1].finish) tfail('the stage ends at the music box', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (TB.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  // the widest open interval across the shaft at height a, given shapes S
+  // (sum: the total of the open stretches a pilot fits through, for the steel ball: a ball in mid-flight splits the shaft
+  // into two lanes, either of which you can take)
+  const openAt = (level, S, a, sum) => {
+    const [l, r] = level.walls(a), iv = [];
+    for (const q of S) {
+      let x0, x1;
+      if (q.k === 'c') { const d = Math.abs(a - q.a); if (d >= q.r) continue; const w = Math.sqrt(q.r * q.r - d * d); x0 = q.x - w; x1 = q.x + w; }
+      else if (q.k === 'b') { if (a < q.a0 || a > q.a1) continue; x0 = q.x0; x1 = q.x1; }
+      else { let lo = Infinity, hi = -Infinity; for (let u = 0; u <= 1.0001; u += 1 / 24) { const x = q.x0 + (q.x1 - q.x0) * u, aa = q.a0 + (q.a1 - q.a0) * u, d = Math.abs(a - aa); if (d < q.r) { const w = Math.sqrt(q.r * q.r - d * d); lo = Math.min(lo, x - w); hi = Math.max(hi, x + w); } } if (lo > hi) continue; x0 = lo; x1 = hi; }
+      iv.push([x0, x1]);
+    }
+    iv.sort((p, q) => p[0] - q[0]);
+    let best = 0, tot = 0, cur = l;
+    const take = w => { best = Math.max(best, w); if (w >= W + 8) tot += w; };
+    for (const [x0, x1] of iv) { if (x0 > cur) take(x0 - cur); cur = Math.max(cur, x1); }
+    take(r - cur);
+    return sum ? tot : best;
+  };
+  // the search (as the vault's): solid = every shape of every trap at that moment
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [];
+      for (const h of traps) TB.toyboxShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = TB.createToyboxLevel(TB.advSeed(st), st), hz = [], fr = [];
+    toyboxStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) tfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) tfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    toyboxStats.len = level.end / 10;
+    for (const h of hz) if (!TB.TOYBOX_TYPES.has(h.type)) tfail('the tower only has its own traps', h.type);
+    for (const h of hz) toyboxStats.kinds[h.type.slice(6)] = (toyboxStats.kinds[h.type.slice(6)] || 0) + (k ? 0 : 1);
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); toyboxStats.beatGap = Math.min(toyboxStats.beatGap, g); if (g < 0) tfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) tfail('the music box chamber below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      toyboxStats.minW = Math.min(toyboxStats.minW, r - l); toyboxStats.slope = Math.max(toyboxStats.slope, l2 - l, r - r2);
+    }
+    if (toyboxStats.minW < R.minWidth) tfail('the shaft is never narrower than minWidth', toyboxStats.minW.toFixed(1));
+    if (toyboxStats.slope > R.maxWallSlope) tfail('the walls never step in faster than maxWallSlope', toyboxStats.slope.toFixed(2));
+    // lanes: every trap alone, at every moment of its cycle, leaves an open lane of minLane across the shaft at every
+    // height it reaches (a flipper all through its flick, the ball anywhere on its path, a bank with its gap anywhere)
+    if (k < 3) for (const h of hz) {
+      const C = TB.toyboxCycle(h), n = 48, D = TB.toyboxDanger(h);
+      let a0 = Infinity, a1 = -Infinity; for (const q of D) { const r = q.r || 0, lo = q.k === 'c' ? q.a - r : q.k === 'b' ? q.a0 : Math.min(q.a0, q.a1) - r, hi = q.k === 'c' ? q.a + r : q.k === 'b' ? q.a1 : Math.max(q.a0, q.a1) + r; a0 = Math.min(a0, lo); a1 = Math.max(a1, hi); }
+      let worst = Infinity;
+      for (let i = 0; i < n; i++) { const S = TB.toyboxShapes(h, (i + 0.5) * C / n + (h.ph || 0), []); for (let a = a0; a <= a1; a += 4) worst = Math.min(worst, openAt(level, S, a, h.type === 'toyboxTop')); }
+      toyboxStats.lane[h.type] = Math.min(toyboxStats.lane[h.type], worst);
+      if (worst < R.minLane) tfail('every trap leaves an open lane of minLane at every moment', `${h.type} ${worst.toFixed(1)} at ${h.alt | 0}`);
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = TB.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) tfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: teddies and the Playroom Rug's heart of coconuts)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(TB.laneSize().w / 2 + 6 + TB.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of TB.toyboxDanger(h)) dd = Math.min(dd, TB.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) toyboxStats.pick = Math.min(toyboxStats.pick, dd);
+      if (dd < need - 0.5) tfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a teddy is a dare, but never inside a solid part (a jack's box or shelf, a march's shelf, a crane's arm)
+    for (const f of fr.filter(f => f.kind === 'toyboxTeddy')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of TB.toyboxShapes(h, 0, [], 'body')) if (TB.shapeDist(q, f.x, f.alt) < TB.COCO_R + 4) { tfail('a teddy never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < TB.pickR(fr[i]) + TB.pickR(fr[j]) + TB.PICK_GAP - 0.01) tfail('pickups never overlap', `${fr[i].alt | 0}`);
+    { const tr = hz.filter(h => h.type === 'toyboxTop').length; toyboxStats.rolls = tr;
+      if (tr < 8) tfail('the top mission has tops to dodge', `${tr}`);
+      if (level.stack.some(items => items.some((q, i) => i && Math.abs(q.p - items[i - 1].p) > Math.min(6, (items[i - 1].a1 - items[i - 1].a0) / 2, (q.a1 - q.a0) / 2) * 1.4 + 1e-6))) tfail('the toy stack never steps out faster than its ramps', ''); }
+    if (fr.filter(f => f.kind === 'toyboxTeddy').length !== 3) tfail('the tower holds exactly 3 golden teddies', `${fr.filter(f => f.kind === 'toyboxTeddy').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) tfail('the tower keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+      toyboxStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        toyboxStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) tfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else toyboxStats.worst = Math.max(toyboxStats.worst, tm);
+      }
+    }
+    // every teddy can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    const dare = (f, x, a, touch, n, label) => {
+      const own = hz.filter(h => h.lo - 40 < a && h.hi + 120 > a), lo = Math.min(a, ...own.map(h => h.lo)) - 200, hi = Math.max(a, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      for (let p = 0; p < n; p++) {
+        toyboxStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, touch);
+        if (tm < 0) { tfail(`every ${label} can be reached and escaped by the widest pilot`, `${label} at ${a | 0}, phase ${p}, seed ${k}`); return false; }
+      }
+      return true;
+    };
+    for (const f of fr.filter(f => f.kind === 'toyboxTeddy')) if (dare(f, f.x, f.alt, (x, a) => Math.hypot(x - f.x, a - f.alt) < TB.COCO_R + W / 2 - 4, 6, 'golden teddy')) toyboxStats.stars++;
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const toyboxSummary = () => `PASS: Toybox Tower: ${toyboxStats.seeds} layouts × ${toyboxStats.len} m, only its own traps (${Object.entries(toyboxStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${toyboxStats.minW.toFixed(0)}+ wide, toy-stack wall slope ${toyboxStats.slope.toFixed(2)} (max ${TB.RULES.maxWallSlope}); open lanes at every moment past jacks ${toyboxStats.lane.toyboxJack.toFixed(0)}+, marches ${toyboxStats.lane.toyboxMarch.toFixed(0)}+, tops ${toyboxStats.lane.toyboxTop.toFixed(0)}+ (both sides of it), yo-yos ${toyboxStats.lane.toyboxYoyo.toFixed(0)}+ (minLane ${TB.RULES.minLane}), beats ${toyboxStats.beatGap.toFixed(0)}+ apart; pickups ${toyboxStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${toyboxStats.rolls} tops to dodge; ${toyboxStats.traps} beats and ${toyboxStats.stars} golden teddies (reach and escape) flown by the widest pilot in ${toyboxStats.searches} searches, the slowest pass ${toyboxStats.worst.toFixed(1)} s`;
 // (test slot: Toybox Tower, island level 32)
 // (test slot: Monkey Carnival, island level 33)
 // (test slot: Haunted Lighthouse, island level 34)
@@ -4476,4 +4643,5 @@ console.log(organSummary());
 console.log(pinballSummary());
 console.log(candySummary());
 console.log(cheeseSummary());
+console.log(toyboxSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
