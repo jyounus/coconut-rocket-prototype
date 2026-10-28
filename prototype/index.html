@@ -14311,6 +14311,394 @@ const ADV_SANDSTORM = { name: 'Sandstorm Canyon', theme: 'sandstorm', seed: 'isl
   goals: [{ k: 'finish', text: 'Reach the Hidden Oasis' }, { k: 'sandstormScarab', n: 3 }, { k: 'sandstormDry', n: 2 }] };
 /* LEVELGEN:END */
 // (LEVELGEN slot: Sandstorm Canyon, island level 38)
+/* LEVELGEN:BEGIN */
+// ---------- Anthill Underworks (island level 39): the stage, its traps' shapes and its layout ----------
+// An authored stage like Monkey Carnival (see createCarnivalLevel): a giant ant colony dug under the island, climbed up
+// its main shaft of packed earth from the Colony Gate to the Queen's Chamber. One trap at a time, each taught alone and
+// slow before it is combined (Soldier Bridges, Antlion Sands, the Leafcutter Run), a breather (the Royal Nursery), the
+// Roly-Poly Galleries, the Deep Dig mixing them all, then the Queen's Chamber and its landing. Its own shaft (strata of
+// packed earth bulging between root knots), its own traps and its own look (G.theme 'anthill', see the anthill drawing).
+// The traps (every one leaves a way through on its own clock that the widest pilot fits; nothing ever rises at you):
+// - anthillMarch (Soldier March): a twig juts from a wall most of the way across, leaving a lane by the far wall. A
+//   column of N soldier ants waits on it near its tip. For `tell` s they rear up and clack their jaws, then they march
+//   out over the gap, linking up into a living bridge to the far wall (the lane shut) for `hold` s, and march back.
+//   The twig and the soldiers are lethal.
+// - anthillJaws (Antlion Jaws): a sand pit in a wall. For `tell` s pebbles slide into it and the sand churns, then the
+//   antlion lunges out with two giant sickle jaws open (`lunge` s), snaps them shut (`snap` s), holds them out across
+//   the shaft (`hold` s) and draws back. The head, the jaws and the pit's rim are lethal; the far lane stays open.
+// - anthillLeaf (Leaf Parade, the twist): leafcutter ants carry big leaf pieces across the shaft along a root thread,
+//   from a tunnel in one wall to a tunnel in the other, `n` leaves round the loop. The leaves are moving walls that
+//   only push: touch one and it shoves you along with the parade (never into a wall). Fly up through the gaps between
+//   them (the stage's clean-pass mission).
+// - anthillRoly (Roly-Poly Ricochet, this stage's own): a pill bug curls into an armoured ball in a burrow high in a
+//   wall. For `tell` s it rocks on the burrow's lip, then rolls out across the shaft, ricochets off the far wall and
+//   rolls back down into a burrow `2 dh` below on its own wall: a zig-zag that only ever goes down. The ball is lethal.
+// ease: how far above you a trap makes the monster wait for you (see gateAhead), so timing a trap is never a death.
+const ANTHILL = {
+  step: { every: [170, 300], D: [0, 13] },   // wall relief: the packed earth bulging between root knots
+  march: { N: 3, sp: 64, lane: 150, tell: 0.8, out: 1.25, hold: 0.85, back: 1.3, sag: 7, r: 15, bh: 18, half: 24, jaw: 8, jx: 36, ease: 430 },
+  jaws: { tell: 1.25, lunge: 0.26, snap: 0.12, hold: 0.45, back: 0.6, open: 0.3, hr: 18, lane: 125, ease: 440 },
+  leaf: { v: 70, n: 3, extra: 40, push: 72, ease: 0 },
+  roly: { r: 26, V: 390, dh: 190, tell: 0.9, sink: 0.3, ease: 520 },
+  tunnel: { r: 15, reach: 34, coins: 3 },
+  chiliGap: 470, end: 420,
+};
+const ANTHILL_TYPES = new Set(['anthillMarch', 'anthillJaws', 'anthillLeaf', 'anthillRoly']);
+// The stage, bottom to top (as CARNIVAL_STAGE: each section's width w and its beats [rise, kind, options], then `tail`
+// of clear shaft; a calm section is `len` of open shaft). drop: this beat holds one of the 3 royal eggs. tun: the
+// heights (above the section's foot, or above its tail) and walls of its plugged side tunnels (the mole's perk).
+const ANTHILL_STAGE = [
+  { name: 'Colony Gate', w: 380, len: 900, calm: true, tun: [[380, 1], [640, -1]] },
+  { name: 'Soldier Bridges', w: 380, beats: [[620, 'anthillMarch', { side: 1, P: 5.6 }], [560, 'anthillMarch', { side: -1, P: 5.5, ph: 0.4 }], [600, 'marchPair', { P: 5.4 }],
+    [640, 'anthillMarch', { side: 1, P: 5.3, drop: true }], [600, 'marchPair', { P: 5.3 }], [640, 'marchPair', { P: 5.2 }]], tail: 560, tun: [[320, -1]] },
+  { name: 'Antlion Sands', w: 380, beats: [[680, 'anthillJaws', { side: -1, P: 4.6 }], [600, 'anthillJaws', { side: 1, P: 4.5, ph: 0.3 }], [640, 'jawPair', { P: 4.5 }],
+    [680, 'anthillJaws', { side: -1, P: 4.4, drop: true }], [780, 'jawMarch', { P: 4.6 }], [700, 'jawPair', { P: 4.4 }]], tail: 600, tun: [[380, 1]] },
+  { name: 'Leafcutter Run', w: 380, beats: [[620, 'anthillLeaf', { dir: 1, v: 62 }], [460, 'anthillLeaf', { dir: -1, v: 66 }], [480, 'leafPair', { v: 68 }],
+    [600, 'leafJaws', { P: 4.5, v: 70 }], [640, 'leafMarch', { P: 5.3, v: 70 }], [640, 'leafJaws', { P: 4.4, v: 72 }]], tail: 600, tun: [[360, -1]] },
+  { name: 'Royal Nursery', w: 384, len: 1200, calm: true, tun: [[240, 1], [420, -1], [900, 1], [1040, -1]] },
+  { name: 'Roly-Poly Galleries', w: 380, beats: [[620, 'anthillRoly', { side: 1, P: 5.4 }], [720, 'anthillRoly', { side: -1, P: 5.3, ph: 0.3 }], [720, 'anthillRoly', { side: 1, P: 5.2, drop: true }],
+    [740, 'rolyLeaf', { P: 5.2, v: 70 }], [860, 'rolyJaws', { P: 5.2 }], [860, 'rolyMarch', { P: 5.2 }]], tail: 640, tun: [[400, 1]] },
+  { name: 'The Deep Dig', w: 376, beats: [[700, 'jawMarch', { P: 4.4 }], [700, 'leafJaws', { P: 4.4, v: 74 }], [720, 'rolyLeaf', { P: 5.1, v: 74 }],
+    [860, 'jawPair', { P: 4.3 }], [700, 'leafMarch', { P: 5.2, v: 74 }], [700, 'rolyJaws', { P: 5.1 }], [900, 'leafPair', { v: 76 }], [640, 'marchPair', { P: 5.1 }]], tail: 720 },
+  { name: "Queen's Chamber", w: 384, len: 900, calm: true, finish: true },
+];
+const anthillLen = sec => sec.calm || !sec.beats ? sec.len : sec.beats.reduce((n, b) => n + b[0], 0) + sec.tail;
+const anthillEnd = () => { let y = 0; for (const sec of ANTHILL_STAGE) { if (sec.finish) return y + ANTHILL.end; y += anthillLen(sec); } return y; };
+
+// ---- the traps' state and shapes over time (shared by play, drawing, the pickups' clearance and the test) ----
+// a soldier column's clock: sL how far out along its path (from its wall) the lead soldier stands, face +1 out, -1
+// home, tell 0..1 (rearing and clacking), k the phase's progress; and each soldier's place on the path
+function anthillMarchAt(h, t) {
+  const X = ANTHILL.march, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.out - X.hold - X.back, s0 = h.tw - 36, s1 = h.wd - 8;
+  let ph, sL, face = 1, tell = 0, k = 0, walk = 0;
+  if (u < I) { ph = 'rest'; sL = s0; k = u / I; }
+  else if (u < I + X.tell) { ph = 'tell'; sL = s0; tell = (u - I) / X.tell; }
+  else if (u < I + X.tell + X.out) { ph = 'out'; k = (u - I - X.tell) / X.out; sL = lerp(s0, s1, smooth(0, 1, k)); walk = 1; }
+  else if (u < I + X.tell + X.out + X.hold) { ph = 'hold'; sL = s1; k = (u - I - X.tell - X.out) / X.hold; }
+  else { ph = 'back'; k = clamp((u - I - X.tell - X.out - X.hold) / X.back, 0, 1); sL = lerp(s1, s0, smooth(0, 1, k)); face = -1; walk = 1; }
+  return { ph, sL, face, tell, k, walk, u };
+}
+// a point s along a column's path: out along the twig, then across the gap to the far wall (sagging a little there)
+function anthillPathAt(h, s) {
+  const X = ANTHILL.march, sag = s > h.tw ? X.sag * Math.sin(Math.PI * clamp((s - h.tw) / (h.wd - h.tw), 0, 1)) : 0;
+  return [h.base + h.side * s, h.alt - sag];
+}
+// an antlion's clock: e how far its head and jaws are out (0..1), open the jaws' half-angle, tell 0..1
+function anthillJawsAt(h, t) {
+  const X = ANTHILL.jaws, u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - X.lunge - X.snap - X.hold - X.back;
+  if (u < I) return { ph: 'rest', e: 0, open: X.open, tell: 0, u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', e: 0, open: X.open, tell: v / X.tell, u };
+  v -= X.tell;
+  if (v < X.lunge) { const k = v / X.lunge; return { ph: 'lunge', e: 1 - (1 - k) ** 2.4, open: X.open, tell: 0, k, u }; }
+  v -= X.lunge;
+  if (v < X.snap) { const k = v / X.snap; return { ph: 'snap', e: 1, open: lerp(X.open, 0.02, smooth(0, 1, k)), tell: 0, k, u }; }
+  v -= X.snap;
+  if (v < X.hold) return { ph: 'hold', e: 1, open: 0.02, tell: 0, k: v / X.hold, u };
+  v -= X.hold;
+  const k = clamp(v / X.back, 0, 1);
+  return { ph: 'back', e: 1 - smooth(0, 1, k), open: 0.02 + 0.1 * k, tell: 0, k, u };
+}
+// one jaw's centreline (sg +1 the upper jaw, -1 the lower), world points with their half-thickness, at extension e
+function anthillJawPts(h, st, sg, n = 5) {
+  const d = h.side, hx = h.base + d * (6 + 16 * st.e), L = st.e * h.jl, rx = hx + d * 10, ra = h.alt + sg * 4, ca = Math.cos(st.open), sa = Math.sin(st.open), out = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), px = L * u, py = sg * (L * 0.13 * Math.sin(Math.PI * u) - L * 0.07 * u * u);
+    const qx = px * ca - py * sg * sa, qy = px * sg * sa + py * ca;   // (px, py) turned by sg × open, up being +
+    out.push([rx + d * qx, ra + qy, 7 - 4.6 * u]);
+  }
+  return out;
+}
+// a leaf parade's carriers: each leaf's x (q along its way, from its source tunnel), and the parade's span
+function anthillLeafPos(h, t, out = []) {
+  const X = ANTHILL.leaf, span = h.span, sp = span / X.n;
+  for (let i = 0; i < X.n; i++) {
+    const q = pmod(h.v * t + (i + h.ph) * sp, span) - 36;
+    out.push({ i, q, x: h.dir > 0 ? h.L + q : h.R - q });
+  }
+  return out;
+}
+// a roly-poly's geometry: its top burrow (Atop), the crossing time tC and the fall per crossing
+function anthillRolyGeo(h) {
+  if (h.geo) return h.geo;
+  const X = ANTHILL.roly, D = h.wd - 2 * X.r, tC = D / X.V;
+  return (h.geo = { D, tC, Atop: h.alt + 2 * X.dh });
+}
+// where the ball is τ s into its roll: out across, off the far wall, back down into its lower burrow
+function anthillRolyPos(h, tau) {
+  const X = ANTHILL.roly, g = anthillRolyGeo(h), k = clamp(tau / g.tC, 0, 2), f = k < 1 ? k : 2 - k;
+  return { x: h.base + h.side * (X.r + g.D * f), a: g.Atop - X.dh * k, k };
+}
+// a roly-poly's clock: rest (curled in its upper burrow), tell 0..1 (rocking out onto the lip), roll (τ), sink 0..1
+function anthillRolyAt(h, t) {
+  const X = ANTHILL.roly, g = anthillRolyGeo(h), u = pmod(t / h.P + h.ph, 1) * h.P, I = h.P - X.tell - 2 * g.tC - X.sink;
+  if (u < I) return { ph: 'rest', tell: 0, k: u / I, u };
+  let v = u - I;
+  if (v < X.tell) return { ph: 'tell', tell: v / X.tell, u };
+  v -= X.tell;
+  if (v < 2 * g.tC) return { ph: 'roll', tau: v, ...anthillRolyPos(h, v), u };
+  v -= 2 * g.tC;
+  return { ph: 'sink', k: clamp(v / X.sink, 0, 1), u };
+}
+// Every collision shape of an anthill trap at time t, fitted to its drawing. kind: undefined or 'body' for the lethal
+// ones, 'still' only the lethal parts that never move, 'push' the leaf parade's leaves and carriers (they only shove).
+function anthillShapes(h, t, S = [], kind) {
+  const c = (x, a, r, soft) => S.push(soft ? { k: 'c', x, a, r, soft: true } : { k: 'c', x, a, r }), cap = (x0, a0, x1, a1, r, soft) => S.push(soft ? { k: 's', x0, a0, x1, a1, r, soft: true } : { k: 's', x0, a0, x1, a1, r });
+  const d = h.side, b = h.base, A = h.alt, moving = kind !== 'still';
+  if (h.type === 'anthillMarch') {
+    if (kind === 'push') return S;
+    const X = ANTHILL.march;
+    cap(b - d * 4, A - 4, b + d * (h.tw + 2), A - 4, 5.2);   // the twig
+    if (moving) {
+      const st = anthillMarchAt(h, t);
+      for (let i = 0; i < X.N; i++) {
+        const [x, a] = anthillPathAt(h, st.sL - i * X.sp);
+        cap(x - X.half, a + X.bh, x + X.half, a + X.bh, X.r);   // abdomen, thorax and head
+        c(x + d * st.face * X.jx, a + X.bh - 1, X.jaw);   // the jaws
+      }
+    }
+  } else if (h.type === 'anthillJaws') {
+    if (kind === 'push') return S;
+    const X = ANTHILL.jaws;
+    c(b + d * 2, A, 19);   // the pit's raised rim
+    if (moving) {
+      const st = anthillJawsAt(h, t);
+      if (st.ph === 'tell' && st.tell > 0.5) c(b + d * 6, A, X.hr - 1);   // the head peeking up out of the sand
+      if (st.e > 0) {
+        c(b + d * (6 + 16 * st.e), A, X.hr);
+        for (const sg of [1, -1]) { const P = anthillJawPts(h, st, sg); for (let i = 1; i < P.length; i++) cap(P[i - 1][0], P[i - 1][1], P[i][0], P[i][1], (P[i - 1][2] + P[i][2]) / 2); }
+      }
+    }
+  } else if (h.type === 'anthillLeaf') {
+    if (kind !== 'push') return S;
+    for (const L of anthillLeafPos(h, t)) {
+      if (L.q < -30 || L.q > h.wd + 30) continue;
+      cap(L.x, A + 18, L.x, A + 48, 19, true);   // the leaf piece held high
+      cap(L.x - 15, A + 7, L.x + 15, A + 7, 7, true);   // its carrier
+    }
+  } else if (h.type === 'anthillRoly') {
+    if (kind === 'push' || !moving) return S;
+    const X = ANTHILL.roly, g = anthillRolyGeo(h), st = anthillRolyAt(h, t);
+    if (st.ph === 'tell') c(b + d * X.r * Math.min(1, 0.2 + st.tell * 1.1), g.Atop + 1.5 * Math.sin(st.tell * 30), X.r - 1);
+    else if (st.ph === 'roll') c(st.x, st.a, X.r);
+    else if (st.ph === 'sink') c(b + d * X.r * (1 - st.k), A, X.r - 2);
+  }
+  return S;
+}
+// Everywhere a trap can ever reach (for keeping pickups clear): its shapes over a whole cycle, a parade's whole band.
+function anthillDanger(h) {
+  const S = []; anthillShapes(h, 0, S, 'still');
+  if (h.type === 'anthillLeaf') { S.push({ k: 's', x0: h.L - 10, a0: h.alt + 26, x1: h.R + 10, a1: h.alt + 26, r: 34 }); return S; }
+  for (let t = 0; t < h.P; t += 0.04) anthillShapes(h, t, S);
+  return S;
+}
+
+// Anthill Underworks' shaft, laid out in full from ANTHILL_STAGE (the seed only nudges looks and phases). It answers the
+// same questions as createTempleLevel (walls, marks, chambers, chunkMarks, fill, all).
+function createAnthillLevel(seed, st) {
+  const rng = mulberry32((seed ^ 0xA27411) >>> 0), Q = ANTHILL;
+  const secs = [], out = [], fruit = [], marks = [], chunkMarks = [], flats = [], tunnels = [];
+  let y = 0;
+  for (const sec of ANTHILL_STAGE) { const len = anthillLen(sec); secs.push({ ...sec, a0: y, a1: y + len }); y += len; }
+  const topA = y, endAt = anthillEnd();
+  const secAt = a => { for (let i = secs.length - 1; i >= 0; i--) if (a >= secs[i].a0) return i; return 0; };
+  const widthAt = a => {
+    const i = secAt(a), sc = secs[i], nx = secs[i + 1];
+    let w = sc.w;
+    if (i > 0) w = lerp(secs[i - 1].w, sc.w, smooth(sc.a0 - 120, sc.a0 + 120, a));
+    if (nx && a > nx.a0 - 120) w = lerp(sc.w, nx.w, smooth(nx.a0 - 120, nx.a0 + 120, a));
+    return lerp(WORLD_W - 28, w, smooth(150, 600, a));
+  };
+  // the walls' relief on a side: packed earth bulging out between root knots (each bulge its own depth), eased flat
+  // where a trap is mounted or reaches and over the launch. Never steeper than RULES.maxWallSlope.
+  let fIdx = null, fN = -1; const fNone = [];
+  const flatsNear = a => { if (fN !== flats.length) { fIdx = new Map(); for (const f of flats) for (let q = Math.floor((f.a0 - 70) / 256); q <= Math.floor((f.a1 + 70) / 256); q++) { let B = fIdx.get(q); if (!B) fIdx.set(q, B = []); B.push(f); } fN = flats.length; } return fIdx.get(Math.floor(a / 256)) || fNone; };
+  const SP = Q.step, flatK = (a, side) => { let k = 0; for (const f of flatsNear(a)) if (f.side === side && a > f.a0 - 70 && a < f.a1 + 70) k = Math.max(k, smooth(f.a0 - 70, f.a0, a) * (1 - smooth(f.a1, f.a1 + 70, a))); return k; };
+  const knots = [[], []];
+  for (const side of [0, 1]) { let a = -60, i = 0; while (a < topA + 400) { knots[side].push({ a, d: lerp(SP.D[0], SP.D[1], hash2(i, (seed & 0xffff) + 711 + side * 17)), t: Math.floor(hash2(i, (seed & 0xffff) + 719 + side * 17) * 4) }); a += lerp(SP.every[0], SP.every[1], hash2(i, (seed & 0xffff) + 713 + side * 17)); i++; } }
+  const knotAt = (a, side) => { const K = knots[side]; let lo = 0, hi = K.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m].a <= a) lo = m; else hi = m; } return lo; };
+  const panelAt = (a, side) => { const K = knots[side], i = knotAt(a, side), k0 = K[i], k1 = K[i + 1] || k0, u = clamp((a - k0.a) / Math.max(1, k1.a - k0.a), 0, 1); return k0.d * Math.sin(Math.PI * u) ** 1.3; };
+  const reliefAt = (a, side) => Math.max(0, panelAt(a, side)) * smooth(380, 620, a) * (1 - flatK(a, side));
+  const baseWalls = a => { const w = widthAt(a); return [WORLD_W / 2 - w / 2, WORLD_W / 2 + w / 2]; };
+  function lWalls(a) {
+    let [L, R] = baseWalls(a);
+    L += reliefAt(a, 0); R -= reliefAt(a, 1);
+    if (R - L < RULES.minWidth) { const m = (RULES.minWidth - (R - L)) / 2; L -= m; R += m; }
+    return [L, R];
+  }
+  function lOpening(lo, hi) { let L = -Infinity, R = Infinity; for (let a = lo; a <= hi + 2; a += 2) { const [l, r] = lWalls(a); if (l > L) L = l; if (r < R) R = r; } return [L, R]; }
+
+  // ---- the traps ----
+  const flat = (a0, a1) => { flats.push({ a0, a1, side: 1 }); flats.push({ a0, a1, side: 0 }); };
+  const ph = () => rng(), pick = () => (rng() < 0.5 ? 1 : -1);
+  let lastSide = 0;
+  const one = (type, A, o, ease, ex = {}) => { lastSide = o.side; return [{ type, side: o.side, alt: A, P: o.P, ph: o.ph ?? ph(), drop: !!o.drop, ease, ...ex }]; };
+  const make = {
+    anthillMarch(A, o) { flat(A - 40, A + 50); return one('anthillMarch', A, o, Q.march.ease); },
+    marchPair(A, o) {   // twigs from facing walls 260 apart, half a cycle out of step (zig-zag through their lanes)
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.anthillMarch(A, { side: d, P: o.P, ph: p0 }), ...make.anthillMarch(A + 260, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    anthillJaws(A, o) { flat(A - 110, A + 110); return one('anthillJaws', A, o, Q.jaws.ease); },
+    jawPair(A, o) {   // pits in facing walls 270 apart, out of step
+      const p0 = o.ph ?? ph(), d = -(lastSide || pick());
+      return [...make.anthillJaws(A, { side: d, P: o.P, ph: p0 }), ...make.anthillJaws(A + 270, { side: -d, P: o.P, ph: p0 + 0.5 })];
+    },
+    jawMarch(A, o) {   // a pit, then a soldier twig well above it from the far wall
+      const d = -(lastSide || pick());
+      return [...make.anthillJaws(A, { side: d, P: o.P, ph: o.ph ?? ph() }), ...make.anthillMarch(A + 330, { side: -d, P: o.P + 0.8, ph: ph() })];
+    },
+    anthillLeaf(A, o) { flat(A - 30, A + 80); lastSide = o.dir; return [{ type: 'anthillLeaf', side: o.dir, dir: o.dir, alt: A, v: o.v, P: 1, ph: o.ph ?? ph(), ease: Q.leaf.ease }]; },
+    leafPair(A, o) {   // two parades 170 apart, walking opposite ways
+      const d = -(lastSide || pick());
+      return [...make.anthillLeaf(A, { dir: d, v: o.v }), ...make.anthillLeaf(A + 170, { dir: -d, v: o.v * 0.9 })];
+    },
+    leafJaws(A, o) {   // a parade, then a pit above it on the wall the parade walks toward
+      const d = -(lastSide || pick());
+      return [...make.anthillLeaf(A, { dir: d, v: o.v }), ...make.anthillJaws(A + 220, { side: d, P: o.P, ph: ph() })];
+    },
+    leafMarch(A, o) {   // a parade, then a soldier twig above it
+      const d = -(lastSide || pick());
+      return [...make.anthillLeaf(A, { dir: d, v: o.v }), ...make.anthillMarch(A + 190, { side: d, P: o.P, ph: ph() })];
+    },
+    anthillRoly(A, o) { flat(A - 40, A + 2 * Q.roly.dh + 40); return one('anthillRoly', A, o, Q.roly.ease); },
+    rolyLeaf(A, o) {   // a roly-poly, then a parade above its upper burrow
+      const d = -(lastSide || pick());
+      return [...make.anthillRoly(A, { side: d, P: o.P, ph: ph() }), ...make.anthillLeaf(A + 2 * Q.roly.dh + 130, { dir: -d, v: o.v })];
+    },
+    rolyJaws(A, o) {   // a roly-poly, then a pit above it in the far wall
+      const d = -(lastSide || pick());
+      return [...make.anthillRoly(A, { side: d, P: o.P, ph: ph() }), ...make.anthillJaws(A + 2 * Q.roly.dh + 200, { side: -d, P: o.P - 0.7, ph: ph() })];
+    },
+    rolyMarch(A, o) {   // a roly-poly, then a soldier twig above it from the same wall
+      const d = -(lastSide || pick());
+      return [...make.anthillRoly(A, { side: d, P: o.P, ph: ph() }), ...make.anthillMarch(A + 2 * Q.roly.dh + 140, { side: d, P: o.P, ph: ph() })];
+    },
+  };
+  const beats = [];
+  for (const sc of secs) {
+    marks.push({ alt: sc.a0 + (sc.calm ? 80 : 40), name: sc.name, zone: 0, anthill: true });
+    if (sc.a0 > 0) chunkMarks.push({ alt: sc.a0 + 20, corridor: false, set: true });
+    if (sc.tun) for (const [da, side] of sc.tun) tunnels.push({ side: side > 0 ? 1 : 0, alt: sc.calm ? sc.a0 + da : sc.a1 - sc.tail + da, open: false });
+    if (!sc.beats) continue;
+    let a = sc.a0;
+    for (const [rise, kind, o] of sc.beats) { a += rise; const hs = make[kind](a, o); beats.push({ a, kind, o, hs, sec: sc }); }
+  }
+  // finish the traps now the flat faces are known
+  for (const h of beats.flatMap(b => b.hs)) {
+    const d = h.side;
+    if (h.type === 'anthillMarch') {
+      const X = Q.march, [L, R] = lOpening(h.alt - 30, h.alt + 40);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L; h.tw = h.wd - X.lane;
+      h.lo = h.alt - X.sag - 12; h.hi = h.alt + X.bh + X.r + 10;
+    } else if (h.type === 'anthillJaws') {
+      const X = Q.jaws, [L, R] = lOpening(h.alt - 100, h.alt + 100);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L; h.jl = h.wd - X.lane - 32;
+      let lo = Infinity, hi = -Infinity; for (let t = 0; t < h.P; t += 0.02) for (const q of anthillShapes(h, t, [])) { const a0 = q.k === 'c' ? q.a : Math.min(q.a0, q.a1), a1 = q.k === 'c' ? q.a : Math.max(q.a0, q.a1); lo = Math.min(lo, a0 - q.r); hi = Math.max(hi, a1 + q.r); }
+      h.lo = lo - 4; h.hi = hi + 4;
+    } else if (h.type === 'anthillLeaf') {
+      const X = Q.leaf, [L, R] = lOpening(h.alt - 10, h.alt + 70);
+      h.base = d > 0 ? L : R; h.L = L; h.R = R; h.x = (L + R) / 2; h.wd = R - L; h.span = h.wd + 72 + X.extra;
+      h.P = h.span / h.v; h.lo = h.alt - 4; h.hi = h.alt + 70;
+    } else if (h.type === 'anthillRoly') {
+      const X = Q.roly, [L, R] = lOpening(h.alt - 30, h.alt + 2 * X.dh + 30);
+      h.base = d > 0 ? L : R; h.far = d > 0 ? R : L; h.x = (L + R) / 2; h.wd = R - L;
+      const g = anthillRolyGeo(h); h.P = Math.max(h.P, X.tell + 2 * g.tC + X.sink + 1.6);
+      h.lo = h.alt - X.r - 6; h.hi = g.Atop + X.r + 8;
+    }
+    out.push(h);
+  }
+  out.sort((p, q) => p.lo - q.lo);
+  // the side tunnels sit in plain wall well clear of any trap
+  for (let i = tunnels.length - 1; i >= 0; i--) if (out.some(h => h.lo - 120 < tunnels[i].alt && h.hi + 120 > tunnels[i].alt)) tunnels.splice(i, 1);
+
+  // ---- pickups ----
+  const near = (a, pad) => out.filter(h => h.lo - pad < a && h.hi + pad > a);
+  const dangerCache = new Map(), dangerOf = h => { if (!dangerCache.has(h)) dangerCache.set(h, anthillDanger(h)); return dangerCache.get(h); };
+  const clearance = (x, a) => { let dd = Infinity; for (const h of near(a, 220)) for (const q of dangerOf(h)) dd = Math.min(dd, shapeDist(q, x, a)); return dd; };
+  const HUG = Math.ceil(laneSize().w / 2 + 6 + COCO_R);
+  const fits = (x, a, r, clear) => { const [l, rr] = lWalls(a); return x - r - RULES.fruitMargin >= l && x + r + RULES.fruitMargin <= rr && clearance(x, a) >= clear && !fruit.some(f => Math.hypot(f.x - x, f.alt - a) < r + pickR(f) + PICK_GAP); };
+  const add = (x, a, kind = 'coco', o = {}) => {
+    const r = pickR({ kind }), clear = o.clear ?? (o.bonus || kind === 'gold' ? HUG : RULES.pickup.clear);
+    for (const dx of [0, 6, -6, 12, -12, 18, -18, 26, -26]) if (fits(x + dx, a, r, clear)) { fruit.push({ x: x + dx, alt: a, kind, ...o }); return true; }
+    return false;
+  };
+  const mid = a => { const [l, r] = lWalls(a); return (l + r) / 2; };
+  let eggs = 0;
+  const weave = (a0, a1, amp = 0.7, k0 = 0) => { for (let a = a0, k = k0; a < a1; a += 70, k++) { const [l, r] = lWalls(a), M = RULES.fruitMargin + 26; add(clamp((l + r) / 2 + Math.sin(k * 0.55 + 0.6) * ((r - l) / 2 - M) * amp, l + M, r - M), a); } };
+  for (const sc of secs) {
+    if (!sc.calm) continue;
+    if (sc.a0 === 0) weave(220, sc.a1 - 80, 0.5);
+    else if (sc.finish) weave(sc.a0 + 100, sc.a0 + Q.end - 120, 0.5);
+    else {   // the Royal Nursery: a clutch of coconuts round a big coin (an egg heap), then a weave
+      const cA = sc.a0 + 560, cx = mid(cA);
+      add(cx, cA, 'gold', { clear: -Infinity });
+      for (let k = 0; k < 12; k++) { const an = k / 12 * Math.PI * 2; add(cx + Math.cos(an) * 84, cA + Math.sin(an) * 84, 'coco', { clear: -Infinity }); }
+      weave(sc.a0 + 720, sc.a1 - 90, 0.6, 3);
+    }
+  }
+  // each trap's coconuts show the way: a column up a soldier twig's lane, a column up a pit's far lane, a pair in each
+  // parade gap's path, a line down a roly-poly's quiet wall (each royal egg a dare: in a soldier twig's lane hard by the
+  // far wall, in the middle of an antlion's lunge, on a roly-poly's bounce off the far wall)
+  for (const b of beats) {
+    for (const h of b.hs) {
+      const d = h.side, [l, r] = lWalls(h.alt);
+      if (h.type === 'anthillMarch') {
+        const x = h.far - d * (Q.march.lane / 2);
+        for (let k = 0; k < 3; k++) add(x, h.alt - 150 + k * 46, 'coco', { clear: 22 });
+        if (h.drop && eggs < 3) { if (add(h.far - d * 34, h.alt + 12, 'egg', { egg: true, clear: -Infinity })) eggs++; }
+      } else if (h.type === 'anthillJaws') {
+        const far = h.far - d * 56;
+        for (let k = 0; k < 4; k++) add(far, h.alt - 90 + k * 60, 'coco', { clear: 22 });
+        if (h.drop && eggs < 3) { if (add(h.base + d * (h.wd * 0.5), h.alt, 'egg', { egg: true, clear: -Infinity })) eggs++; }
+      } else if (h.type === 'anthillLeaf') {
+        add((l + r) / 2 - 40, h.alt - 70, 'coco', { clear: 18 }); add((l + r) / 2 + 40, h.alt - 70, 'coco', { clear: 18 });
+      } else if (h.type === 'anthillRoly') {
+        const g = anthillRolyGeo(h);
+        if (h.drop && eggs < 3) { if (add(h.far - d * 42, (h.alt + g.Atop) / 2, 'egg', { egg: true, clear: -Infinity })) eggs++; }
+      }
+    }
+    const next = beats[beats.indexOf(b) + 1];
+    if (next && next.sec === b.sec) { const a0 = Math.max(...b.hs.map(q => q.hi)) + 90, a1 = Math.min(...next.hs.map(q => q.lo)) - 120; if (a1 - a0 > 80) { const x = mid((a0 + a1) / 2) + (rng() - 0.5) * 80; for (let a = a0, k = 0; a <= a1 && k < 4; a += 38, k++) add(x + (k - 1.5) * 10, a); } }
+  }
+  // the chili line (as the carnival's)
+  {
+    const spots = [];
+    for (let a = 260; a < endAt - 160; a += 10) {
+      const m = mid(a);
+      let got = false;
+      for (const cc of [RULES.pickup.clear, 30]) { for (let dd = 0; dd < 140 && !got; dd += 8) { const xx = [m - dd, m + dd].find(x => fits(x, a, CHILI_R, cc)); if (xx != null) { spots.push({ x: xx, a, c: cc }); got = true; } } if (got) break; }
+    }
+    let last = 60;
+    for (let i = 0; i < spots.length;) {
+      let k = -1;
+      for (let j = i; j < spots.length && spots[j].a - last <= Q.chiliGap + 130; j++) if (spots[j].a - last >= Q.chiliGap - 60) k = j;
+      if (k < 0) { k = i; while (k < spots.length && spots[k].a - last < Q.chiliGap - 60) k++; if (k >= spots.length) break; }
+      const q = spots[k];
+      if (fits(q.x, q.a, CHILI_R, q.c)) { fruit.push({ x: q.x, alt: q.a, kind: 'chili', fill: true, ...(q.c < RULES.pickup.clear ? { clear: q.c } : {}) }); last = q.a; }
+      i = k + 1;
+    }
+  }
+  for (let i = fruit.length - 1; i >= 0; i--) if (fruit[i].alt > endAt - 60) fruit.splice(i, 1);
+  fruit.sort((p, q) => p.alt - q.alt);
+
+  let hi = 0, fi = 0;
+  return {
+    seed, intro: 0, walls: lWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, anthill: true, sections: secs, beats, tunnels, top: topA,
+    difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null, reliefAt, knots, panelAt,
+    fill(upTo, outH, outF) {
+      while (hi < out.length && out[hi].lo < upTo) outH.push(out[hi++]);
+      if (outF) while (fi < fruit.length && fruit[fi].alt < upTo) outF.push(fruit[fi++]);
+    },
+    all: { hazards: out, fruit },
+  };
+}
+
+// The stage itself (island level 39): its own shaft (createAnthillLevel), the anthill look (G.theme), its missions (the
+// Queen's Chamber, 3 royal eggs, 6 leaf parades slipped through without a nudge) and its length in metres.
+const ADV_ANTHILL = { name: 'Anthill Underworks', theme: 'anthill', seed: 'isl-39-anthill', reward: 260, target: 0, len: anthillEnd() / UNITS_PER_M,
+  goals: [{ k: 'finish', text: "Reach the Queen's Chamber" }, { k: 'anthillEggs', n: 3 }, { k: 'anthillClean', n: 6 }] };
+/* LEVELGEN:END */
 // (LEVELGEN slot: Anthill Underworks, island level 39)
 // (LEVELGEN slot: Bamboo Pagoda, island level 40)
 /* LEVELGEN:BEGIN */
@@ -43464,7 +43852,7 @@ const ISLAND = {
     { id: 36, name: 'Starfall Summit', region: 'starfall', pilot: 'goat', perk: 'His firework kick shoots extra high', stage: 'starfall' },
     { id: 37, name: 'Beanstalk Heights', region: 'beanstalk', pilot: 'snail', perk: 'Sticky foot: clouds bounce him up, never sideways', stage: 'beanstalk' },
     { id: 38, name: 'Sandstorm Canyon', region: 'sandstorm', pilot: 'chameleon', perk: 'Tongue snatches scorpions', stage: 'sandstorm' },
-    { id: 39, name: 'Anthill Underworks', region: 'anthill', pilot: 'mole', perk: 'Digs side tunnels' },
+    { id: 39, name: 'Anthill Underworks', region: 'anthill', pilot: 'mole', perk: 'Digs open side tunnels of coconuts', stage: 'anthill' },
     { id: 40, name: 'Bamboo Pagoda', region: 'pagoda', pilot: 'ember', perk: 'Fireproof: the fireworks fizzle on him' },
     { id: 41, name: 'Hollow Palm', region: 'hollowpalm', pilot: 'chameleon', perk: 'Wriggles free of sticky sap three times faster', stage: 'hollowpalm' },
   ],
@@ -43545,6 +43933,7 @@ ADV_STAGES.carnival = ADV_CARNIVAL;   // (island level 33, Monkey Carnival: see 
 ADV_STAGES.sandstorm = ADV_SANDSTORM;   // (island level 38, Sandstorm Canyon: see createSandstormLevel)
 ADV_STAGES.beanstalk = ADV_BEANSTALK;   // (island level 37, Beanstalk Heights: see createBeanstalkLevel)
 ADV_STAGES.hollowpalm = ADV_HOLLOWPALM;   // (island level 41, Hollow Palm: see createHollowpalmLevel)
+ADV_STAGES.anthill = ADV_ANTHILL;   // (island level 39, Anthill Underworks: see createAnthillLevel)
 const advStageOf = lv => lv.stage != null ? (typeof lv.stage === 'string' ? ADV_STAGES[lv.stage] : ADVENTURE.stages[lv.stage]) : advAll() ? advTestStage(lv) : null;
 const advPathLit = ([a]) => advFull(a);
 // a level's look on the map: 'done' (3 stars), 'tried' (1-2), 'open', 'locked'
@@ -91003,6 +91392,1650 @@ if (/[?&]debug\b/.test(location.search)) {
   };
 }
 // (game slot: Sandstorm Canyon, island level 38)
+// ---------- Anthill Underworks (island level 39): its look, traps, royal eggs, side tunnels and sounds ----------
+// The stage's shaft and traps are laid out by createAnthillLevel (LEVELGEN); here they come alive and get drawn. While
+// it runs G.theme is 'anthill': the main shaft of a giant ant colony under the island, packed earth in warm strata lit
+// amber by heaps of glowing eggs in niches, root threads dangling, dust and glowing pollen drifting in the still air.
+// Its walls are banded soil bulging between root knots, studded with glossy pebbles, root cross-sections and egg
+// niches, with a real lip of packed earth (lit crumbly top, shaded underside, root ends hanging out); behind the shaft
+// the colony recedes in calm parallax layers, different in every section (the gate tunnels, the soldiers' barracks,
+// the antlions' sand cavern, the leafcutters' fungus gardens, the royal nursery's egg galleries, the roly-polies' damp
+// mossy galleries, the deep clay and great roots of the Deep Dig, the Queen's Chamber). Art as the rest of the game:
+// cartoony, 2-3 stop gradients lit from the top left (or the eggs' glow), every edge a darker shade of its own colour
+// (never black), detail as line pairs (a dark furrow over a lit ridge), sheen strokes and soft glows; the backdrop stays
+// calm and pushed back so the traps and pickups read first. Performance: everything that never moves (the walls, the
+// backdrop's layers, the traps' mounts and bodies, every ant pose, the finish) is painted once into offscreen canvases
+// at the screen's pixel scale and blitted each frame (see anthillTile, anthillSprite); only what moves or glows is
+// drawn live, every glow one cached sprite, every sprite key quantised.
+const ANTHILLP = {
+  pal: { bgTop: [74, 44, 30], bgBot: [34, 18, 12], far: [86, 54, 36], far2: [70, 42, 28], wall: [104, 64, 38], wallIn: [40, 22, 14], rim: [255, 196, 110] },
+  soil: ['#c99060', '#9a6238', '#6a3e22', '#4a2a18'], soilEdge: '#3e2414',
+  sand: ['#fff0c8', '#e8c088', '#b88a52', '#7a5630'], sandEdge: '#6a4824',
+  red: ['#ffa088', '#e04a34', '#a4241c', '#681410'], redEdge: '#701812',
+  amber: ['#fff4c0', '#ffc64a', '#e0841a', '#8a4208'], amberEdge: '#7a3a08',
+  orange: ['#ffd8a0', '#f0943a', '#b45a1a', '#6e3010'], orangeEdge: '#6a2e0e',
+  plum: ['#f0c0f0', '#a45cb8', '#64307a', '#3a1648'], plumEdge: '#3e1a4c',
+  slate: ['#d8e2f0', '#8c9cb8', '#56627e', '#343c54'], slateEdge: '#363e58',
+  bark: ['#d8a070', '#9a6236', '#62381a', '#3e220e'], barkEdge: '#422410',
+  leafG: ['#e0ff9a', '#6cc83a', '#2a7a22', '#164a14'], leafGEdge: '#1e5a1a',
+  leafY: ['#fff4a8', '#ecb636', '#a8641a', '#6a3a0c'], leafYEdge: '#7a440e',
+  cream: ['#fffaf0', '#f4e4c8', '#d0b490', '#a08664'], creamEdge: '#8a6e4c',
+};
+const anthillOn = () => !!(G && G.theme === 'anthill');
+{ const base = pal; pal = function (key, a) { return anthillOn() && ANTHILLP.pal[key] ? ANTHILLP.pal[key].slice() : base(key, a); }; }
+const anthillHex = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+// ---- offscreen caches: tiles of the walls and backdrop, sprites of the traps and the finish ----
+// All are painted at the screen's pixel scale (s × dpr) and thrown away when it changes or a new run starts.
+const ANTHILLC = { key: '', tiles: new Map(), sprites: new Map(), glows: new Map() };
+function anthillCacheCheck() {
+  const key = `${s.toFixed(5)}|${dpr}|${cssW}|${H}|${G.seed}|${G.level && G.level.end}`;
+  if (key !== ANTHILLC.key) { ANTHILLC.key = key; ANTHILLC.tiles.clear(); ANTHILLC.sprites.clear(); }
+}
+// a tile canvas covering world x0..x1 and heights a0..a1, painted by paint(c) in world units with y = -alt
+function anthillTile(id, x0, x1, a0, a1, paint) {
+  let T = ANTHILLC.tiles.get(id);
+  if (!T) {
+    const k = s * dpr, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * k)); cv.height = Math.max(1, Math.ceil((a1 - a0) * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, -x0 * k, a1 * k);
+    paint(c);
+    T = { cv, x0, x1, a0, a1 };
+    ANTHILLC.tiles.set(id, T);
+    if (ANTHILLC.tiles.size > 72) { for (const kk of ANTHILLC.tiles.keys()) { ANTHILLC.tiles.delete(kk); if (ANTHILLC.tiles.size <= 58) break; } }
+  }
+  return T;
+}
+// a sprite: w × h world units around an anchor (ax, ay from its top left), painted by paint(c) in world units, y down
+function anthillSprite(id, w, h, ax, ay, paint) {
+  let S = ANTHILLC.sprites.get(id);
+  if (!S) {
+    const k = s * dpr * 1.15, cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * k)); cv.height = Math.max(1, Math.ceil(h * k));
+    const c = cv.getContext('2d'); c.setTransform(k, 0, 0, k, ax * k, ay * k); paint(c);
+    S = { cv, w, h, ax, ay }; ANTHILLC.sprites.set(id, S);
+    if (ANTHILLC.sprites.size > 260) { for (const kk of ANTHILLC.sprites.keys()) { ANTHILLC.sprites.delete(kk); if (ANTHILLC.sprites.size <= 210) break; } }
+  }
+  return S;
+}
+// blit a sprite with its anchor at world (x, alt), mirrored when flip < 0
+function anthillBlit(S, x, alt, alpha = 1, flip = 1) {
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  if (flip < 0) { ctx.save(); ctx.translate(sx(x), sy(alt)); ctx.scale(-1, 1); ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore(); }
+  else ctx.drawImage(S.cv, sx(x) - S.ax * s, sy(alt) - S.ay * s, S.w * s, S.h * s);
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+// blit a sprite with its anchor at screen (X, Y), turned by ang, mirrored when flip < 0, scaled by k (kx, ky)
+function anthillBlitAt(S, X, Y, ang = 0, flip = 1, alpha = 1, k = 1, ky = k) {
+  if (!ang && flip > 0 && k === 1 && ky === 1) { if (alpha < 1) ctx.globalAlpha = alpha; ctx.drawImage(S.cv, X - S.ax * s, Y - S.ay * s, S.w * s, S.h * s); if (alpha < 1) ctx.globalAlpha = 1; return; }
+  ctx.save(); ctx.translate(X, Y); if (ang) ctx.rotate(ang); if (flip < 0) ctx.scale(-1, 1); if (k !== 1 || ky !== 1) ctx.scale(k, ky); if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(S.cv, -S.ax * s, -S.ay * s, S.w * s, S.h * s); ctx.restore();
+}
+// a soft additive glow: one cached radial sprite per colour (no gradient built per frame)
+function anthillGlowCv(col) {
+  col = col.map(v => Math.min(255, Math.round(v / 16) * 16));   // quantised, so blended colours share a few sprites
+  const key = col.join(',');
+  let cv = ANTHILLC.glows.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = cv.height = 96; const q = cv.getContext('2d');
+    q.fillStyle = gRG(q, 48, 48, 47, [gCol(col, 1), gCol(col, 0.42), gCol(col, 0.12), gCol(col, 0)]); q.fillRect(0, 0, 96, 96);
+    ANTHILLC.glows.set(key, cv); if (ANTHILLC.glows.size > 64) ANTHILLC.glows.delete(ANTHILLC.glows.keys().next().value);
+  }
+  return cv;
+}
+function anthillGlow(c, x, y, r, col, a) {
+  if (a < 0.01 || r < 0.6) return;
+  const cv = anthillGlowCv(col);
+  const op = c.globalCompositeOperation, ga = c.globalAlpha; c.globalCompositeOperation = 'lighter'; c.globalAlpha = ga * Math.min(1, a); c.drawImage(cv, x - r, y - r, r * 2, r * 2); c.globalCompositeOperation = op; c.globalAlpha = ga;
+}
+// ---- shared painters (any context, world units, y down) ----
+// a glossy ball lit from the top left: 3-stop body, an edge of its own darker colour, a sheen and a glint
+function anthillBall(c, x, y, r, P, edge, sheen = 0.55) {
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, r * 0.07); c.stroke();
+  c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, r * 0.13); c.lineCap = 'round'; c.beginPath(); c.arc(x, y, r * 0.72, 3.5, 4.5); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(x - r * 0.42, y - r * 0.5, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+}
+// a glossy ellipse body part (any context): rx × ry at angle a, the palette P lit from the top left, its own edge
+function anthillPart(c, x, y, rx, ry, a, P, edge, sheen = 0.5) {
+  c.fillStyle = gRG(c, x - rx * 0.35, y - ry * 0.55, Math.max(rx, ry) * 1.4, [P[0], P[1], P[2], P[3] || P[2]]); c.beginPath(); c.ellipse(x, y, rx, ry, a, 0, TWO_PI); c.fill();
+  c.strokeStyle = edge; c.lineWidth = Math.max(0.5, Math.min(rx, ry) * 0.12); c.stroke();
+  if (sheen > 0) { c.save(); c.translate(x, y); c.rotate(a); c.strokeStyle = `rgba(255,255,255,${sheen})`; c.lineWidth = Math.max(0.6, Math.min(rx, ry) * 0.2); c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, rx * 0.7, ry * 0.68, 0, 3.6, 4.6); c.stroke(); c.restore(); }
+}
+function anthillRR(c, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r); c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h); c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r); c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath(); }
+// cartoon eyes (any context) at x, y, radius r; look -1..1 sideways; lid 0..1 an angry brow lid over the top; iris colour
+function anthillEyes(c, x, y, r, look = 0.5, lid = 0, iris = '#ffd23a', gap = 1.1, ry = 1.12, lidCol = '#a4241c') {
+  for (const e of [-1, 1]) {
+    const ex = x + e * r * gap, hy = r * ry;
+    c.fillStyle = gRG(c, ex - r * 0.3, y - r * 0.3, r * 1.3, ['#ffffff', '#f6eee6', '#d8c8b8']); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(90,30,20,.7)'; c.lineWidth = Math.max(0.4, r * 0.13); c.stroke();
+    c.save(); c.beginPath(); c.ellipse(ex, y, r, hy, 0, 0, TWO_PI); c.clip();
+    c.fillStyle = iris; c.beginPath(); c.arc(ex + look * r * 0.38, y + r * 0.08, r * 0.64, 0, TWO_PI); c.fill();
+    c.fillStyle = '#2a1008'; c.beginPath(); c.arc(ex + look * r * 0.44, y + r * 0.1, r * 0.33, 0, TWO_PI); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + look * r * 0.38 - r * 0.22, y - r * 0.2, r * 0.2, 0, TWO_PI); c.fill();
+    if (lid > 0) { c.fillStyle = lidCol; c.beginPath(); c.moveTo(ex - r * 1.2, y - hy * 1.2); c.lineTo(ex + r * 1.2, y - hy * 1.2); c.lineTo(ex + r * 1.2, y - hy + hy * 1.1 * lid * (e > 0 ? 0.35 : 1)); c.lineTo(ex - r * 1.2, y - hy + hy * 1.1 * lid * (e > 0 ? 1 : 0.35)); c.closePath(); c.fill(); }
+    c.restore();
+  }
+}
+// a dark-furrow-over-lit-ridge line pair along points (any context)
+function anthillPair(c, P, dk, lt, w, off = -0.8) { gPair(c, P, dk, lt, w, off); }
+
+// ---- sounds ----
+const ANTHILL_SFX = {
+  // soldiers rearing at the twig's tip: a burst of chitin jaw clacks and a buzzing hiss
+  ahclack: (t, B, v) => { for (let i = 0; i < 8; i++) { const q = t + i * 0.085 + (i % 2) * 0.02; vTone(B, q, 1800 + (i % 3) * 300, { f2: 900, glide: 0.02, type: 'square', lp: 3600, v: 0.035 * v, dur: 0.022 }); vNoise(B, q, { type: 'bandpass', f: 3200, q: 5, v: 0.04 * v, dur: 0.02 }); } vNoise(B, t, { type: 'bandpass', f: 1400, q: 2, v: 0.02 * v, dur: 0.7, a: 0.1 }); },
+  // ...marching out: a quick patter of many little feet
+  ahmarch: (t, B, v) => { for (let i = 0; i < 12; i++) vNoise(B, t + i * 0.09 + Math.random() * 0.02, { type: 'bandpass', f: 1500 + Math.random() * 900, q: 4, v: 0.03 * v, dur: 0.018 }); },
+  // ...the living bridge locking on at the far wall: a crunchy chitin click and a low hum
+  ahlock: (t, B, v) => { vTone(B, t, 260, { f2: 180, glide: 0.08, type: 'triangle', v: 0.08 * v, dur: 0.18 }); vNoise(B, t, { type: 'highpass', f: 2200, v: 0.07 * v, dur: 0.04, a: 0.001 }); vTone(B, t + 0.03, 1250, { type: 'square', lp: 2600, v: 0.03 * v, dur: 0.03 }); },
+  // an antlion stirring: pebbles trickling down the sand funnel and a dry hiss
+  ahsand: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 2600, f2: 1400, q: 1.2, v: 0.05 * v, dur: 0.95, a: 0.15 }); for (let i = 0; i < 7; i++) vTone(B, t + 0.1 + i * 0.11 + Math.random() * 0.04, 1300 + Math.random() * 900, { type: 'triangle', lp: 3000, v: 0.02 * v, dur: 0.03 }); },
+  // ...its lunge: a sandy whoosh and the jaws' big snap
+  ahlunge: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 700, f2: 2200, q: 1.1, v: 0.12 * v, dur: 0.24, a: 0.01 }); vNoise(B, t + 0.27, { type: 'highpass', f: 1800, v: 0.18 * v, dur: 0.05, a: 0.001 }); vTone(B, t + 0.27, 520, { f2: 160, glide: 0.06, type: 'square', lp: 1800, v: 0.08 * v, dur: 0.1 }); },
+  // a leaf shoving you: a papery rustle
+  ahrustle: (t, B, v) => { vNoise(B, t, { type: 'bandpass', f: 3400, f2: 2000, q: 1.4, v: 0.1 * v, dur: 0.22, a: 0.01 }); vNoise(B, t + 0.06, { type: 'bandpass', f: 5200, q: 2, v: 0.05 * v, dur: 0.12 }); },
+  // slipping through a parade untouched: a woody marimba "tock-tink"
+  ahclean: (t, B) => { [[76, 0], [83, 0.08]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.06, dur: 0.3, send: 0.25 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.015, dur: 0.08 }); }); },
+  // a roly-poly peeking and curling up: a little squeak and a click of plates
+  ahpeek: (t, B, v) => { vTone(B, t, 1500, { f2: 2100, glide: 0.06, type: 'triangle', v: 0.03 * v, dur: 0.1, vib: [30, 40], vibAt: 0 }); for (let i = 0; i < 4; i++) vTone(B, t + 0.45 + i * 0.05, 900, { type: 'square', lp: 2000, v: 0.02 * v, dur: 0.02 }); },
+  // ...rolling: a hollow rumble that runs the length of its roll
+  ahroll: (t, B, v) => { vNoise(B, t, { type: 'lowpass', f: 380, v: 0.09 * v, dur: 1.7, a: 0.08 }); vTone(B, t, 70, { f2: 95, glide: 1.6, type: 'triangle', v: 0.05 * v, dur: 1.7, a: 0.1 }); },
+  // ...ricocheting off the far wall: a woody clonk and a spray of soil
+  ahbonk: (t, B, v) => { vTone(B, t, 340, { f2: 210, glide: 0.06, type: 'sine', v: 0.14 * v, dur: 0.16 }); vTone(B, t, 680, { type: 'triangle', v: 0.04 * v, dur: 0.06 }); vNoise(B, t, { type: 'lowpass', f: 1200, v: 0.08 * v, dur: 0.12 }); },
+  // Digby digging a side tunnel open: crunchy scoops of soil and a coin jingle
+  ahdig: (t, B) => { for (let i = 0; i < 4; i++) vNoise(B, t + i * 0.07, { type: 'lowpass', f: 900 + i * 200, v: 0.12, dur: 0.06, a: 0.004 }); [84, 88, 91].forEach((m, i) => vTone(B, t + 0.3 + i * 0.06, mf(m), { type: 'triangle', v: 0.04, dur: 0.3, send: 0.3 })); },
+  // a royal egg: a warm glassy arpeggio and a soft chime
+  ahegg: (t, B) => { [72, 76, 79, 84, 88, 91].forEach((m, i) => vTone(B, t + i * 0.055, mf(m), { type: i % 2 ? 'sine' : 'triangle', v: 0.055, dur: 0.6, send: 0.35 })); vTone(B, t + 0.33, mf(96), { type: 'sine', v: 0.03, dur: 0.9, send: 0.4 }); },
+  // the Queen's Chamber on the clear: a woody marimba fanfare over a soft drum and a shimmering chord
+  ahfinish: (t, B) => { for (let i = 0; i < 6; i++) vNoise(B, t + i * 0.09, { type: 'lowpass', f: 300, v: 0.06, dur: 0.06 }); [[67, 0.5], [71, 0.62], [74, 0.74], [79, 0.86], [83, 1.0]].forEach(([m, d]) => { vTone(B, t + d, mf(m), { type: 'sine', v: 0.07, dur: d > 0.9 ? 1.4 : 0.22, send: 0.35 }); vTone(B, t + d, mf(m + 12), { type: 'triangle', v: 0.02, dur: 0.1 }); }); [55, 62, 67, 71].forEach(m => vTone(B, t + 1.0, mf(m), { type: 'triangle', lp: 1600, v: 0.035, dur: 1.6, a: 0.05, send: 0.4 })); },
+};
+{ const base = sfx; sfx = function (name, o = {}) {
+  const f = ANTHILL_SFX[name]; if (!f) return base(name, o);
+  const c = SND.ctx; if (!c || c.state !== 'running' || settings.sfx === false) return;
+  f(c.currentTime + 0.005, SND.sfx, o.v ?? 1, o);
+}; }
+const anthillVol = a => clamp(1 - Math.abs(a - (G.camAlt + viewH * 0.5)) / (viewH * 0.75), 0, 1);
+
+// ---- the traps at play ----
+CAUSES.anthillMarch = 'Pinched by the soldier ants';
+CAUSES.anthillJaws = 'Snapped up by an antlion';
+CAUSES.anthillRoly = 'Bowled over by a roly-poly';
+{ const base = causeColour; causeColour = function (cause) { return cause === 'anthillMarch' ? [255, 120, 100] : cause === 'anthillJaws' ? [230, 150, 255] : cause === 'anthillRoly' ? [170, 190, 230] : base(cause); }; }
+// the lethal anthill shapes (the leaf parades only push: see the steer wrapper)
+{ const base = hazardShapes; hazardShapes = function (h) {
+  if (!ANTHILL_TYPES.has(h.type)) return base(h);
+  return anthillShapes(h, G.t, [], 'body').map(shrinkShape);
+}; }
+{ const base = updateHazards; updateHazards = function (dt) { if (G.level && G.level.anthill) anthillUpdateTraps(dt); base(dt); }; }
+// the monster waits while you time a trap just above you (each trap's own reach, `ease`)
+{ const base = gateAhead; gateAhead = function (reach = RULES.gate.room + 120) {
+  if (base(reach)) return true;
+  if (!G.level || !G.level.anthill) return false;
+  const a = G.p.alt;
+  return G.hazards.some(h => h.ease && ANTHILL_TYPES.has(h.type) && h.lo < a + Math.min(reach, h.ease) && h.hi > a - 120);
+}; }
+// soil crumbs and sand: world-space particles drawn by the anthill particle wrapper (capped on top of puff's own cap)
+function anthillCrumbs(x, a, n, v, up = 40, col = 0) {
+  let have = 0; for (const q of G.particles) if (q.kind === 'ahcrumb') have++;
+  n = Math.min(n, Math.max(0, 90 - have));
+  for (let i = 0; i < n; i++) { const an = Math.random() * TWO_PI, sp = v * (0.3 + 0.7 * Math.random()); puff(x, a, Math.cos(an) * sp, Math.sin(an) * sp * 0.7 + up, 0.7 + Math.random() * 0.6, 1.4 + Math.random() * 1.8, 'ahcrumb', { col: col || Math.floor(Math.random() * 3) + 1, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 10 }); }
+}
+// The mole's perk: Digby digs the plugged side tunnels open as he passes, and finds a cache of coconuts in each
+const anthillMole = () => settings.character === 'mole';
+function anthillUpdateTraps(dt) {
+  const top = G.camAlt + viewH, X = ANTHILL, p = G.p, play = G.state === 'play';
+  const pLo = play ? pilotLow() : 0, pHi = play ? pilotHigh() : 0;
+  for (const h of G.hazards) {
+    if (!ANTHILL_TYPES.has(h.type)) continue;
+    const d = h.side, vis = h.hi > G.camAlt - 80 && h.lo < top + 80;
+    if (h.type === 'anthillMarch') {
+      const st = anthillMarchAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('ahclack', { v: anthillVol(h.alt) });
+      if (st.ph === 'out' && was.ph !== 'out' && vis) sfx('ahmarch', { v: anthillVol(h.alt) });
+      if (st.ph === 'hold' && was.ph !== 'hold' && vis) { sfx('ahlock', { v: anthillVol(h.alt) }); anthillCrumbs(h.far - d * 4, h.alt + 10, 6, 70, 30); }
+      if (st.ph === 'back' && was.ph !== 'back' && vis) sfx('ahmarch', { v: anthillVol(h.alt) * 0.7 });
+      h.st = st;
+    } else if (h.type === 'anthillJaws') {
+      const st = anthillJawsAt(h, G.t), was = h.st || st;
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('ahsand', { v: anthillVol(h.alt) });
+      if (st.ph === 'lunge' && was.ph !== 'lunge' && vis) {
+        sfx('ahlunge', { v: anthillVol(h.alt) });
+        for (let k = 0; k < 10; k++) puff(h.base + d * 10, h.alt + (Math.random() - 0.5) * 20, d * (60 + Math.random() * 140), (Math.random() - 0.2) * 90, 0.6 + Math.random() * 0.4, 1.6 + Math.random() * 1.6, 'ahcrumb', { col: 4, rot: 0, spin: 0 });
+        if (Math.abs(h.alt - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.6);
+      }
+      h.st = st;
+    } else if (h.type === 'anthillLeaf') {
+      // the clean-pass mission: through the parade's band from below to above without a nudge
+      if (play) {
+        if (pHi < h.lo - 4) { h.inB = false; h.nudged = false; }
+        else if (!h.inB && pHi >= h.lo && pLo < h.lo + 20) h.inB = true;
+        if (h.inB && !h.done && pLo > h.hi + 2) {
+          h.done = true; h.inB = false;
+          if (!h.nudged) {
+            const n = G.stats.ahClean = (G.stats.ahClean || 0) + 1, of = advGoalN('anthillClean');
+            sfx('ahclean');
+            for (let k = 0; k < 8; k++) { const an = k / 8 * TWO_PI; puff(p.x + Math.cos(an) * 30, h.hi + Math.sin(an) * 10, Math.cos(an) * 70, 30 + Math.random() * 50, 0.5, 1.8, 'sparkle', [200, 255, 140]); }
+            chainEvent(of && n <= of ? (n >= of ? `Clean parades ${n}/${of}!` : `Slipped through! ${n}/${of}`) : 'Slipped through!', '#d8ff9a', 1.0);
+          }
+        }
+      }
+    } else if (h.type === 'anthillRoly') {
+      const st = anthillRolyAt(h, G.t), was = h.st || st, g = anthillRolyGeo(h);
+      if (st.ph === 'tell' && was.ph !== 'tell' && vis) sfx('ahpeek', { v: anthillVol(g.Atop) });
+      if (st.ph === 'roll' && was.ph !== 'roll' && vis) sfx('ahroll', { v: anthillVol(h.alt + X.roly.dh) });
+      if (st.ph === 'roll' && was.ph === 'roll' && was.k < 1 && st.k >= 1 && vis) {
+        sfx('ahbonk', { v: anthillVol(st.a) }); anthillCrumbs(h.far - d * 4, st.a, 9, 110, 20);
+        if (Math.abs(st.a - p.alt) < viewH * 0.5) G.shake = Math.max(G.shake, 1.2);
+      }
+      if (st.ph === 'sink' && was.ph !== 'sink' && vis) anthillCrumbs(h.base + d * 6, h.alt, 5, 50, 30);
+      h.st = st;
+    }
+  }
+  // Digby's side tunnels: passing close by a plugged one, he digs it open
+  const L = G.level;
+  if (play && L.tunnels && anthillMole()) for (const tn of L.tunnels) {
+    if (tn.open || Math.abs(tn.alt - p.alt) > 70) continue;
+    const mx = walls(tn.alt)[tn.side];
+    if (Math.abs(p.x - mx) < 78) {
+      tn.open = G.t; const into = tn.side ? -1 : 1, n = X.tunnel.coins;
+      G.stats.coconuts += n; G.fruitBump = 1; G.stats.ahTunnels = (G.stats.ahTunnels || 0) + 1;
+      sfx('ahdig'); vibrate([10, 20]);
+      anthillCrumbs(mx + into * 10, tn.alt, 22, 160, 50);
+      for (let k = 0; k < 8; k++) puff(mx + into * 12, tn.alt, into * (60 + Math.random() * 120), 40 + Math.random() * 100, 0.6, 2.2, 'sparkle', [255, 214, 110]);
+      addPop(`+${n}`, mx + into * 40, tn.alt + 20, { col: '#ffe0a0', sub: 'Digby digs a side tunnel!' });
+    }
+  }
+}
+// The leaf parade's push: touching a leaf (or its carrier) shoves you along with the parade, a steady shove against
+// the steering spring that lingers a moment after (about ANTHILL.leaf.push), never through a wall.
+{ const base = steer; steer = function (dt) {
+  base(dt);
+  if (!anthillOn() || !G.level || !G.level.anthill || G.state !== 'play') return;
+  const p = G.p, lo = pilotLow(), hi = pilotHigh();
+  let hit = null;
+  for (const h of G.hazards) if (h.type === 'anthillLeaf' && hi > h.lo && lo < h.hi) {
+    for (const q of anthillShapes(h, G.t, [], 'push')) if (shapeHits(q)) { hit = h; break; }
+    if (hit) break;
+  }
+  if (hit) {
+    if (!(G.ahPushK > 0.5)) { sfx('ahrustle', { v: 1 }); vibrate(8); hit.flutter = G.t; for (let k = 0; k < 5; k++) puff(p.x - hit.dir * 20, p.alt + 20, -hit.dir * (20 + Math.random() * 40), (Math.random() - 0.3) * 50, 0.6, 2, 'ahleafbit', { col: Math.floor(Math.random() * 2), rot: Math.random() * 6, spin: (Math.random() - 0.5) * 12 }); }
+    hit.nudged = true; G.ahPushK = 1; G.ahPushDir = hit.dir;
+  } else G.ahPushK = Math.max(0, (G.ahPushK || 0) - dt * 4);
+  if (!(G.ahPushK > 0)) return;
+  const kSp = lerp(80, 5, cfg.lag), [l, r] = steerRange();
+  p.vx += G.ahPushDir * ANTHILL.leaf.push * kSp * G.ahPushK * dt;
+  if (p.x < l || p.x > r) { p.x = clamp(p.x, l, r); p.vx *= 0.2; }
+  p.tilt = lerp(p.tilt, clamp(G.ahPushDir * 0.35 * G.ahPushK, -PILOT_TILT, PILOT_TILT), Math.min(1, dt * 6));
+}; }
+
+// ---- royal eggs: a glowing amber queen's egg in risky spots, worth a big coin each, and the stage's egg mission ----
+{ const base = pickUp; pickUp = function (f) {
+  if (f.kind !== 'egg') return base(f);
+  const st = G.stats, worth = COCO_GOLD, n = st.ahEggs = (st.ahEggs || 0) + 1, of = advGoalN('anthillEggs');
+  st.coconuts += worth; G.fruitBump = 1;
+  chainEvent(of ? `Royal egg ${n}/${of}!` : 'Royal egg!', '#ffe0a0', 1.6);
+  G.flash = Math.max(G.flash, 0.3); G.flashCol = [255, 210, 130];
+  for (let k = 0; k < 18; k++) { const a = k / 18 * TWO_PI; puff(f.x, f.alt, Math.cos(a) * 180, Math.sin(a) * 180, 0.6, 2.4, 'sparkle', k % 2 ? [255, 220, 120] : [255, 170, 80]); }
+  addPop(`+${worth}`, f.x, f.alt + 10, { col: '#ffe0a0', big: true, sub: 'royal egg' });
+  vibrate([20, 30, 20]); sfx('ahegg');
+}; }
+{ const base = drawPickups; drawPickups = function () {
+  // (only when an egg is on screen is the list split; most frames just draw the base pickups)
+  const all = G.fruit, lo = G.camAlt - 100, hi = G.camAlt + viewH + 100; let any = false;
+  for (let i = 0; i < all.length; i++) { const f = all[i]; if (f.kind === 'egg' && f.alt > lo && f.alt < hi) { any = true; break; } }
+  if (!any) return base();
+  G.fruit = all.filter(f => f.kind !== 'egg');
+  try { base(); } finally { G.fruit = all; }
+  for (const f of all) {
+    if (f.kind !== 'egg') continue;
+    const y = sy(f.alt); if (y < -60 || y > H + 60) continue;
+    anthillDrawEgg(sx(f.x), y, G.t, f.alt * 0.05 + f.x * 0.01);
+  }
+}; }
+// the missions (stars), and their lines on the HUD under the others: the eggs found, the parades slipped through
+ADV_GOALS.anthillEggs = { text: g => `Find all ${g.n} royal eggs`, done: (r, g) => (r.stats.ahEggs || 0) >= g.n, any: true, prog: (g, st) => `${st.ahEggs || 0}/${g.n}` };
+ADV_GOALS.anthillClean = { text: g => `Slip through ${g.n} leaf parades untouched`, done: (r, g) => (r.stats.ahClean || 0) >= g.n, any: true, prog: (g, st) => `${Math.min(g.n, st.ahClean || 0)}/${g.n}` };
+{ const base = drawAdvGoalHud; drawAdvGoalHud = function () {
+  base();
+  const a = G.adv, goals = advGoalList(a.lv, a.st); if (!goals.some(g => g.k === 'anthillEggs' || g.k === 'anthillClean')) return;
+  const st = G.stats, T = G.t, xr = Math.min(cssW - 16, ox + playW - 6);
+  let y = safeTop + 70 + 24 * goals.filter(g => (g.k === 'coconuts' && g.n) || g.k === 'idols' || g.k === 'time').length;
+  ctx.save(); ctx.font = '400 17px "Lilita One", sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const line = (txt, col, icon) => {
+    const tw = ctx.measureText(txt).width;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(50,24,10,.85)'; ctx.strokeText(txt, xr, y); ctx.fillStyle = col; ctx.fillText(txt, xr, y);
+    icon(xr - tw - 13, y);
+    y += 24;
+  };
+  for (const g of goals) {
+    if (g.k === 'anthillEggs') { const n = st.ahEggs || 0; line(`${n}/${g.n}`, n >= g.n ? '#ffe0a0' : '#fff2ea', (x, yy) => { const S = anthillEggSprite(); anthillBlitAt(S, x, yy, 0, 1, 1, 17 / (S.h * s)); }); }
+    else if (g.k === 'anthillClean') { const n = Math.min(g.n, st.ahClean || 0); line(`${n}/${g.n}`, n >= g.n ? '#d8ff9a' : '#fff2ea', (x, yy) => { const S = anthillLeafSprite(0); anthillBlitAt(S, x - 2, yy + 8, -0.25, 1, 1, 19 / (S.h * s)); }); }
+  }
+  ctx.restore();
+}; }
+// The stage on the island: level 39 plays it (its own shaft replaces the one advStart lays out, as the carnival's)
+{ const base = advStart; advStart = function (id) {
+  base(id);
+  const st = G && G.adv && G.adv.id === id ? G.adv.st : null;
+  if (!st || st.theme !== 'anthill' || (G.level && G.level.anthill)) return;
+  G.level = createAnthillLevel(G.seed, st);
+  G.level.marks.push({ alt: G.adv.end - 560, name: "The Queen's Chamber ahead!", zone: 0 });
+  G.ahPushK = 0;
+}; }
+// play-testing hook (only with ?debug in the URL): the anthill traps' shapes and clocks for scripts
+if (/[?&]debug\b/.test(location.search)) window.CRANTHILL = { ANTHILL, ANTHILL_STAGE, anthillShapes, anthillMarchAt, anthillJawsAt, anthillRolyAt, anthillRolyGeo, anthillLeafPos, anthillDanger, createAnthillLevel, ANTHILLC, scr: (x, a) => [sx(x), sy(a)] };
+
+// ---- the traps' art (each anchored at its wall at the trap's height, drawn for the left wall: x into the shaft, y
+// down; mirrored on the right wall). Static bodies are cached sprites; what moves is drawn live. ----
+
+// ---- ants (the soldiers and the leafcutters): a side-view cartoon ant standing on y = 0, facing +x ----
+// kind 0 a soldier (crimson armour, a big helmeted head, long jaws, angry gold eyes), 1 a leafcutter worker (amber,
+// smaller jaws, friendly blue eyes); g the gait frame (0..7), jaw 0..3 how far its jaws are open, grip: legs splayed
+// fore and aft to hold the ant in front (a living bridge). Scaled so the soldier fills its hitbox (±16 r 10 at 12 up).
+const ANTHILL_ANT = [
+  { k: 2.04, P: ANTHILLP.red, edge: ANTHILLP.redEdge, leg: '#8a1e16', legLit: 'rgba(255,170,150,.75)', far: '#4e100c', jawP: ['#ffe0b0', '#e08a3a', '#9a4a14'], iris: '#ffd23a', soldier: true },
+  { k: 0.98, P: ANTHILLP.orange, edge: ANTHILLP.orangeEdge, leg: '#8a4a1a', legLit: 'rgba(255,215,160,.75)', far: '#55280c', jawP: ['#fff0c8', '#d89a4a', '#8a5418'], iris: '#62c4ff', soldier: false },
+];
+function anthillAntPaint(c, kind, g, jaw, grip) {
+  const A = ANTHILL_ANT[kind], ph = g / 8 * TWO_PI, bob = grip ? 0 : Math.abs(Math.sin(ph)) * 0.7;
+  c.save(); c.scale(A.k, A.k); c.lineCap = 'round'; c.lineJoin = 'round';
+  // legs: three pairs off the thorax (far side darker, behind the body), each a thigh and a shin with a lit top line
+  const leg = (i, near) => {
+    const hx = -0.5 + i * 2.4, p = ph + i * 2.1 + (near ? 0 : Math.PI);
+    let kx, ky, fx, fy;
+    if (grip) { const dir = i - 1; kx = hx + dir * 4.5; ky = -12 + Math.abs(dir) * 1.5; fx = hx + dir * 10 + (near ? 1.5 : -1.5); fy = -5.5 + (i === 1 ? 2.5 : 0); }
+    else { fx = hx + (i - 1) * 5.5 + Math.sin(p) * 3.2; fy = -Math.max(0, Math.cos(p)) * 2.2; kx = hx + (i - 1) * 3.3 + Math.sin(p) * 1.3; ky = -11 - bob; }
+    c.strokeStyle = near ? A.leg : A.far; c.lineWidth = 1.9; c.beginPath(); c.moveTo(hx, -7.2 - bob); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+    if (near) { c.strokeStyle = A.legLit; c.lineWidth = 0.6; c.beginPath(); c.moveTo(hx, -7.7 - bob); c.lineTo(kx, ky - 0.5); c.lineTo(lerp(kx, fx, 0.6), lerp(ky, fy, 0.6) - 0.4); c.stroke(); c.fillStyle = A.far; c.beginPath(); c.arc(fx, fy, 0.9, 0, TWO_PI); c.fill(); }
+  };
+  for (let i = 0; i < 3; i++) leg(i, false);
+  c.translate(0, -bob);
+  // the abdomen (gaster): banded plates as line pairs, a big sheen
+  anthillPart(c, -10, -8.5, 7.6, 6, -0.22, A.P, A.edge, 0.5);
+  for (const k of [0, 1, 2]) { const x = -12.5 + k * 2.6; gPair(c, [[x, -13.2 + k * 0.3], [x - 1.2, -8.5], [x, -3.8 - k * 0.3]], gCol(gMix(anthillHex(A.P[2]), [40, 8, 4], 0.3), 0.55), 'rgba(255,230,210,.35)', 0.8, 0.7); }
+  anthillPart(c, -3.2, -7.8, 1.9, 1.9, 0, A.P, A.edge, 0.35);   // the waist node
+  anthillPart(c, 1.8, -8.8, 4.6, 3.2, 0.28, A.P, A.edge, 0.45);   // the thorax
+  const hx = A.soldier ? 9.4 : 8.2, hy = A.soldier ? -11.2 : -10.6, hr = A.soldier ? 5.8 : 4.3;
+  // antennae: elbowed, a club tip
+  c.strokeStyle = A.leg; c.lineWidth = 1.05; c.beginPath(); c.moveTo(hx + 1, hy - hr + 1); c.lineTo(hx + 2.2, hy - hr - 5); c.lineTo(hx + 7.4, hy - hr - 4.2 + (grip ? 2 : Math.sin(ph * 0.5) * 1.1)); c.stroke();
+  c.fillStyle = A.P[1]; c.beginPath(); c.arc(hx + 7.4, hy - hr - 4.2 + (grip ? 2 : Math.sin(ph * 0.5) * 1.1), 1.05, 0, TWO_PI); c.fill();
+  // jaws: two curved mandibles with a lit top and a toothed inner edge, opening by `jaw`
+  const mx = hx + hr * 0.78, my = hy + hr * 0.5, ml = A.soldier ? 7.6 : 4.4;
+  for (const d of [-1, 1]) {
+    const a = d * (0.1 + jaw * 0.2);
+    c.save(); c.translate(mx, my); c.rotate(a);
+    c.fillStyle = gLG(c, 0, -2, 0, 2, A.jawP);
+    c.beginPath(); c.moveTo(0, -1.5); c.quadraticCurveTo(ml * 0.8, -d * 0.7 - 1.7, ml, d * 1.7); c.quadraticCurveTo(ml * 0.5, d * 0.25, 0, 1.5); c.closePath(); c.fill();
+    c.strokeStyle = A.edge; c.lineWidth = 0.55; c.stroke();
+    if (A.soldier) { c.fillStyle = '#fff4dc'; for (let k = 1; k <= 3; k++) { const tx = ml * k / 4.2; c.beginPath(); c.moveTo(tx - 0.8, d * 0.4); c.lineTo(tx + 0.2, d * 1.7); c.lineTo(tx + 0.9, d * 0.3); c.fill(); } }
+    c.restore();
+  }
+  // the head; a soldier's is a helmet with a ridge and two lit plates
+  anthillPart(c, hx, hy, hr, hr * 0.92, 0, A.P, A.edge, 0.55);
+  if (A.soldier) { gPair(c, [[hx - hr * 0.7, hy - hr * 0.35], [hx - hr * 0.1, hy - hr * 0.88], [hx + hr * 0.5, hy - hr * 0.7]], gCol(anthillHex(A.P[3]), 0.5), 'rgba(255,200,180,.7)', 0.9, 0.6); }
+  for (let i = 0; i < 3; i++) leg(i, true);
+  anthillEyes(c, hx + hr * 0.28, hy - hr * 0.12, hr * 0.36, 0.7, A.soldier ? 0.55 : 0, A.iris, 1.08, 1.12, A.P[2]);
+  c.restore();
+}
+function anthillAntSprite(kind, g, jaw, grip = 0) {
+  const k = ANTHILL_ANT[kind].k;
+  return anthillSprite(`ant${kind}_${g}_${jaw}_${grip}`, 44 * k, 36 * k, 21 * k, 30 * k, c => anthillAntPaint(c, kind, g, jaw, grip));
+}
+
+// ---- the Soldier March ----
+// the twig along +x from its wall (length tw, quantised): bark with furrows and knots in line pairs, a clod of earth
+// and root where it is wedged into the wall, a forked sprig with two leaves near the tip, a lit top and a shaded belly
+function anthillTwigSprite(tw) {
+  const L = Math.round(tw / 2) * 2, B = ANTHILLP.bark;
+  return anthillSprite(`twig${L}`, L + 30, 40, 18, 20, c => {
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    // soft shadow on the air below (keeps it reading as solid)
+    c.fillStyle = 'rgba(30,14,6,.18)'; c.beginPath(); c.ellipse(L * 0.45, 10, L * 0.5, 4, 0, 0, TWO_PI); c.fill();
+    // the twig body: a slight droop, tapering toward the tip
+    const yAt = x => 4 + 2.4 * (x / L) ** 2, wAt = x => lerp(6.2, 3.6, x / L);
+    const top = [], bot = []; for (let x = -12; x <= L + 0.1; x += 4) { top.push([x, yAt(x) - wAt(x)]); bot.push([x, yAt(x) + wAt(x)]); }
+    c.beginPath(); top.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.quadraticCurveTo(L + 3, yAt(L), bot[bot.length - 1][0], bot[bot.length - 1][1]); for (let i = bot.length - 1; i >= 0; i--) c.lineTo(...bot[i]); c.closePath();
+    c.fillStyle = gLG(c, 0, -3, 0, 11, [B[0], B[1], B[2], B[3]]); c.fill();
+    c.strokeStyle = ANTHILLP.barkEdge; c.lineWidth = 0.8; c.stroke();
+    // bark furrows (dark over lit), long and wavy
+    for (let k = 0; k < 2; k++) { const P = []; for (let x = -6; x < L - 6; x += 6) P.push([x, yAt(x) + (k ? 1.8 : -1.6) + Math.sin(x * 0.21 + k * 2) * 0.7]); gPair(c, P, 'rgba(50,24,10,.55)', 'rgba(240,196,140,.4)', 0.8, 0.7); }
+    for (let x = 14; x < L - 10; x += 26 + (x * 7 % 11)) { c.fillStyle = gRG(c, x - 0.6, yAt(x) - 0.8, 3, [B[1], B[2], B[3]]); c.beginPath(); c.ellipse(x, yAt(x), 2.6, 1.8, 0, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(240,200,150,.5)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(x, yAt(x), 2.6, 1.8, 0, 3.4, 5.4); c.stroke(); }
+    // the lit top ridge
+    c.strokeStyle = 'rgba(255,226,180,.65)'; c.lineWidth = 1.1; c.beginPath(); top.forEach(([x, y], i) => i ? c.lineTo(x, y + 1) : c.moveTo(x, y + 1)); c.stroke();
+    // the clod of packed earth and a root where it's wedged into the wall
+    c.fillStyle = gRG(c, -6, -2, 16, ANTHILLP.soil); c.beginPath(); c.moveTo(-18, -9); c.quadraticCurveTo(-2, -12, 4, -2); c.quadraticCurveTo(6, 8, -2, 13); c.quadraticCurveTo(-10, 16, -18, 12); c.closePath(); c.fill();
+    c.strokeStyle = ANTHILLP.soilEdge; c.lineWidth = 0.7; c.stroke();
+    for (const [x, y, r] of [[-6, -4, 1.6], [-2, 5, 1.2], [-10, 8, 1.4]]) anthillBall(c, x, y, r, ['#e8dccc', '#b0a090', '#7a6a5c'], '#6a5a4c', 0.4);
+    gPair(c, [[-15, -7], [-6, -9], [1, -5]], 'rgba(60,30,12,.5)', 'rgba(255,220,170,.45)', 0.8, 0.7);
+    // a forked sprig near the tip, two leaves
+    const kx = L * 0.72, ky = yAt(kx);
+    c.strokeStyle = B[2]; c.lineWidth = 1.6; c.beginPath(); c.moveTo(kx, ky - 1); c.quadraticCurveTo(kx + 4, ky - 8, kx + 9, ky - 11); c.stroke();
+    for (const [lx, ly, a] of [[kx + 9, ky - 11, -0.5], [kx + 6, ky - 8, 0.9]]) {
+      c.save(); c.translate(lx, ly); c.rotate(a); c.fillStyle = gLG(c, 0, -3, 0, 3, ANTHILLP.leafG.slice(0, 3)); c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(5, -4, 10, 0); c.quadraticCurveTo(5, 3.4, 0, 0); c.fill();
+      c.strokeStyle = ANTHILLP.leafGEdge; c.lineWidth = 0.5; c.stroke(); c.strokeStyle = 'rgba(240,255,200,.6)'; c.beginPath(); c.moveTo(1, -0.2); c.lineTo(8.5, -0.2); c.stroke(); c.restore();
+    }
+    // the broken tip: pale wood showing
+    c.fillStyle = gRG(c, L - 0.5, yAt(L) - 1, 4, ['#fff0d0', '#e8c08a', '#b07a40']); c.beginPath(); c.ellipse(L - 0.5, yAt(L), 1.8, wAt(L) * 0.95, 0, 0, TWO_PI); c.fill();
+  });
+}
+function anthillDrawMarch(h) {
+  const X = ANTHILL.march, d = h.side, T = G.t, st = h.st || anthillMarchAt(h, T);
+  // the tell: the gap the column will bridge glows a warning, the soldiers flash hot
+  if (st.ph === 'tell' || st.ph === 'out') {
+    const k = st.ph === 'tell' ? st.tell : 1 - st.k * 0.6, x0 = h.base + d * h.tw, x1 = h.far;
+    for (let i = 0; i < 5; i++) { const u = (i + 0.5) / 5; anthillGlow(ctx, sx(lerp(x0, x1, u)), sy(h.alt + 10), 26 * s, [255, 90, 60], 0.13 * k * (0.7 + 0.3 * Math.sin(T * 18 + i))); }
+  }
+  anthillBlit(anthillTwigSprite(h.tw), h.base, h.alt, 1, d);
+  // the soldiers, back to front (the lead last, on top)
+  for (let i = X.N - 1; i >= 0; i--) {
+    const sA = st.sL - i * X.sp, [x, a] = anthillPathAt(h, sA), onGap = sA > h.tw + 4;
+    let g = 0, jaw = 1, rear = 0;
+    if (st.walk) g = Math.floor(T * 15 + i * 3) & 7;
+    if (st.ph === 'tell') { jaw = Math.sin(T * 30 + i * 1.3) > 0 ? 3 : 0; rear = 0.22 * smooth(0, 0.3, st.tell) * (i === 0 ? 1.3 : 0.7) * (0.8 + 0.2 * Math.sin(T * 9 + i)); }
+    else if (st.ph === 'out') jaw = 2;
+    else if (st.ph === 'hold') jaw = 0;
+    const grip = onGap && st.ph !== 'back' ? 1 : 0, S = anthillAntSprite(0, grip ? 0 : g, jaw, grip), face = d * st.face;
+    // on the bridge each ant tilts along the sag
+    let ang = 0; if (onGap) { const [x2, a2] = anthillPathAt(h, sA + 6); ang = -Math.atan2(a2 - a, (x2 - x) * face) * 1; }
+    if (rear) ang -= rear;
+    if (st.ph === 'tell' && st.tell > 0.15) anthillGlow(ctx, sx(x), sy(a + 12), 22 * s, [255, 110, 70], 0.18 + 0.12 * Math.sin(T * 26 + i));
+    anthillBlitAt(S, sx(x), sy(a), ang * face, face);
+  }
+}
+
+// ---- the Antlion Jaws ----
+// the sand pit in the wall (anchored at its mouth on the wall line): a round funnel of pale sand ringed by a raised
+// lip, its slope streaked toward the dark throat, a fan of spilled sand trickling down the wall below it
+function anthillPitSprite() {
+  const Sd = ANTHILLP.sand;
+  return anthillSprite('pit', 70 * 1.35, 92 * 1.35, 30 * 1.35, 34 * 1.35, c => {
+    c.scale(1.35, 1.35);
+    // the spill fan running down the wall
+    c.fillStyle = gLG(c, 0, 10, 0, 56, ['rgba(232,192,136,.95)', 'rgba(184,138,82,.55)', 'rgba(184,138,82,0)']);
+    c.beginPath(); c.moveTo(-12, 14); c.quadraticCurveTo(10, 28, 6, 56); c.lineTo(-14, 56); c.quadraticCurveTo(-18, 30, -12, 14); c.fill();
+    for (let k = 0; k < 6; k++) { const x = -8 + k * 2.6, y = 22 + k * 5; anthillBall(c, x, y, 0.9 + (k % 3) * 0.3, ['#fff4dc', '#d8b888', '#8a6a44'], '#7a5a36', 0.3); }
+    // the raised lip (pale, lit from the top left) and the funnel
+    c.fillStyle = gRG(c, -6, -14, 34, [Sd[0], Sd[1], Sd[2], Sd[3]]); c.beginPath(); c.ellipse(2, 0, 25, 24, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = ANTHILLP.sandEdge; c.lineWidth = 0.9; c.stroke();
+    c.fillStyle = gRG(c, 0, 1, 19, ['#1a0a04', '#3a1e0e', '#8a5c30', '#c8945a']); c.beginPath(); c.ellipse(1, 1, 18.5, 18, 0, 0, TWO_PI); c.fill();
+    // streaks down the slope (dark grooves over lit ridges) spiralling in
+    for (let k = 0; k < 12; k++) { const a = k / 12 * TWO_PI, b = a + 0.35; gPair(c, [[1 + Math.cos(a) * 17, 1 + Math.sin(a) * 17], [1 + Math.cos(b) * 10, 1 + Math.sin(b) * 10], [1 + Math.cos(b + 0.3) * 5, 1 + Math.sin(b + 0.3) * 5]], 'rgba(80,46,20,.45)', 'rgba(255,236,190,.28)', 0.8, 0.6); }
+    c.strokeStyle = 'rgba(255,244,210,.85)'; c.lineWidth = 1.5; c.lineCap = 'round'; c.beginPath(); c.ellipse(2, 0, 23.5, 22.5, 0, Math.PI * 0.95, Math.PI * 1.6); c.stroke();
+    c.strokeStyle = 'rgba(90,54,24,.5)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(2, 0, 23.5, 22.5, 0, 0.1, 1.3); c.stroke();
+    // pebbles caught on the lip
+    for (const [a, r] of [[0.4, 2], [1.9, 1.6], [3.6, 2.2], [5.0, 1.5]]) anthillBall(c, 2 + Math.cos(a) * 22, Math.sin(a) * 21, r, ['#f0e4d4', '#b4a090', '#706050'], '#5e4e40', 0.45);
+  });
+}
+// the antlion's head (anchored at its centre): a plum dome with bristles, a lit crown plate, glaring orange eyes
+function anthillAntlionHead() {
+  const r = ANTHILL.jaws.hr, P = ANTHILLP.plum;
+  return anthillSprite('alHead', r * 2 + 14, r * 2 + 14, r + 7, r + 7, c => {
+    c.lineCap = 'round';
+    // bristles round the back of the head
+    c.strokeStyle = P[2]; c.lineWidth = 1.2; for (let k = 0; k < 9; k++) { const a = Math.PI * 0.55 + k * 0.13 * Math.PI; c.beginPath(); c.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9); c.lineTo(Math.cos(a) * (r + 4.5), Math.sin(a) * (r + 4.5)); c.stroke(); }
+    anthillPart(c, 0, 0, r, r * 1.04, 0, P, ANTHILLP.plumEdge, 0.55);
+    gPair(c, [[-r * 0.2, -r * 0.92], [r * 0.15, -r * 0.2], [-r * 0.1, r * 0.7]], 'rgba(50,14,60,.5)', 'rgba(255,210,255,.4)', 1, 0.7);
+    c.fillStyle = 'rgba(255,220,255,.5)'; c.beginPath(); c.ellipse(-r * 0.4, -r * 0.55, r * 0.3, r * 0.16, -0.6, 0, TWO_PI); c.fill();
+    anthillEyes(c, r * 0.32, -r * 0.3, r * 0.3, 0.9, 0.7, '#ff6a2a', 1.15, 1.1, P[2]);
+  });
+}
+// one jaw at full length (anchored at its root, pointing +x): a sickle of orange chitin bowing out and hooking in at the
+// tip, a lit ridge along its back, a groove at its joint, a row of cream teeth on its inner edge; sg +1 the upper jaw
+// (y down: bows toward -y)
+function anthillJawSprite(jl, sg) {
+  const L = Math.round(jl / 4) * 4, Pj = ['#ffdf98', '#f08a34', '#a8461a', '#6a2a0c'];
+  return anthillSprite(`jaw${L}_${sg}`, L + 10, L * 0.3 + 18, 4, sg > 0 ? L * 0.22 + 10 : L * 0.07 + 10, c => {
+    const pt = u => [L * u, -sg * (L * 0.13 * Math.sin(Math.PI * u) - L * 0.07 * u * u)], th = u => 7 - 4.6 * u;
+    const outer = [], inner = [];
+    for (let i = 0; i <= 24; i++) { const u = i / 24, [x, y] = pt(u), [x2, y2] = pt(Math.min(1, u + 0.01)), [x1, y1] = pt(Math.max(0, u - 0.01)), nx = -(y2 - y1), ny = x2 - x1, nl = Math.hypot(nx, ny) || 1, t = th(u) * (u > 0.92 ? (1 - u) / 0.08 * 0.8 + 0.2 : 1); outer.push([x + nx / nl * t * -sg, y + ny / nl * t * -sg]); inner.push([x - nx / nl * t * -sg, y - ny / nl * t * -sg]); }
+    c.beginPath(); outer.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); for (let i = inner.length - 1; i >= 0; i--) c.lineTo(...inner[i]); c.closePath();
+    c.fillStyle = gLG(c, 0, -sg * 10, 0, sg * 6, Pj); c.fill();
+    c.strokeStyle = '#6a2a0c'; c.lineWidth = 0.9; c.stroke();
+    // teeth on the inner edge, pointing at the other jaw
+    c.fillStyle = '#fff4d8'; c.strokeStyle = 'rgba(150,90,40,.7)'; c.lineWidth = 0.5;
+    for (let k = 1; k <= 7; k++) { const u = k / 9, i = Math.round(u * 24), [x, y] = inner[i], [xa] = inner[Math.min(24, i + 1)]; c.beginPath(); c.moveTo(x - 2.4, y); c.lineTo(x + 0.4, y + sg * (5 - k * 0.35)); c.lineTo(Math.max(xa, x + 2.4), y); c.closePath(); c.fill(); c.stroke(); }
+    // the lit ridge along its back and the joint groove
+    const ridge = outer.slice(1, 22).map(([x, y], i) => [x, y + sg * 1.4]); c.strokeStyle = 'rgba(255,246,214,.85)'; c.lineWidth = 1.4; c.lineCap = 'round'; gPoly(c, ridge, false); c.stroke();
+    const [jx, jy] = pt(0.22); gPair(c, [[jx - 1, jy - 6], [jx + 1, jy + 6]], 'rgba(110,40,12,.6)', 'rgba(255,220,170,.45)', 1, 0.8);
+    // the hooked tip: a dark lacquered point
+    const tip = outer[24]; c.fillStyle = '#5a200a'; c.beginPath(); c.arc(tip[0] - 1, tip[1], 1.6, 0, TWO_PI); c.fill();
+  });
+}
+function anthillDrawJaws(h) {
+  const X = ANTHILL.jaws, d = h.side, T = G.t, st = h.st || anthillJawsAt(h, T), b = h.base, A = h.alt, shake = st.ph === 'tell' ? Math.sin(T * 50) * 0.7 * st.tell : 0;
+  if (st.ph === 'tell') anthillGlow(ctx, sx(b + d * 10), sy(A), (40 + 20 * st.tell) * s, [255, 110, 70], 0.18 + 0.2 * st.tell * (0.6 + 0.4 * Math.sin(T * 22)));
+  if (st.e > 0.02) { const reach = st.e * (h.jl + 32); anthillGlow(ctx, sx(b + d * reach * 0.55), sy(A), (reach * 0.5 + 30) * s, [255, 120, 90], 0.12 * st.e); }
+  anthillBlit(anthillPitSprite(), b + shake * d, A, 1, d);
+  // pebbles sliding into the funnel through the tell
+  if (st.ph === 'tell') {
+    for (let k = 0; k < 7; k++) {
+      const u = pmod(T * 1.4 + k * 0.37, 1), a0 = k * 2.3, rr = (1 - u) * 18 + 2, an = a0 + u * 2.8;
+      const px = b + d * (1 + Math.cos(an) * rr * 0.9), pa = A - Math.sin(an) * rr * 0.9;
+      ctx.fillStyle = k % 2 ? '#c8b49c' : '#e8d8c0'; ctx.beginPath(); ctx.arc(sx(px), sy(pa), (1.3 + 0.6 * (1 - u)) * s, 0, TWO_PI); ctx.fill();
+    }
+  }
+  // the head peeking up at the end of the tell, or lunging out with its jaws
+  if (st.ph === 'tell' && st.tell > 0.5) anthillBlitAt(anthillAntlionHead(), sx(b + d * 6), sy(A), 0, d, smooth(0.5, 0.8, st.tell));
+  if (st.e > 0) {
+    const hx = b + d * (6 + 16 * st.e), rx = hx + d * 10;
+    // the neck: a short plum segment back into the pit
+    ctx.strokeStyle = ANTHILLP.plum[2]; ctx.lineWidth = 19 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx(b), sy(A)); ctx.lineTo(sx(hx), sy(A)); ctx.stroke();
+    ctx.strokeStyle = ANTHILLP.plum[1]; ctx.lineWidth = 13 * s; ctx.stroke();
+    for (const sg of [1, -1]) {
+      const S = anthillJawSprite(h.jl, sg);
+      anthillBlitAt(S, sx(rx), sy(A + sg * 4), -sg * st.open * d, d, 1, st.e * h.jl / (Math.round(h.jl / 4) * 4));
+    }
+    anthillBlitAt(anthillAntlionHead(), sx(hx), sy(A), 0, d);
+    // sand spray off the lunge
+    if (st.ph === 'lunge' || (st.ph === 'snap' && st.k < 0.5)) for (let k = 0; k < 6; k++) { const u = (st.ph === 'lunge' ? st.k : 1) * 0.8, r = hash2(k, h.alt | 0); ctx.fillStyle = `rgba(246,214,150,${0.8 * (1 - u)})`; ctx.beginPath(); ctx.arc(sx(b + d * (20 + 60 * r) * u * 2), sy(A + (r - 0.5) * 60 * u - 20 * u * u), 1.6 * s, 0, TWO_PI); ctx.fill(); }
+  }
+}
+
+// ---- the Leaf Parade ----
+const ANTHILL_LEAFP = [ANTHILLP.leafG, ['#d4f888', '#46ae3a', '#18602a', '#0e3e1a'], ANTHILLP.leafY];
+// a bitten leaf piece (anchored at its stalk end, held up): a fat lobe with a zig-zag cut edge, midrib and veins as
+// line pairs, a sheen; hue 0 green, 1 deep green, 2 autumn gold
+function anthillLeafSprite(hue) {
+  const P = ANTHILL_LEAFP[hue], edge = hue === 2 ? ANTHILLP.leafYEdge : ANTHILLP.leafGEdge;
+  return anthillSprite(`leaf${hue}`, 46, 64, 22, 60, c => {
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(0, 0);
+    c.bezierCurveTo(-22, -6, -24, -38, -7, -50); c.quadraticCurveTo(5, -57, 14, -50);
+    for (let k = 0; k < 8; k++) { const u = k / 8; c.lineTo(lerp(14, 5, u) + (k % 2 ? 4.6 : 0), lerp(-50, -5, u)); }
+    c.closePath();
+    c.fillStyle = gLG(c, -18, -50, 12, 0, P.slice(0, 3)); c.fill();
+    c.strokeStyle = edge; c.lineWidth = 1; c.stroke();
+    // a shaded underside half
+    c.save(); c.clip(); c.fillStyle = 'rgba(10,40,10,.16)'; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-5, -25, -1, -48); c.lineTo(20, -48); c.lineTo(20, 0); c.fill(); c.restore();
+    // midrib and veins (dark furrow over a lit ridge)
+    const vein = (P2) => gPair(c, P2, hue === 2 ? 'rgba(110,60,10,.55)' : 'rgba(20,70,20,.55)', 'rgba(255,255,220,.5)', 1.1, -0.7);
+    vein([[0, -1], [-4, -24], [-1, -47]]);
+    for (let k = 1; k < 6; k++) { const yy = -k * 8.2; vein([[-2.6, yy], [-10, yy - 3.4], [-17 + k * 1.6, yy - 8]]); vein([[-1.8, yy - 1], [6, yy - 5.6]]); }
+    c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-17, -16); c.quadraticCurveTo(-18, -33, -8, -44); c.stroke();
+    // a little bite hole for character
+    if (hue !== 1) { c.fillStyle = gCol(gMix(anthillHex(P[2]), [30, 20, 10], 0.5)); c.beginPath(); c.ellipse(-9, -30, 2.4, 1.6, 0.5, 0, TWO_PI); c.fill(); }
+  });
+}
+// a tunnel mouth in the wall (anchored at the wall line, opening +x): a dark round burrow with a packed-earth rim, lit on
+// top, crumbs at its sill
+function anthillTunnelSprite(big) {
+  const R = big ? 34 : 20, Rx = big ? 16 : 14;
+  return anthillSprite(`tun${big ? 1 : 0}`, Rx * 2 + 16, R * 2 + 16, Rx + 4, R + 8, c => {
+    c.fillStyle = gRG(c, -4, -R * 0.4, R * 1.2, ANTHILLP.soil); c.beginPath(); c.ellipse(0, 0, Rx + 4, R + 4, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = ANTHILLP.soilEdge; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = gRG(c, -Rx * 0.3, 0, R, ['#0e0604', '#1e0e08', '#3a2214']); c.beginPath(); c.ellipse(0, 0, Rx, R, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,214,150,.6)'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, Rx + 1.5, R + 1.5, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+    c.strokeStyle = 'rgba(40,20,8,.6)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, 0, Rx + 1.5, R + 1.5, 0, 0.2, 1.4); c.stroke();
+    for (let k = 0; k < 5; k++) anthillBall(c, -Rx * 0.5 + k * Rx * 0.32, R + 2 + (k % 2), 1.2 + (k % 3) * 0.4, ['#e0c8a8', '#9a7652', '#5a3e24'], '#4a301a', 0.35);
+  });
+}
+function anthillDrawLeaf(h) {
+  const T = G.t, A = h.alt, d = h.dir, L = h.L, R = h.R, p = G.p;
+  // the root thread across the shaft, sagging a little; it twangs as you push through it
+  const near = Math.abs(p.alt - A) < 60 && p.x > L && p.x < R && G.state === 'play';
+  if (near) h.twT = T, h.twX = p.x;
+  const tw = h.twT != null ? Math.exp(-(T - h.twT) * 5) * Math.sin((T - h.twT) * 34) * 7 : 0;
+  const mxp = h.twX != null && tw ? h.twX : (L + R) / 2, Y0 = sy(A - 2);
+  const path = o => { ctx.beginPath(); ctx.moveTo(sx(L - 6), Y0 + o * s); ctx.quadraticCurveTo(sx(mxp), Y0 + (o + 5 + tw) * s, sx(R + 6), Y0 + o * s); };
+  ctx.lineCap = 'round';
+  for (const [lw, col, o] of [[5.2, '#5a3618', 0.8], [3.6, '#a87850', 0], [1.4, '#e4bc8a', -1], [0.6, 'rgba(255,240,210,.9)', -1.7]]) { ctx.strokeStyle = col; ctx.lineWidth = lw * s; path(o); ctx.stroke(); }
+  // hair rootlets hanging off it
+  ctx.strokeStyle = 'rgba(214,170,120,.7)'; ctx.lineWidth = 0.8 * s;
+  for (let x = L + 14, k = 0; x < R - 8; x += 27, k++) { const u = (x - L) / (R - L), yy = Y0 + (5 + tw) * 4 * u * (1 - u) * s, sw = Math.sin(T * 1.4 + k) * 2 * s; ctx.beginPath(); ctx.moveTo(sx(x), yy + 2 * s); ctx.quadraticCurveTo(sx(x + 3), yy + 9 * s, sx(x + 1) + sw, yy + (14 + (k % 3) * 4) * s); ctx.stroke(); }
+  // the carriers and their leaves, clipped to the shaft (they walk out of one tunnel and into the other)
+  ctx.save(); ctx.beginPath(); ctx.rect(sx(L), sy(A + 90), (R - L) * s, 110 * s); ctx.clip();
+  const fl = h.flutter != null ? Math.exp(-(T - h.flutter) * 4) : 0;
+  for (const C of anthillLeafPos(h, T)) {
+    if (C.q < -40 || C.q > h.wd + 40) continue;
+    const g = Math.floor(T * 13 + C.i * 3) & 7, x = C.x, u = (x - L) / (R - L), ya = A + 1 - (5 + tw) * 4 * u * (1 - u) * 0.4;
+    anthillBlitAt(anthillAntSprite(1, g, 0), sx(x), sy(ya), 0, d);
+    const bob = Math.sin(T * 13 + C.i * 2) * 0.04 + fl * Math.sin(T * 30 + C.i) * 0.25, hue = (C.i + Math.floor(h.alt / 7)) % 3;
+    // its jaws grip the leaf's stalk: drawn from the ant's head up into the leaf
+    ctx.strokeStyle = '#3e7a20'; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(sx(x + d * 10), sy(ya + 12)); ctx.lineTo(sx(x + d * 3), sy(ya + 18)); ctx.stroke();
+    anthillBlitAt(anthillLeafSprite(hue), sx(x + d * 3), sy(ya + 17), d * (0.1 - bob), d);
+  }
+  ctx.restore();
+  // the tunnel mouths the parade comes and goes by
+  anthillBlit(anthillTunnelSprite(true), L - 10, A + 26, 1, 1);
+  anthillBlit(anthillTunnelSprite(true), R + 10, A + 26, 1, -1);
+}
+
+// ---- the Roly-Poly Ricochet ----
+const ANTHILL_ROLYR = ANTHILL.roly.r;
+// the ball (anchored at its centre, unrotated): a pill bug rolled up tight, slate armour plates in bands (each lit on
+// top with a dark seam under it), a pale rim on every plate, a big sheen
+function anthillRolyBall() {
+  const r = ANTHILL_ROLYR, P = ANTHILLP.slate;
+  return anthillSprite('rolyBall', r * 2 + 8, r * 2 + 8, r + 4, r + 4, c => {
+    anthillBall(c, 0, 0, r, P, ANTHILLP.slateEdge, 0);
+    c.save(); c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.clip();
+    // the armour: seven curved plates wrapping round the ball, each a band lit along its leading rim with a dark seam
+    // tucked under the plate in front; alternate plates a shade cooler
+    const band = (x0, x1) => { c.beginPath(); for (let i = 0; i <= 16; i++) { const y = -r + i * r / 8, w = Math.sqrt(Math.max(0, 1 - (y / r) ** 2)); c.lineTo(x0 * w + r * 0.28 * (1 - w), y); } for (let i = 16; i >= 0; i--) { const y = -r + i * r / 8, w = Math.sqrt(Math.max(0, 1 - (y / r) ** 2)); c.lineTo(x1 * w + r * 0.28 * (1 - w), y); } c.closePath(); };
+    for (let k = 0; k < 7; k++) {
+      const x0 = -r + k * r * 2 / 7, x1 = x0 + r * 2 / 7;
+      c.fillStyle = gLG(c, x0, -r, x1, r, k % 2 ? ['#b4c0d8', '#7a88a6', '#4e5a76'] : ['#c8d2e6', '#8c9cb8', '#56627e']); band(x0, x1); c.fill();
+      const rim = []; for (let i = 0; i <= 16; i++) { const y = -r + i * r / 8, w = Math.sqrt(Math.max(0, 1 - (y / r) ** 2)); rim.push([x1 * w + r * 0.28 * (1 - w), y]); }
+      gPair(c, rim, 'rgba(26,32,54,.75)', 'rgba(236,244,255,.7)', 1.6, -1.3);
+      // little dimples along each plate
+      c.fillStyle = 'rgba(40,48,76,.35)'; for (const y of [-r * 0.45, 0, r * 0.45]) { const w = Math.sqrt(1 - (y / r) ** 2); c.beginPath(); c.arc(((x0 + x1) / 2) * w + r * 0.28 * (1 - w), y, r * 0.035, 0, TWO_PI); c.fill(); }
+    }
+    // shade on the lower right, so the plates wrap round
+    c.fillStyle = gRG(c, -r * 0.4, -r * 0.45, r * 1.8, ['rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(30,34,60,.4)']); c.fillRect(-r, -r, 2 * r, 2 * r);
+    c.restore();
+    c.strokeStyle = ANTHILLP.slateEdge; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = r * 0.14; c.lineCap = 'round'; c.beginPath(); c.arc(0, 0, r * 0.74, 3.55, 4.45); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.ellipse(-r * 0.42, -r * 0.52, r * 0.16, r * 0.09, -0.7, 0, TWO_PI); c.fill();
+  });
+}
+// the pill bug uncurled, peeking out of its burrow (anchored at its burrow's mouth, facing +x): a domed plated back, a
+// round face with big blinking eyes, two elbowed antennae, little legs on the lip
+function anthillRolyPeek(blink) {
+  const r = ANTHILL_ROLYR, P = ANTHILLP.slate;
+  const K = r / 16;
+  return anthillSprite(`rolyPeek${blink}`, 40 * K, 34 * K, 12 * K, 20 * K, c => {
+    c.scale(K, K); const r = 16; c.lineCap = 'round';
+    for (let k = 0; k < 4; k++) { c.strokeStyle = '#3c4460'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(2 + k * 3, 6); c.lineTo(4 + k * 3, 10); c.stroke(); }
+    anthillPart(c, 0, 0, r * 0.95, r * 0.62, 0, P, ANTHILLP.slateEdge, 0.5);
+    for (let k = -2; k <= 1; k++) gPair(c, [[k * 4.4, -r * 0.6], [k * 4.4 + 1.2, 0], [k * 4.4, r * 0.45]], 'rgba(30,36,60,.55)', 'rgba(230,240,255,.5)', 1.1, 0.8);
+    anthillPart(c, r * 0.95, 1, 6, 5.4, 0, ['#e8eef8', '#a8b4c8', '#6c7894'], ANTHILLP.slateEdge, 0.4);
+    c.strokeStyle = '#4a5270'; c.lineWidth = 1; c.beginPath(); c.moveTo(r + 2, -3); c.lineTo(r + 6, -9); c.lineTo(r + 11, -8); c.moveTo(r + 3, -3); c.lineTo(r + 9, -6); c.lineTo(r + 13, -3); c.stroke();
+    if (blink) { c.strokeStyle = '#2a3048'; c.lineWidth = 1; c.beginPath(); c.moveTo(r - 0.5, 0); c.lineTo(r + 2.5, 0); c.moveTo(r + 3.5, 0); c.lineTo(r + 6.5, 0); c.stroke(); }
+    else anthillEyes(c, r + 3, -0.4, 1.9, 0.6, 0, '#5a6a9a', 1.1, 1.15);
+  });
+}
+// a burrow in the wall for the roly-poly (anchored at the wall line): a round dark hole with a mossy, crumbly rim
+function anthillBurrowSprite() {
+  const r = ANTHILL_ROLYR + 5;
+  return anthillSprite('burrow', 2 * r + 16, 2 * r + 18, r + 6, r + 8, c => {
+    c.fillStyle = gRG(c, -4, -r * 0.4, r * 1.3, ANTHILLP.soil); c.beginPath(); c.ellipse(0, 0, r + 5, r + 5, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = ANTHILLP.soilEdge; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = gRG(c, -r * 0.2, 0, r, ['#0c0604', '#1e0e08', '#3a2214']); c.beginPath(); c.ellipse(0, 0, r - 1, r, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,214,150,.55)'; c.lineWidth = 1.4; c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, r + 1.5, r + 1.5, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+    // moss tufts on the rim
+    for (const a of [3.9, 4.4, 4.9, 5.4]) { const x = Math.cos(a) * (r + 2), y = Math.sin(a) * (r + 2); c.fillStyle = gRG(c, x - 1, y - 1, 4, ['#b8e078', '#5a9a38', '#2e5e1e']); c.beginPath(); c.ellipse(x, y, 3.6, 2.2, a + 1.57, 0, TWO_PI); c.fill(); }
+  });
+}
+// a scuff where the ball ricochets off the far wall (anchored on the wall line): a dished dent with soil cracks
+function anthillScuffSprite() {
+  return anthillSprite('scuff', 30, 40, 6, 20, c => {
+    c.fillStyle = gRG(c, 4, -2, 14, ['rgba(40,20,10,.55)', 'rgba(60,34,18,.35)', 'rgba(60,34,18,0)']); c.beginPath(); c.ellipse(4, 0, 10, 15, 0, 0, TWO_PI); c.fill();
+    for (const [a, l] of [[-0.6, 12], [0.1, 10], [0.7, 13], [2.6, 7], [3.4, 8]]) gPair(c, [[4 + Math.cos(a) * 5, Math.sin(a) * 6], [4 + Math.cos(a) * l, Math.sin(a) * l * 1.2]], 'rgba(40,20,10,.6)', 'rgba(255,214,160,.35)', 0.8, 0.6);
+  });
+}
+function anthillDrawRoly(h) {
+  const X = ANTHILL.roly, d = h.side, T = G.t, st = h.st || anthillRolyAt(h, T), g = anthillRolyGeo(h), r = X.r;
+  const bounceA = g.Atop - X.dh;
+  anthillBlit(anthillScuffSprite(), h.far, bounceA, 0.9, -d);
+  anthillBlit(anthillBurrowSprite(), h.base, g.Atop, 1, d);
+  anthillBlit(anthillBurrowSprite(), h.base, h.alt, 1, d);
+  // its zig-zag, faintly scored into the dust of the air while it rolls (a warning of where it goes next)
+  if (st.ph === 'tell' || st.ph === 'roll') {
+    const k = st.ph === 'tell' ? st.tell : 1;
+    ctx.save(); ctx.setLineDash([4 * s, 7 * s]); ctx.lineCap = 'round'; ctx.strokeStyle = `rgba(255,150,110,${0.25 * k})`; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.moveTo(sx(h.base + d * r), sy(g.Atop)); ctx.lineTo(sx(h.far - d * r), sy(bounceA)); ctx.lineTo(sx(h.base + d * r), sy(h.alt)); ctx.stroke(); ctx.restore();
+  }
+  if (st.ph === 'rest') {
+    // curled in its upper burrow: just its face peeking, blinking now and then
+    anthillBlitAt(anthillRolyPeek(pmod(T + h.alt * 0.01, 3.1) < 0.14 ? 1 : 0), sx(h.base - d * 8), sy(g.Atop), 0, d, 0.95);
+  } else if (st.ph === 'tell') {
+    const tk = st.tell;
+    if (tk < 0.45) anthillBlitAt(anthillRolyPeek(0), sx(h.base + d * (tk * 14 - 4)), sy(g.Atop + 1.5 * Math.sin(T * 30)), 0, d);
+    else { const x = h.base + d * r * Math.min(1, 0.2 + tk * 1.1); anthillGlow(ctx, sx(x), sy(g.Atop), 34 * s, [255, 120, 80], 0.25 * tk); anthillBlitAt(anthillRolyBall(), sx(x), sy(g.Atop + 1.5 * Math.sin(tk * 30)), Math.sin(T * 20) * 0.3); }
+  } else if (st.ph === 'roll') {
+    const spin = (st.k < 1 ? st.k : 2 - st.k) * g.D / r * d;
+    // dust trail behind it
+    for (let k = 1; k <= 4; k++) { const q = anthillRolyPos(h, Math.max(0, st.tau - k * 0.035)); ctx.fillStyle = `rgba(214,180,140,${0.2 - k * 0.04})`; ctx.beginPath(); ctx.arc(sx(q.x), sy(q.a), (r - k * 1.6) * s, 0, TWO_PI); ctx.fill(); }
+    anthillGlow(ctx, sx(st.x), sy(st.a), 30 * s, [255, 140, 100], 0.16);
+    anthillBlitAt(anthillRolyBall(), sx(st.x), sy(st.a), spin);
+  } else if (st.ph === 'sink') {
+    anthillBlitAt(anthillRolyBall(), sx(h.base + d * r * (1 - st.k)), sy(h.alt), d * 6 * st.k, 1, 1 - st.k * 0.6, 1 - st.k * 0.3);
+  }
+}
+
+// ---- the royal egg: a big amber queen's egg glowing from inside, a curled larva shadow, a little golden crown mark ----
+function anthillEggSprite() {
+  return anthillSprite('egg', 30, 36, 15, 18, c => {
+    const rx = 9.5, ry = 12.5, A0 = ANTHILLP.amber;
+    c.fillStyle = gRG(c, rx * 0.1, ry * 0.4, ry * 1.35, ['#fff8d0', A0[1], A0[2], A0[3]]); c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = ANTHILLP.amberEdge; c.lineWidth = 0.8; c.stroke();
+    // the larva curled inside, a soft shadow
+    c.strokeStyle = 'rgba(160,70,10,.4)'; c.lineWidth = 2.6; c.lineCap = 'round'; c.beginPath(); c.arc(0, 2, rx * 0.48, -0.5, Math.PI * 1.4); c.stroke();
+    // a golden crown mark on its shell
+    c.fillStyle = 'rgba(255,250,210,.75)'; c.beginPath(); c.moveTo(-4, -2); c.lineTo(-4, -6); c.lineTo(-2, -4); c.lineTo(0, -7.5); c.lineTo(2, -4); c.lineTo(4, -6); c.lineTo(4, -2); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(190,110,20,.7)'; c.lineWidth = 0.5; c.stroke();
+    // the warm rim light along the bottom, a crisp specular and a second glint
+    c.strokeStyle = 'rgba(255,236,160,.75)'; c.lineWidth = 1.1; c.beginPath(); c.ellipse(0, 0, rx * 0.86, ry * 0.88, 0, 0.3, Math.PI - 0.3); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.ellipse(-rx * 0.38, -ry * 0.48, rx * 0.24, ry * 0.28, -0.4, 0, TWO_PI); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(-rx * 0.02, -ry * 0.74, 0.7, 0, TWO_PI); c.fill();
+  });
+}
+function anthillDrawEgg(X, Y, t, ph) {
+  const bob = Math.sin(t * 2.4 + ph) * 2.2 * s, pulse = 0.8 + 0.2 * Math.sin(t * 3.1 + ph);
+  anthillGlow(ctx, X, Y + bob, 34 * s, [255, 180, 70], 0.42 * pulse);
+  anthillGlow(ctx, X, Y + bob, 16 * s, [255, 230, 150], 0.4 * pulse);
+  anthillBlitAt(anthillEggSprite(), X, Y + bob, Math.sin(t * 1.7 + ph) * 0.08);
+  // sparkles orbiting it
+  for (let k = 0; k < 3; k++) { const a = t * 1.8 + ph + k * 2.1, x = X + Math.cos(a) * 16 * s, y = Y + bob + Math.sin(a) * 19 * s, tw = 0.5 + 0.5 * Math.sin(t * 6 + k * 2); ctx.fillStyle = `rgba(255,246,200,${0.5 + 0.4 * tw})`; ctx.beginPath(); ctx.moveTo(x, y - 3 * s * tw); ctx.lineTo(x + 0.9 * s, y); ctx.lineTo(x, y + 3 * s * tw); ctx.lineTo(x - 0.9 * s, y); ctx.closePath(); ctx.fill(); }
+}
+DRAW.anthillMarch = anthillDrawMarch; DRAW.anthillJaws = anthillDrawJaws; DRAW.anthillLeaf = anthillDrawLeaf; DRAW.anthillRoly = anthillDrawRoly;
+
+// ---- the stage's particles: soil crumbs and grains of sand, bits of leaf ----
+{ const base = updateParticles; updateParticles = function (dt) {
+  base(dt);
+  if (!anthillOn()) return;
+  for (const q of G.particles) {
+    if (q.kind === 'ahcrumb') { q.vy -= 420 * dt; q.ex.rot += q.ex.spin * dt; }
+    else if (q.kind === 'ahleafbit') { q.vy = lerp(q.vy, -40, Math.min(1, dt * 2)); q.vx += Math.sin(G.t * 5 + q.ex.rot) * 30 * dt; q.ex.rot += q.ex.spin * dt; }
+  }
+}; }
+const ANTHILL_CRUMB = [null, [150, 96, 56], [110, 66, 36], [196, 140, 86], [232, 196, 140]];
+const anthillPartCv = new Map();
+function anthillCrumbSprite(col) {
+  let cv = anthillPartCv.get(col); if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = 20; const c = cv.getContext('2d'); c.translate(10, 10); c.scale(2, 2);
+  if (col >= 10) {   // a bit of leaf
+    const P = col === 10 ? ANTHILLP.leafG : ANTHILLP.leafY; c.fillStyle = gLG(c, -4, -2, 4, 2, P.slice(0, 3)); c.beginPath(); c.moveTo(-4, 0); c.quadraticCurveTo(0, -3, 4, 0); c.quadraticCurveTo(0, 2.6, -4, 0); c.fill(); c.strokeStyle = P[3]; c.lineWidth = 0.4; c.stroke();
+  } else {
+    const q = ANTHILL_CRUMB[col]; c.fillStyle = gRG(c, -1, -1, 4, [gCol(gMix(q, [255, 240, 210], 0.4)), gCol(q), gCol(gMix(q, [30, 14, 6], 0.4))]); c.beginPath(); c.moveTo(-3, -1); c.lineTo(-1, -3); c.lineTo(2.6, -2); c.lineTo(3, 1.5); c.lineTo(0, 3); c.lineTo(-2.6, 2); c.closePath(); c.fill();
+  }
+  anthillPartCv.set(col, cv); return cv;
+}
+{ const base = drawParticles; drawParticles = function (additive) {
+  const ps = G.particles;
+  if (additive || !ps.some(q => q.kind === 'ahcrumb' || q.kind === 'ahleafbit')) return base(additive);
+  G.particles = ps.filter(q => q.kind !== 'ahcrumb' && q.kind !== 'ahleafbit'); try { base(additive); } finally { G.particles = ps; }
+  for (const q of ps) {
+    if (q.kind !== 'ahcrumb' && q.kind !== 'ahleafbit') continue;
+    const t = clamp(q.life / q.max, 0, 1), x = sx(q.x), y = sy(q.alt);
+    if (y < -20 || y > H + 20) continue;
+    const r = q.size * s, cv = anthillCrumbSprite(q.kind === 'ahleafbit' ? 10 + (q.ex.col || 0) : q.ex.col || 1);
+    ctx.globalAlpha = Math.min(1, t * 3);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(q.ex.rot); ctx.drawImage(cv, -r, -r, r * 2, r * 2); ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}; }
+
+// ---- the shaft's walls: packed earth in strata ----
+// Each wall is the colony's packed earth: wavy strata of soil running across it (each band its own shade, a dark seam
+// over a lit ridge where two meet), studded with glossy pebbles, cut root ends and creeping roots, with egg niches dug
+// into it here and there, heaps of amber eggs glowing inside (the shaft's light). Each section is dug through its own
+// soil (red clay by the barracks, pale sand at the antlions, dark loam in the gardens, grey damp earth in the
+// galleries...), so the strata change as you climb. The edge is a real lip of packed earth: a crumbly rim of lumps,
+// each lit on top and shaded under, a lit line where the shaft's glow catches it, hair roots hanging out of it.
+const ANTHILL_WB = 160;   // wall tile height
+const ANTHILL_SOIL = {
+  'Colony Gate': { b: [[150, 98, 58], [124, 78, 44], [168, 112, 66], [108, 66, 38]], deep: [46, 26, 16], rim: [196, 140, 90] },
+  'Soldier Bridges': { b: [[160, 82, 52], [134, 64, 40], [178, 100, 64], [112, 52, 34]], deep: [50, 22, 14], rim: [210, 130, 92] },
+  'Antlion Sands': { b: [[200, 154, 98], [176, 128, 78], [218, 176, 118], [150, 106, 62]], deep: [64, 42, 24], rim: [238, 206, 150] },
+  'Leafcutter Run': { b: [[118, 80, 50], [98, 64, 40], [136, 96, 60], [84, 56, 36]], deep: [36, 26, 16], rim: [170, 128, 86], moss: 1 },
+  'Royal Nursery': { b: [[170, 110, 60], [146, 90, 48], [190, 130, 74], [124, 76, 40]], deep: [58, 32, 14], rim: [226, 166, 100] },
+  'Roly-Poly Galleries': { b: [[124, 104, 90], [102, 86, 74], [142, 122, 104], [88, 72, 62]], deep: [34, 30, 28], rim: [178, 160, 140], moss: 1 },
+  'The Deep Dig': { b: [[150, 70, 46], [122, 54, 36], [170, 88, 58], [100, 44, 30]], deep: [44, 18, 12], rim: [200, 116, 82] },
+  "Queen's Chamber": { b: [[182, 126, 70], [156, 104, 56], [202, 148, 88], [134, 86, 44]], deep: [58, 34, 16], rim: [236, 184, 116] },
+};
+function anthillSecIdx(a) { const ss = (G.level && G.level.sections) || []; let i = 0; while (i < ss.length - 1 && a >= ss[i + 1].a0) i++; return i; }
+const anthillSoil = a => { const ss = (G.level && G.level.sections) || [], i = anthillSecIdx(a); return ANTHILL_SOIL[ss[i] && ss[i].name] || ANTHILL_SOIL['Colony Gate']; };
+const ANTHILL_PEB = [[[240, 232, 222], [176, 162, 150], [110, 98, 90]], [[250, 214, 170], [200, 140, 92], [130, 80, 44]], [[214, 214, 228], [140, 140, 160], [86, 86, 104]], [[255, 230, 180], [214, 168, 104], [140, 100, 50]]];
+// where each egg niche is on a side (deterministic: the walls, the glows and the light all agree)
+function anthillNiches(side, a0, a1) {
+  const out = [], SL = 300;
+  for (let j = Math.floor((a0 - 60) / SL); j <= Math.floor((a1 + 60) / SL); j++) {
+    const a = j * SL + 60 + 160 * hash2(j, 0x7a1 + side * 9), sc = G.level && G.level.segAt ? G.level.segAt(a) : null, nurse = sc && (sc.name === 'Royal Nursery' || sc.name === "Queen's Chamber");
+    if (a < 300 || (!nurse && hash2(j, 0x7a2 + side * 9) > 0.55)) continue;
+    if (G.level && G.level.all.hazards.some(h => h.lo - 50 < a && h.hi + 50 > a)) continue;   // (never behind a trap's mount)
+    if (G.level && G.level.tunnels && G.level.tunnels.some(t => t.side === side && Math.abs(t.alt - a) < 60)) continue;
+    out.push({ a, n: 4 + Math.floor(hash2(j, 0x7a3 + side * 9) * 3), sd: j * 7 + side });
+  }
+  return out;
+}
+// a glowing egg niche dug into the wall (any context, y down): a dark hollow with a heap of amber eggs, a lit rim
+function anthillNichePaint(c, x, y, into, n, sd) {
+  c.save(); c.translate(x, y);
+  c.fillStyle = gRG(c, 0, 0, 22, ['#1a0a06', '#2a140a', 'rgba(50,26,14,0)']); c.beginPath(); c.ellipse(0, 0, 21, 15, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, 0, 4, 18, ['rgba(255,170,60,.5)', 'rgba(255,140,40,.15)', 'rgba(255,140,40,0)']); c.beginPath(); c.ellipse(0, 2, 19, 13, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(255,196,120,.6)'; c.lineWidth = 1.3; c.lineCap = 'round'; c.beginPath(); c.ellipse(0, 0, 19.5, 13.5, 0, Math.PI * 0.12, Math.PI * 0.88); c.stroke();
+  c.strokeStyle = 'rgba(30,14,6,.6)'; c.lineWidth = 1.3; c.beginPath(); c.ellipse(0, 0, 19.5, 13.5, 0, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+  const TINT = [['#ffe9a0', '#ffbe3a', '#e0780e', '#7a3006'], ['#ffdc80', '#ffa82a', '#d0600c', '#6a2406'], ['#fff2b8', '#ffd060', '#e8a030', '#8a4a10'], ['#ffd890', '#ff9a2a', '#c8501a', '#6a1e08']];
+  const front = Math.ceil(n * 0.55);
+  for (let k = n - 1; k >= 0; k--) {
+    const back = k >= front, i = back ? k - front : k, cnt = back ? n - front : front, h1 = hash2(k, sd), h2 = hash2(k, sd + 3);
+    const ex = (i - (cnt - 1) / 2) * (back ? 6.6 : 7.4) + (h1 - 0.5) * 1.6, ey = (back ? -2 : 5.5) + (h2 - 0.5) * 1.4, sz = (back ? 0.9 : 1.1) * (0.88 + h1 * 0.24), T = TINT[(k * 3 + sd) & 3];
+    const rx = 3.6 * sz, ry = 4.9 * sz;
+    c.save(); c.translate(ex, ey); c.rotate((h2 - 0.5) * 0.7);
+    c.fillStyle = gRG(c, rx * 0.1, ry * 0.45, ry * 1.3, T); c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TWO_PI); c.fill();
+    if (back) { c.fillStyle = 'rgba(60,20,8,.25)'; c.fill(); }
+    if ((k + sd) % 4 === 1) { c.strokeStyle = 'rgba(150,70,20,.45)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0.6, rx * 0.5, -0.6, Math.PI * 1.35); c.stroke(); }
+    c.strokeStyle = back ? 'rgba(120,50,10,.8)' : 'rgba(150,70,14,.8)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TWO_PI); c.stroke();
+    c.strokeStyle = 'rgba(255,230,150,.6)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, 0, rx * 0.85, ry * 0.88, 0, 0.3, Math.PI - 0.3); c.stroke();
+    c.fillStyle = `rgba(255,255,255,${back ? 0.6 : 0.92})`; c.beginPath(); c.ellipse(-rx * 0.35, -ry * 0.45, rx * 0.24, ry * 0.3, -0.4, 0, TWO_PI); c.fill();
+    c.restore();
+  }
+  c.restore();
+}
+function anthillWallPaint(c, side, a0, a1, x0, x1) {
+  const WXM = new Map(), wx = a => { const q = Math.round(a); let v = WXM.get(q); if (v === undefined) { v = walls(q)[side]; WXM.set(q, v); } return v; };
+  const into = side ? 1 : -1, A0 = a0 - 12, A1 = a1 + 12, outer = side ? x1 + 4 : x0 - 4, X0 = Math.min(x0, x1) - 6, X1 = Math.max(x0, x1) + 6;
+  const pts = []; for (let a = A0; a <= A1 + 0.1; a += 2) pts.push([wx(a), -a]);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // the wall's soft shadow into the shaft
+  for (const [lw, al] of [[26, 0.05], [13, 0.08], [6, 0.1]]) { c.strokeStyle = `rgba(30,12,4,${al})`; c.lineWidth = lw; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x - into * (lw / 2 - 1.5); i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+  const body = () => { c.beginPath(); c.moveTo(outer, -A0); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(outer, -A1); c.closePath(); };
+  c.save(); body(); c.clip();
+  // the strata: band k's lower edge at height e(k, x)
+  const BH = 26, e = (k, x) => k * BH + 9 * Math.sin(k * 1.7) + 3.4 * Math.sin(x * 0.11 + k * 2.3) + (x - WORLD_W / 2) * 0.05 * ((k & 1) ? 1 : -1);
+  const k0 = Math.floor(A0 / BH) - 2, k1 = Math.ceil(A1 / BH) + 2, xs = []; for (let x = X0; x <= X1 + 0.1; x += 5) xs.push(x);
+  for (let k = k0; k <= k1; k++) {
+    const S = anthillSoil(k * BH + BH / 2), col = S.b[((k % 4) + 4) % 4], v = (hash2(k, 0x5b1) - 0.5) * 18, C0 = col.map(q => q + v);
+    c.beginPath(); xs.forEach((x, i) => i ? c.lineTo(x, -e(k, x)) : c.moveTo(x, -e(k, x))); for (let i = xs.length - 1; i >= 0; i--) c.lineTo(xs[i], -e(k + 1, xs[i]) - 0.5); c.closePath();
+    c.fillStyle = gLG(c, 0, -(k + 1) * BH, 0, -k * BH, [gCol(gMix(C0, [255, 230, 190], 0.1)), gCol(C0), gCol(gMix(C0, [30, 14, 6], 0.18))]); c.fill();
+    // the seam under the band: a dark furrow, a lit ridge just above it
+    const seam = xs.map(x => [x, -e(k, x)]);
+    c.strokeStyle = gCol(gMix(C0, [20, 8, 2], 0.55), 0.6); c.lineWidth = 1.1; gPoly(c, seam, false); c.stroke();
+    c.strokeStyle = gCol(gMix(C0, [255, 236, 200], 0.45), 0.45); c.lineWidth = 0.8; gPoly(c, seam.map(([x, y]) => [x, y - 1.3]), false); c.stroke();
+    // fine grain streaks in some bands
+    if (hash2(k, 0x5b2) < 0.5) { c.strokeStyle = gCol(gMix(C0, [20, 8, 2], 0.4), 0.3); c.lineWidth = 0.6; for (let q = 0; q < 3; q++) { const off = BH * (0.3 + q * 0.22), x2 = X0 + (X1 - X0) * hash2(k * 3 + q, 0x5b3); c.beginPath(); c.moveTo(x2 - 14, -e(k, x2 - 14) - off); c.quadraticCurveTo(x2, -e(k, x2) - off - 1.5, x2 + 16, -e(k, x2 + 16) - off); c.stroke(); } }
+  }
+  // the light: brighter by the lip (the shaft's amber glow), sinking into warm dark deep in
+  const ex = wx((a0 + a1) / 2);
+  c.fillStyle = gLG(c, ex, 0, ex + into * 110, 0, ['rgba(255,190,110,.16)', 'rgba(255,190,110,0)', 'rgba(20,8,4,.18)', 'rgba(20,8,4,.5)']); c.fillRect(X0, -A1, X1 - X0, A1 - A0);
+  // creeping roots: from deep in the wall toward the lip, a dark root with a lit top line and rootlets
+  for (let j = Math.floor((A0 - 160) / 150); j <= Math.floor((A1 + 60) / 150); j++) {
+    if (hash2(j, 0x5c1 + side) > 0.62) continue;
+    const ra = j * 150 + 100 * hash2(j, 0x5c2 + side), len = 60 + 60 * hash2(j, 0x5c3 + side), w = 2.6 + 2.2 * hash2(j, 0x5c4 + side), dIn = 50 + 40 * hash2(j, 0x5c5 + side);
+    const P0 = [wx(ra) + into * dIn, -ra], P3 = [wx(ra - len) + into * 8, -(ra - len)], P1 = [P0[0] - into * 14, P0[1] + len * 0.3], P2 = [P3[0] + into * 18, P3[1] - len * 0.3];
+    const bez = () => { c.beginPath(); c.moveTo(...P0); c.bezierCurveTo(...P1, ...P2, ...P3); };
+    c.strokeStyle = '#3e2410'; c.lineWidth = w + 1.4; bez(); c.stroke();
+    c.strokeStyle = '#7a5030'; c.lineWidth = w; bez(); c.stroke();
+    c.strokeStyle = 'rgba(240,200,150,.6)'; c.lineWidth = w * 0.32; c.save(); c.translate(-0.6, -0.8); bez(); c.stroke(); c.restore();
+    c.strokeStyle = '#6a4428'; c.lineWidth = 1; for (let q = 1; q <= 3; q++) { const u = q / 4, bx = lerp(lerp(P0[0], P1[0], u), lerp(P2[0], P3[0], u), u), by = lerp(lerp(P0[1], P1[1], u), lerp(P2[1], P3[1], u), u); c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx - into * 6, by + 5, bx - into * 3, by + 11); c.stroke(); }
+  }
+  // pebbles and cut root ends, scattered through the earth (hashed on a world grid, so tiles join seamlessly)
+  const CS = 22;
+  for (let gy = Math.floor((A0 - 8) / CS); gy <= Math.floor((A1 + 8) / CS); gy++) for (let gx = Math.floor((X0 - 8) / CS); gx <= Math.floor((X1 + 8) / CS); gx++) {
+    const hsh = hash2(gx * 131 + gy, 0x5d1); if (hsh > 0.42) continue;
+    const pa = gy * CS + CS * hash2(gx, gy + 0x5d2), px = gx * CS + CS * hash2(gy, gx + 0x5d3), dd = (px - wx(pa)) * into;
+    if (dd < 7 || dd > 120) continue;
+    if (hsh < 0.06) {   // a cut root end: a ring of bark round pale wood, growth rings
+      const r = 2.6 + 2 * hash2(gx, gy + 0x5d4);
+      c.fillStyle = '#6a4224'; c.beginPath(); c.ellipse(px, -pa, r + 1, r * 0.85 + 1, 0.3, 0, TWO_PI); c.fill();
+      c.fillStyle = gRG(c, px - r * 0.3, -pa - r * 0.3, r * 1.2, ['#f4dcb0', '#d8b080', '#a87848']); c.beginPath(); c.ellipse(px, -pa, r, r * 0.85, 0.3, 0, TWO_PI); c.fill();
+      c.strokeStyle = 'rgba(140,90,46,.6)'; c.lineWidth = 0.5; c.beginPath(); c.ellipse(px, -pa, r * 0.55, r * 0.45, 0.3, 0, TWO_PI); c.stroke();
+    } else {
+      const r = 1.5 + 3 * hash2(gx, gy + 0x5d5), P = ANTHILL_PEB[Math.floor(hash2(gx, gy + 0x5d6) * 4)].map(q => gCol(q));
+      c.fillStyle = 'rgba(30,14,6,.3)'; c.beginPath(); c.ellipse(px + 0.6, -pa + 0.9, r * 1.2, r, 0, 0, TWO_PI); c.fill();
+      c.fillStyle = gRG(c, px - r * 0.4, -pa - r * 0.4, r * 1.5, P); c.beginPath(); c.ellipse(px, -pa, r * 1.2, r, hash2(gy, gx) * 3, 0, TWO_PI); c.fill();
+      c.strokeStyle = gCol(gMix(anthillHex('#000000'), [90, 60, 40], 0.7), 0.55); c.lineWidth = 0.5; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(px - r * 0.4, -pa - r * 0.35, r * 0.25, 0, TWO_PI); c.fill();
+    }
+  }
+  // egg niches (the walls' light)
+  for (const N of anthillNiches(side, A0 - 20, A1 + 20)) anthillNichePaint(c, wx(N.a) + into * 26, -N.a, into, N.n, N.sd);
+  c.restore();
+  // the lip: a rim band of packed earth, then lumps along the edge (lit on top, shaded under), a lit line, crumbs
+  const S0 = anthillSoil((a0 + a1) / 2), rim = S0.rim;
+  c.save(); body(); c.clip();
+  c.strokeStyle = gCol(gMix(rim, S0.b[1], 0.35)); c.lineWidth = 12; gPoly(c, pts, false); c.stroke();
+  c.strokeStyle = gCol(gMix(rim, [30, 14, 6], 0.45), 0.5); c.lineWidth = 1; gPoly(c, pts.map(([x, y]) => [x + into * 6.2, y]), false); c.stroke();
+  c.restore();
+  for (let a = Math.floor(A0 / 7) * 7; a <= A1; a += 7) {
+    const hh = hash2(a / 7 | 0, 0x5e1 + side), r = 2.4 + 2.4 * hh, x = wx(a) + into * (r * 0.35), y = -a;
+    c.fillStyle = gRG(c, x - r * 0.4, y - r * 0.5, r * 1.5, [gCol(gMix(rim, [255, 240, 210], 0.35)), gCol(rim), gCol(gMix(rim, [40, 18, 8], 0.5))]); c.beginPath(); c.arc(x, y, r, 0, TWO_PI); c.fill();
+    c.strokeStyle = gCol(gMix(rim, [30, 12, 4], 0.6), 0.55); c.lineWidth = 0.5; c.beginPath(); c.arc(x, y, r, 0.3, Math.PI - 0.3); c.stroke();
+  }
+  c.strokeStyle = side ? 'rgba(255,214,150,.7)' : 'rgba(255,200,130,.42)'; c.lineWidth = 1.1; gPoly(c, pts.map(([x, y]) => [x - into * 0.8 + (side ? 0 : 0), y - 1.4]), false); c.stroke();
+  // moss on the lip in the damp sections
+  if (S0.moss) for (let a = Math.floor(A0 / 19) * 19; a <= A1; a += 19) { if (hash2(a / 19 | 0, 0x5e2 + side) > 0.45) continue; const x = wx(a), y = -a; c.fillStyle = gRG(c, x - 1, y - 2, 6, ['#c8ec88', '#6aa840', '#2e6420']); c.beginPath(); c.ellipse(x - into * 1, y - 1, 3.4, 5.5, 0.2 * into, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(30,70,20,.6)'; c.lineWidth = 0.5; c.stroke(); }
+  // hair roots hanging out of the lip into the shaft (short, they never reach a pilot's lane)
+  for (let a = Math.floor(A0 / 34) * 34; a <= A1; a += 34) {
+    const hh = hash2(a / 34 | 0, 0x5e3 + side); if (hh > 0.5) continue;
+    const x = wx(a), len = 7 + 9 * hh, sw = (hash2(a, side) - 0.5) * 4;
+    c.strokeStyle = '#5a3a20'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x, -a); c.quadraticCurveTo(x - into * len * 0.5, -a + len * 0.4, x - into * len * 0.6 + sw, -a + len); c.stroke();
+    c.strokeStyle = 'rgba(240,206,150,.7)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(x - into * 0.5, -a - 0.5); c.quadraticCurveTo(x - into * len * 0.5 - 0.5, -a + len * 0.4 - 0.5, x - into * len * 0.6 + sw - 0.4, -a + len - 0.6); c.stroke();
+  }
+}
+// the wall's x at a height, memoised per level (the live glows ask for the same heights every frame)
+function anthillWallX(a, side) {
+  const L = G.level, M = L._ahw || (L._ahw = new Map()), key = Math.round(a) * 2 + side;
+  let x = M.get(key); if (x === undefined) { x = walls(Math.round(a))[side]; M.set(key, x); if (M.size > 6000) M.clear(); }
+  return x;
+}
+let anthillMade = 0;   // tiles painted this frame (at most one is painted ahead of need per frame)
+function anthillTileBlit(T, f = 1) {
+  const x = Math.round((ox + T.x0 * s) * dpr) / dpr, y = Math.round((H - (T.a1 - G.camAlt * f) * s) * dpr) / dpr;
+  ctx.drawImage(T.cv, x, y, T.cv.width / dpr, T.cv.height / dpr);
+}
+// a side tunnel in the wall (anchored on the wall line, opening +x): plugged, a mound of loose crumbly earth with a
+// couple of coconuts glinting through; dug open, a dark round burrow with spilled soil
+function anthillSideTunnel(open) {
+  return anthillSprite(`stun${open ? 1 : 0}`, 44, 44, 22, 22, c => {
+    const r = ANTHILL.tunnel.r;
+    c.fillStyle = gRG(c, -4, -r * 0.4, r * 1.4, ANTHILLP.soil); c.beginPath(); c.ellipse(-2, 0, r + 4, r + 4, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = ANTHILLP.soilEdge; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = gRG(c, -r * 0.2, 0, r, ['#0e0604', '#1e0e08', '#3a2214']); c.beginPath(); c.ellipse(-3, 0, r - 2, r, 0, 0, TWO_PI); c.fill();
+    c.strokeStyle = 'rgba(255,214,150,.55)'; c.lineWidth = 1.2; c.lineCap = 'round'; c.beginPath(); c.ellipse(-2, 0, r + 1.5, r + 1.5, 0, Math.PI * 1.05, Math.PI * 1.7); c.stroke();
+    if (!open) {
+      // the plug: lumps of loose earth heaped in the mouth, two coconut glints peeping between them
+      for (const [x, y, rr] of [[-6, 6, 6.5], [2, 7, 5.5], [-1, -1, 6.8], [-8, -4, 5.4], [3, -6, 5], [-4, -10, 4.4]]) { c.fillStyle = gRG(c, x - rr * 0.4, y - rr * 0.5, rr * 1.4, ['#d8a878', '#9a6a40', '#5e3a1e']); c.beginPath(); c.arc(x, y, rr, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(60,30,12,.6)'; c.lineWidth = 0.5; c.stroke(); }
+      for (const [x, y] of [[-3, 3.5], [3.6, -1.5]]) { c.fillStyle = gRG(c, x - 1, y - 1, 3.4, ['#fff4b0', '#ffc840', '#b07a10']); c.beginPath(); c.arc(x, y, 2.6, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(255,255,255,.9)'; c.beginPath(); c.arc(x - 0.9, y - 0.9, 0.7, 0, TWO_PI); c.fill(); }
+    } else {
+      for (let k = 0; k < 5; k++) anthillBall(c, -r * 0.4 + k * 3.2, r + 1 + (k % 2), 1.4 + (k % 3) * 0.4, ['#e0c8a8', '#9a7652', '#5a3e24'], '#4a301a', 0.35);
+    }
+  });
+}
+function anthillDrawWalls() {
+  anthillCacheCheck();
+  const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad, Pd = drawPad * s;
+  for (const side of [0, 1]) {
+    const j0 = Math.floor(bot / ANTHILL_WB), j1 = Math.floor(top / ANTHILL_WB);
+    for (let j = j0; j <= j1 + 1; j++) {
+      const wide = drawPad > 0 ? 1 : 0, id = `w${side}_${j}_${wide}`, need = j <= j1;
+      if (!need && (anthillMade || ANTHILLC.tiles.has(id))) continue;
+      if (!ANTHILLC.tiles.has(id)) anthillMade++;
+      const a0 = j * ANTHILL_WB, a1 = a0 + ANTHILL_WB;
+      let Tl = ANTHILLC.tiles.get(id);
+      if (!Tl) {
+        let lo = Infinity, hi = -Infinity; for (let a = a0 - 12; a <= a1 + 12; a += 4) { const w = walls(a)[side]; lo = Math.min(lo, w); hi = Math.max(hi, w); }
+        const vis = ox / s + 30, x0 = side ? lo - 20 : wide ? lo - 210 : Math.max(lo - 210, -vis), x1 = side ? (wide ? hi + 210 : Math.min(hi + 210, WORLD_W + vis)) : hi + 20;
+        Tl = anthillTile(id, x0, x1, a0, a1, c => anthillWallPaint(c, side, a0, a1, x0, x1));
+      }
+      if (!need) continue;
+      anthillTileBlit(Tl);
+      const y0 = sy(a1) - 1, hh = ANTHILL_WB * s + 2;
+      ctx.fillStyle = Tl.deep || (Tl.deep = gCol(gMix(anthillSoil(a0 + 80).deep, [20, 8, 4], 0.25)));
+      if (side) { const xe = sx(Tl.x1) - 1; if (xe < cssW + 30 + Pd) ctx.fillRect(xe, y0, cssW + 30 + Pd - xe, hh); }
+      else { const xe = sx(Tl.x0) + 1; if (xe > -30 - Pd) ctx.fillRect(-30 - Pd, y0, xe + 30 + Pd, hh); }
+    }
+  }
+  anthillMade = 0;
+  // live: each egg niche's warm glow breathing, batched (one composite switch, the cached glow sprite)
+  const T = G.t, gw = anthillGlowCv([255, 170, 70]);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const side of [0, 1]) {
+    const into = side ? 1 : -1;
+    for (const N of anthillNichesCached(side)) {
+      if (N.a < G.camAlt - 60 || N.a > G.camAlt + viewH + 60) continue;
+      const X = sx(anthillWallX(N.a, side) + into * 24), Y = sy(N.a), r = 46 * s;
+      ctx.globalAlpha = 0.34 + 0.1 * Math.sin(T * 2.2 + N.sd); ctx.drawImage(gw, X - r, Y - r, r * 2, r * 2);
+    }
+  }
+  ctx.restore();
+  // the side tunnels (plugged until Digby digs them open)
+  const L = G.level;
+  if (L && L.tunnels) for (const tn of L.tunnels) {
+    if (tn.alt < G.camAlt - 40 || tn.alt > G.camAlt + viewH + 40) continue;
+    const into = tn.side ? 1 : -1, x = anthillWallX(tn.alt, tn.side) + into * 8;
+    anthillBlit(anthillSideTunnel(!!tn.open), x, tn.alt, 1, tn.side ? -1 : 1);
+    if (!tn.open && anthillMole()) anthillGlow(ctx, sx(x - into * 10), sy(tn.alt), 26 * s, [255, 210, 110], 0.18 + 0.1 * Math.sin(T * 4 + tn.alt));
+  }
+}
+// the niches over the whole stage per side, worked out once per level (the walls paint them, the glows breathe on them)
+function anthillNichesCached(side) {
+  const L = G.level; if (!L) return [];
+  const C = L._ahn || (L._ahn = [null, null]);
+  return C[side] || (C[side] = anthillNiches(side, 0, L.end + 400));
+}
+// ---- the backdrop: the colony receding behind the shaft ----
+// far (0.07): the earth cut away to show the colony in cross-section: strata of soil drawn as line pairs, pebbles and
+// buried stones, great roots with real volume, winding tunnels with lit floors, and chambers opened up like a doll's
+// house, each furnished as the section's own: the gate's seed stores with workers hauling seeds in, the soldiers'
+// barracks, the antlions' sand cavern of pit craters, the leafcutters' fungus gardens of capped and gilled mushrooms and
+// their aphid herds, the nursery's rows of glowing eggs and the nurses tending them, the roly-polies' damp mossy
+// galleries, the Deep Dig's lanterns of glowing amber fungus among giant roots, the royal galleries of amber pillars.
+// near (0.2): overhangs of earth with roots spilling off them and thick gnarled roots, soft and dim. Depth is shown
+// by easing colour toward each section's haze; every section has its own light. Live: tiny ants file along the far
+// tunnels, and the Deep Dig's fungus lanterns and the nursery's egg rows breathe their glow (a handful of cheap blits).
+const ANTHILL_FAR = 0.07, ANTHILL_NEAR = 0.2, ANTHILL_BB = 440, ANTHILL_NB = 300;
+const ANTHILL_LIGHT = {
+  'Colony Gate': { top: [104, 72, 46], bot: [46, 28, 16], haze: [96, 66, 42], lamp: [255, 222, 160], earth: [132, 90, 56], glow: [255, 214, 140] },
+  'Soldier Bridges': { top: [110, 56, 38], bot: [48, 20, 12], haze: [104, 52, 36], lamp: [255, 188, 150], earth: [142, 72, 46], glow: [255, 150, 110] },
+  'Antlion Sands': { top: [140, 106, 66], bot: [66, 44, 24], haze: [132, 98, 62], lamp: [255, 228, 170], earth: [186, 140, 88], glow: [255, 220, 150] },
+  'Leafcutter Run': { top: [86, 80, 44], bot: [36, 32, 16], haze: [80, 76, 44], lamp: [226, 255, 176], earth: [112, 92, 54], glow: [220, 255, 160] },
+  'Royal Nursery': { top: [118, 72, 34], bot: [52, 26, 10], haze: [112, 68, 34], lamp: [255, 204, 120], earth: [152, 98, 54], glow: [255, 196, 110] },
+  'Roly-Poly Galleries': { top: [92, 86, 52], bot: [38, 34, 20], haze: [88, 84, 54], lamp: [226, 255, 200], earth: [124, 106, 70], glow: [210, 255, 170] },
+  'The Deep Dig': { top: [112, 62, 30], bot: [44, 20, 8], haze: [106, 58, 30], lamp: [255, 184, 96], earth: [140, 76, 40], glow: [255, 176, 70] },
+  "Queen's Chamber": { top: [122, 82, 40], bot: [54, 30, 12], haze: [116, 78, 38], lamp: [255, 214, 140], earth: [160, 110, 62], glow: [255, 210, 130] },
+};
+function anthillLightAt(a) {
+  const ss = (G.level && G.level.sections) || [], i = anthillSecIdx(a), me = ANTHILL_LIGHT[ss[i] && ss[i].name] || ANTHILL_LIGHT['Colony Gate'];
+  let k = 0, o = null;
+  if (ss[i + 1] && a > ss[i + 1].a0 - 320) { k = 0.5 * smooth(ss[i + 1].a0 - 320, ss[i + 1].a0, a); o = ANTHILL_LIGHT[ss[i + 1].name]; }
+  else if (i > 0 && a < ss[i].a0 + 320) { k = 0.5 * (1 - smooth(ss[i].a0, ss[i].a0 + 320, a)); o = ANTHILL_LIGHT[ss[i - 1].name]; }
+  if (!o) return me;
+  return { top: gMix(me.top, o.top, k), bot: gMix(me.bot, o.bot, k), haze: gMix(me.haze, o.haze, k), lamp: gMix(me.lamp, o.lamp, k), earth: gMix(me.earth, o.earth, k), glow: gMix(me.glow, o.glow, k) };
+}
+function anthillXSpan() { return [-(ox / s) - 40, WORLD_W + ox / s + 40]; }
+const anthillC = (col, L, k, a = 1) => gCol(gMix(col, L.haze, k), a);
+const anthillV3 = (c, y0, y1, P, L, k) => gLG(c, 0, y0, 0, y1, P.map(q => anthillC(q, L, k)));
+// what each section furnishes its chambers with
+const ANTHILL_SET = {
+  'Colony Gate': 'gate', 'Soldier Bridges': 'barracks', 'Antlion Sands': 'sands', 'Leafcutter Run': 'garden',
+  'Royal Nursery': 'nursery', 'Roly-Poly Galleries': 'galleries', 'The Deep Dig': 'deep', "Queen's Chamber": 'royal',
+};
+// the far tile's layout (shared by the painter and the live ants and glows): two chambers and the tunnels joining them,
+// all kept inside the tile so no seam shows
+function anthillFarLayout(j, u0, u1) {
+  const W = u1 - u0, y0 = -(j + 1) * ANTHILL_BB - 4, y1 = -j * ANTHILL_BB + 4, sd = j * 13 + 7, rnd = q => hash2(j, sd + q), cx = (u0 + u1) / 2, flip = j % 2 ? 1 : -1;
+  const ch = [
+    { x: cx + flip * W * (0.15 + 0.08 * rnd(1)), y: y0 + 118 + 24 * rnd(2), rx: 100 + 12 * rnd(3), ry: 54 + 6 * rnd(4) },
+    { x: cx - flip * W * (0.16 + 0.08 * rnd(5)), y: y0 + 320 + 20 * rnd(6), rx: 92 + 12 * rnd(7), ry: 50 + 6 * rnd(8) },
+  ];
+  const curve = (x0, a0, x1, a1, wob, n = 8) => { const P = []; for (let i = 0; i <= n; i++) { const u = i / n; P.push([lerp(x0, x1, u) + Math.sin(u * Math.PI) * wob, lerp(a0, a1, u) + Math.sin(u * TWO_PI + j) * 6 * Math.sin(u * Math.PI)]); } return P; };
+  const [A, B] = ch;
+  const bores = [
+    curve(A.x - flip * A.rx * 0.9, A.y + A.ry * 0.6, flip > 0 ? u0 - 20 : u1 + 20, y0 + 40 + 40 * rnd(9), 0),
+    curve(A.x, A.y + A.ry * 0.7, B.x, B.y + B.ry * 0.7, 60 * (rnd(10) - 0.5)),
+    curve(B.x + flip * B.rx * 0.9, B.y + B.ry * 0.6, flip > 0 ? u1 + 20 : u0 - 20, y1 - 30 - 30 * rnd(11), 0),
+  ];
+  return { ch, bores, y0, y1, W, cx, sd, rnd, flip };
+}
+// ---- painters (any context, world units, y down; k eases into the haze) ----
+function anthillBore(c, P, w, L, k) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = anthillC(gMix(L.earth, [255, 226, 180], 0.18), L, k); c.lineWidth = w + 6; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = anthillC(gMix(L.earth, [30, 14, 6], 0.55), L, k); c.lineWidth = w + 2; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = anthillC(gMix(L.earth, [30, 14, 6], 0.72), L, k); c.lineWidth = w; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = anthillC(gMix(L.earth, [255, 226, 180], 0.4), L, k, 0.7); c.lineWidth = 1.6; gPoly(c, P.map(([x, y]) => [x, y + w / 2 - 1.2]), false); c.stroke();
+  c.strokeStyle = anthillC([20, 8, 4], L, k, 0.45); c.lineWidth = 1.4; gPoly(c, P.map(([x, y]) => [x, y - w / 2 + 1.5]), false); c.stroke();
+}
+// a chamber in cross-section: a thick rind of packed earth (lit on its upper left), a warm-lit hollow, a flat floor,
+// root hairs hanging from its roof. paint(fx, fy) furnishes it inside a clip.
+function anthillChamber(c, C, L, k, glow, paint) {
+  const { x, y, rx, ry } = C;
+  c.fillStyle = anthillC(gMix(L.earth, [255, 226, 180], 0.2), L, k); c.beginPath(); c.ellipse(x, y, rx + 7, ry + 7, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = anthillC(gMix(L.earth, [40, 18, 8], 0.35), L, k); c.beginPath(); c.ellipse(x + 1.5, y + 2, rx + 5, ry + 5, 0, 0, TWO_PI); c.fill();
+  c.save(); c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TWO_PI); c.clip();
+  c.fillStyle = gLG(c, 0, y - ry, 0, y + ry, [anthillC(gMix(L.earth, [26, 10, 4], 0.7), L, k), anthillC(gMix(L.earth, [40, 18, 8], 0.45), L, k), anthillC(gMix(L.earth, glow, 0.25), L, k)]); c.fillRect(x - rx, y - ry, rx * 2, ry * 2);
+  c.fillStyle = gRG(c, x, y + ry * 0.55, rx * 0.95, [anthillC(glow, L, k * 0.6, 0.55), anthillC(glow, L, k * 0.6, 0.18), anthillC(glow, L, k, 0)]); c.fillRect(x - rx, y - ry, rx * 2, ry * 2);
+  // the back wall's strata and the roof's root hairs
+  for (let q = 0; q < 3; q++) { const yy = y - ry * 0.5 + q * ry * 0.38; gPair(c, [[x - rx, yy + 3], [x - rx * 0.3, yy - 2], [x + rx * 0.4, yy + 2], [x + rx, yy - 3]], anthillC([30, 12, 6], L, k, 0.35), anthillC([255, 220, 170], L, k, 0.14), 1.2, 1); }
+  c.lineCap = 'round';
+  for (let q = 0; q < 6; q++) { const hx = x - rx * 0.7 + q * rx * 0.28, top = y - ry * Math.sqrt(Math.max(0, 1 - ((hx - x) / rx) ** 2)), len = 6 + 12 * hash2(q, x | 0); c.strokeStyle = anthillC([90, 56, 32], L, k, 0.85); c.lineWidth = 1.3; c.beginPath(); c.moveTo(hx, top - 2); c.quadraticCurveTo(hx + 3, top + len * 0.5, hx - 1, top + len); c.stroke(); }
+  // the floor: packed flat, lit along its front lip
+  const fy = y + ry * 0.62;
+  c.fillStyle = anthillV3(c, fy, y + ry, [gMix(L.earth, [255, 226, 180], 0.25), L.earth, gMix(L.earth, [30, 14, 6], 0.4)], L, k); c.fillRect(x - rx, fy, rx * 2, ry);
+  c.strokeStyle = anthillC([255, 232, 190], L, k, 0.6); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x - rx, fy + 0.6); c.lineTo(x + rx, fy + 0.6); c.stroke();
+  paint(x, fy);
+  c.fillStyle = anthillC(L.haze, L, 0, 0.2); c.fillRect(x - rx, y - ry, rx * 2, ry * 2);   // eased back behind the play
+  c.restore();
+  // the rind's lit upper-left edge and its shaded lower right
+  c.strokeStyle = anthillC([255, 232, 190], L, k, 0.55); c.lineWidth = 1.6; c.beginPath(); c.ellipse(x, y, rx + 3, ry + 3, 0, Math.PI * 1.02, Math.PI * 1.62); c.stroke();
+  c.strokeStyle = anthillC([30, 12, 6], L, k, 0.45); c.lineWidth = 1.6; c.beginPath(); c.ellipse(x, y, rx + 6, ry + 6, 0, Math.PI * 0.05, Math.PI * 0.62); c.stroke();
+}
+function anthillSeedPile(c, x, y, w, L, k, sd) {
+  const cols = [[[255, 230, 170], [214, 160, 84], [130, 84, 34]], [[240, 200, 140], [176, 120, 60], [100, 62, 24]], [[255, 214, 150], [196, 122, 52], [116, 64, 20]]];
+  let n = 0;
+  for (let row = 0; row < 3; row++) { const cnt = 6 - row * 2; for (let i = 0; i < cnt; i++) {
+    const sx2 = x + (i - (cnt - 1) / 2) * w / 6, sy2 = y - 4 - row * 6.5, P = cols[(((i + row + Math.round(sd)) % 3) + 3) % 3], ang = (hash2(n, sd) - 0.5) * 1.4; n++;
+    c.fillStyle = gRG(c, sx2 - 1.5, sy2 - 2, 7, P.map(q => anthillC(q, L, k))); c.beginPath(); c.ellipse(sx2, sy2, 5.2, 3.4, ang, 0, TWO_PI); c.fill();
+    c.strokeStyle = anthillC(P[2], L, k, 0.8); c.lineWidth = 0.6; c.stroke();
+    c.strokeStyle = anthillC([255, 250, 230], L, k, 0.6); c.lineWidth = 0.8; c.beginPath(); c.ellipse(sx2, sy2, 3.6, 2, ang, 3.6, 4.6); c.stroke();
+  } }
+}
+// a worker ant painted small into a backdrop (the real ant painter, scaled and eased into the haze afterwards)
+function anthillTinyAnt(c, x, y, sc, face, kind, g, L, k, carry) {
+  c.save(); c.globalAlpha = 1 - k * 0.35; c.translate(x, y); c.scale(face * sc, sc); anthillAntPaint(c, kind, g, carry ? 1 : 0, 0);
+  if (carry === 'seed') { c.fillStyle = gRG(c, 14, -14, 6, ['#fff0c0', '#d8a050', '#8a5420']); c.beginPath(); c.ellipse(15, -13, 5, 3.4, -0.3, 0, TWO_PI); c.fill(); }
+  else if (carry === 'leaf') { c.fillStyle = gLG(c, 8, -40, 22, -10, ANTHILLP.leafG); c.beginPath(); c.moveTo(14, -12); c.quadraticCurveTo(4, -30, 16, -42); c.quadraticCurveTo(28, -26, 14, -12); c.fill(); }
+  else if (carry === 'egg') { c.fillStyle = gRG(c, 14, -16, 6, ['#ffffff', '#f4e6cc', '#c8ae88']); c.beginPath(); c.ellipse(15, -14, 3.4, 4.6, 0.3, 0, TWO_PI); c.fill(); }
+  c.restore();
+}
+function anthillMushroom(c, x, y, h, cap, L, k, glowCol) {
+  const cw = h * 0.62;
+  c.fillStyle = anthillV3(c, y - h, y, [[255, 248, 232], [232, 214, 186], [170, 150, 118]], L, k); c.beginPath(); c.moveTo(x - h * 0.1, y); c.quadraticCurveTo(x - h * 0.06, y - h * 0.6, x - h * 0.08, y - h); c.lineTo(x + h * 0.08, y - h); c.quadraticCurveTo(x + h * 0.06, y - h * 0.6, x + h * 0.1, y); c.closePath(); c.fill();
+  // the gills: the cap's underside, a darker ellipse with radiating lines
+  c.fillStyle = anthillC(gMix(cap[2], [60, 30, 10], 0.3), L, k); c.beginPath(); c.ellipse(x, y - h, cw, cw * 0.22, 0, 0, TWO_PI); c.fill();
+  c.strokeStyle = anthillC(gMix(cap[0], [255, 255, 255], 0.3), L, k, 0.55); c.lineWidth = 0.6; for (let q = -5; q <= 5; q++) { c.beginPath(); c.moveTo(x + q * cw * 0.03, y - h + 1); c.lineTo(x + q * cw * 0.18, y - h + cw * 0.18); c.stroke(); }
+  // the cap: a glossy dome lit from the top left, its own darker rim, a sheen
+  c.fillStyle = gRG(c, x - cw * 0.35, y - h - cw * 0.45, cw * 1.2, cap.map(q => anthillC(q, L, k))); c.beginPath(); c.ellipse(x, y - h - 0.5, cw, cw * 0.62, 0, Math.PI, 0); c.closePath(); c.fill();
+  c.strokeStyle = anthillC(cap[2], L, k); c.lineWidth = 0.8; c.stroke();
+  c.strokeStyle = anthillC([255, 255, 255], L, k, 0.55); c.lineWidth = Math.max(0.8, cw * 0.12); c.lineCap = 'round'; c.beginPath(); c.ellipse(x, y - h, cw * 0.7, cw * 0.44, 0, Math.PI * 1.15, Math.PI * 1.5); c.stroke();
+  if (glowCol) { c.fillStyle = gRG(c, x, y - h - cw * 0.2, cw * 2.4, [gCol(glowCol, 0.45), gCol(glowCol, 0.12), gCol(glowCol, 0)]); c.beginPath(); c.arc(x, y - h - cw * 0.2, cw * 2.4, 0, TWO_PI); c.fill(); }
+}
+function anthillAphid(c, x, y, sc, L, k, face) {
+  c.save(); c.translate(x, y); c.scale(face * sc, sc);
+  c.strokeStyle = anthillC([60, 110, 40], L, k); c.lineWidth = 0.8; c.lineCap = 'round'; for (let q = 0; q < 3; q++) { c.beginPath(); c.moveTo(-2 + q * 3, -3); c.lineTo(-4 + q * 4, 0); c.stroke(); }
+  c.fillStyle = gRG(c, -2, -8, 9, [anthillC([220, 255, 160], L, k), anthillC([120, 200, 70], L, k), anthillC([50, 120, 40], L, k)]); c.beginPath(); c.moveTo(6, -5); c.bezierCurveTo(6, -11, -6, -12, -8, -6); c.bezierCurveTo(-9, -2, 4, -1, 6, -5); c.fill();
+  c.strokeStyle = anthillC([40, 100, 30], L, k); c.lineWidth = 0.6; c.stroke();
+  c.fillStyle = anthillC([255, 255, 255], L, k, 0.6); c.beginPath(); c.ellipse(-2, -8.5, 2.6, 1.1, -0.2, 0, TWO_PI); c.fill();
+  c.fillStyle = anthillC([30, 50, 20], L, k); c.beginPath(); c.arc(5, -5.6, 0.9, 0, TWO_PI); c.fill();
+  c.fillStyle = anthillC([200, 255, 255], L, k * 0.6, 0.9); c.beginPath(); c.arc(-9, -4, 1.3, 0, TWO_PI); c.fill();   // a drop of honeydew
+  c.restore();
+}
+function anthillEggRow(c, x, y, n, L, k, sd) {
+  c.fillStyle = gRG(c, x, y - 6, n * 6, [anthillC([255, 200, 110], L, k * 0.5, 0.4), anthillC([255, 170, 80], L, k * 0.5, 0.1), 'rgba(0,0,0,0)']); c.beginPath(); c.arc(x, y - 6, n * 6, 0, TWO_PI); c.fill();
+  for (let i = 0; i < n; i++) { const ex = x + (i - (n - 1) / 2) * 7.2, ey = y - 5;
+    c.fillStyle = gRG(c, ex - 1.2, ey - 2, 6, [anthillC([255, 252, 236], L, k * 0.5), anthillC([248, 226, 186], L, k * 0.5), anthillC([200, 160, 110], L, k * 0.5)]); c.beginPath(); c.ellipse(ex, ey, 3.1, 4.6, (hash2(i, sd) - 0.5) * 0.4, 0, TWO_PI); c.fill();
+    c.strokeStyle = anthillC([170, 130, 90], L, k * 0.5, 0.8); c.lineWidth = 0.5; c.stroke(); }
+}
+function anthillPitCrater(c, x, y, r, L, k) {
+  c.fillStyle = gRG(c, x - r * 0.3, y - r * 0.4, r * 1.3, [anthillC([255, 236, 190], L, k), anthillC([220, 180, 120], L, k), anthillC([160, 120, 70], L, k)]); c.beginPath(); c.ellipse(x, y, r, r * 0.4, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = gRG(c, x, y + 1, r * 0.7, [anthillC([30, 16, 8], L, k), anthillC([110, 76, 40], L, k), anthillC([170, 130, 80], L, k)]); c.beginPath(); c.ellipse(x, y + 1, r * 0.72, r * 0.27, 0, 0, TWO_PI); c.fill();
+  for (let q = 0; q < 6; q++) { const a = q / 6 * TWO_PI; gPair(c, [[x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.38], [x + Math.cos(a + 0.4) * r * 0.5, y + Math.sin(a + 0.4) * r * 0.2]], anthillC([120, 80, 40], L, k, 0.5), anthillC([255, 240, 200], L, k, 0.4), 0.7, 0.6); }
+}
+function anthillPillBug(c, x, y, r, L, k) {
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.45, r * 1.4, [anthillC([216, 226, 240], L, k), anthillC([140, 156, 184], L, k), anthillC([80, 92, 120], L, k)]); c.beginPath(); c.arc(x, y - r, r, 0, TWO_PI); c.fill();
+  for (let q = -2; q <= 2; q++) { const xx = x + q * r * 0.36, w = Math.sqrt(Math.max(0, 1 - (q * 0.36) ** 2)) * r; gPair(c, [[xx - 0.5, y - r - w], [xx + 1, y - r], [xx - 0.5, y - r + w]], anthillC([40, 48, 76], L, k, 0.6), anthillC([236, 244, 255], L, k, 0.5), 0.9, 0.7); }
+  c.strokeStyle = anthillC([255, 255, 255], L, k, 0.6); c.lineWidth = r * 0.16; c.lineCap = 'round'; c.beginPath(); c.arc(x, y - r, r * 0.7, 3.6, 4.5); c.stroke();
+}
+function anthillRootVol(c, P, w, L, k) {
+  // a root with volume: a dark underside, a rounded body, a lit top ridge, bark creases as line pairs, rootlets
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = anthillC([52, 30, 16], L, k); c.lineWidth = w + 3; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = anthillC([110, 72, 42], L, k); c.lineWidth = w; gPoly(c, P, false); c.stroke();
+  c.strokeStyle = anthillC([160, 112, 70], L, k); c.lineWidth = w * 0.5; gPoly(c, P.map(([x, y]) => [x - w * 0.12, y - w * 0.18]), false); c.stroke();
+  c.strokeStyle = anthillC([240, 200, 150], L, k, 0.55); c.lineWidth = Math.max(1, w * 0.12); gPoly(c, P.map(([x, y]) => [x - w * 0.2, y - w * 0.3]), false); c.stroke();
+  for (let i = 1; i < P.length - 1; i++) { const [x, y] = P[i], [x2, y2] = P[i + 1], an = Math.atan2(y2 - y, x2 - x) + Math.PI / 2, ca = Math.cos(an) * w * 0.42, sa = Math.sin(an) * w * 0.42; gPair(c, [[x - ca, y - sa], [x + ca * 0.2 + (x2 - x) * 0.15, y + sa * 0.2 + (y2 - y) * 0.15], [x + ca, y + sa]], anthillC([50, 28, 14], L, k, 0.55), anthillC([230, 190, 140], L, k, 0.3), 0.9, 0.8); }
+  for (let i = 2; i < P.length - 1; i += 3) { const [x, y] = P[i]; c.strokeStyle = anthillC([90, 60, 34], L, k); c.lineWidth = Math.max(1, w * 0.18); c.beginPath(); c.moveTo(x, y + w * 0.3); c.quadraticCurveTo(x + 6, y + w * 0.3 + 10, x + 2, y + w * 0.3 + 18); c.stroke(); }
+}
+function anthillStone(c, x, y, r, L, k, sd) {
+  const P = ANTHILL_PEB[((Math.round(sd) % ANTHILL_PEB.length) + ANTHILL_PEB.length) % ANTHILL_PEB.length];
+  c.fillStyle = gRG(c, x - r * 0.35, y - r * 0.4, r * 1.4, P.map(q => anthillC(q, L, k))); c.beginPath(); c.ellipse(x, y, r * 1.15, r * 0.85, (hash2(sd, 3) - 0.5) * 0.8, 0, TWO_PI); c.fill();
+  c.strokeStyle = anthillC(P[2], L, k); c.lineWidth = 0.7; c.stroke();
+  c.strokeStyle = anthillC([255, 255, 255], L, k, 0.5); c.lineWidth = Math.max(0.7, r * 0.15); c.lineCap = 'round'; c.beginPath(); c.ellipse(x, y, r * 0.8, r * 0.55, 0, 3.5, 4.4); c.stroke();
+  if (r > 5) gPair(c, [[x - r * 0.3, y - r * 0.5], [x + r * 0.1, y], [x - r * 0.1, y + r * 0.5]], anthillC(P[2], L, k, 0.6), anthillC([255, 255, 255], L, k, 0.3), 0.7, 0.6);
+}
+function anthillPillar(c, x, y0, y1, w, L, k) {
+  c.fillStyle = gLG(c, x - w / 2, 0, x + w / 2, 0, [anthillC([210, 160, 100], L, k), anthillC([166, 114, 64], L, k), anthillC([96, 60, 30], L, k)]); c.beginPath(); c.moveTo(x - w * 0.6, y1); c.quadraticCurveTo(x - w * 0.4, (y0 + y1) / 2, x - w * 0.6, y0); c.lineTo(x + w * 0.6, y0); c.quadraticCurveTo(x + w * 0.4, (y0 + y1) / 2, x + w * 0.6, y1); c.closePath(); c.fill();
+  gPair(c, [[x - w * 0.42, y0], [x - w * 0.3, (y0 + y1) / 2], [x - w * 0.42, y1]], anthillC([90, 50, 20], L, k, 0.4), anthillC([255, 230, 180], L, k, 0.45), 1.4, 1.2);
+  for (let yy = y0 + 20; yy < y1 - 10; yy += 34) { c.fillStyle = gRG(c, x - 2, yy - 2, 6, [anthillC([255, 236, 160], L, k * 0.6), anthillC([255, 176, 60], L, k * 0.6), anthillC([170, 90, 20], L, k * 0.6)]); c.beginPath(); c.ellipse(x + (hash2(yy, 4) - 0.5) * w * 0.4, yy, 4, 5, 0, 0, TWO_PI); c.fill(); }
+}
+// the chamber contents, per section
+function anthillFurnish(c, kind, C0, fx, fy, L, K, sd, q) {
+  // everything inside is drawn 1.6× about the floor's middle, so it reads at phone size
+  const Z = 1.6, C = { x: C0.x, rx: C0.rx / Z, ry: C0.ry / Z, y: fy - (fy - C0.y) / Z }, rx = C.rx, face = q ? -1 : 1;
+  c.save(); c.translate(fx, fy); c.scale(Z, Z); c.translate(-fx, -fy);
+  if (kind === 'gate') { anthillSeedPile(c, fx - rx * 0.3, fy, rx * 0.9, L, K, sd); anthillTinyAnt(c, fx + rx * 0.45, fy, 0.75, -1, 1, 2, L, K, 'seed'); anthillTinyAnt(c, fx + rx * 0.05, fy, 0.75, 1, 1, 5, L, K, 0); }
+  else if (kind === 'barracks') { for (let i = 0; i < 3; i++) anthillTinyAnt(c, fx + (i - 1) * rx * 0.55, fy, 0.42, i < 1 ? 1 : -1, 0, i * 2, L, K, 0); c.strokeStyle = anthillC([130, 86, 50], L, K); c.lineWidth = 3.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(fx - rx * 0.9, fy - C.ry * 0.95); c.lineTo(fx + rx * 0.9, fy - C.ry * 1.05); c.stroke(); c.strokeStyle = anthillC([240, 190, 130], L, K, 0.6); c.lineWidth = 1; c.stroke(); }
+  else if (kind === 'sands') { c.fillStyle = anthillV3(c, fy - 10, fy + 4, [[250, 222, 170], [224, 184, 124], [176, 136, 86]], L, K); c.beginPath(); c.moveTo(fx - rx, fy + 2); c.quadraticCurveTo(fx - rx * 0.4, fy - 14, fx, fy - 4); c.quadraticCurveTo(fx + rx * 0.5, fy - 12, fx + rx, fy + 2); c.closePath(); c.fill(); anthillPitCrater(c, fx - rx * 0.32, fy - 3, 20, L, K); anthillStone(c, fx + rx * 0.2, fy - 4, 4, L, K, sd); anthillStone(c, fx + rx * 0.3, fy - 3, 2.6, L, K, sd + 1); anthillTinyAnt(c, fx + rx * 0.62, fy - 2, 0.65, -1, 1, 6, L, K, 'seed'); }
+  else if (kind === 'garden') {
+    // a fungus garden: a spongy mound of chewed leaf, mushrooms with caps and gills, a herd of aphids and their keeper
+    for (let i = 0; i < 5; i++) { const u = i / 4, bx = fx - rx * 0.55 + u * rx * 0.7, r = 10 + 4 * hash2(i, sd); c.fillStyle = gRG(c, bx - r * 0.4, fy - r, r * 1.4, [anthillC([255, 246, 220], L, K), anthillC([226, 206, 160], L, K), anthillC([160, 134, 92], L, K)]); c.beginPath(); c.arc(bx, fy - Math.sin(u * Math.PI) * 6, r, Math.PI, 0); c.fill(); }
+    const caps = [[[255, 236, 200], [226, 170, 110], [150, 96, 50]], [[255, 210, 190], [220, 120, 90], [140, 60, 40]]];
+    anthillMushroom(c, fx - rx * 0.45, fy - 6, 18, caps[0], L, K); anthillMushroom(c, fx - rx * 0.2, fy - 9, 24, caps[1], L, K); anthillMushroom(c, fx + 0.02 * rx, fy - 5, 14, caps[0], L, K);
+    for (let i = 0; i < 3; i++) anthillAphid(c, fx + rx * (0.32 + i * 0.16), fy, 1.1, L, K, -1);
+    anthillTinyAnt(c, fx + rx * 0.82, fy, 0.6, -1, 1, 3, L, K, 0);
+  }
+  else if (kind === 'nursery' || kind === 'royal') { anthillEggRow(c, fx - rx * 0.35, fy, 6, L, K, sd); anthillEggRow(c, fx - rx * 0.35, fy - 9, 4, L, K, sd + 1); anthillEggRow(c, fx + rx * 0.4, fy, 4, L, K, sd + 2); anthillTinyAnt(c, fx + rx * 0.12, fy, 0.7, face, 1, 4, L, K, 'egg'); }
+  else if (kind === 'galleries') { c.fillStyle = anthillV3(c, fy - 4, fy + 4, [[170, 220, 120], [100, 160, 70], [50, 100, 40]], L, K); c.beginPath(); c.ellipse(fx, fy, rx * 0.95, 5, 0, Math.PI, TWO_PI); c.fill(); const caps = [[255, 200, 160], [220, 110, 80], [130, 50, 30]];
+    anthillMushroom(c, fx - rx * 0.6, fy - 2, 13, caps, L, K); anthillMushroom(c, fx - rx * 0.45, fy - 2, 9, caps, L, K); anthillPillBug(c, fx - rx * 0.05, fy, 8, L, K); anthillPillBug(c, fx + rx * 0.25, fy, 6.5, L, K); anthillPillBug(c, fx + rx * 0.5, fy, 7.5, L, K);
+    for (let i = 0; i < 3; i++) { const dx = fx + rx * (-0.3 + i * 0.3), top = C.y - C.ry * 0.9; c.fillStyle = anthillC([200, 240, 255], L, K * 0.6, 0.8); c.beginPath(); c.moveTo(dx, top); c.quadraticCurveTo(dx + 3, top + 6, dx, top + 8); c.quadraticCurveTo(dx - 3, top + 6, dx, top); c.fill(); } }
+  else if (kind === 'deep') { const G0 = [[255, 236, 170], [255, 170, 60], [170, 80, 20]]; anthillMushroom(c, fx - rx * 0.5, fy - 1, 20, G0, L, K * 0.4, [255, 170, 60]); anthillMushroom(c, fx - rx * 0.3, fy - 1, 13, G0, L, K * 0.4, [255, 170, 60]); anthillMushroom(c, fx + rx * 0.45, fy - 1, 16, G0, L, K * 0.4, [255, 170, 60]); anthillStone(c, fx + rx * 0.08, fy - 7, 9, L, K, sd); anthillTinyAnt(c, fx + rx * 0.22, fy, 0.65, -1, 1, 1, L, K, 0); }
+  c.restore();
+}
+function anthillFarPaint(c, sec, a0, a1, u0, u1) {
+  const L = ANTHILL_LIGHT[sec] || ANTHILL_LIGHT['Colony Gate'], kind = ANTHILL_SET[sec] || 'gate', j = Math.floor(a0 / ANTHILL_BB), K = 0.3;
+  const Ly = anthillFarLayout(j, u0, u1), { ch, bores, y0, y1, W, cx, sd, rnd } = Ly;
+  // the earth: a flat ground, soft blotches, strata as line pairs
+  c.fillStyle = anthillC(L.earth, L, 0.5); c.fillRect(u0 - 10, y0, W + 20, y1 - y0);
+  for (let q = 0; q < 10; q++) { const bx = u0 + W * hash2(q, sd + 40), by = y0 + 70 + (y1 - y0 - 140) * hash2(q, sd + 41), br = 50 + 40 * hash2(q, sd + 42), lt = q % 2 ? [255, 230, 190] : [30, 14, 6];
+    c.fillStyle = gRG(c, bx, by, br, [anthillC(gMix(L.earth, lt, 0.14), L, 0.5, 0.8), anthillC(gMix(L.earth, lt, 0.14), L, 0.5, 0)]); c.beginPath(); c.arc(bx, by, br, 0, TWO_PI); c.fill(); }
+  for (let q = 0; q < 8; q++) { const yy = y0 + (q + 0.5) * (y1 - y0) / 8, P = []; for (let x = u0 - 10; x <= u1 + 10; x += 24) P.push([x, yy + 5 * Math.sin(x * 0.017 + q * 1.9 + j * 0.7)]); gPair(c, P, anthillC(gMix(L.earth, [30, 12, 4], 0.4), L, 0.45, 0.45), anthillC(gMix(L.earth, [255, 230, 190], 0.3), L, 0.45, 0.3), 1.2, 1.2); }
+  // buried stones and pebbles
+  for (let q = 0; q < 14; q++) { const x = u0 + W * hash2(q, sd + 50), y = y0 + 20 + (y1 - y0 - 40) * hash2(q, sd + 51), r = q < 3 ? 7 + 4 * hash2(q, sd + 52) : 2 + 2.5 * hash2(q, sd + 52); anthillStone(c, x, y, r, L, 0.45, q + sd); }
+  // great roots with volume, continuous from tile to tile (their ends are fixed per tile boundary)
+  if (kind === 'deep' || kind === 'galleries' || kind === 'gate' || kind === 'garden') {
+    const xa = u0 + W * (0.12 + 0.76 * hash2(j + 1, 0xb07)), xb = u0 + W * (0.12 + 0.76 * hash2(j, 0xb07)), P = [];
+    for (let i = 0; i <= 14; i++) { const u = i / 14; P.push([lerp(xa, xb, u) + Math.sin(u * Math.PI) * 50 * (hash2(j, 0xb08) - 0.5), lerp(y0 - 6, y1 + 6, u)]); }
+    anthillRootVol(c, P, kind === 'deep' ? 22 : 14, L, 0.45);
+  }
+  if (kind === 'royal') { anthillPillar(c, u0 + W * 0.16, y0, y1, 26, L, 0.42); anthillPillar(c, u0 + W * 0.84, y0, y1, 26, L, 0.42); }
+  if (kind === 'gate' && j % 2 === 0) { const bx = cx + (rnd(12) - 0.5) * W * 0.4; c.fillStyle = gLG(c, 0, y0 + 20, 0, y1 - 20, [anthillC([255, 236, 190], L, 0.2, 0), anthillC([255, 236, 190], L, 0.2, 0.16), anthillC([255, 236, 190], L, 0.2, 0)]); c.beginPath(); c.moveTo(bx - 14, y0 + 20); c.lineTo(bx + 24, y0 + 20); c.lineTo(bx + 110, y1 - 20); c.lineTo(bx + 40, y1 - 20); c.closePath(); c.fill(); }
+  for (const P of bores) anthillBore(c, P, 14, L, 0.45);
+  ch.forEach((C, q) => anthillChamber(c, C, L, K, L.glow, (fx, fy) => anthillFurnish(c, kind, C, fx, fy, L, K, sd + q, q)));
+  // a calm veil of haze over it all
+  c.fillStyle = anthillC(L.haze, L, 0, 0.1); c.fillRect(u0 - 10, y0, W + 20, y1 - y0);
+}
+// near: an overhang of earth with roots spilling off its lip, or a thick gnarled root curling in from a side; soft, dim
+function anthillNearPaint(c, a0, a1, u0, u1, sec) {
+  const L = ANTHILL_LIGHT[sec] || ANTHILL_LIGHT['Colony Gate'], j = Math.floor(a0 / ANTHILL_NB), k = 0.58, W = u1 - u0;
+  if (hash2(j, 0xf11) < 0.25) return;
+  const side = hash2(j, 0xf12) < 0.5 ? 0 : 1, y0 = -a1 - 6, y1 = -a0 + 6, dd = side ? -1 : 1;
+  if (hash2(j, 0xf13) < 0.5) {
+    const ox2 = side ? u1 + 10 : u0 - 10, oy = y0 + 60 + 120 * hash2(j, 0xf14), ow = 70 + 40 * hash2(j, 0xf17), oh = 26 + 12 * hash2(j, 0xf18);
+    c.fillStyle = gLG(c, 0, oy - oh, 0, oy + oh, [anthillC(gMix(L.earth, [255, 220, 170], 0.18), L, k), anthillC(L.earth, L, k), anthillC(gMix(L.earth, [20, 10, 4], 0.45), L, k)]);
+    c.beginPath(); c.moveTo(ox2, oy - oh * 1.4); c.bezierCurveTo(ox2 + dd * ow * 0.7, oy - oh * 1.2, ox2 + dd * ow * 1.1, oy - oh * 0.2, ox2 + dd * ow, oy + oh * 0.3); c.bezierCurveTo(ox2 + dd * ow * 0.7, oy + oh * 0.9, ox2 + dd * ow * 0.3, oy + oh * 0.6, ox2, oy + oh * 1.1); c.closePath(); c.fill();
+    c.strokeStyle = anthillC(gMix(L.earth, [255, 220, 170], 0.35), L, k, 0.7); c.lineWidth = 1.4; c.beginPath(); c.moveTo(ox2 + dd * 6, oy - oh * 1.34); c.bezierCurveTo(ox2 + dd * ow * 0.6, oy - oh * 1.14, ox2 + dd * ow * 0.95, oy - oh * 0.3, ox2 + dd * ow * 0.98, oy + oh * 0.1); c.stroke();
+    for (let q = 0; q < 3; q++) gPair(c, [[ox2 + dd * 4, oy - oh * (0.8 - q * 0.5)], [ox2 + dd * ow * 0.5, oy - oh * (0.7 - q * 0.45)], [ox2 + dd * ow * 0.8, oy - oh * (0.5 - q * 0.4)]], anthillC([40, 18, 8], L, k, 0.4), anthillC([255, 220, 170], L, k, 0.25), 1, 1);
+    for (let q = 0; q < 3; q++) anthillStone(c, ox2 + dd * ow * (0.25 + 0.2 * q), oy - oh * 0.3 + q * 6, 3 + 2 * hash2(q, j), L, k, q + j);
+    c.lineCap = 'round';
+    for (let q = 0; q < 4; q++) { const x = ox2 + dd * ow * (0.3 + 0.17 * q), ya = oy + oh * (0.55 - 0.1 * q), len = 30 + 50 * hash2(j * 4 + q, 0xf19);
+      c.strokeStyle = anthillC([80, 52, 30], L, k, 0.9); c.lineWidth = 2; c.beginPath(); c.moveTo(x, ya); c.quadraticCurveTo(x + 5, ya + len * 0.5, x - 1, ya + len); c.stroke();
+      c.strokeStyle = anthillC([230, 190, 140], L, k, 0.35); c.lineWidth = 0.7; c.stroke(); }
+  } else {
+    // a thick root curling in from the side and down, tapering to a tip
+    const x0 = side ? u1 + 20 : u0 - 20, ya = y0 + 40 + 60 * hash2(j, 0xf1a), P = [];
+    for (let i = 0; i <= 12; i++) { const u = i / 12; P.push([x0 + dd * (120 * Math.sin(u * 1.4) + 10 * Math.sin(u * 9)), ya + 170 * u * u + 30 * u]); }
+    anthillRootVol(c, P, 16, L, k);
+  }
+}
+function anthillRooms() {
+  const ss = (G.level && G.level.sections) || [], m = G.camAlt + viewH / 2, i = anthillSecIdx(m), W = 300, nm = q => (ss[q] && ss[q].name) || 'Colony Gate';
+  if (ss[i + 1] && m > ss[i + 1].a0 - W) return { a: nm(i), b: nm(i + 1), k: smooth(ss[i + 1].a0 - W, ss[i + 1].a0 + W, m), nx: null };
+  if (i > 0 && m < ss[i].a0 + W) return { a: nm(i - 1), b: nm(i), k: smooth(ss[i].a0 - W, ss[i].a0 + W, m), nx: null };
+  return { a: nm(i), b: null, k: 0, nx: ss[i + 1] && m > ss[i + 1].a0 - W - 900 ? nm(i + 1) : null };
+}
+function anthillDrawBackground() {
+  anthillCacheCheck(); anthillMade = 0;
+  const P = drawPad * s, X0 = -20 - P, X1 = cssW + 20 + P, Y0 = -20 - P, Y1 = H + 20 + P, T = G.t, [u0, u1] = anthillXSpan();
+  const L = anthillLightAt(G.camAlt + viewH / 2), R = anthillRooms();
+  ctx.fillStyle = gLG(ctx, 0, 0, 0, H, [gCol(L.top), gCol(gMix(L.top, L.bot, 0.55)), gCol(L.bot)]); ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  const layer = (f, tag, paint, B, sec, al) => {
+    const pa0 = G.camAlt * f - drawPad - 20, pa1 = G.camAlt * f + viewH + drawPad + 20;
+    for (let j = Math.floor(pa0 / B); j <= Math.floor(pa1 / B) + 1; j++) {
+      const id = `${tag}${sec}|${j}`, need = al > 0.01 && j <= Math.floor(pa1 / B);
+      if (!need && (anthillMade || ANTHILLC.tiles.has(id))) continue;
+      if (!ANTHILLC.tiles.has(id)) anthillMade++;
+      const Tl = anthillTile(id, u0, u1, j * B, (j + 1) * B, c => paint(c, j * B, (j + 1) * B, u0, u1, sec));
+      if (need) { ctx.globalAlpha = al; anthillTileBlit(Tl, f); ctx.globalAlpha = 1; }
+    }
+  };
+  const rooms = R.b ? [[R.a, 1 - R.k], [R.b, R.k]] : [[R.a, 1]];
+  if (R.nx) rooms.push([R.nx, 0]);
+  for (const [sec, al] of rooms) layer(ANTHILL_FAR, 'f', (c, a0, a1, x0, x1, sc) => anthillFarPaint(c, sc, a0, a1, x0, x1), ANTHILL_BB, sec, al);
+  // live: tiny ants filing along the far tunnels, and the Deep Dig's fungus lanterns and the nursery's egg rows breathing
+  {
+    const f = ANTHILL_FAR, pa0 = G.camAlt * f - 20, pa1 = G.camAlt * f + viewH + 20, sec = R.b && R.k > 0.5 ? R.b : R.a, kind = ANTHILL_SET[sec], gl = (kind === 'deep' || kind === 'nursery' || kind === 'royal') ? anthillGlowCv(L.glow) : null;
+    ctx.fillStyle = gCol(gMix([40, 20, 12], L.haze, 0.3), 0.85);
+    const Y = a => H - (-a - G.camAlt * f) * s;
+    for (let j = Math.floor(pa0 / ANTHILL_BB); j <= Math.floor(pa1 / ANTHILL_BB); j++) {
+      const Ly = anthillFarLayout(j, u0, u1);
+      for (const Pp of [Ly.bores[0], Ly.bores[2]]) for (let k = 0; k < 2; k++) {
+        const u = pmod(T * 0.04 + k / 2 + j * 0.3, 1) * (Pp.length - 1), i = Math.floor(u), v = u - i, p0 = Pp[i], p1 = Pp[Math.min(Pp.length - 1, i + 1)];
+        const X = ox + lerp(p0[0], p1[0], v) * s, YY = Y(lerp(p0[1], p1[1], v)) + 4 * s, dir = Math.sign(p1[0] - p0[0]) || 1;
+        ctx.beginPath(); ctx.ellipse(X - dir * 2.6 * s, YY, 2.6 * s, 1.8 * s, 0, 0, TWO_PI); ctx.ellipse(X + dir * 2 * s, YY - 0.5 * s, 1.8 * s, 1.5 * s, 0, 0, TWO_PI); ctx.fill();
+      }
+      if (gl) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const C of Ly.ch) { const r = C.rx * 0.9 * s, X = ox + C.x * s, YY = Y(C.y + C.ry * 0.5); ctx.globalAlpha = 0.16 + 0.08 * Math.sin(T * 1.7 + C.x * 0.05); ctx.drawImage(gl, X - r, YY - r, r * 2, r * 2); } ctx.restore(); }
+    }
+  }
+  for (const [sec, al] of rooms) layer(ANTHILL_NEAR, 'n', anthillNearPaint, ANTHILL_NB, sec, al);
+  anthillDrawMotes();
+  anthillMade = 0;
+}
+// dust and glowing pollen drifting through the still air of the colony (motes)
+MOTE_DRIFT.ahmote = [-6, 12];
+{ const base = moteKind; moteKind = function (m, a) { return anthillOn() ? 'ahmote' : base(m, a); }; }
+function anthillDrawMotes() {
+  const T = G.t, gl = anthillGlowCv([255, 190, 90]);
+  for (const m of motes) {
+    const mx = ox + m.x * playW + Math.sin(T * 0.5 + m.ph) * 9 * s, y = m.y, r = (0.9 + m.sz * 0.5) * s * (0.6 + m.depth * 0.6);
+    if (m.r < 0.3) {   // a glowing pollen speck
+      const tw = 0.5 + 0.5 * Math.sin(T * 2 + m.ph * 3);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (0.25 + 0.3 * m.depth) * tw; ctx.drawImage(gl, mx - r * 5, y - r * 5, r * 10, r * 10); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.5 + 0.4 * tw; ctx.fillStyle = '#ffe8a8'; ctx.beginPath(); ctx.arc(mx, y, r * 0.7, 0, TWO_PI); ctx.fill();
+    } else {   // a mote of dust
+      ctx.globalAlpha = 0.14 + 0.24 * m.depth; ctx.fillStyle = '#e8cfa8'; ctx.beginPath(); ctx.arc(mx, y, r * 0.8, 0, TWO_PI); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- The Queen's Chamber: the finish ----
+// At the bottom of the colony the shaft opens into the royal chamber: a tall domed hollow carved out of the earth, great
+// roots arching over its roof, its back wall honeycombed with brood cells glowing amber with eggs, packed-earth pillars
+// studded with amber either side. On a raised dais heaped with a bed of fresh leaves lies the Ant Queen: a big glossy
+// chestnut ant with a long banded abdomen, folded shimmering wings and a crown of amber droplets, smiling down; egg
+// heaps glow either side and two nurse ants bustle about her. On the clear the brood cells light up in a wave, the
+// Queen rears and waves her front legs, her crown sparkles, the nurses hop and a burst of amber sparks and crumbs fills
+// the chamber.
+const ANTHILL_FIN = { half: 176, wall: 330, dome: 170, dais: 62 };
+const ANTHILL_QP = ['#ffd8a0', '#e8843a', '#a8461c', '#5e2210'], ANTHILL_QE = '#6a2a10';
+const ANTHILL_GOLD = ['#fff6c0', '#ffd24a', '#d0901a', '#7a4a08'], ANTHILL_GOLDE = '#7a4a08';
+function anthillApse(c) { const F = ANTHILL_FIN; c.beginPath(); c.moveTo(-F.half, 0); c.lineTo(-F.half, -F.wall); c.ellipse(0, -F.wall, F.half, F.dome, 0, Math.PI, TWO_PI); c.lineTo(F.half, 0); c.closePath(); }
+// the brood cells on the back wall: a staggered honeycomb of round cells (centres in apse units)
+function anthillCells() {
+  // brood cells in two loose arches over the throne (centres in apse units), each a slightly different size
+  const out = [];
+  for (const [R, n, a0, a1, cy] of [[150, 9, 0.12, 0.88, -250], [118, 7, 0.16, 0.84, -380]]) for (let i = 0; i < n; i++) {
+    const u = lerp(a0, a1, i / (n - 1)), ang = Math.PI + u * Math.PI, h = hash2(i, R);
+    out.push([Math.cos(ang) * R + (h - 0.5) * 8, cy + Math.sin(ang) * R * 0.9 + (hash2(R, i) - 0.5) * 10, h, 10 + 3 * hash2(i + 7, R)]);
+  }
+  return out;
+}
+function anthillChamberSprite() {
+  const F = ANTHILL_FIN;
+  return anthillSprite('chamber', 440, 600, 220, 560, c => {
+    c.save(); anthillApse(c); c.clip();
+    // the back wall: warm earth, a soft amber pool of light at its heart
+    c.fillStyle = gLG(c, 0, -F.wall - F.dome, 0, 0, ['#5a3018', '#7a4626', '#8e5a32']); c.fillRect(-190, -540, 380, 560);
+    for (let q = 0; q < 9; q++) { const yy = -40 - q * 52; gPair(c, [[-180, yy], [-90, yy + 5 * Math.sin(q)], [0, yy - 3], [90, yy + 4], [180, yy - 2]], 'rgba(50,24,10,.35)', 'rgba(255,210,150,.18)', 1.4, 1); }
+    c.fillStyle = gRG(c, 0, -220, 250, ['rgba(255,200,120,.42)', 'rgba(255,170,90,.14)', 'rgba(255,170,90,0)']); c.fillRect(-190, -540, 380, 560);
+    // the brood cells: each a round hollow with a lit lower rim; most hold a glossy egg (lit live on the clear)
+    for (const [x, y, h, r] of anthillCells()) {
+      c.fillStyle = gRG(c, x, y + 2, r * 1.2, ['#c8803a', '#8a4e22', '#5a3018']); c.beginPath(); c.ellipse(x, y, r, r * 1.15, 0, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#4a2410'; c.lineWidth = 1.6; c.stroke();
+      c.strokeStyle = 'rgba(255,214,160,.55)'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(x, y, r + 1.2, r * 1.15 + 1.2, 0, 0.2, Math.PI - 0.2); c.stroke();
+      // a pale grub curled asleep in the cell (or a pair of pearly eggs), cream with a soft lit back
+      if (h < 0.55) {   // a fat cream grub curled in a C, its body ringed, a little tan head tucked in
+        const R = r * 0.5, a0 = -0.9 + h, a1 = a0 + 4.4, lw = r * 0.62;
+        c.lineCap = 'round'; c.strokeStyle = '#b89a74'; c.lineWidth = lw + 1.4; c.beginPath(); c.arc(x, y + 1, R, a0, a1); c.stroke();
+        c.strokeStyle = gRG(c, x - 3, y - 3, r * 1.1, ['#fffdf6', '#f6e8d0', '#d8c09c']); c.lineWidth = lw; c.stroke();
+        c.strokeStyle = 'rgba(150,120,86,.55)'; c.lineWidth = 0.7;
+        for (let q = 1; q < 6; q++) { const an = a0 + (a1 - a0) * q / 6, ca = Math.cos(an), sa = Math.sin(an); c.beginPath(); c.moveTo(x + ca * (R - lw * 0.45), y + 1 + sa * (R - lw * 0.45)); c.lineTo(x + ca * (R + lw * 0.45), y + 1 + sa * (R + lw * 0.45)); c.stroke(); }
+        c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 0.9; c.beginPath(); c.arc(x, y + 1, R + lw * 0.22, a0 + 2.4, a0 + 3.8); c.stroke();
+        c.fillStyle = gRG(c, x + Math.cos(a1) * R - 1, y + 1 + Math.sin(a1) * R - 1, lw * 0.6, ['#f0d0a0', '#c8945a', '#8a5a2a']); c.beginPath(); c.arc(x + Math.cos(a1) * R, y + 1 + Math.sin(a1) * R, lw * 0.42, 0, TWO_PI); c.fill();
+      }
+      else for (const e of [-1, 1]) { const ex = x + e * r * 0.3; c.fillStyle = gRG(c, ex - 1.5, y - 2, r * 0.6, ['#ffffff', '#f6ecd8', '#cdb894']); c.beginPath(); c.ellipse(ex, y + 2, r * 0.3, r * 0.44, e * 0.25, 0, TWO_PI); c.fill(); c.strokeStyle = '#a89070'; c.lineWidth = 0.6; c.stroke(); }
+    }
+    // great roots arching over the dome, lit along their tops, rootlets hanging off them
+    c.lineCap = 'round';
+    for (const [x0, y0, cx, cy, x1, y1, w] of [[-190, -300, -60, -560, 120, -500, 16], [190, -360, 70, -540, -110, -520, 12], [-190, -150, -150, -260, -120, -420, 9]]) {
+      c.strokeStyle = '#4a2a14'; c.lineWidth = w + 3; c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.stroke();
+      c.strokeStyle = gLG(c, 0, y0, 0, y1, ['#9a6a40', '#7a4e2c']); c.lineWidth = w; c.stroke();
+      c.strokeStyle = 'rgba(255,220,170,.5)'; c.lineWidth = Math.max(1.2, w * 0.2); c.beginPath(); c.moveTo(x0, y0 - w * 0.3); c.quadraticCurveTo(cx, cy - w * 0.3, x1, y1 - w * 0.3); c.stroke();
+      for (let k = 1; k < 6; k++) { const u = k / 6, v = 1 - u, px = v * v * x0 + 2 * v * u * cx + u * u * x1, py = v * v * y0 + 2 * v * u * cy + u * u * y1 + w * 0.4, len = 14 + 18 * hash2(k, w); c.strokeStyle = '#6a4224'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo(px + 4, py + len * 0.5, px - 1, py + len); c.stroke(); c.strokeStyle = 'rgba(255,214,160,.4)'; c.lineWidth = 0.6; c.stroke(); }
+    }
+    // the floor: packed earth, worn smooth, a shadow under the dais
+    c.fillStyle = gLG(c, 0, -26, 0, 0, ['#a87446', '#7a4c2a', '#5a361c']); c.beginPath(); c.moveTo(-190, 0); c.lineTo(-190, -18); c.quadraticCurveTo(0, -30, 190, -18); c.lineTo(190, 0); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(255,224,170,.55)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-176, -18.5); c.quadraticCurveTo(0, -30.5, 176, -18.5); c.stroke();
+    c.restore();
+    // the chamber's lip: a thick rim of packed earth round the apse, crumbly, lit on its upper left and shaded below right
+    c.lineJoin = 'round';
+    c.strokeStyle = '#4e2c16'; c.lineWidth = 17; anthillApse(c); c.stroke();
+    c.strokeStyle = gLG(c, -F.half, -F.wall - F.dome, F.half, 0, ['#c89060', '#9a6238', '#6e4222']); c.lineWidth = 13; anthillApse(c); c.stroke();
+    c.save(); c.strokeStyle = 'rgba(255,226,180,.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(-F.half - 4, -10); c.lineTo(-F.half - 4, -F.wall); c.ellipse(0, -F.wall, F.half + 4, F.dome + 4, 0, Math.PI, Math.PI * 1.55); c.stroke(); c.restore();
+    for (let k = 0; k < 26; k++) { const u = k / 25, ang = Math.PI + u * Math.PI, x = Math.cos(ang) * (F.half + 1), y = -F.wall + Math.sin(ang) * (F.dome + 1), rr = 3 + 3 * hash2(k, 0xc1); anthillBall(c, x, y, rr, ['#d8a070', '#9a6236', '#62381a'], '#4a2a14', 0.3); }
+    // the pillars flanking the chamber: packed earth bulging, studded with amber beads
+    for (const e of [-1, 1]) {
+      const x = e * (F.half + 6);
+      c.fillStyle = gLG(c, x - 18, 0, x + 18, 0, ['#c8925e', '#9a6238', '#5e381c']); c.beginPath(); c.moveTo(x - 16, 0); c.bezierCurveTo(x - 24, -120, x - 10, -220, x - 15, -330); c.lineTo(x + 15, -330); c.bezierCurveTo(x + 10, -220, x + 24, -120, x + 16, 0); c.closePath(); c.fill();
+      c.strokeStyle = '#4e2c16'; c.lineWidth = 1.2; c.stroke();
+      for (let yy = -40; yy > -320; yy -= 46) { anthillBall(c, x + (hash2(yy, e + 3) - 0.5) * 10, yy, 5, ANTHILL_GOLD, ANTHILL_GOLDE, 0.6); }
+      gPair(c, [[x - 10, -10], [x - 14, -160], [x - 9, -320]], 'rgba(60,30,12,.4)', 'rgba(255,220,170,.4)', 1.2, 1);
+    }
+    // the egg heaps either side on the floor: piles of glossy amber eggs
+    for (const e of [-1, 1]) for (let i = 0; i < 9; i++) {
+      const row = i < 5 ? 0 : i < 8 ? 1 : 2, j = row === 0 ? i : row === 1 ? i - 5 : 0, n = row === 0 ? 5 : row === 1 ? 3 : 1;
+      const x = e * 128 + (j - (n - 1) / 2) * 12, y = -26 - row * 13;
+      c.fillStyle = gRG(c, x - 2, y - 4, 11, ['#fff8d8', '#ffc85a', '#d0801c', '#8a4a0c']); c.beginPath(); c.ellipse(x, y, 6.4, 8.4, (hash2(i, e) - 0.5) * 0.5, 0, TWO_PI); c.fill();
+      c.strokeStyle = '#9a5a14'; c.lineWidth = 0.7; c.stroke(); c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(x - 2.2, y - 3, 1.4, 2.2, -0.4, 0, TWO_PI); c.fill();
+    }
+    // the throne: a tall mound of packed earth, its front carved in steps, lit along its crown, a skirt of amber studs;
+    // a bed of fresh leaves heaped on top
+    const D = F.dais;
+    c.fillStyle = gLG(c, 0, -D - 20, 0, -10, ['#d09a68', '#9a6238', '#6a4020']); c.beginPath(); c.moveTo(-112, -16); c.bezierCurveTo(-110, -D * 0.7, -96, -D - 14, -60, -D - 8); c.quadraticCurveTo(0, -D - 18, 60, -D - 8); c.bezierCurveTo(96, -D - 14, 110, -D * 0.7, 112, -16); c.quadraticCurveTo(0, -6, -112, -16); c.fill();
+    c.strokeStyle = '#4e2c16'; c.lineWidth = 1.3; c.stroke();
+    for (const [w, y] of [[86, -D * 0.38], [100, -D * 0.68]]) gPair(c, [[-w, y + 4], [-w * 0.5, y - 1], [0, y - 2], [w * 0.5, y - 1], [w, y + 4]], 'rgba(70,36,14,.55)', 'rgba(255,224,176,.5)', 1.6, 1.3);
+    c.strokeStyle = 'rgba(255,230,190,.65)'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-96, -D - 4); c.quadraticCurveTo(-40, -D - 18, 40, -D - 14); c.stroke();
+    for (let k = 0; k < 9; k++) anthillBall(c, -80 + k * 20, -D * 0.52 - Math.sin((k + 0.5) / 9 * Math.PI) * 5, 3.6, ANTHILL_GOLD, ANTHILL_GOLDE, 0.6);
+    for (const [x, y, rr] of [[-104, -20, 6], [-90, -14, 4], [96, -18, 5.5], [108, -12, 3.5], [-30, -10, 3], [44, -11, 3.6]]) anthillBall(c, x, y, rr, ['#d8a070', '#9a6236', '#62381a'], '#4a2a14', 0.35);
+    for (let k = 0; k < 9; k++) {
+      const u = k / 8, x = -84 + u * 168, y = -F.dais - 8 - Math.sin(u * Math.PI) * 6, ang = (u - 0.5) * 1.6 - Math.PI / 2, P = k % 3 === 1 ? ANTHILLP.leafY : ANTHILLP.leafG, E = k % 3 === 1 ? ANTHILLP.leafYEdge : ANTHILLP.leafGEdge;
+      c.save(); c.translate(x, y); c.rotate(ang + Math.PI / 2 + (u - 0.5) * 0.6);
+      c.fillStyle = gLG(c, -8, 0, 8, 0, P); c.beginPath(); c.moveTo(-22, 0); c.quadraticCurveTo(0, -11, 22, 0); c.quadraticCurveTo(0, 9, -22, 0); c.fill(); c.strokeStyle = E; c.lineWidth = 0.8; c.stroke();
+      gPair(c, [[-20, 0], [0, -0.6], [20, 0]], gCol(anthillHex(E), 0.6), 'rgba(255,255,220,.5)', 0.8, 0.6);
+      c.restore();
+    }
+  });
+}
+// the Queen, painted at 1× and blitted at ANTHILL_QK about her feet (x = her waist, y = her belly on the leaves)
+const ANTHILL_QK = 1.3;
+function anthillQueenBody() {
+  // she lies on her leaf bed: the great abdomen resting along it behind her, the thorax propped up in front, her legs
+  // folded under her with their feet on the leaves; (0, 0) is under her waist on the bed
+  const K = ANTHILL_QK;
+  return anthillSprite('queen', 240 * K, 130 * K, 150 * K, 110 * K, c => {
+    c.scale(K, K); c.lineCap = 'round'; c.lineJoin = 'round';
+    const leg = (hx, hy, kx, ky, fx, fy, near) => { c.strokeStyle = near ? '#7a3014' : '#4a1a0a'; c.lineWidth = near ? 3.6 : 3.2; c.beginPath(); c.moveTo(hx, hy); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke(); if (near) { c.strokeStyle = 'rgba(255,200,160,.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(hx, hy - 1.2); c.lineTo(kx, ky - 1.2); c.lineTo(lerp(kx, fx, 0.6), lerp(ky, fy, 0.6) - 1); c.stroke(); } };
+    // far legs, folded, behind
+    leg(14, -30, 4, -22, -10, -1, false); leg(22, -32, 30, -20, 38, -1, false);
+    // the abdomen: a long teardrop lying on the bed, built of six curved armour plates that overlap front to back,
+    // each lit along its rim with a dark seam under it, a big sheen across the top
+    const abd = () => { c.beginPath(); c.moveTo(4, -30); c.bezierCurveTo(-8, -74, -96, -86, -128, -58); c.bezierCurveTo(-146, -40, -138, -6, -110, -2); c.bezierCurveTo(-70, 3, -20, 0, 4, -30); c.closePath(); };
+    c.fillStyle = gRG(c, -70, -66, 96, ANTHILL_QP); abd(); c.fill();
+    c.save(); abd(); c.clip();
+    const edge = (x0) => { const P = []; for (let i = 0; i <= 12; i++) { const y = -92 + i * 8.5, v = (y + 40) / 52; P.push([x0 - 24 * (1 - v * v), y]); } return P; };
+    for (let k = 0; k < 6; k++) {
+      const xa = -136 + k * 24, xb = xa + 24, A = edge(xa), B = edge(xb);
+      c.beginPath(); A.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); for (let i = B.length - 1; i >= 0; i--) c.lineTo(...B[i]); c.closePath();
+      c.fillStyle = gLG(c, 0, -84, 0, 0, k % 2 ? ['#ffc088', '#d8742e', '#7a3010'] : ['#ffd49c', '#ec8a3c', '#923c14']); c.fill();
+      // the shadow the plate in front casts on this one, then its rim raised over it: a dark seam and a lit edge
+      c.save(); c.clip(); c.strokeStyle = 'rgba(90,26,6,.38)'; c.lineWidth = 9; gPoly(c, B.map(([x, y]) => [x - 3, y]), false); c.stroke(); c.restore();
+      gPair(c, B, 'rgba(70,18,4,.9)', 'rgba(255,234,200,.9)', 2.4, -2);
+      // a soft highlight in the middle of each plate, high up
+      c.fillStyle = 'rgba(255,236,206,.28)'; c.beginPath(); c.ellipse((xa + xb) / 2 - 6, -62, 6, 9, 0.2, 0, TWO_PI); c.fill();
+    }
+    c.fillStyle = gLG(c, 0, -30, 0, 4, ['rgba(70,20,6,0)', 'rgba(70,20,6,.35)']); c.fillRect(-150, -30, 160, 36);
+    c.restore();
+    c.strokeStyle = ANTHILL_QE; c.lineWidth = 1.6; abd(); c.stroke();
+    c.strokeStyle = 'rgba(255,244,222,.75)'; c.lineWidth = 3.2; c.beginPath(); c.moveTo(-118, -60); c.bezierCurveTo(-96, -76, -62, -78, -34, -66); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.ellipse(-104, -64, 6, 2.4, -0.45, 0, TWO_PI); c.fill();
+    // her folded wings lying along her back: pale and translucent with veins, a soft lilac shimmer
+    for (const [dx, ang] of [[0, -0.04], [8, -0.12]]) {
+      c.save(); c.translate(0 + dx, -60); c.rotate(ang);
+      c.fillStyle = gLG(c, -90, 0, 0, 0, ['rgba(220,200,255,.16)', 'rgba(240,230,255,.42)', 'rgba(255,255,255,.55)']); c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-40, -14, -92, -8); c.quadraticCurveTo(-60, 8, 0, 6); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(150,120,200,.55)'; c.lineWidth = 0.8; c.stroke();
+      c.strokeStyle = 'rgba(160,130,210,.45)'; c.lineWidth = 0.6; for (const [x, y] of [[-30, -6], [-56, -7], [-76, -4]]) { c.beginPath(); c.moveTo(0, 2); c.quadraticCurveTo(x * 0.6, y - 3, x, y); c.stroke(); }
+      c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-6, -1); c.quadraticCurveTo(-40, -10, -78, -6); c.stroke();
+      c.restore();
+    }
+    // the waist nodes and the thorax, propped up and leaning forward
+    anthillPart(c, 8, -32, 6, 5.5, 0, ANTHILL_QP, ANTHILL_QE, 0.45);
+    anthillPart(c, 17, -36, 5.5, 5, 0, ANTHILL_QP, ANTHILL_QE, 0.45);
+    anthillPart(c, 34, -46, 19, 14, -0.45, ANTHILL_QP, ANTHILL_QE, 0.55);
+    gPair(c, [[22, -50], [32, -60], [44, -60]], 'rgba(90,30,10,.55)', 'rgba(255,220,180,.6)', 1.3, 1.1);
+    // the near legs, folded under her, feet on the leaves
+    leg(26, -36, 12, -20, 0, -1, true); leg(34, -36, 46, -18, 54, -1, true);
+    // leaf tips curling up in front of her belly, so she nestles in the bed
+    for (const [x, ang, P, E] of [[-112, -0.5, ANTHILLP.leafG, ANTHILLP.leafGEdge], [-70, -0.25, ANTHILLP.leafY, ANTHILLP.leafYEdge], [-30, 0.2, ANTHILLP.leafG, ANTHILLP.leafGEdge], [20, 0.5, ANTHILLP.leafG, ANTHILLP.leafGEdge]]) {
+      c.save(); c.translate(x, 6); c.rotate(ang); c.fillStyle = gLG(c, -6, 0, 6, 0, P); c.beginPath(); c.moveTo(-18, 0); c.quadraticCurveTo(0, -10, 18, -2); c.quadraticCurveTo(0, 6, -18, 0); c.fill(); c.strokeStyle = E; c.lineWidth = 0.8; c.stroke(); gPair(c, [[-16, 0], [0, -2], [16, -2]], gCol(anthillHex(E), 0.6), 'rgba(255,255,220,.5)', 0.7, 0.5); c.restore();
+    }
+  });
+}
+function anthillQueenHead(pose) {
+  // pose 0: a serene smile, blinking (1: eyes shut); 2: thrilled, mouth open, happy shut eyes
+  const K = ANTHILL_QK * 1.2;
+  return anthillSprite(`qhead${pose}`, 80 * K, 90 * K, 34 * K, 60 * K, c => {
+    c.scale(K, K); const r = 22;
+    c.lineCap = 'round';
+    // jaws: small and neat, closed under her chin
+    for (const d of [-1, 1]) { c.save(); c.translate(r * 0.7, r * 0.55); c.rotate(d * 0.2 + 0.3); c.fillStyle = gLG(c, 0, -2, 0, 2, ['#ffe0b0', '#d0803a', '#8a4214']); c.beginPath(); c.moveTo(0, -2); c.quadraticCurveTo(7, -2 - d, 9, d * 2); c.quadraticCurveTo(4, d, 0, 2); c.closePath(); c.fill(); c.strokeStyle = ANTHILL_QE; c.lineWidth = 0.6; c.stroke(); c.restore(); }
+    anthillPart(c, 0, 0, r, r * 0.92, 0, ANTHILL_QP, ANTHILL_QE, 0.55);
+    // cheeks blush
+    c.fillStyle = 'rgba(255,120,110,.35)'; c.beginPath(); c.ellipse(r * 0.55, r * 0.42, 5, 3, 0, 0, TWO_PI); c.fill();
+    // the eyes
+    if (pose === 0) anthillEyes(c, r * 0.32, -r * 0.08, r * 0.3, 0.5, 0, '#7a3cc8', 1.15, 1.18, ANTHILL_QP[2]);
+    else { c.strokeStyle = '#4a1a0a'; c.lineWidth = 2; for (const e of [-1, 1]) { const ex = r * 0.32 + e * r * 0.34; c.beginPath(); c.arc(ex, -r * 0.02, r * 0.2, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); } }
+    // lashes
+    c.strokeStyle = '#4a1a0a'; c.lineWidth = 1.2; for (const e of [-1, 1]) { const ex = r * 0.32 + e * r * 0.34; c.beginPath(); c.moveTo(ex + e * r * 0.24, -r * 0.3); c.lineTo(ex + e * r * 0.38, -r * 0.45); c.stroke(); }
+    // the mouth
+    c.strokeStyle = '#5a1a0a'; c.lineWidth = 1.4;
+    if (pose === 2) { c.fillStyle = '#8a2a1a'; c.beginPath(); c.moveTo(r * 0.12, r * 0.36); c.quadraticCurveTo(r * 0.38, r * 0.82, r * 0.66, r * 0.34); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#ff8a7a'; c.beginPath(); c.ellipse(r * 0.4, r * 0.56, 3.5, 2, 0, 0, TWO_PI); c.fill(); }
+    else { c.beginPath(); c.moveTo(r * 0.16, r * 0.4); c.quadraticCurveTo(r * 0.4, r * 0.62, r * 0.64, r * 0.36); c.stroke(); }
+    // the crown: a gold band of five points, each tipped with an amber droplet, a big amber jewel in front
+    c.save(); c.translate(-r * 0.1, -r * 0.82); c.rotate(-0.12);
+    c.fillStyle = gLG(c, 0, -18, 0, 4, ANTHILL_GOLD); c.beginPath(); c.moveTo(-17, 4); c.lineTo(-19, -10); c.lineTo(-11, -3); c.lineTo(-6, -17); c.lineTo(0, -4); c.lineTo(6, -17); c.lineTo(11, -3); c.lineTo(19, -10); c.lineTo(17, 4); c.quadraticCurveTo(0, 8, -17, 4); c.closePath(); c.fill();
+    c.strokeStyle = ANTHILL_GOLDE; c.lineWidth = 0.9; c.stroke();
+    c.strokeStyle = 'rgba(255,255,230,.8)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-15, 1); c.quadraticCurveTo(0, 4, 15, 1); c.stroke();
+    for (const [x, y] of [[-19, -10], [-6, -17], [6, -17], [19, -10]]) anthillBall(c, x, y - 1.5, 2.8, ['#fff2c0', '#ffb030', '#c0600c', '#6a2e04'], '#7a3a08', 0.7);
+    anthillBall(c, 0, -1, 4.2, ['#ffe8f0', '#ff6a8a', '#b01c40', '#5a0a20'], '#6a1028', 0.7);
+    c.restore();
+  });
+}
+function anthillDrawQueen() {
+  const a = G.adv; if (!a || !a.end || !(a.st && a.st.theme === 'anthill')) return;
+  const E = a.end; if (sy(E + 600) > H + 40 || sy(E - 60) < -40) return;
+  const T = G.t, F = ANTHILL_FIN, won = a.clearT >= 0, pay = won ? smooth(0, 1, a.clearT) : 0, cx = sx(WORLD_W / 2);
+  anthillGlow(ctx, cx, sy(E + 200), (240 + 70 * pay) * s, [255, 190, 110], 0.22 + 0.22 * pay);
+  anthillBlit(anthillChamberSprite(), WORLD_W / 2, E);
+  // the brood cells breathe their glow (a slow wave; on the clear a bright ripple runs up the wall)
+  {
+    const gl = anthillGlowCv([255, 190, 90]); ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gc = anthillGlowCv([255, 214, 150]);
+    for (const [x, y, h, rc] of anthillCellsCached()) { const wave = won ? Math.max(0, 1 - Math.abs((-y - 120) / 50 - a.clearT * 4)) : 0, al = 0.16 + 0.08 * Math.sin(T * 1.6 + h * 9) + 0.6 * wave, X = cx + x * s, Y = sy(E) + y * s, r = (rc * 1.9 + 10 * wave) * s; ctx.globalAlpha = Math.min(1, al); ctx.drawImage(gc, X - r, Y - r, r * 2, r * 2); }
+    // the egg heaps
+    for (const e of [-1, 1]) { const r = (46 + 10 * pay) * s; ctx.globalAlpha = 0.32 + 0.08 * Math.sin(T * 2 + e) + 0.25 * pay; ctx.drawImage(gl, cx + e * 128 * s - r, sy(E + 36) - r, r * 2, r * 2); }
+    ctx.restore();
+  }
+  // the Queen: idle, she breathes and her antennae sway; on the clear she rears, front legs waving
+  const K = ANTHILL_QK, rear = won ? smooth(0, 0.5, a.clearT) : 0, breathe = Math.sin(T * 1.4);
+  const qx = WORLD_W / 2 + 6, qa = E + F.dais + 6, X0 = sx(qx), Y0 = sy(qa);
+  const PX = (dx, da) => [X0 + dx * K * s, Y0 - da * K * s];
+  ctx.save(); ctx.translate(X0, Y0); ctx.scale(1, 1 + 0.01 * breathe); const QB = anthillQueenBody(); ctx.drawImage(QB.cv, -QB.ax * s, -QB.ay * s, QB.w * s, QB.h * s); ctx.restore();
+  // her head (and its antennae) rides on the thorax, lifted as she rears
+  const hb = (won ? 3 * Math.abs(Math.sin(T * 5)) * (1 - smooth(3, 5, a.clearT)) : 0.8 * breathe);
+  const rot = (dx, da) => { const ang = 0, cs = Math.cos(ang), sn = Math.sin(ang); return [dx * cs - da * sn, dx * sn + da * cs]; };
+  const [hdx, hda] = rot(56 + 4 * rear, 70 + hb + 10 * rear), [HX, HY] = PX(hdx, hda);
+  // her neck: a short glossy stalk from the thorax up into her head
+  { const nb = PX(44, 54); ctx.lineCap = 'round'; ctx.strokeStyle = ANTHILL_QE; ctx.lineWidth = 12 * K * s; ctx.beginPath(); ctx.moveTo(...nb); ctx.lineTo(HX - 4 * K * s, HY + 14 * K * s); ctx.stroke(); ctx.strokeStyle = ANTHILL_QP[1]; ctx.lineWidth = 9 * K * s; ctx.stroke(); ctx.strokeStyle = 'rgba(255,226,190,.6)'; ctx.lineWidth = 2 * K * s; ctx.beginPath(); ctx.moveTo(nb[0] - 2 * K * s, nb[1]); ctx.lineTo(HX - 7 * K * s, HY + 14 * K * s); ctx.stroke(); }
+  // the front legs, live: resting on the leaves, or waving up on the clear
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const d of [0, 1]) {
+    const [sdx, sda] = rot(42 + d * 4, 40), sh = PX(sdx, sda), wv = won ? Math.sin(T * 8 + d * 1.8) : 0;
+    const kn = won ? PX(sdx + 14 + d * 6, sda + 26 + 6 * wv) : PX(58 + d * 6, 22), ft = won ? PX(sdx + 22 + d * 10, sda + 50 + 10 * wv) : PX(72 + d * 8, 1);
+    ctx.strokeStyle = d ? '#7a3014' : '#4a1a0a'; ctx.lineWidth = 3.4 * K * s; ctx.beginPath(); ctx.moveTo(...sh); ctx.lineTo(...kn); ctx.lineTo(...ft); ctx.stroke();
+    if (d) { ctx.strokeStyle = 'rgba(255,200,160,.7)'; ctx.lineWidth = 0.9 * K * s; ctx.beginPath(); ctx.moveTo(sh[0], sh[1] - 1 * s); ctx.lineTo(kn[0], kn[1] - 1 * s); ctx.stroke(); }
+  }
+  // antennae: elbowed, swaying, club tips (lit up on the clear)
+  for (const d of [0, 1]) {
+    const sw = Math.sin(T * (won ? 6 : 1.3) + d * 1.4) * (won ? 6 : 2.5), b = [HX + (2 + d * 7) * K * s, HY - 21 * K * s], el = [b[0] + (7 + d * 4) * K * s, b[1] - 20 * K * s], tp = [el[0] + (20 + d * 4) * K * s, el[1] + (2 + sw) * K * s];
+    ctx.strokeStyle = d ? '#7a3014' : '#5a200c'; ctx.lineWidth = 1.8 * K * s; ctx.beginPath(); ctx.moveTo(...b); ctx.lineTo(...el); ctx.lineTo(...tp); ctx.stroke();
+    ctx.fillStyle = '#c85a24'; ctx.beginPath(); ctx.arc(tp[0], tp[1], 2.3 * K * s, 0, TWO_PI); ctx.fill();
+    if (won) anthillGlow(ctx, tp[0], tp[1], 9 * s, [255, 220, 140], 0.6);
+  }
+  const blink = !won && pmod(T, 4.2) < 0.13;
+  anthillBlitAt(anthillQueenHead(won ? 2 : blink ? 1 : 0), HX, HY, (won ? Math.sin(T * 6) * 0.08 : Math.sin(T * 0.9) * 0.04) - 0.1 * rear, 1, 1, 1);
+  // the crown sparkles now and then (and keeps on sparkling after the clear)
+  { const ph = pmod(T * (won ? 1.6 : 0.4), 1); if (ph < 0.25) { const [gx, gy] = [HX - 2 * K * s, HY - 45 * K * s], k = Math.sin(ph / 0.25 * Math.PI); anthillGlow(ctx, gx, gy, 14 * s, [255, 240, 180], 0.7 * k); ctx.strokeStyle = `rgba(255,255,230,${0.9 * k})`; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(gx - 6 * k * s, gy); ctx.lineTo(gx + 6 * k * s, gy); ctx.moveTo(gx, gy - 6 * k * s); ctx.lineTo(gx, gy + 6 * k * s); ctx.stroke(); } }
+  // the nurse ants bustling to and fro along the floor in front of the egg heaps (hopping on the clear)
+  for (const e of [-1, 1]) {
+    const u = Math.sin(T * 0.7 + (e > 0 ? 2 : 0)), x = WORLD_W / 2 + e * (110 + 26 * u), dir = Math.cos(T * 0.7 + (e > 0 ? 2 : 0)) * e > 0 ? 1 : -1, g = Math.floor(pmod(T * 9, 8)), hop = won ? 7 * Math.abs(Math.sin(T * 6 + e)) : 0;
+    anthillBlit(anthillAntSprite(1, won ? 0 : g, 0, 0), x, E + 16 + hop, 1, e > 0 ? -dir : dir);
+  }
+  if (pay > 0.01) anthillGlow(ctx, sx(qx + 50), sy(qa + 60), 140 * s, [255, 220, 160], 0.22 * pay * (1 - 0.6 * smooth(3, 7, a.clearT)));
+}
+function anthillCellsCached() { return ANTHILLC.cells || (ANTHILLC.cells = anthillCells()); }
+function anthillDrawMidground() { anthillDrawQueen(); }
+
+// ---- the landing: shelves of packed earth grow out of the walls to meet under you, lamps of glowing amber on root posts
+function anthillDeckSeg() {
+  return anthillSprite('deckseg', 24, 18, 0, 6, c => {
+    c.fillStyle = gLG(c, 0, -6, 0, 8, ['#c89060', '#9a6238', '#6a4020']); c.fillRect(0, -6, 24, 13);
+    c.fillStyle = 'rgba(255,226,180,.65)'; c.fillRect(0, -6, 24, 1.2);
+    c.strokeStyle = 'rgba(60,30,12,.5)'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(0, 1); c.quadraticCurveTo(12, 3, 24, 0.5); c.stroke();
+    // crumbly lumps along the lit top edge, soft clods in the packed earth
+    for (const [x, r] of [[3, 2.6], [9, 2], [14.5, 2.8], [20.5, 2.2]]) { c.fillStyle = gRG(c, x - 0.8, -6.5, r * 1.4, ['#e0aa74', '#b07a48', '#8a5a32']); c.beginPath(); c.arc(x, -5.2, r, Math.PI, TWO_PI); c.fill(); }
+    c.strokeStyle = 'rgba(255,226,180,.6)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(0, -6); c.quadraticCurveTo(6, -8, 12, -6.5); c.quadraticCurveTo(18, -8.4, 24, -6); c.stroke();
+    for (const [x, y, rx] of [[6, 3, 2.6], [17, 4, 2]]) { c.fillStyle = 'rgba(70,36,14,.35)'; c.beginPath(); c.ellipse(x, y, rx, rx * 0.6, 0.2, 0, TWO_PI); c.fill(); }
+    c.fillStyle = '#5a3418'; for (let x = 2; x < 24; x += 5) { c.beginPath(); c.moveTo(x, 7); c.lineTo(x + 2.4, 7); c.lineTo(x + 1.2, 10); c.closePath(); c.fill(); }
+  });
+}
+function anthillDrawDeck() {
+  const a = G.adv; if (!a || !a.end) return;
+  const E = a.end, y = sy(E), T = G.t;
+  if (y < -220 || y > H + 120) return;
+  const [L, R] = walls(E), meet = clamp(a.deckX ?? (L + R) / 2, L + 40, R - 40), e = a.deck, pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) : 0, seg = anthillDeckSeg();
+  for (const side of [-1, 1]) {
+    const w = side < 0 ? L : R, tip = lerp(w - side * 4, meet - side * 0.5, e), x0 = Math.min(w, tip), x1 = Math.max(w, tip);
+    if (e > 0.04 && x1 - x0 > 2) {
+      ctx.save(); ctx.beginPath(); ctx.rect(sx(x0), y - 10 * s, (x1 - x0) * s, 30 * s); ctx.clip();
+      for (let x = side < 0 ? tip - 24 * Math.ceil((tip - w) / 24) : tip; x < x1; x += 24) anthillBlitAt(seg, sx(x), y);
+      ctx.restore();
+      ctx.save(); ctx.translate(sx(tip), y); ctx.scale(s, s); anthillBall(ctx, 0, 0, 6, ['#d8a070', '#9a6236', '#62381a'], '#4a2a14', 0.4); ctx.restore();
+    }
+    // a root post at each wall holding a lamp of glowing amber, flaring on the clear
+    const lx = w - side * 8, la = E + 30;
+    ctx.strokeStyle = '#5a361c'; ctx.lineWidth = 4.4 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx(w + side * 2), sy(E + 2)); ctx.quadraticCurveTo(sx(lx + side * 4), sy(E + 18), sx(lx), sy(la - 5)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,214,160,.55)'; ctx.lineWidth = 1.2 * s; ctx.stroke();
+    anthillGlow(ctx, sx(lx), sy(la), (16 + 14 * pay) * s, [255, 190, 90], 0.5 + 0.12 * Math.sin(T * 3 + side) + 0.3 * pay);
+    ctx.save(); ctx.translate(sx(lx), sy(la)); ctx.scale(s, s); anthillBall(ctx, 0, 0, 5, ANTHILL_GOLD, ANTHILL_GOLDE, 0.7); ctx.restore();
+  }
+}
+function anthillQueenBurst() {
+  const a = G.adv; if (!a || !a.end) return;
+  for (let k = 0; k < 26; k++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, v = 120 + Math.random() * 240; puff(WORLD_W / 2 + (Math.random() - 0.5) * 120, a.end + 140, Math.cos(an) * v, -Math.sin(an) * v, 0.9 + Math.random() * 0.9, 1.6 + Math.random() * 1.8, 'sparkle', [[255, 210, 110], [255, 170, 80], [255, 240, 190]][k % 3]); }
+  for (const e of [-1, 1]) anthillCrumbs(WORLD_W / 2 + e * 128, a.end + 40, 10, 160, 140, 4);
+  sfx('ahfinish');
+}
+
+// ---- light, speed and the foreground ----
+// the colony's light: a warm umber vignette at the edges (never black), the section's lamp from the top left, the
+// chamber's amber glow as you near the finish
+function anthillDrawLight() {
+  const P = drawPad * s + 40, X0 = -P, Y0 = -P, WW = cssW + 2 * P, HH = H + 2 * P;
+  ctx.save();
+  const vg = ctx.createRadialGradient(cssW / 2, H * 0.5, Math.min(cssW, H) * 0.34, cssW / 2, H * 0.5, Math.max(cssW, H) * 0.8);
+  vg.addColorStop(0, 'rgba(70,30,12,0)'); vg.addColorStop(1, 'rgba(70,30,12,.34)'); ctx.fillStyle = vg; ctx.fillRect(X0, Y0, WW, HH);
+  ctx.globalCompositeOperation = 'lighter';
+  const L = anthillLightAt(G.camAlt + viewH / 2);
+  const sg = ctx.createRadialGradient(ox, 0, 10, ox, 0, Math.max(cssW, H) * 0.7); sg.addColorStop(0, gCol(L.lamp, 0.14)); sg.addColorStop(0.6, gCol(L.lamp, 0.035)); sg.addColorStop(1, gCol(L.lamp, 0)); ctx.fillStyle = sg; ctx.fillRect(X0, Y0, WW, HH);
+  const a = G.adv;
+  if (a && a.end && a.st && a.st.theme === 'anthill') {
+    const ha = a.end + 200, y = sy(ha), k = clamp(1 - Math.abs(ha - (G.camAlt + viewH / 2)) / (viewH * 1.1), 0, 1), pay = a.clearT >= 0 ? smooth(0, 1, a.clearT) * (1 - 0.5 * smooth(2, 5, a.clearT)) : 0;
+    if (k > 0.01) { const g = ctx.createRadialGradient(cssW / 2, y, 10, cssW / 2, y, Math.max(cssW, H) * 0.75); g.addColorStop(0, `rgba(255,200,120,${(0.1 + 0.14 * pay) * k})`); g.addColorStop(0.5, `rgba(255,160,90,${0.05 * k})`); g.addColorStop(1, 'rgba(255,160,90,0)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, WW, HH); }
+  }
+  ctx.restore();
+}
+// speed: pale dust streaks down the walls and crumbs of earth whipping past through the shaft
+function anthillDrawSpeed() {
+  if (G.state !== 'play') return;
+  const v = G.p.vy, up = v > 0, k = up ? clamp((v - 0.6 * cfg.maxUp) / (cfg.maxUp * 0.55), 0, 1) : clamp((-v - 200) / 360, 0, 1) * 0.5;
+  if (k <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const side of [0, 1]) for (let i = 0; i < 5 + Math.round(5 * k); i++) {
+    const j = hash2(i + side * 31, 0xd31), y = ((G.camAlt * s * (1.6 + 0.5 * j) + hash2(i + side * 31, 0xd32) * H * 3) % (H + 300)) - 150;
+    const a = G.camAlt + (H - y) / s, x = sx(anthillWallX(a, side)) + (side ? -1 : 1) * (10 + 14 * j) * s, len = (24 + 100 * k) * (0.6 + 0.6 * j) * s;
+    ctx.strokeStyle = gCol([255, 214, 160], (0.05 + 0.14 * k * k) * (0.6 + 0.4 * j)); ctx.lineWidth = (1.2 + 1.4 * k * j) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  const n = 4 + Math.round(12 * k * k), cols = ['#b07a4a', '#8a5a34', '#d8a878', '#6a4426'];
+  for (let i = 0; i < n; i++) {
+    const x = ox + playW * (0.1 + 0.8 * hash2(i, 0xd33)), len = (6 + 16 * hash2(i, 0xd34)) * (0.5 + 1.2 * k) * s, y = ((G.camAlt * s * (1.2 + hash2(i, 0xd35)) + hash2(i, 0xd36) * H * 2) % (H + 200)) - 100;
+    ctx.globalAlpha = 0.18 + 0.3 * k * hash2(i, 0xd37); ctx.strokeStyle = cols[i % 4]; ctx.lineWidth = (2 + 1.4 * hash2(i, 0xd38)) * s;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + (up ? len : -len)); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Foreground: a dangling root or a clump of hanging root hairs close to the camera at the screen's edges (in warm shade
+// with lit edges), fading back when a trap or you are near
+function anthillFgSprite(side, v) {
+  return anthillSprite(`fg${side}_${v}`, 80, 200, side ? 70 : 10, 100, c => {
+    const d = side ? -1 : 1;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (v === 0) {
+      // a thick gnarled root curling down from above, a few rootlets off it
+      const P = []; for (let y = -100; y <= 70; y += 8) P.push([8 * d + 9 * Math.sin(y * 0.025) * d + (y > 40 ? (y - 40) * 0.5 * d : 0), y]);
+      c.strokeStyle = '#3e2210'; c.lineWidth = 19; gPoly(c, P, false); c.stroke();
+      c.strokeStyle = gLG(c, -10, 0, 30, 0, ['#8a5a34', '#6a4224', '#4a2c16']); c.lineWidth = 15; gPoly(c, P, false); c.stroke();
+      c.strokeStyle = 'rgba(255,214,160,.4)'; c.lineWidth = 2.4; gPoly(c, P.map(([x, y]) => [x - 4, y]), false); c.stroke();
+      for (let k = 2; k < P.length - 2; k += 3) { const [x, y] = P[k]; gPair(c, [[x - 6, y - 2], [x + 6, y + 2]], 'rgba(40,20,8,.6)', 'rgba(255,214,160,.25)', 1.2, 1); }
+      for (const k of [5, 11, 16]) { const [x, y] = P[Math.min(k, P.length - 1)]; c.strokeStyle = '#5a3a1e'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + d * 16, y + 8, x + d * 20, y + 26); c.stroke(); c.strokeStyle = 'rgba(255,214,160,.3)'; c.lineWidth = 0.8; c.stroke(); }
+    } else {
+      // a curtain of fine hanging root hairs, a clod of earth caught in them
+      for (let q = 0; q < 7; q++) {
+        const x = (4 + q * 5) * d, len = 90 + 70 * hash2(q, 0xd41);
+        c.strokeStyle = q % 2 ? '#6a4224' : '#56341a'; c.lineWidth = 2.6 - q * 0.2; c.beginPath(); c.moveTo(x, -100); c.bezierCurveTo(x + 6, -100 + len * 0.3, x - 6, -100 + len * 0.7, x + 2 * d, -100 + len); c.stroke();
+        c.strokeStyle = 'rgba(255,214,160,.32)'; c.lineWidth = 0.7; c.stroke();
+      }
+      anthillBall(c, 18 * d, 6, 9, ['#b07a4a', '#7a4c2a', '#4a2c16'], '#3e2210', 0.3);
+    }
+    c.fillStyle = 'rgba(60,24,10,.28)'; c.fillRect(-60, -100, 160, 200);
+  });
+}
+function anthillDrawForeground() {
+  const f = 1.35, slot = 360, b0 = G.camAlt * f;
+  for (let i = Math.floor((b0 - 300) / slot); i <= Math.ceil((b0 + viewH + 300) / slot); i++) {
+    if (hash2(i, 0xd51) < 0.55) continue;
+    const side = hash2(i, 0xd52) < 0.5 ? 0 : 1, y = H - (i * slot + 120 * hash2(i, 0xd53) - b0) * s;
+    if (y < -110 * s || y > H + 110 * s) continue;
+    const a = G.camAlt + (H - y) / s;
+    let dist = Math.abs(G.p.alt - a) - 40;
+    for (const h of G.hazards) { const dd = Math.max(h.lo - a, a - h.hi, 0); if (dd < dist) dist = dd; }
+    const al = 0.15 + 0.7 * smooth(40, 220, dist);
+    const S = anthillFgSprite(side, Math.floor(hash2(i, 0xd54) * 2));
+    const x = side ? ox + playW + 8 * s : ox - 8 * s;
+    ctx.globalAlpha = al; ctx.drawImage(S.cv, x - S.ax * s, y - S.ay * s, S.w * s, S.h * s); ctx.globalAlpha = 1;
+  }
+}
+{ const base = drawBackground; drawBackground = function () { if (anthillOn()) anthillDrawBackground(); else base(); }; }
+{ const base = drawMidground; drawMidground = function () { if (anthillOn()) anthillDrawMidground(); else base(); }; }
+{ const base = drawWalls; drawWalls = function () { if (anthillOn()) anthillDrawWalls(); else base(); }; }
+{ const base = drawLight; drawLight = function () { if (anthillOn()) anthillDrawLight(); else base(); }; }
+{ const base = drawFinishDeck; drawFinishDeck = function () { if (anthillOn()) anthillDrawDeck(); else base(); }; }
+{ const base = drawSpeedLines; drawSpeedLines = function () { if (anthillOn()) anthillDrawSpeed(); else base(); }; }
+{ const base = drawForeground; drawForeground = function () { if (anthillOn()) anthillDrawForeground(); else base(); }; }
+{ const base = stageClear; stageClear = function (boss) { base(boss); if (anthillOn() && !boss) anthillQueenBurst(); }; }
 // (game slot: Anthill Underworks, island level 39)
 // (game slot: Bamboo Pagoda, island level 40)
 // ---------- Hollow Palm (island level 41): its look, traps, jewel beetles, sap and sounds ----------
