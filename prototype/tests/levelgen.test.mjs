@@ -5294,6 +5294,170 @@ const starfallStats = { seeds: 0, traps: 0, searches: 0, worst: 0, stars: 0, pic
 const starfallSummary = () => `PASS: Starfall Summit: ${starfallStats.seeds} layouts × ${starfallStats.len} m, only its own traps (${Object.entries(starfallStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}; ${starfallStats.meteors} meteors), each taught alone first; gravity down to ${SF.STARFALL.grav.lo} of the island's; shaft ${starfallStats.minW.toFixed(0)}+ wide, wall slope ${starfallStats.slope.toFixed(2)} (max ${SF.RULES.maxWallSlope}), ${starfallStats.rocks} wall asteroids none poking past the edge (worst ${starfallStats.poke.toFixed(2)}); open lanes past flare loops ${starfallStats.lane.starfallFlare.toFixed(0)}+, saucers ${starfallStats.lane.starfallUfo.toFixed(0)}+, satellites at the ends of their drift ${starfallStats.lane.starfallSat.toFixed(0)}+ (minLane ${SF.RULES.minLane}); beats ${starfallStats.beatGap.toFixed(0)}+ apart; pickups ${starfallStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${starfallStats.traps} beats and ${starfallStats.stars} stars (reach and escape) flown by the widest pilot (hauled by the beams) in ${starfallStats.searches} searches, the slowest pass ${starfallStats.worst.toFixed(1)} s`;
 // (test slot: Starfall Summit, island level 36)
 // (test slot: Beanstalk Heights, island level 37)
+// ---------- Adventure: Sandstorm Canyon (island level 38), an authored stage with its own traps ----------
+// As the summit's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// sides and looks), the wall strata never standing out past the shaft's edge, then every beat and every golden scarab
+// flown by a time-space search for the widest pilot on the traps' own clocks (a sandfall slowing the climb and the
+// steering while it pours, the sandstorm's gusts pushing it sideways) from several start phases; and every beat flown
+// again with the sandfalls treated as solid (the "touch 2 sandfalls or fewer" mission can be done).
+const SS = new Function(regions.join('\n') + '\nreturn { createSandstormLevel, sandstormShapes, sandstormDanger, sandstormEnd, sandstormFallState, sandstormSandAt, sandstormGustAt, sandstormGustWave, sandstormScorpState, SANDSTORM, SANDSTORM_STAGE, SANDSTORM_TYPES, ADV_SANDSTORM, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const sandstormStats = { seeds: 0, traps: 0, searches: 0, worst: 0, dry: 0, gems: 0, pick: Infinity, minW: Infinity, slope: 0, lane: { sandstormScorp: Infinity, sandstormFall: Infinity }, len: 0, kinds: {}, beatGap: Infinity, bands: 0, gust: 0 };
+{
+  const R = SS.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = SS.ADV_SANDSTORM, X = SS.SANDSTORM;
+  const sfail = (rule, d) => fail('sandstorm: ' + rule, d);
+  if (st0.theme !== 'sandstorm' || !(st0.reward > 0)) sfail('the canyon is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'sandstormScarab' && g.n === 3) || !st0.goals.some(g => g.k === 'sandstormDry' && g.n >= 0)) sfail('three missions: the oasis, 3 scarabs and the sandfalls', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * SS.UNITS_PER_M - SS.sandstormEnd()) > 1e-6) sfail('the stage length matches its layout', `${st0.len}`);
+  {
+    let mx = 0; for (let t = 0; t < X.gust.P; t += 0.01) mx = Math.max(mx, Math.abs(SS.sandstormGustWave(t)));
+    if (mx > 1.0001 || mx < 0.99) sfail('the gust wave runs -1..1', `${mx}`);
+  }
+  // the stage's order: worms, then scorpions, then sandfalls, then tumbleweeds, each taught alone; a breather; the finish
+  {
+    const fam = { worm: 'worm', wormPair: 'worm', scorp: 'scorp', scorpPair: 'scorp', scorpWorm: 'scorp', fall: 'fall', fallPair: 'fall', fallScorp: 'fall', fallWorm: 'fall', weed: 'weed', weedPair: 'weed', weedFall: 'weed', weedScorp: 'weed', weedWorm: 'weed' };
+    const firsts = {}, seen = [];
+    for (const sec of SS.SANDSTORM_STAGE) if (!sec.calm) for (const [, kind] of sec.beats) {
+      const b = fam[kind]; if (!b) { sfail('every beat is a known kind', kind); continue; }
+      if (!firsts[b]) { firsts[b] = 1; seen.push(b); if (kind !== b) sfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+    }
+    if (seen.join() !== 'worm,scorp,fall,weed') sfail('the canyon teaches worms, scorpions, sandfalls, then tumbleweeds', seen.join());
+    if (!SS.SANDSTORM_STAGE.some(sec => sec.calm && !sec.finish && sec !== SS.SANDSTORM_STAGE[0])) sfail('the canyon has a breather', '');
+    if (!SS.SANDSTORM_STAGE[SS.SANDSTORM_STAGE.length - 1].finish) sfail('the stage ends at the Hidden Oasis', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (SS.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const ext = S => { let x0 = Infinity, x1 = -Infinity; for (const q of S) { const r = q.r || 0, a = q.k === 'c' ? q.x - r : q.k === 'b' ? q.x0 : Math.min(q.x0, q.x1) - r, b = q.k === 'c' ? q.x + r : q.k === 'b' ? q.x1 : Math.max(q.x0, q.x1) + r; x0 = Math.min(x0, a); x1 = Math.max(x1, b); } return [x0, x1]; };
+  // the search (as the summit's): solid = every lethal shape of every trap at that moment; inside a pouring sandfall the
+  // climb is X.fall.up of its speed and the steering slower; the gusts shift every move by their push over that step.
+  // dry: a pouring sandfall counts as solid (the mission's way through)
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via, dry) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), upS = Math.max(1, Math.round(440 * X.fall.up * DT / DA)), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX), sdS = Math.max(1, Math.round(330 / X.fall.lag * DT / DX));
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6, falls = traps.filter(h => h.type === 'sandstormFall');
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 12 / DT; step++) {
+      const t = t0 + step * DT, S = [], fs = falls.map(h => [h, SS.sandstormFallState(h, t - DT)]), fsNow = dry ? falls.map(h => [h, SS.sandstormFallState(h, t)]) : [];
+      for (const h of traps) SS.sandstormShapes(h, t, S);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a);
+        let ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        if (ok && dry) for (const [h, st] of fsNow) for (const da of [-Hh / 2 + 6, 0, Hh / 2 - 6]) if (SS.sandstormSandAt(h, st, x, a + da, W / 2)) { ok = false; break; }
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000, x = xi * DX, a = lo + ai * DA;
+        let sand = false; for (const [h, st] of fs) if (SS.sandstormSandAt(h, st, x, a, W / 2 - 10)) sand = true;
+        const u = sand ? upS : up, s2 = sand ? sdS : sd, sX = Math.round(SS.sandstormGustAt(level, a, t - DT) * DT / DX);
+        for (let dA = -dn; dA <= u; dA++) for (let dX = -s2; dX <= s2; dX++) {
+          const nx = xi + dX + sX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) return -1;
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = SS.createSandstormLevel(SS.advSeed(st), st), hz = [], fr = [];
+    sandstormStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) sfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) sfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    sandstormStats.len = level.end / 10;
+    for (let a = 0; a < level.end; a += 50) sandstormStats.gust = Math.max(sandstormStats.gust, level.gustK(a) * X.gust.v);
+    for (const h of hz) if (!SS.SANDSTORM_TYPES.has(h.type)) sfail('the canyon only has its own traps', h.type);
+    for (const h of hz) sandstormStats.kinds[h.type.slice(9)] = (sandstormStats.kinds[h.type.slice(9)] || 0) + (k ? 0 : 1);
+    if (hz.filter(h => h.type === 'sandstormFall').length < 3 * st0.goals.find(g => g.k === 'sandstormDry').n) sfail('the canyon has plenty more sandfalls than the mission allows', '');
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); sandstormStats.beatGap = Math.min(sandstormStats.beatGap, g); if (g < 0) sfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    if (hz.some(h => h.hi > level.end - 320)) sfail('the oasis below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      sandstormStats.minW = Math.min(sandstormStats.minW, r - l); sandstormStats.slope = Math.max(sandstormStats.slope, Math.abs(l2 - l), Math.abs(r - r2));
+    }
+    if (sandstormStats.minW < R.minWidth) sfail('the shaft is never narrower than minWidth', sandstormStats.minW.toFixed(1));
+    if (sandstormStats.slope > R.maxWallSlope) sfail('the walls never step faster than maxWallSlope', sandstormStats.slope.toFixed(2));
+    if (!k) sandstormStats.bands = level.bands[0].length + level.bands[1].length;
+    // static lanes: a scorpion's sting at full stretch and a sandfall's column leave an open lane of minLane
+    for (const h of hz) {
+      if (h.type === 'sandstormScorp') {
+        const [x0, x1] = ext(SS.sandstormShapes(h, 0, [], 'sweep'));
+        for (let a = h.alt - 20; a <= h.alt + X.scorp.top; a += 6) { const [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l; sandstormStats.lane.sandstormScorp = Math.min(sandstormStats.lane.sandstormScorp, m); if (m < R.minLane) { sfail('every scorpion leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt | 0}`); break; } }
+      } else if (h.type === 'sandstormFall') {
+        for (let a = h.alt; a <= h.aT - X.fall.jet; a += 10) { const [l, r] = level.walls(a), hw = X.fall.hw1 + (X.fall.hw0 - X.fall.hw1) * (a - h.alt) / h.len, m = h.side > 0 ? r - (h.cx + hw) : (h.cx - hw) - l; sandstormStats.lane.sandstormFall = Math.min(sandstormStats.lane.sandstormFall, m); if (m < R.minLane - 60) { sfail('every sandfall leaves a lane', `${m.toFixed(1)} at ${h.alt | 0}`); break; } }
+        { const [x0, x1] = ext(SS.sandstormShapes(h, 0, [])); for (let a = h.alt - 2 * X.fall.lr - 4; a <= h.alt + 4; a += 4) { const [l, r] = level.walls(a), m = h.side > 0 ? r - x1 : x0 - l; sandstormStats.lane.ledge = Math.min(sandstormStats.lane.ledge ?? Infinity, m); if (m < R.minLane) { sfail('every sandfall ledge leaves a lane of minLane', `${m.toFixed(1)} at ${h.alt | 0}`); break; } } }
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = SS.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) sfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: scarabs and the Painted Narrows' sun)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(SS.laneSize().w / 2 + 6 + SS.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of SS.sandstormDanger(h)) dd = Math.min(dd, SS.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) sandstormStats.pick = Math.min(sandstormStats.pick, dd);
+      if (dd < need - 0.5) sfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    // a scarab is a dare, but never inside a solid part (a scorpion or its ledge)
+    for (const f of fr.filter(f => f.kind === 'sandstormScarab')) for (const h of hz) if (h.lo - 60 < f.alt && h.hi + 60 > f.alt)
+      for (const q of SS.sandstormShapes(h, 0, [], 'body')) if (SS.shapeDist(q, f.x, f.alt) < SS.COCO_R + 6) { sfail('a scarab never sits in a trap\'s solid parts', `${h.type} at ${f.alt | 0}`); break; }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < SS.pickR(fr[i]) + SS.pickR(fr[j]) + SS.PICK_GAP - 0.01) sfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'sandstormScarab').length !== 3) sfail('the canyon holds exactly 3 golden scarabs', `${fr.filter(f => f.kind === 'sandstormScarab').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) sfail('the canyon keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    for (const b of level.beats) {
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), wet = traps.some(h => h.type === 'sandstormFall');
+      sandstormStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(lo + 40);
+        sandstormStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) sfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k}`);
+        else sandstormStats.worst = Math.max(sandstormStats.worst, tm);
+        // and without touching a pouring sandfall (from half the phases)
+        if (wet && p % 2 === 0) {
+          sandstormStats.searches++;
+          const td = fly(level, traps, (l + r) / 2, lo + 40, t0, (x, a) => a >= hi - 10, lo, hi + 20, null, true);
+          if (td < 0) sfail('every sandfall beat can be passed dry by the widest pilot', `${b.kind} at ${b.a}, start ${t0.toFixed(2)} s, seed ${k}`);
+          else sandstormStats.dry++;
+        }
+      }
+    }
+    // every scarab can be touched and then escaped (flown on past its traps) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'sandstormScarab')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60), [l, r] = level.walls(lo + 40);
+      let ok = true;
+      for (let p = 0; p < 6 && ok; p++) {
+        sandstormStats.searches++;
+        const tm = fly(level, traps, (l + r) / 2, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < X.scarab.r + W / 2 - 4);
+        if (tm < 0) { sfail('every golden scarab can be reached and escaped by the widest pilot', `scarab at ${f.alt | 0}, phase ${p}, seed ${k}`); ok = false; }
+      }
+      if (ok) sandstormStats.gems++;
+    }
+  }
+  if (failures.size) {
+    console.log(`FAILED: ${failures.size} rule(s) broken`);
+    for (const [rule, { count, example }] of failures) console.log(`  ✗ ${rule} — ${count}× (e.g. ${example})`);
+    process.exit(1);
+  }
+}
+const sandstormSummary = () => `PASS: Sandstorm Canyon: ${sandstormStats.seeds} layouts × ${sandstormStats.len} m, only its own traps (${Object.entries(sandstormStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; gusts up to ${sandstormStats.gust.toFixed(0)} u/s; shaft ${sandstormStats.minW.toFixed(0)}+ wide, wall slope ${sandstormStats.slope.toFixed(2)} (max ${SS.RULES.maxWallSlope}) over ${sandstormStats.bands} sandstone bands; open lanes past scorpion stings ${sandstormStats.lane.sandstormScorp.toFixed(0)}+ (minLane ${SS.RULES.minLane}), beside sandfalls ${sandstormStats.lane.sandstormFall.toFixed(0)}+ and past their foot ledges ${(sandstormStats.lane.ledge ?? 0).toFixed(0)}+; beats ${sandstormStats.beatGap.toFixed(0)}+ apart; pickups ${sandstormStats.pick.toFixed(1)}+ from any trap's reach, nothing pops in; ${sandstormStats.traps} beats (${sandstormStats.dry} dry runs past sandfalls) and ${sandstormStats.gems} scarabs (reach and escape) flown by the widest pilot (slowed by sand, pushed by gusts) in ${sandstormStats.searches} searches, the slowest pass ${sandstormStats.worst.toFixed(1)} s`;
 // (test slot: Sandstorm Canyon, island level 38)
 // (test slot: Anthill Underworks, island level 39)
 // (test slot: Bamboo Pagoda, island level 40)
@@ -5325,4 +5489,5 @@ console.log(lighthouseSummary());
 console.log(wizardSummary());
 console.log(starfallSummary());
 console.log(carnivalSummary());
+console.log(sandstormSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
