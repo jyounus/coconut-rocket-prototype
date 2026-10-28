@@ -5377,12 +5377,20 @@ function createHiveLevel(seed, st) {
     return lerp(WORLD_W - 28, w, smooth(150, 600, a));
   };
   // ---- the comb walls: how far comb row i bulges in on a side (0 where a trap is set into it) ----
-  const bulgeOf = (i, side) => {
+  const bulgeRaw = (i, side) => {
     const a0 = i * RH, a1 = a0 + RH;
     if (a0 < 500) return 0;
     for (const f of flats) if (f.side === side && f.a1 > a0 - 4 && f.a0 < a1 + 4) return 0;
     const k = hash2(i, (seed & 0xffff) + 53 + side * 19);
     return HIVE.bulge[k < 0.42 ? 0 : k < 0.8 ? 1 : 2];
+  };
+  // (remembered per row once the layout is done and the flats are final: the walls are asked for hundreds of times a frame)
+  const bulgeMemo = new Map(); let bulgeFinal = false;
+  const bulgeOf = (i, side) => {
+    if (!bulgeFinal) return bulgeRaw(i, side);
+    const key = i * 2 + side; let b = bulgeMemo.get(key);
+    if (b === undefined) { b = bulgeRaw(i, side); bulgeMemo.set(key, b); }
+    return b;
   };
   // how far the comb juts in at a: the row's bulge (chamfered in from the row below, never steeper than the hexagon's
   // own side plus the chamfer: 0.58 + 0.9, under RULES.maxWallSlope) plus the outer cell's point
@@ -5544,6 +5552,7 @@ function createHiveLevel(seed, st) {
   fruit.sort((p, q) => p.alt - q.alt);
 
   let hi = 0, fi = 0;
+  bulgeFinal = true;
   return {
     seed, intro: 0, walls: hWalls, marks, chambers: [], chunkMarks, pillars: [], end: endAt, branch: null, hive: true, sections: secs, beats, top: topA,
     difficulty: a => clamp(a / endAt, 0, 1), segAt: a => secs[secAt(a)], allowed: () => null, safeLane: () => null,
@@ -48752,51 +48761,70 @@ function drawHoneyCoat(k) {
 // wings beating so fast they blur. angry: a frowning brow (the swarm out hunting).
 // A glassy bee wing pointing up from its root (0, 0): a leaf of pale blue-white, its rim a deeper blue-grey, veins as line
 // pairs (a darker vein with a lit one beside it), a white sheen along its leading edge (L long, W wide, al its opacity)
-function hivWing(L, W, al) {
-  const shape = () => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(W * 0.9, -L * 0.15, W * 1.05, -L * 0.75, W * 0.3, -L); ctx.bezierCurveTo(-W * 0.3, -L * 1.04, -W * 0.95, -L * 0.6, -W * 0.6, -L * 0.3); ctx.quadraticCurveTo(-W * 0.4, -L * 0.08, 0, 0); ctx.closePath(); };
-  shape(); ctx.fillStyle = tpLG(-W, 0, W, -L, [`rgba(206,230,252,${al * 0.8})`, `rgba(236,248,255,${al})`, `rgba(255,255,255,${Math.min(1, al * 1.2)})`]); ctx.fill();
-  ctx.strokeStyle = `rgba(110,146,186,${Math.min(1, al * 1.5)})`; ctx.lineWidth = Math.max(0.5, L * 0.045); ctx.stroke();
-  const vein = (x0, y0, cx, cy, x1, y1) => { ctx.strokeStyle = `rgba(124,158,196,${al * 1.1})`; ctx.lineWidth = Math.max(0.4, L * 0.035); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(cx, cy, x1, y1); ctx.stroke(); ctx.strokeStyle = `rgba(255,255,255,${al * 1.1})`; ctx.lineWidth = Math.max(0.3, L * 0.022); ctx.beginPath(); ctx.moveTo(x0 + L * 0.04, y0); ctx.quadraticCurveTo(cx + L * 0.04, cy, x1 + L * 0.04, y1); ctx.stroke(); };
+function hivWing(L, W, al, c = ctx) {
+  const shape = () => { c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(W * 0.9, -L * 0.15, W * 1.05, -L * 0.75, W * 0.3, -L); c.bezierCurveTo(-W * 0.3, -L * 1.04, -W * 0.95, -L * 0.6, -W * 0.6, -L * 0.3); c.quadraticCurveTo(-W * 0.4, -L * 0.08, 0, 0); c.closePath(); };
+  shape(); c.fillStyle = hivLG(c, -W, 0, W, -L, [`rgba(206,230,252,${al * 0.8})`, `rgba(236,248,255,${al})`, `rgba(255,255,255,${Math.min(1, al * 1.2)})`]); c.fill();
+  c.strokeStyle = `rgba(110,146,186,${Math.min(1, al * 1.5)})`; c.lineWidth = Math.max(0.5, L * 0.045); c.stroke();
+  const vein = (x0, y0, cx, cy, x1, y1) => { c.strokeStyle = `rgba(124,158,196,${al * 1.1})`; c.lineWidth = Math.max(0.4, L * 0.035); c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.stroke(); c.strokeStyle = `rgba(255,255,255,${al * 1.1})`; c.lineWidth = Math.max(0.3, L * 0.022); c.beginPath(); c.moveTo(x0 + L * 0.04, y0); c.quadraticCurveTo(cx + L * 0.04, cy, x1 + L * 0.04, y1); c.stroke(); };
   vein(0, -L * 0.05, W * 0.35, -L * 0.5, W * 0.1, -L * 0.92); vein(W * 0.05, -L * 0.4, -W * 0.3, -L * 0.55, -W * 0.55, -L * 0.62); vein(W * 0.2, -L * 0.6, W * 0.6, -L * 0.62, W * 0.72, -L * 0.7);
-  ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, al * 1.6)})`; ctx.lineWidth = Math.max(0.6, L * 0.07); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-W * 0.45, -L * 0.35); ctx.quadraticCurveTo(-W * 0.6, -L * 0.7, -W * 0.15, -L * 0.92); ctx.stroke();
+  c.strokeStyle = `rgba(255,255,255,${Math.min(1, al * 1.6)})`; c.lineWidth = Math.max(0.6, L * 0.07); c.lineCap = 'round'; c.beginPath(); c.moveTo(-W * 0.45, -L * 0.35); c.quadraticCurveTo(-W * 0.6, -L * 0.7, -W * 0.15, -L * 0.92); c.stroke();
 }
-function drawHiveBee(t, ph, angry) {
+function drawHiveBee(t, ph, angry, c = ctx) {
   const flap = Math.sin(t * 62 + ph), P = HIVEP;
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  c.lineJoin = 'round'; c.lineCap = 'round';
   // the far wing (behind the body)
-  const wing = (ox, oy, rot, al) => { ctx.save(); ctx.translate(ox, oy); ctx.rotate(rot); hivWing(14, 4.6, al); ctx.restore(); };
+  const wing = (ox, oy, rot, al) => { c.save(); c.translate(ox, oy); c.rotate(rot); hivWing(14, 4.6, al, c); c.restore(); };
   wing(-1.5, -3.2, -0.55 - 0.35 * flap, 0.38); wing(-1.5, -3.2, -0.55 + 0.35 * flap, 0.22);
   // the abdomen, behind: gold with brown stripes, a soft fuzz rim, a red stinger tip
-  ctx.save(); ctx.translate(-7.5, 1.2); ctx.rotate(0.22);
-  ctx.fillStyle = tpLG(0, -2, 0, 7, ['#c86a14', '#7a3a10']); ctx.beginPath(); ctx.moveTo(-6.8, 0.6); ctx.lineTo(-12, 1.4); ctx.lineTo(-6.4, 2.6); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = rgbaA(DANGER_RGB, 0.95); ctx.beginPath(); ctx.moveTo(-9.4, 1.1); ctx.lineTo(-12, 1.4); ctx.lineTo(-9.4, 2); ctx.closePath(); ctx.fill();
-  const abd = () => { ctx.beginPath(); ctx.ellipse(0, 0, 7.6, 5.8, 0, 0, TWO_PI); };
-  abd(); ctx.fillStyle = tpRG(-2, -2.6, 9, P.bee); ctx.fill();
-  ctx.save(); abd(); ctx.clip();
-  for (const bx of [-3.6, 0.6, 4.6]) { ctx.fillStyle = tpLG(bx - 1.6, -5, bx + 1.6, 5, P.stripe); ctx.beginPath(); ctx.ellipse(bx, 0, 1.7, 6.4, 0.08, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = 'rgba(255,236,170,.35)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.ellipse(bx + 1.9, 0, 0.4, 5.6, 0.08, 3.6, 5.6); ctx.stroke(); }
-  ctx.restore();
-  abd(); ctx.strokeStyle = P.beeEdge; ctx.lineWidth = 0.9; ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,230,.6)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.ellipse(0, 0, 5.6, 3.9, 0, 3.6, 4.7); ctx.stroke();
-  ctx.restore();
+  c.save(); c.translate(-7.5, 1.2); c.rotate(0.22);
+  c.fillStyle = hivLG(c, 0, -2, 0, 7, ['#c86a14', '#7a3a10']); c.beginPath(); c.moveTo(-6.8, 0.6); c.lineTo(-12, 1.4); c.lineTo(-6.4, 2.6); c.closePath(); c.fill();
+  c.fillStyle = rgbaA(DANGER_RGB, 0.95); c.beginPath(); c.moveTo(-9.4, 1.1); c.lineTo(-12, 1.4); c.lineTo(-9.4, 2); c.closePath(); c.fill();
+  const abd = () => { c.beginPath(); c.ellipse(0, 0, 7.6, 5.8, 0, 0, TWO_PI); };
+  abd(); c.fillStyle = hivRG(c, -2, -2.6, 9, P.bee); c.fill();
+  c.save(); abd(); c.clip();
+  for (const bx of [-3.6, 0.6, 4.6]) { c.fillStyle = hivLG(c, bx - 1.6, -5, bx + 1.6, 5, P.stripe); c.beginPath(); c.ellipse(bx, 0, 1.7, 6.4, 0.08, 0, TWO_PI); c.fill(); c.strokeStyle = 'rgba(255,236,170,.35)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(bx + 1.9, 0, 0.4, 5.6, 0.08, 3.6, 5.6); c.stroke(); }
+  c.restore();
+  abd(); c.strokeStyle = P.beeEdge; c.lineWidth = 0.9; c.stroke();
+  c.strokeStyle = 'rgba(255,255,230,.6)'; c.lineWidth = 1.1; c.beginPath(); c.ellipse(0, 0, 5.6, 3.9, 0, 3.6, 4.7); c.stroke();
+  c.restore();
   // the thorax: fuzz all round
-  ctx.fillStyle = '#d8902a'; for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; ctx.beginPath(); ctx.arc(Math.cos(an) * 4.4, Math.sin(an) * 4.2, 1.3, 0, TWO_PI); ctx.fill(); }
-  ctx.fillStyle = tpRG(-1, -1.6, 5.4, ['#ffe08a', '#e0a030', '#8a5010']); ctx.beginPath(); ctx.arc(0, 0, 4.6, 0, TWO_PI); ctx.fill();
-  ctx.strokeStyle = 'rgba(122,66,4,.7)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(0, 0, 4.6, 0.2, 2.9); ctx.stroke();
+  c.fillStyle = '#d8902a'; for (let k = 0; k < 10; k++) { const an = k / 10 * TWO_PI; c.beginPath(); c.arc(Math.cos(an) * 4.4, Math.sin(an) * 4.2, 1.3, 0, TWO_PI); c.fill(); }
+  c.fillStyle = hivRG(c, -1, -1.6, 5.4, ['#ffe08a', '#e0a030', '#8a5010']); c.beginPath(); c.arc(0, 0, 4.6, 0, TWO_PI); c.fill();
+  c.strokeStyle = 'rgba(122,66,4,.7)'; c.lineWidth = 0.6; c.beginPath(); c.arc(0, 0, 4.6, 0.2, 2.9); c.stroke();
   // legs tucked under
-  ctx.strokeStyle = '#5a3010'; ctx.lineWidth = 0.9; for (const lx of [-1.6, 0.6, 2.6]) { ctx.beginPath(); ctx.moveTo(lx, 3.6); ctx.quadraticCurveTo(lx - 1.4, 6, lx - 0.4, 7.4); ctx.stroke(); }
+  c.strokeStyle = '#5a3010'; c.lineWidth = 0.9; for (const lx of [-1.6, 0.6, 2.6]) { c.beginPath(); c.moveTo(lx, 3.6); c.quadraticCurveTo(lx - 1.4, 6, lx - 0.4, 7.4); c.stroke(); }
   // the head, the eye, the antennae
-  ctx.strokeStyle = '#5a3010'; ctx.lineWidth = 0.8;
-  ctx.beginPath(); ctx.moveTo(6.4, -2.6); ctx.quadraticCurveTo(7.6, -8, 10.4, -8.4); ctx.moveTo(5.4, -3); ctx.quadraticCurveTo(5.6, -8.8, 8.2, -10); ctx.stroke();
-  ctx.fillStyle = '#5a3010'; ctx.beginPath(); ctx.arc(10.6, -8.4, 1.1, 0, TWO_PI); ctx.arc(8.4, -10, 1.1, 0, TWO_PI); ctx.fill();
-  ctx.fillStyle = tpRG(5.4, -1.4, 5, ['#9a6038', '#5a3018', '#341a0a']); ctx.beginPath(); ctx.arc(6.6, 0.2, 3.9, 0, TWO_PI); ctx.fill();
-  ctx.strokeStyle = '#4a2410'; ctx.lineWidth = 0.6; ctx.stroke();
-  ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.ellipse(7.8, -0.6, 1.9, 2.2, 0, 0, TWO_PI); ctx.fill();
-  ctx.fillStyle = '#3a1c0a'; ctx.beginPath(); ctx.arc(8.4, -0.3, 1.2, 0, TWO_PI); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8.0, -0.9, 0.5, 0, TWO_PI); ctx.fill();
-  if (angry) { ctx.strokeStyle = '#3a1a08'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(6.2, -3.4); ctx.lineTo(9.6, -2.1); ctx.stroke(); }
-  ctx.strokeStyle = 'rgba(255,230,190,.5)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.arc(6.6, 0.2, 2.9, 3.5, 4.6); ctx.stroke();
+  c.strokeStyle = '#5a3010'; c.lineWidth = 0.8;
+  c.beginPath(); c.moveTo(6.4, -2.6); c.quadraticCurveTo(7.6, -8, 10.4, -8.4); c.moveTo(5.4, -3); c.quadraticCurveTo(5.6, -8.8, 8.2, -10); c.stroke();
+  c.fillStyle = '#5a3010'; c.beginPath(); c.arc(10.6, -8.4, 1.1, 0, TWO_PI); c.arc(8.4, -10, 1.1, 0, TWO_PI); c.fill();
+  c.fillStyle = hivRG(c, 5.4, -1.4, 5, ['#9a6038', '#5a3018', '#341a0a']); c.beginPath(); c.arc(6.6, 0.2, 3.9, 0, TWO_PI); c.fill();
+  c.strokeStyle = '#4a2410'; c.lineWidth = 0.6; c.stroke();
+  c.fillStyle = '#fffaf0'; c.beginPath(); c.ellipse(7.8, -0.6, 1.9, 2.2, 0, 0, TWO_PI); c.fill();
+  c.fillStyle = '#3a1c0a'; c.beginPath(); c.arc(8.4, -0.3, 1.2, 0, TWO_PI); c.fill();
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(8.0, -0.9, 0.5, 0, TWO_PI); c.fill();
+  if (angry) { c.strokeStyle = '#3a1a08'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(6.2, -3.4); c.lineTo(9.6, -2.1); c.stroke(); }
+  c.strokeStyle = 'rgba(255,230,190,.5)'; c.lineWidth = 0.7; c.beginPath(); c.arc(6.6, 0.2, 2.9, 3.5, 4.6); c.stroke();
   // the near wing, on top
   wing(-0.6, -3.6, -0.25 + 0.4 * flap, 0.5);
+}
+// gradients on a given context (the bee and its wings also paint into their sprite cache)
+function hivLG(c, x0, y0, x1, y1, cols) { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
+function hivRG(c, x, y, r, cols) { const g = c.createRadialGradient(x, y, 0, x, y, r); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
+// The bee as drawn by the dozen (the swarms, the workers on the comb and the pods): drawHiveBee painted once per wing
+// position (17 steps through the flap), mood and size on screen (half octaves) into a little sprite and blitted under
+// the current transform; each bee drawn live is ~60 canvas calls
+const hiveBeeCache = new Map();
+function drawHiveBeeFast(t, ph, angry) {
+  const m = ctx.getTransform(), lv = Math.ceil(Math.log2(Math.max(0.05, Math.hypot(m.a, m.b))) * 2 - 1e-6), R = 2 ** (lv / 2);
+  const fq = Math.round(Math.sin(t * 62 + ph) * 8) / 8, key = (angry ? 'a' : 'c') + fq + ':' + lv;
+  let c = hiveBeeCache.get(key);
+  if (!c) {
+    if (hiveBeeCache.size > 240) hiveBeeCache.clear();
+    c = document.createElement('canvas'); c.width = Math.ceil(38 * R) + 2; c.height = Math.ceil(35 * R) + 2;
+    const g = c.getContext('2d'); g.setTransform(R, 0, 0, R, 22 * R + 1, 21 * R + 1); drawHiveBee(Math.asin(fq) / 62, 0, angry, g);
+    c.R = R; hiveBeeCache.set(key, c);
+  }
+  ctx.drawImage(c, -22 - 1 / c.R, -21 - 1 / c.R, c.width / c.R, c.height / c.R);
 }
 // The swarm's pod: a papery teardrop of chewed wax hanging on the wall (pale layered scallops, each ridge lit along its top
 // and shaded under, darker resin seams), its door low on the shaft side glowing warm from inside, honey welling out of the
@@ -48885,7 +48913,7 @@ function drawHiveBees(h) {
     const bx = 1 + Math.cos(an) * rx, by = -3 + Math.sin(an) * ry, hd = Math.atan2(Math.cos(an) * ry, -Math.sin(an) * rx) * (q ? -1 : 1);
     ctx.save(); ctx.translate(bx, by); ctx.rotate(hd + (q ? 0 : Math.PI)); ctx.scale(0.42, 0.42);
     ctx.fillStyle = 'rgba(60,30,6,.3)'; ctx.beginPath(); ctx.ellipse(1, 3, 13, 6, 0, 0, TWO_PI); ctx.fill();
-    drawHiveBee(q * 0.37, q * 2 + 0.6, false); ctx.restore();
+    drawHiveBeeFast(q * 0.37, q * 2 + 0.6, false); ctx.restore();
   }
   ctx.restore();
 
@@ -48897,7 +48925,7 @@ function drawHiveBees(h) {
     if (b.k < 0.05) continue;
     const ang = fly >= 0 ? 0.25 * Math.sin(b.th) : 0.15 * Math.sin(T * 3 + b.i);
     ctx.save(); ctx.translate(sx(b.x), sy(b.a)); ctx.scale(b.dir * s * 0.66 * (0.5 + 0.5 * b.k), s * 0.66 * (0.5 + 0.5 * b.k)); ctx.rotate(ang);
-    drawHiveBee(T + b.i * 0.37, b.i * 1.7, fly >= 0 || tell > 0.5); ctx.restore();
+    drawHiveBeeFast(T + b.i * 0.37, b.i * 1.7, fly >= 0 || tell > 0.5); ctx.restore();
   }
 }
 
@@ -49211,6 +49239,168 @@ const hiveNearTrap = (a, side, pad) => { const lv = G.level; return !!(lv.all &&
 // how many columns of front comb a row holds before it breaks off onto the deeper comb behind (2..6, in slow lobes)
 const hiveLobeN = (i, side) => 2 + Math.round(4 * hivN1(i / 7.5 + side * 13, 520 + side) * 0.75 + 4 * 0.25 * hivN1(i / 2.2 + side * 5, 530 + side)) + (hash2(i, 540 + side) < 0.22 ? 1 : 0);
 
+// the lip's wax (everything but the honey), into context c with the mapping X/Y (world to c's units); pts as drawHiveLip's
+function hiveLipBody(c, pts, dir, side, wx, X, Y) {
+  const RH = HIVE.row, n = pts.length, lit = side ? 1 : 0.82, lw = pts.map(p => 5.5 + 3 * hivN1(p[2] / 41, 77 + side)), LW = 7;
+  const lg = (x0, y0, x1, y1, cols) => { const g = c.createLinearGradient(x0, y0, x1, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; };
+  const face = j => { const d = (pts[Math.min(n - 1, j + 1)][0] - pts[Math.max(0, j - 1)][0]) * dir; return d > 0.15 ? 1 : d < -0.15 ? -1 : 0; };
+  // runs of the edge facing one way
+  const runs = []; let j0 = 0, f0 = face(0);
+  for (let j = 1; j < n; j++) { const f = face(j); if (f !== f0) { runs.push([j0, j, f0]); j0 = j; f0 = f; } }
+  runs.push([j0, n - 1, f0]);
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  const band = (ja, jb, off0, off1) => {
+    c.beginPath();
+    for (let j = ja; j <= jb; j++) { const [x, y] = pts[j]; j === ja ? c.moveTo(x + dir * off0 * s, y) : c.lineTo(x + dir * off0 * s, y); }
+    for (let j = jb; j >= ja; j--) { const [x, y] = pts[j]; c.lineTo(x + dir * off1 * lw[j] / LW * s, y); }
+    c.closePath();
+  };
+  // the lip's body in one piece first (no seams), then each run's own light
+  c.beginPath(); pts.forEach(([x, y], j) => j ? c.lineTo(x, y) : c.moveTo(x, y)); for (let j = n - 1; j >= 0; j--) c.lineTo(pts[j][0] + dir * lw[j] * 0.7 * s, pts[j][1]); c.closePath();
+  c.fillStyle = side ? 'rgb(222,146,52)' : 'rgb(200,124,40)'; c.fill();
+  for (const [ja, jb, f] of runs) {
+    if (jb - ja < 1) continue;
+    const xm = pts[(ja + jb) >> 1][0], g = (cols) => lg(xm, 0, xm + dir * LW * s, 0, cols);
+    band(ja, jb, 0, LW);
+    if (f > 0) c.fillStyle = g(lit > 0.9 ? ['#fff0bc', '#ffd47a', '#eeaa48', 'rgba(214,138,52,.75)', 'rgba(200,120,40,0)'] : ['#ffe4a2', '#f8c466', '#e09a3a', 'rgba(200,124,44,.75)', 'rgba(190,110,36,0)']);
+    else if (f < 0) c.fillStyle = g(lit > 0.9 ? ['#c06c20', '#d68a34', '#c47a2a', 'rgba(150,72,16,.6)', 'rgba(140,64,14,0)'] : ['#a85a18', '#c27628', '#b46c22', 'rgba(130,60,12,.6)', 'rgba(120,54,10,0)']);
+    else c.fillStyle = g(['#f0bc62', '#e8a446', '#d08a34', 'rgba(170,90,24,.6)', 'rgba(160,80,20,0)']);
+    c.fill();
+  }
+  // the rounding: a sheen along the arris of the tops, a soft dark under the round of the undersides
+  for (const [ja, jb, f] of runs) {
+    if (jb - ja < 2 || f === 0) continue;
+    c.beginPath(); for (let j = ja + 1; j < jb; j++) { const [x, y] = pts[j]; const xx = x + dir * (f > 0 ? 2.2 : 4.6) * s; j === ja + 1 ? c.moveTo(xx, y) : c.lineTo(xx, y); }
+    c.strokeStyle = f > 0 ? `rgba(255,252,228,${0.75 * lit + 0.1})` : 'rgba(110,46,6,.4)'; c.lineWidth = (f > 0 ? 1.3 : 2) * s; c.stroke();
+  }
+  // the crease behind the lip (a dark furrow, the next wax just catching the light) and the edge's own deep shade
+  const line = (off, col, w) => { c.strokeStyle = col; c.lineWidth = w * s; c.beginPath(); pts.forEach(([x, y], j) => { const xx = x + dir * off * s; j ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); };
+  line(0.2, side ? 'rgba(150,72,12,.85)' : 'rgba(130,60,10,.9)', 1);
+  // the comb rows meet at the notches: a short wax seam into the lip
+  const bot = pts[0][2], top = pts[n - 1][2];
+  for (let i = Math.floor(bot / RH); i * RH <= top; i++) {
+    const a = i * RH, x = X(wx(a)), y = Y(a);
+    c.strokeStyle = 'rgba(110,44,6,.5)'; c.lineWidth = 1.1 * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x + dir * 5 * s, y + 0.5 * s); c.stroke();
+  }
+  // chipped cells along the edge: a bite out of the lip's underside showing the dark cell behind, its broken wall lit
+  for (let i = Math.floor(bot / RH); i * RH <= top; i++) {
+    const hj = hash2(i, 1501 + side); if (hj > 0.1) continue;
+    const ac = (i + 0.5) * RH, a0 = ac - 2, a1 = ac - RH * 0.42, e0 = wx(a0), e1 = wx(a1), d = 4.5 + 2 * hash2(i, 1502);
+    const P = [[e0, a0], [e0 + dir * 1.4, a0 - 1.6], [lerp(e0, e1, 0.3) + dir * d, lerp(a0, a1, 0.3)], [lerp(e0, e1, 0.55) + dir * (d - 1.6), lerp(a0, a1, 0.55) + 0.8], [lerp(e0, e1, 0.8) + dir * (d + 0.8), lerp(a0, a1, 0.8)], [e1 + dir * 0.6, a1], [e1, a1 - 0.6]];
+    c.beginPath(); P.forEach(([x, a], k) => k ? c.lineTo(X(x), Y(a)) : c.moveTo(X(x), Y(a))); c.closePath();
+    c.fillStyle = lg(X(e0), 0, X(e0 + dir * d), 0, ['#3e1604', '#6a2a06']); c.fill();
+    c.strokeStyle = 'rgba(255,224,150,.75)'; c.lineWidth = 1 * s; c.beginPath(); for (let k = 2; k <= 5; k++) { const [x, a] = P[k]; k === 2 ? c.moveTo(X(x), Y(a) + 0.8 * s) : c.lineTo(X(x), Y(a) + 0.8 * s); } c.stroke();
+    c.strokeStyle = 'rgba(96,36,4,.8)'; c.lineWidth = 0.9 * s; c.beginPath(); for (let k = 1; k <= 3; k++) { const [x, a] = P[k]; k === 1 ? c.moveTo(X(x), Y(a)) : c.lineTo(X(x), Y(a)); } c.stroke();
+  }
+  c.restore();
+}
+// The comb's three layers of cells (into context c with the mapping X/Y from world to c's units; px: the cell sprites'
+// size in device pixels). drawHiveWalls draws them from cached tiles (below) and live only when zoomed out past those.
+// The deep comb behind: big cells on a fixed grid (columns kb, kb + dir .. kn of them), old and dark, honey glinting in a few
+function hiveDeepComb(c, X, Y, side, kb, kn, bot, top, px2) {
+  const R2 = HIVE.cell * 1.8, RH2 = R2 * Math.sqrt(3), dir = side ? 1 : -1;
+  c.globalAlpha = 0.7;
+  for (let kk = 0; kk <= kn; kk++) {
+    const k = kb + dir * kk, cx = k * 1.5 * R2, odd = ((k % 2) + 2) % 2;
+    for (let j = Math.floor(bot / RH2) - 1; j <= Math.ceil(top / RH2) + 1; j++) {
+      const a = (j + (odd ? 0.5 : 0)) * RH2, v = hivN2(j / 3.2 + side * 9, k / 2.4, 610 + side), q = hash2(j * 13 + k * 7, 620 + side);
+      const kind = v < 0.32 ? (q < 0.7 ? 'cap' : 'h2') : v < 0.55 ? (q < 0.5 ? 'h3' : q < 0.8 ? 'h2' : 'h1') : v < 0.7 ? (q < 0.6 ? 'empty' : 'pollen') : (q < 0.6 ? 'empty' : q < 0.8 ? 'resin' : 'h1');
+      hiveCellBlit(c, X, Y, hiveCellSprite(kind, px2), cx, a);
+    }
+  }
+  c.globalAlpha = 1;
+}
+// a soft warm contact shadow on the shaft side of the edge (pts: the edge on c, [x, y, alt]), so the comb stands off the haze
+function hiveContactShade(c, pts, dir) {
+  for (const [lw, al] of [[24, 0.05], [13, 0.07], [6, 0.08]]) { c.strokeStyle = `rgba(40,16,4,${al})`; c.lineWidth = lw * s; c.beginPath(); pts.forEach(([x, y], i) => { const xx = x + dir * (-lw / 2 + 1) * s; i ? c.lineTo(xx, y) : c.moveTo(xx, y); }); c.stroke(); }
+}
+const hiveCellBlit = (c, X, Y, cv, x, a) => { const ww = cv.width / dpr; c.drawImage(cv, X(x) - ww / 2, Y(a) - ww / 2, ww, ww); };
+// the front comb (rows i0..i1, columns 1 .. the lobe's depth): its thickness and its shadow on the deep comb under every
+// cell, then the cells (the edge column, k 0, is drawn after with each row's own bulge: hiveEdgeComb)
+function hiveFrontComb(c, X, Y, side, i0, i1, px) {
+  const lv = G.level, RH = HIVE.row, r = HIVE.cell, dir = side ? 1 : -1;
+  const cellAt = (i, k) => { const a = (i + 0.5) * RH + (k & 1 ? RH / 2 : 0); return [lv.base(a)[side] + dir * (r / 2 + 1.5 * r * k), a]; };
+  const front = [];
+  for (let i = i0; i <= i1; i++) {
+    const n = hiveLobeN(i, side);
+    for (let k = n - 1; k >= 1; k--) { const [x, a] = cellAt(i, k), kind = hiveCellKind(i, k, side, a); if (kind) front.push([x, a, kind, k]); }
+  }
+  c.fillStyle = 'rgba(30,10,2,.28)';
+  for (const [x, a] of front) { c.beginPath(); hivHex(c, X(x) + dir * 4 * s, Y(a) + 6 * s, r * 1.12 * s); c.fill(); }
+  c.fillStyle = 'rgba(30,10,2,.3)';
+  for (const [x, a] of front) { c.beginPath(); hivHex(c, X(x) + dir * 2 * s, Y(a) + 3.4 * s, r * 1.04 * s); c.fill(); }
+  c.fillStyle = 'rgb(128,62,14)';
+  for (const [x, a] of front) { c.beginPath(); hivHex(c, X(x) + dir * 1.2 * s, Y(a) + 2.2 * s, r * 1.03 * s); c.fill(); }
+  for (const [x, a, kind] of front) hiveCellBlit(c, X, Y, hiveCellSprite(kind, px), x, a);
+}
+// the edge column: each row's own bulge, standing proud of the cells behind with a shadow under it
+function hiveEdgeComb(c, X, Y, side, i0, i1, px) {
+  const lv = G.level, RH = HIVE.row, r = HIVE.cell, dir = side ? 1 : -1;
+  for (let i = i0; i <= i1; i++) {
+    const a = (i + 0.5) * RH, b = lv.bulgeAt(a, side), x = lv.base(a)[side] + dir * (r / 2 - b);
+    if (b > 0.5) { c.fillStyle = 'rgba(40,14,2,.4)'; c.beginPath(); hivHex(c, X(x) + dir * 1.5 * s, Y(a) + 3.5 * s, r * 1.05 * s); c.fill(); }
+    hiveCellBlit(c, X, Y, hiveCellSprite(hiveCellKind(i, 0, side, a) || 'broken', px), x, a);
+  }
+}
+// The walls' static art is drawn once into tiles (per side, per layer, per HIVE_TA of height, at the screen's density) and
+// blitted: hundreds of cells, their shadows and the lip's wax cost ~1.5 ms a frame drawn live. Layers: 0 the deep comb
+// (also keyed on its first column, which follows the shaft's width), 1 the front comb, 2 the edge column, 3 the lip's wax,
+// 4 the contact shadow on the shaft side;
+// the screen-anchored shading, the breathing glow and the honey between them stay live. They cover HIVE_TPAD world units
+// past the screen's sides, so a deeper zoom-out (or a zoom-in) draws live as before.
+const HIVE_TA = 8 * HIVE.row, HIVE_TPAD = 70;
+const HIVE_WT = { key: '', tiles: new Map(), live: 0 };   // (live: frames drawn without the tiles, for the debug view)
+function hiveWallTiled() { const zk = camZoom.k || 1; return zk <= 1.02 && cssW * (1 / zk - 1) / s + 8 < HIVE_TPAD; }
+function hiveWallCacheCheck() {
+  const key = `${cssW}x${H}@${dpr}:${s.toFixed(4)}:${ox.toFixed(2)}:${G.seed}`;
+  if (HIVE_WT.key !== key) { HIVE_WT.key = key; HIVE_WT.tiles.clear(); }
+}
+function hiveWallTile(side, layer, ch, kb) {
+  const C = HIVE_WT.tiles, key = side + ':' + layer + ':' + ch + (layer ? '' : ':' + kb);
+  let t = C.get(key);
+  if (t) { C.delete(key); C.set(key, t); return t; }
+  t = hiveRenderWallTile(side, layer, ch, kb); C.set(key, t);
+  while (C.size > 120) C.delete(C.keys().next().value);   // (the view holds up to ~90 when zoomed out at speed)
+  return t;
+}
+function hiveRenderWallTile(side, layer, ch, kb) {
+  const lv = G.level, r = HIVE.cell, R2 = r * 1.8, RH = HIVE.row, a0 = ch * HIVE_TA, a1 = a0 + HIVE_TA, M = 40, dir = side ? 1 : -1;
+  let bMin = Infinity, bMax = -Infinity;
+  for (let a = a0 - M; a <= a1 + M; a += 4) { const b = lv.base(a)[side]; if (b < bMin) bMin = b; if (b > bMax) bMax = b; }
+  const scrL = -ox / s - HIVE_TPAD, scrR = (cssW - ox) / s + HIVE_TPAD, kx = (kb || 0) * 1.5 * R2;
+  const [xa, xb] = layer === 0 ? (side ? [Math.min(bMin, kx) - 70, scrR] : [scrL, Math.max(bMax, kx) + 70])
+    : layer === 1 ? (side ? [bMin - 40, bMax + 160] : [bMin - 160, bMax + 40]) : [bMin - 40, bMax + 40];
+  const X0 = Math.floor((ox + xa * s) * dpr) / dpr, w = (xb - xa) * s + 2, h = HIVE_TA * s;
+  const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.ceil(w * dpr)); cv.height = Math.max(1, Math.ceil(h * dpr) + 1);
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.lineJoin = 'round';
+  const X = x => ox + x * s - X0, Y = a => (a1 - a) * s, i0 = Math.floor((a0 - M) / RH) - 1, i1 = Math.ceil((a1 + M) / RH) + 1;
+  const px = Math.max(4, Math.round(r * s * dpr)), px2 = Math.max(5, Math.round(R2 * s * dpr));
+  if (layer === 0) hiveDeepComb(c, X, Y, side, kb, Math.ceil(Math.abs((side ? scrR : scrL) - kx) / (1.5 * R2)) + 2, a0 - M, a1 + M, px2);
+  else if (layer === 1) hiveFrontComb(c, X, Y, side, i0, i1, px);
+  else if (layer === 2) hiveEdgeComb(c, X, Y, side, i0, i1, px);
+  else {
+    const wx = a => side ? rightWall(a) : leftWall(a), pts = [];
+    for (let a = Math.floor((a0 - 30) / 2) * 2; a <= a1 + 30; a += 2) pts.push([X(wx(a)), Y(a), a]);
+    if (layer === 3) hiveLipBody(c, pts, dir, side, wx, X, Y); else hiveContactShade(c, pts, dir);
+  }
+  return { cv, X0, a1 };
+}
+const hivPx = y => Math.round(y * dpr) / dpr;
+// blit a layer's tiles over bot..top (world): each tile exactly its own rows, their edges on whole pixels (no seams)
+function hiveWallBlit(side, layer, bot, top, kb) {
+  for (let ch = Math.floor(bot / HIVE_TA); ch * HIVE_TA < top; ch++) {
+    const t = hiveWallTile(side, layer, ch, kb), y0 = hivPx(sy(t.a1)), y1 = hivPx(sy(t.a1 - HIVE_TA));
+    ctx.drawImage(t.cv, 0, 0, t.cv.width, HIVE_TA * s * dpr, t.X0, y0, t.cv.width / dpr, y1 - y0);
+  }
+}
+// render one missing tile a frame ahead of the climb (the next tiles up), so new tiles rarely cost a visible frame
+function hiveWallAhead(top, kbs) {
+  const c1 = Math.floor(top / HIVE_TA) + 1;
+  for (let ch = c1; ch <= c1 + 1; ch++) for (const side of [0, 1]) for (let layer = 0; layer < 5; layer++) {
+    const key = side + ':' + layer + ':' + ch + (layer ? '' : ':' + kbs[side]);
+    if (!HIVE_WT.tiles.has(key)) { hiveWallTile(side, layer, ch, kbs[side]); return; }
+  }
+}
 // The walls: comb in two layers. Behind, an older, deeper comb of big cells fading into the hive's dark; in front, the
 // working comb at the shaft: lobes of cells two to six columns deep (each casting its thickness and a soft shadow onto the
 // comb behind), laid out in regions, torn open in places. Light glows through the honey stores. Along the edge (exactly
@@ -49220,18 +49410,19 @@ const hiveLobeN = (i, side) => 2 + Math.round(4 * hivN1(i / 7.5 + side * 13, 520
 function drawHiveWalls() {
   const lv = G.level, RH = HIVE.row, r = HIVE.cell, pl = HIVEP.pal, T = G.t;
   const bot = G.camAlt - 30 - drawPad, top = G.camAlt + viewH + 30 + drawPad;
-  const zk = Math.max(0.6, camZoom.k || 1), px = Math.max(4, Math.round(r * s * dpr * zk)), spr = k => hiveCellSprite(k, px);
-  const R2 = r * 1.8, px2 = Math.max(5, Math.round(R2 * s * dpr * zk)), RH2 = R2 * Math.sqrt(3);
-  const blit = (c, x, a) => { const ww = c.width / dpr; ctx.drawImage(c, sx(x) - ww / 2, sy(a) - ww / 2, ww, ww); };
+  const zk = Math.max(0.6, camZoom.k || 1), px = Math.max(4, Math.round(r * s * dpr * zk));
+  const R2 = r * 1.8, px2 = Math.max(5, Math.round(R2 * s * dpr * zk));
+  // the comb's cells and the lip's wax come from cached tiles (hiveWallBlit); live only when zoomed past what they cover
+  const tiled = hiveWallTiled(), kbs = [];
+  if (tiled) hiveWallCacheCheck(); else HIVE_WT.live++;
   const SCR = [-40 - drawPad * s, -40 - drawPad * s, cssW + 80 + 2 * drawPad * s, H + 80 + 2 * drawPad * s];
   for (const side of [0, 1]) {
     const dir = side ? 1 : -1, wx = a => side ? rightWall(a) : leftWall(a);
     const pts = []; for (let a = bot; a <= top + 2; a += 2) pts.push([sx(wx(a)), sy(a), a]);
-    const trace = (off = 0) => pts.forEach(([x, y], i) => { const xx = x + dir * off * s; i ? ctx.lineTo(xx, y) : ctx.moveTo(xx, y); });
     const edge = side ? cssW + 30 + drawPad * s : -30 - drawPad * s;
     ctx.lineJoin = 'round';
     // a soft warm contact shadow on the shaft side, so the comb stands off the haze (no rim light, no hard line)
-    for (const [lw, al] of [[24, 0.05], [13, 0.07], [6, 0.08]]) { ctx.strokeStyle = `rgba(40,16,4,${al})`; ctx.lineWidth = lw * s; ctx.beginPath(); trace(-lw / 2 + 1); ctx.stroke(); }
+    if (tiled) hiveWallBlit(side, 4, bot, top); else hiveContactShade(ctx, pts, dir);
     // the body: the hive's dark behind the comb
     ctx.save();
     ctx.beginPath(); ctx.moveTo(edge, sy(bot)); for (const [x, y] of pts) ctx.lineTo(x, y); ctx.lineTo(edge, sy(top + 2)); ctx.closePath();
@@ -49241,17 +49432,8 @@ function drawHiveWalls() {
     // the deep comb behind: big cells on a fixed grid, old and dark, honey glinting in a few
     {
       const room = side ? (cssW + drawPad * s + 40 - x0) / s : (x0 + drawPad * s + 40) / s, k1 = Math.ceil(room / (1.5 * R2)) + 2;
-      const kb = Math.round(xMid / (1.5 * R2));
-      ctx.globalAlpha = 0.7;
-      for (let kk = 0; kk <= k1; kk++) {
-        const k = kb + dir * kk, cx = k * 1.5 * R2, odd = ((k % 2) + 2) % 2;
-        for (let j = Math.floor(bot / RH2) - 1; j <= Math.ceil(top / RH2) + 1; j++) {
-          const a = (j + (odd ? 0.5 : 0)) * RH2, v = hivN2(j / 3.2 + side * 9, k / 2.4, 610 + side), q = hash2(j * 13 + k * 7, 620 + side);
-          const kind = v < 0.32 ? (q < 0.7 ? 'cap' : 'h2') : v < 0.55 ? (q < 0.5 ? 'h3' : q < 0.8 ? 'h2' : 'h1') : v < 0.7 ? (q < 0.6 ? 'empty' : 'pollen') : (q < 0.6 ? 'empty' : q < 0.8 ? 'resin' : 'h1');
-          blit(hiveCellSprite(kind, px2), cx, a);
-        }
-      }
-      ctx.globalAlpha = 1;
+      const kb = Math.round(xMid / (1.5 * R2)); kbs[side] = kb;
+      if (tiled) hiveWallBlit(side, 0, bot, top, kb); else hiveDeepComb(ctx, sx, sy, side, kb, k1, bot, top, px2);
       // it sits back in shade and fades into the dark away from the shaft
       ctx.fillStyle = tpLG(x0, 0, x0 + dir * 230 * s, 0, ['rgba(52,20,4,.52)', 'rgba(38,14,3,.7)', 'rgba(26,9,2,.86)', 'rgba(20,7,2,.95)']); ctx.fillRect(...SCR);
     }
@@ -49259,19 +49441,7 @@ function drawHiveWalls() {
     const cellAt = (i, k) => { const a = (i + 0.5) * RH + (k & 1 ? RH / 2 : 0); return [lv.base(a)[side] + dir * (r / 2 + 1.5 * r * k), a]; };
     // the front comb's thickness and its shadow on the deep comb (drawn under every front cell, so it shows only past a
     // lobe's ragged end and in the torn places)
-    const front = [];
-    for (let i = i0; i <= i1; i++) {
-      const n = hiveLobeN(i, side);
-      for (let k = n - 1; k >= 1; k--) { const [c, a] = cellAt(i, k), kind = hiveCellKind(i, k, side, a); if (kind) front.push([c, a, kind, k]); }
-    }
-    ctx.fillStyle = 'rgba(30,10,2,.28)';
-    for (const [c, a] of front) { ctx.beginPath(); hivHex(ctx, sx(c) + dir * 4 * s, sy(a) + 6 * s, r * 1.12 * s); ctx.fill(); }
-    ctx.fillStyle = 'rgba(30,10,2,.3)';
-    for (const [c, a] of front) { ctx.beginPath(); hivHex(ctx, sx(c) + dir * 2 * s, sy(a) + 3.4 * s, r * 1.04 * s); ctx.fill(); }
-    ctx.fillStyle = 'rgb(128,62,14)';
-    for (const [c, a] of front) { ctx.beginPath(); hivHex(ctx, sx(c) + dir * 1.2 * s, sy(a) + 2.2 * s, r * 1.03 * s); ctx.fill(); }
-    // the front cells (the edge column, k 0, is drawn after with each row's own bulge)
-    for (const [c, a, kind] of front) blit(spr(kind), c, a);
+    if (tiled) hiveWallBlit(side, 1, bot, top); else hiveFrontComb(ctx, sx, sy, side, i0, i1, px);
     // the lobes curve away from the shaft: a shade deepening across them
     ctx.fillStyle = tpLG(x0, 0, x0 + dir * 1.5 * r * 6.5 * s, 0, ['rgba(60,24,4,0)', 'rgba(60,24,4,.06)', 'rgba(50,20,4,.3)', 'rgba(36,14,3,.56)']); ctx.fillRect(...SCR);
     // light glowing through the honey stores (slowly breathing pools, where the open honey sits)
@@ -49283,15 +49453,12 @@ function drawHiveWalls() {
     }
     ctx.restore();
     // the edge column: each row's own bulge, standing proud of the cells behind with a shadow under it
-    for (let i = i0; i <= i1; i++) {
-      const a = (i + 0.5) * RH, b = lv.bulgeAt(a, side), c = lv.base(a)[side] + dir * (r / 2 - b);
-      if (b > 0.5) { ctx.fillStyle = 'rgba(40,14,2,.4)'; ctx.beginPath(); hivHex(ctx, sx(c) + dir * 1.5 * s, sy(a) + 3.5 * s, r * 1.05 * s); ctx.fill(); }
-      blit(spr(hiveCellKind(i, 0, side, a) || 'broken'), c, a);
-    }
+    if (tiled) hiveWallBlit(side, 2, bot, top); else hiveEdgeComb(ctx, sx, sy, side, i0, i1, px);
     ctx.fillStyle = 'rgba(70,28,4,.2)'; ctx.fillRect(...SCR);   // (the comb sits a step under the traps in value)
     ctx.restore();
-    drawHiveLip(pts, dir, side, wx);
+    drawHiveLip(pts, dir, side, wx, tiled);
   }
+  if (tiled) hiveWallAhead(top, kbs);
   // worker bees about their business on the comb (never beside a trap): crawling a little way and back, head up
   for (let q = Math.floor(bot / 230); q * 230 < top; q++) {
     if (hash2(q, 971) < 0.35) continue;
@@ -49300,7 +49467,7 @@ function drawHiveWalls() {
     const a = a0 + Math.sin(T * 0.5 + q) * 12, dir = side ? 1 : -1, x = lv.base(a)[side] + dir * (r * (1.6 + 1.4 * hash2(q, 974)));
     ctx.save(); ctx.translate(sx(x), sy(a)); ctx.rotate(-Math.PI / 2 + Math.cos(T * 0.5 + q) * 0.25 * dir); ctx.scale(0.5 * s, 0.5 * s);
     ctx.fillStyle = 'rgba(40,14,2,.35)'; ctx.beginPath(); ctx.ellipse(-2, 4, 15, 7, 0, 0, TWO_PI); ctx.fill();
-    drawHiveBee(T * 0.25 + q, q * 1.3, false); ctx.restore();
+    drawHiveBeeFast(T * 0.25 + q, q * 1.3, false); ctx.restore();
   }
 }
 // The wax lip along a wall's edge (pts: the edge traced every 2 units, [x, y, alt] on screen): thick soft wax, the faces
@@ -49308,57 +49475,10 @@ function drawHiveWalls() {
 // and the edge itself a deeper shade of the wax. The right wall's lip faces the light, the left's sits a touch darker.
 // Honey pools on some of the tops and runs off the point below into a hanging drip; a few cells along the edge are
 // chipped open. Glow only where honey catches the light.
-function drawHiveLip(pts, dir, side, wx) {
-  const T = G.t, RH = HIVE.row, n = pts.length, lit = side ? 1 : 0.82, lw = pts.map(p => 5.5 + 3 * hivN1(p[2] / 41, 77 + side)), LW = 7;
-  const face = j => { const d = (pts[Math.min(n - 1, j + 1)][0] - pts[Math.max(0, j - 1)][0]) * dir; return d > 0.15 ? 1 : d < -0.15 ? -1 : 0; };
-  // runs of the edge facing one way
-  const runs = []; let j0 = 0, f0 = face(0);
-  for (let j = 1; j < n; j++) { const f = face(j); if (f !== f0) { runs.push([j0, j, f0]); j0 = j; f0 = f; } }
-  runs.push([j0, n - 1, f0]);
+function drawHiveLip(pts, dir, side, wx, tiled) {
+  const T = G.t, RH = HIVE.row, n = pts.length, bot = pts[0][2], top = pts[n - 1][2];
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  const band = (ja, jb, off0, off1) => {
-    ctx.beginPath();
-    for (let j = ja; j <= jb; j++) { const [x, y] = pts[j]; j === ja ? ctx.moveTo(x + dir * off0 * s, y) : ctx.lineTo(x + dir * off0 * s, y); }
-    for (let j = jb; j >= ja; j--) { const [x, y] = pts[j]; ctx.lineTo(x + dir * off1 * lw[j] / LW * s, y); }
-    ctx.closePath();
-  };
-  // the lip's body in one piece first (no seams), then each run's own light
-  ctx.beginPath(); pts.forEach(([x, y], j) => j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); for (let j = n - 1; j >= 0; j--) ctx.lineTo(pts[j][0] + dir * lw[j] * 0.7 * s, pts[j][1]); ctx.closePath();
-  ctx.fillStyle = side ? 'rgb(222,146,52)' : 'rgb(200,124,40)'; ctx.fill();
-  for (const [ja, jb, f] of runs) {
-    if (jb - ja < 1) continue;
-    const xm = pts[(ja + jb) >> 1][0], g = (cols) => tpLG(xm, 0, xm + dir * LW * s, 0, cols);
-    band(ja, jb, 0, LW);
-    if (f > 0) ctx.fillStyle = g(lit > 0.9 ? ['#fff0bc', '#ffd47a', '#eeaa48', 'rgba(214,138,52,.75)', 'rgba(200,120,40,0)'] : ['#ffe4a2', '#f8c466', '#e09a3a', 'rgba(200,124,44,.75)', 'rgba(190,110,36,0)']);
-    else if (f < 0) ctx.fillStyle = g(lit > 0.9 ? ['#c06c20', '#d68a34', '#c47a2a', 'rgba(150,72,16,.6)', 'rgba(140,64,14,0)'] : ['#a85a18', '#c27628', '#b46c22', 'rgba(130,60,12,.6)', 'rgba(120,54,10,0)']);
-    else ctx.fillStyle = g(['#f0bc62', '#e8a446', '#d08a34', 'rgba(170,90,24,.6)', 'rgba(160,80,20,0)']);
-    ctx.fill();
-  }
-  // the rounding: a sheen along the arris of the tops, a soft dark under the round of the undersides
-  for (const [ja, jb, f] of runs) {
-    if (jb - ja < 2 || f === 0) continue;
-    ctx.beginPath(); for (let j = ja + 1; j < jb; j++) { const [x, y] = pts[j]; const xx = x + dir * (f > 0 ? 2.2 : 4.6) * s; j === ja + 1 ? ctx.moveTo(xx, y) : ctx.lineTo(xx, y); }
-    ctx.strokeStyle = f > 0 ? `rgba(255,252,228,${0.75 * lit + 0.1})` : 'rgba(110,46,6,.4)'; ctx.lineWidth = (f > 0 ? 1.3 : 2) * s; ctx.stroke();
-  }
-  // the crease behind the lip (a dark furrow, the next wax just catching the light) and the edge's own deep shade
-  const line = (off, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w * s; ctx.beginPath(); pts.forEach(([x, y], j) => { const xx = x + dir * off * s; j ? ctx.lineTo(xx, y) : ctx.moveTo(xx, y); }); ctx.stroke(); };
-  line(0.2, side ? 'rgba(150,72,12,.85)' : 'rgba(130,60,10,.9)', 1);
-  // the comb rows meet at the notches: a short wax seam into the lip
-  const bot = pts[0][2], top = pts[n - 1][2];
-  for (let i = Math.floor(bot / RH); i * RH <= top; i++) {
-    const a = i * RH, x = sx(wx(a)), y = sy(a);
-    ctx.strokeStyle = 'rgba(110,44,6,.5)'; ctx.lineWidth = 1.1 * s; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dir * 5 * s, y + 0.5 * s); ctx.stroke();
-  }
-  // chipped cells along the edge: a bite out of the lip's underside showing the dark cell behind, its broken wall lit
-  for (let i = Math.floor(bot / RH); i * RH <= top; i++) {
-    const hj = hash2(i, 1501 + side); if (hj > 0.1) continue;
-    const ac = (i + 0.5) * RH, a0 = ac - 2, a1 = ac - RH * 0.42, e0 = wx(a0), e1 = wx(a1), d = 4.5 + 2 * hash2(i, 1502);
-    const P = [[e0, a0], [e0 + dir * 1.4, a0 - 1.6], [lerp(e0, e1, 0.3) + dir * d, lerp(a0, a1, 0.3)], [lerp(e0, e1, 0.55) + dir * (d - 1.6), lerp(a0, a1, 0.55) + 0.8], [lerp(e0, e1, 0.8) + dir * (d + 0.8), lerp(a0, a1, 0.8)], [e1 + dir * 0.6, a1], [e1, a1 - 0.6]];
-    ctx.beginPath(); P.forEach(([x, a], k) => k ? ctx.lineTo(sx(x), sy(a)) : ctx.moveTo(sx(x), sy(a))); ctx.closePath();
-    ctx.fillStyle = tpLG(sx(e0), 0, sx(e0 + dir * d), 0, ['#3e1604', '#6a2a06']); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,224,150,.75)'; ctx.lineWidth = 1 * s; ctx.beginPath(); for (let k = 2; k <= 5; k++) { const [x, a] = P[k]; k === 2 ? ctx.moveTo(sx(x), sy(a) + 0.8 * s) : ctx.lineTo(sx(x), sy(a) + 0.8 * s); } ctx.stroke();
-    ctx.strokeStyle = 'rgba(96,36,4,.8)'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); for (let k = 1; k <= 3; k++) { const [x, a] = P[k]; k === 1 ? ctx.moveTo(sx(x), sy(a)) : ctx.lineTo(sx(x), sy(a)); } ctx.stroke();
-  }
+  if (tiled) hiveWallBlit(side, 3, bot, top); else hiveLipBody(ctx, pts, dir, side, wx, sx, sy);
   // honey pooled on a top and running off its point into a drip, swelling and creeping (never beside a trap)
   for (let i = Math.floor(bot / RH) - 1; i * RH < top; i++) {
     const hj = hash2(i, 961 + side); if (hj > 0.2) continue;
@@ -49388,29 +49508,52 @@ function drawHiveLip(pts, dir, side, wx) {
 // A sheet of comb hanging down the hive's depths (screen units: its centre x, the bottom of its body yb, width w; id seeds
 // its shape): straight-ish sides that pinch in a little, a ragged bottom of rounded tongues of different lengths with
 // pointed drips of wax and honey between them. Returns the path builder and where its tongues end (for the honey).
-function hiveSheetPath(x, yb, w, top, id) {
-  const n = 3 + Math.floor(hash2(id, 701) * 3), tips = [], L = x - w / 2, R = x + w / 2, sag = w * (0.3 + 0.16 * hash2(id, 702)), lean = (hash2(id, 706) - 0.5) * 0.3;
+// (its shape is worked out once per sheet, relative to its bottom-left corner, and kept with its fixed gradients: hiveSheetGeo)
+const hiveSheetCache = new Map();
+function hiveSheetGeo(id, w) {
+  const key = id + '|' + w.toFixed(3); let g = hiveSheetCache.get(key); if (g) return g;
+  if (hiveSheetCache.size > 96) hiveSheetCache.clear();
+  const n = 3 + Math.floor(hash2(id, 701) * 3), tips = [], sag = w * (0.3 + 0.16 * hash2(id, 702)), lean = (hash2(id, 706) - 0.5) * 0.3;
   const dep = []; for (let k = 0; k < n; k++) dep.push(w * (0.05 + 0.1 * hash2(id * 7 + k, 703)));
   // the bottom: a broad rounded belly (lowest a little off centre) carrying n tongues, a drip between each two
-  const pts = [], M = n * 10;
+  const pts = [], M = n * 10, dls = [];
   for (let q = 0; q <= M; q++) {
     const u = q / M, k = Math.min(n - 1, Math.floor(u * n)), fu = u * n - k, belly = Math.pow(Math.sin(Math.PI * clamp(u + lean * Math.sin(Math.PI * u), 0, 1)), 0.8);
-    pts.push([L + w * u, yb - sag * (1 - belly) + dep[k] * Math.pow(Math.sin(Math.PI * fu), 0.7)]);
+    pts.push([w * u, -sag * (1 - belly) + dep[k] * Math.pow(Math.sin(Math.PI * fu), 0.7)]);
     if (q % 10 === 0 && q > 0 && q < M) { const [bx, by] = pts[pts.length - 1], dl = (5 + 9 * hash2(id * 5 + k, 705)) * s; tips.push([bx, by + dl, true]); }
   }
+  for (let q = 10; q < M; q += 10) dls[q] = (5 + 9 * hash2(id * 5 + q / 10 - 1, 705)) * s;
   for (let k = 0; k < n; k++) { const p = pts[k * 10 + 5]; tips.push([p[0], p[1], false]); }
+  g = { pts, tips, sag, M, dls, grads: new Map() }; hiveSheetCache.set(key, g); return g;
+}
+function hiveSheetPath(x, yb, w, top, id) {
+  const g = hiveSheetGeo(id, w), { pts, M, dls, sag } = g, L = x - w / 2, R = x + w / 2;
+  const tips = g.tips.map(([tx, ty, d]) => [L + tx, yb + ty, d]);
   const path = () => {
     ctx.beginPath(); ctx.moveTo(L - w * 0.04, top);
-    ctx.bezierCurveTo(L - w * 0.06, lerp(top, pts[0][1], 0.5), L + w * 0.02, lerp(top, pts[0][1], 0.85), pts[0][0], pts[0][1]);
+    ctx.bezierCurveTo(L - w * 0.06, lerp(top, yb + pts[0][1], 0.5), L + w * 0.02, lerp(top, yb + pts[0][1], 0.85), L + pts[0][0], yb + pts[0][1]);
     for (let q = 1; q <= M; q++) {
-      const [px2, py2] = pts[q];
-      if (q % 10 === 0 && q < M) { const dl = (5 + 9 * hash2(id * 5 + q / 10 - 1, 705)) * s; ctx.lineTo(px2 - 2.4 * s, py2 - 0.5 * s); ctx.quadraticCurveTo(px2, py2 + dl * 1.3, px2 + 2.4 * s, py2 - 0.5 * s); }
+      const px2 = L + pts[q][0], py2 = yb + pts[q][1];
+      if (q % 10 === 0 && q < M) { const dl = dls[q]; ctx.lineTo(px2 - 2.4 * s, py2 - 0.5 * s); ctx.quadraticCurveTo(px2, py2 + dl * 1.3, px2 + 2.4 * s, py2 - 0.5 * s); }
       else ctx.lineTo(px2, py2);
     }
-    ctx.bezierCurveTo(R - w * 0.02, lerp(top, pts[M][1], 0.85), R + w * 0.06, lerp(top, pts[M][1], 0.5), R + w * 0.04, top);
+    ctx.bezierCurveTo(R - w * 0.02, lerp(top, yb + pts[M][1], 0.85), R + w * 0.06, lerp(top, yb + pts[M][1], 0.5), R + w * 0.04, top);
     ctx.closePath();
   };
-  return { path, tips, sag };
+  // a gradient fixed relative to the sheet (made once: name, its maker)
+  const grad = (name, make) => { let q = g.grads.get(name); if (!q) { q = make(); g.grads.set(name, q); } return q; };
+  return { path, tips, sag, grad };
+}
+// one comb cell's outline (screen radius cr, a sheet's colour) in a tile one row tall and two columns wide (the cell in the
+// middle), repeating across every other column and down; cached
+const hiveColCache = new Map();
+function hiveCellColumn(cr, col) {
+  const key = Math.round(cr * dpr * 8) + '|' + col.join(',') + '|' + Math.round(s * dpr * 100); let c = hiveColCache.get(key); if (c) return c;
+  if (hiveColCache.size > 12) hiveColCache.clear();
+  const Pr = cr * 1.73; c = document.createElement('canvas'); c.width = Math.max(2, Math.round(cr * 3 * dpr)); c.height = Math.max(2, Math.round(Pr * dpr));
+  const g = c.getContext('2d'); g.setTransform(c.width / (cr * 3), 0, 0, c.height / Pr, c.width / 2, c.height / 2);
+  g.beginPath(); hivHex(g, 0, 0, cr * 0.84); g.strokeStyle = rgb(col.map(v => v * 0.72), 0.5); g.lineWidth = 1.3 * s; g.stroke();
+  c.pat = ctx.createPattern(c, 'repeat'); hiveColCache.set(key, c); return c;
 }
 // one layer of hanging comb sheets (parallax f, slot spacing in world units, colour col, how hazy): each a soft slab a
 // touch lighter than the haze, cells showing faintly where light comes through the thin wax near its bottom, its left
@@ -49424,24 +49567,34 @@ function drawHiveSheets(f, slot, seed, col, opt) {
     if (opt.sides) { const sd = hash2(i, seed + 3) < 0.5 ? -1 : 1; x = cssW / 2 + sd * (playW * (0.3 + 0.25 * hash2(i, seed + 2))); }
     const top = Math.min(yb - w * (opt.h0 + opt.h1 * hash2(i, seed + 4)), -drawPad * s - 30);   // hanging from comb above the view, so no top edge shows
     if (yb + w < -60 || top > H + 60) continue;
-    const { path, tips, sag } = hiveSheetPath(x, yb, w, top, i * 31 + seed);
+    const { path, tips, sag, grad } = hiveSheetPath(x, yb, w, top, i * 31 + seed);
     ctx.save(); ctx.globalAlpha = opt.al;
-    path(); ctx.fillStyle = tpLG(x - w / 2, 0, x + w / 2, 0, [rgb(col.map(v => v * 1.16 + 8)), rgb(col), rgb(col.map(v => v * 0.8))]); ctx.fill();
+    path(); ctx.fillStyle = grad('body' + x.toFixed(2), () => tpLG(x - w / 2, 0, x + w / 2, 0, [rgb(col.map(v => v * 1.16 + 8)), rgb(col), rgb(col.map(v => v * 0.8))])); ctx.fill();
     ctx.save(); path(); ctx.clip();
-    // light through the thin wax low down: a warm glow, and the cells it shows
+    // light through the thin wax low down: a warm glow (its gradient kept, moved down with the sheet), and the cells it shows
     const gy = yb - sag * 0.2, gr = w * 0.7;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = tpRG(x, gy, gr, [`rgba(255,170,70,${opt.glow})`, `rgba(255,150,50,${opt.glow * 0.3})`, 'rgba(255,150,50,0)']); ctx.fillRect(x - gr, gy - gr, gr * 2, gr * 2);
+    ctx.translate(0, gy); ctx.fillStyle = grad('glow' + x.toFixed(2), () => tpRG(x, 0, gr, [`rgba(255,170,70,${opt.glow})`, `rgba(255,150,50,${opt.glow * 0.3})`, 'rgba(255,150,50,0)'])); ctx.fillRect(x - gr, -gr, gr * 2, gr * 2); ctx.translate(0, -gy);
     ctx.globalCompositeOperation = 'source-over';
     if (opt.cells) {
-      const cr = opt.cells * s, ox0 = x - w / 2 - cr;
-      ctx.beginPath();
-      for (let cx = ox0, k = 0; cx < x + w / 2 + cr; cx += cr * 1.5, k++) for (let cy = yb + w * 0.4 - (k & 1 ? cr * 0.87 : 0); cy > top - cr; cy -= cr * 1.73) hivHex(ctx, cx, cy, cr * 0.84);
-      ctx.strokeStyle = rgb(col.map(v => v * 0.72), 0.5); ctx.lineWidth = 1.3 * s; ctx.stroke();
+      // (the even and the odd columns are each one rect filled from a cached one-cell tile repeating across and down them,
+      // only the rows on screen: stroking every hex of every sheet each frame cost ~6 ms)
+      const cr = opt.cells * s, ox0 = x - w / 2 - cr, Pr = cr * 1.73, tile = hiveCellColumn(cr, col), hw = (cr * 1.68 + 1.3 * s) / 2 + 1;
+      const vy0 = -drawPad * s - 40, vy1 = H + drawPad * s + 40, nk = Math.ceil((w + 2 * cr) / (cr * 1.5) - 1e-9);
+      ctx.fillStyle = tile.pat;
+      for (let odd = 0; odd < 2; odd++) {
+        const kL = odd, kR = nk - 1 - ((nk - 1 - odd) & 1); if (kR < kL) continue;
+        const c0 = yb + w * 0.4 - (odd ? cr * 0.87 : 0), jN = Math.ceil((c0 - top + cr) / Pr) - 1;
+        const ja = Math.max(0, Math.ceil((c0 - vy1) / Pr - 0.5)), jb = Math.min(jN, Math.floor((c0 - vy0) / Pr + 0.5));
+        if (ja > jb) continue;
+        const cxL = ox0 + kL * cr * 1.5, cxR = ox0 + kR * cr * 1.5;
+        tile.pat.setTransform(new DOMMatrix([cr * 3 / tile.width, 0, 0, Pr / tile.height, cxL - cr * 1.5, c0 - Pr / 2]));
+        ctx.fillRect(cxL - hw, c0 - jb * Pr - Pr / 2, cxR - cxL + 2 * hw, (jb - ja + 1) * Pr);
+      }
       ctx.fillStyle = tpLG(0, top, 0, yb + w * 0.3, [rgbaA(col, 0.95), rgbaA(col, 0.5), rgbaA(col, 0)]); ctx.fillRect(x - w, top, w * 2, yb - top + w * 0.3);
     }
     // the shade under its belly and its lit left edge
-    ctx.fillStyle = tpLG(x + w * 0.2, 0, x + w * 0.6, 0, ['rgba(30,12,4,0)', 'rgba(30,12,4,.22)']); ctx.fillRect(x - w, top, w * 2, yb - top + w);
+    ctx.fillStyle = grad('shade' + x.toFixed(2), () => tpLG(x + w * 0.2, 0, x + w * 0.6, 0, ['rgba(30,12,4,0)', 'rgba(30,12,4,.22)'])); ctx.fillRect(x - w, top, w * 2, yb - top + w);
     ctx.restore();
     if (opt.rim) {
       ctx.save(); path(); ctx.clip();
@@ -95163,6 +95316,6 @@ requestAnimationFrame(frame);
 // play-testing hook: with ?debug in the URL, scripts can read the run and drive it (never on in a normal page)
 if (/[?&]debug\b/.test(location.search)) window.CR = { get G() { return G; }, get pCaps() { return pCaps; }, input, recomputeThrust, start, revive, monsterGap, pickR, hazardShapes, batPos, grabShapes, AMMO, COMEBACK, RULES, WALLET, cfg, settings, steerRange, get screen() { return currentScreen; }, setPaused(v) { paused = v; }, pilotBounds, pilot: () => pilot(), die: (c, h) => die(c, h), paintMissionBanner, SND, sfx, TRACKS, drawCoconutArt, drawCoconutFast, drawMonsterThumb, monster: () => monster(), MF, SF, THR, STU, KIT, studioOf, stemsNeeded, AUDIO_BAKED, stExport, makeShift, shiftSet, zoneSound, makeZoneFx, zoneApply, zoneBeat, startProf() { PROF = []; }, stopProf() { const p = PROF; PROF = null; return p; }, get MF() { return MF; } };
 if (window.CR) window.CR.adv = { start: advStart, map: advMap, data: advData, ADVENTURE, ISLAND, ISL, ISLV, islSelect, islTap, islSX, islSY, advState, advUnlocked, get reveal() { return advReveal; }, BOSS, get boss() { return G && G.boss; }, bossVolley, capsSpan, save: advSaveNow, startSel(id) { advFromSel = true; advStart(id); }, sel: advSelOpen, get fromSel() { return advFromSel; }, TEMPLE, templeShapes, axeGeom, totemState, jetState, advGoalList };
-if (window.CR) Object.assign(window.CR.adv, { HIVE, hiveShapes, beeState, dripState, guardPos, createHiveLevel });
+if (window.CR) Object.assign(window.CR.adv, { HIVE, hiveShapes, beeState, dripState, guardPos, createHiveLevel, hiveCaches: () => [HIVE_WT.tiles.size, hiveBeeCache.size, hiveColCache.size, hiveCellCache.size, HIVE_WT.live] });
 })();
 </script>
