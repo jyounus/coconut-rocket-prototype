@@ -6635,6 +6635,182 @@ const basaltStats = { seeds: 0, traps: 0, searches: 0, worst: 0, opals: 0, pick:
 }
 const basaltSummary = () => `PASS: Basalt Deep: ${basaltStats.seeds} layouts × ${basaltStats.len} m, only its own traps (${Object.entries(basaltStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${basaltStats.minW.toFixed(0)}+ wide, wall slope ${basaltStats.slope.toFixed(2)} (max ${BD.RULES.maxWallSlope}); ripples stop ${basaltStats.ripShut.toFixed(0)}+ short of the far wall, curtain gaps ${basaltStats.gap.toFixed(0)}+, resting crickets leave ${basaltStats.crLane.toFixed(0)}+, magma streams leave ${basaltStats.jetLane.toFixed(0)}+ lanes; ${basaltStats.nests} glow-worm nests ${basaltStats.nestClear.toFixed(0)}+ from traps; beats ${basaltStats.beatGap.toFixed(0)}+ apart; pickups ${basaltStats.pick.toFixed(1)}+ from any reach; ${basaltStats.traps} beats × 6 phases and ${basaltStats.opals} fire opals flown by the widest pilot (${basaltStats.searches} searches, slowest ${basaltStats.worst.toFixed(1)} s)`;
 // (test slot: Basalt Deep, island level 14)
+// ---------- Adventure: Geode King (island level 15), an authored approach with its own traps, then the boss ----------
+// As the Anthill's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only move
+// phases and looks), then every beat of the approach (and the Throne Hall's first beats) and every crown jewel flown
+// by a time-space search for the widest pilot on the traps' own clocks from 6 start phases. Lethal: the crossed
+// halberds, the guards' gauntlets, the balconies, the chandeliers with their chains and cranes, the mirror panels, the
+// gongs and their frames. A gong's ring of sound only shoves (never lethal), so the searches fly through it.
+const GK = new Function(regions.join('\n') + '\nreturn { createGeodekingLevel, geodekingShapes, geodekingDanger, geodekingGate, geodekingHalberdAt, geodekingPole, geodekingChandAt, geodekingChandBot, geodekingMirrorGap, geodekingGongAt, geodekingGongTouch, GEODEKING, GEODEKING_STAGE, GEODEKING_TYPES, ADV_GEODEKING, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const geodekingStats = { seeds: 0, traps: 0, searches: 0, worst: 0, jewels: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, gate: 0, kinds: {}, open: Infinity, shut: 0, chandGap: Infinity, chandPlug: 0, chandSide: Infinity, mirGap: Infinity, mirV: 0, arena: 0 };
+{
+  const R = GK.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = GK.ADV_GEODEKING, X = GK.GEODEKING;
+  const gfail = (rule, d) => fail('geodeking: ' + rule, d);
+  if (st0.theme !== 'geodeking' || !st0.boss || !(st0.reward > 0) || !(st0.hp > 0)) gfail('Geode King is a themed boss stage with a reward and its own boss health', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'boss') || !st0.goals.some(g => g.k === 'geodekingJewels' && g.n === 3) || !st0.goals.some(g => g.k === 'geodekingGong' && g.n > 0)) gfail('three missions: beat the King, 3 crown jewels and gongs slipped past', JSON.stringify(st0.goals));
+  // the approach's order: halberds, then mirrors, then chandeliers, then gongs, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { halberdTwin: 'geodekingHalberd', mirrorPair: 'geodekingMirror', mirrorHalberd: 'geodekingMirror', chandMirror: 'geodekingChand', chandHalberd: 'geodekingChand', chandGong: 'geodekingChand', halberdMirror: 'geodekingHalberd', gongHalberd: 'geodekingGong', gongChand: 'geodekingGong', gongMirror: 'geodekingGong' };
+    const S = GK.GEODEKING_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) gfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) gfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'geodekingHalberd,geodekingMirror,geodekingChand,geodekingGong') gfail('the palace teaches halberds, then mirrors, then chandeliers, then gongs', seen.join());
+    if (!S.some(sec => sec.calm && !sec.gate && sec !== S[0])) gfail('the palace has a breather', '');
+    if (!S[S.length - 1].gate) gfail('the approach ends at the Throne Doors', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (GK.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) GK.geodekingShapes(h, t, S); return S; };
+  // the widest free run across the shaft at height a against shapes S (for a pilot of width W)
+  const freeRun = (level, S, a) => { const [l, r] = level.walls(a); let best = 0, run = 0; for (let x = l; x <= r; x += 2) { let hit = false; for (const q of S) if (GK.shapeDist(q, x, a) < 0.5) { hit = true; break; } if (hit) run = 0; else { run += 2; best = Math.max(best, run); } } return best; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.geodekingDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = GK.createGeodekingLevel(GK.advSeed(st), st), hz = [], fr = [];
+    geodekingStats.seeds++; geodekingStats.gate = level.gate / 10;
+    if (Math.abs(level.gate - GK.geodekingGate()) > 1e-6) gfail('the gate sits at the top of the approach', `${level.gate}`);
+    const CHECK = level.gate + 9000;   // the approach and the first stretch of the Throne Hall
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < CHECK; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) gfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) gfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    for (const h of hz) if (!GK.GEODEKING_TYPES.has(h.type)) gfail('the palace only has its own traps', h.type);
+    for (const h of hz) geodekingStats.kinds[h.type] = (geodekingStats.kinds[h.type] || 0) + (k || h.alt > level.gate ? 0 : 1);
+    for (const h of level.all.hazards) if (h.alt > level.gate && (h.type === 'geodekingHalberd' || h.type === 'geodekingChand')) gfail('the Throne Hall never has a trap that shuts the way (the King is fought there)', `${h.type} at ${h.alt}`);
+    if (level.all.hazards.some(h => h.lo < level.gate + 500 && h.hi > level.gate - 400)) gfail('the Throne Doors are clear of traps either side of the gate', '');
+    const beats = level.beats.filter(b => Math.min(...b.hs.map(h => h.lo)) < CHECK);
+    for (let i = 1; i < beats.length; i++) { const p = beats[i - 1], q = beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); geodekingStats.beatGap = Math.min(geodekingStats.beatGap, g); if (g < 80) gfail('beats never crowd each other', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    for (const b of beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) { const p = b.hs[i], q = b.hs[j]; if (p.hi > q.lo && q.hi > p.lo) gfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`); }
+    for (let a = 0; a < CHECK; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      geodekingStats.minW = Math.min(geodekingStats.minW, r - l); geodekingStats.slope = Math.max(geodekingStats.slope, l2 - l, r - r2);
+    }
+    if (geodekingStats.minW < R.minWidth) gfail('the shaft is never narrower than minWidth', geodekingStats.minW.toFixed(1));
+    if (geodekingStats.slope > R.maxWallSlope) gfail('the walls never step in faster than maxWallSlope', geodekingStats.slope.toFixed(2));
+    const straight = (h, lo, hi) => { for (let a = lo; a <= hi; a += 4) { const [l, r] = level.walls(a); if (Math.abs(l - h.L) > 0.5 || Math.abs(r - h.R) > 0.5) return false; } return true; };
+    for (const h of hz) {
+      if (h.type === 'geodekingHalberd') {
+        // at rest the guards leave the shaft open; crossed, the halberds shut it (the tips meet in the middle)
+        let open = Infinity, shut = 0;
+        for (let t = 0; t < h.P; t += 0.05) {
+          const s1 = GK.geodekingHalberdAt(h, t), S = GK.geodekingShapes(h, t, []);
+          if (s1.ph === 'rest') for (let a = h.alt; a <= h.hi; a += 15) open = Math.min(open, freeRun(level, S, a));
+          if (s1.ph === 'hold') shut = Math.min(shut, Math.max(...[h.alt - 6, h.alt, h.alt + 6].map(a => freeRun(level, S, a))));
+          if (s1.th < -X.halberd.wind - 1e-6 || s1.th > Math.PI / 2 + 0.05) gfail('a halberd only swings between upright and level', `${h.alt} ${s1.th}`);
+        }
+        geodekingStats.open = Math.min(geodekingStats.open, open); geodekingStats.shut = Math.max(geodekingStats.shut, shut);
+        if (open < W + 120) gfail('resting guards leave the shaft wide open', `${h.alt} ${open.toFixed(0)}`);
+        if (shut > W * 0.6) gfail('crossed halberds really shut the way', `${h.alt} ${shut.toFixed(0)}`);
+        if (!straight(h, h.lo, h.hi)) gfail('the walls are straight where the guards stand', `${h.alt}`);
+        // the lift only moves the halberds up and away (no point of the haft or head ever moves down during it)
+      }
+      if (h.type === 'geodekingChand') {
+        const C = X.chand, gap = C.gap, [l, r] = level.walls(h.alt);
+        geodekingStats.chandGap = Math.min(geodekingStats.chandGap, gap - W);
+        if (gap < W + 80) gfail('a chandelier\'s gap fits the widest pilot with room', `${h.alt}`);
+        let plug = 0; for (let t = 0; t < h.P; t += 0.02) { const s1 = GK.geodekingChandAt(h, t); if (GK.geodekingChandBot(h, s1.e) < h.alt - C.bal - 0.5) gfail('a chandelier never drops below its balconies', `${h.alt}`); if (s1.ph === 'hold') plug = Math.max(plug, freeRun(level, GK.geodekingShapes(h, t, []), h.alt + 8)); }
+        geodekingStats.chandPlug = Math.max(geodekingStats.chandPlug, plug); if (plug > W * 0.7) gfail('a dropped chandelier plugs its gap', `${h.alt} ${plug.toFixed(0)}`);
+        // hanging high, the far side (away from its crane) leaves a wide way round it
+        const far = h.side > 0 ? r - (h.gx + C.R) : (h.gx - C.R) - l; geodekingStats.chandSide = Math.min(geodekingStats.chandSide, far);
+        if (far < W + 40) gfail('a chandelier leaves a wide way round it on its far side', `${h.alt} ${far.toFixed(0)}`);
+        if (!straight(h, h.lo, h.hi)) gfail('the walls are straight round a chandelier', `${h.alt}`);
+      }
+      if (h.type === 'geodekingMirror') {
+        let gmin = Infinity, v = 0, prev = null;
+        for (let t = 0; t < h.P; t += 0.05) { const S = GK.geodekingShapes(h, t, []); gmin = Math.min(gmin, freeRun(level, S, h.alt)); const gc = GK.geodekingMirrorGap(h, t); if (prev != null) v = Math.max(v, Math.abs(gc - prev) / 0.05); prev = gc; }
+        geodekingStats.mirGap = Math.min(geodekingStats.mirGap, gmin); geodekingStats.mirV = Math.max(geodekingStats.mirV, v);
+        if (gmin < W + 70) gfail('the mirror gap always fits the widest pilot with room', `${h.alt} ${gmin.toFixed(0)}`);
+        if (v > 140) gfail('the mirror gap drifts slowly enough to follow', `${h.alt} ${v.toFixed(0)}`);
+        if (!straight(h, h.lo, h.hi)) gfail('the walls are straight where the mirrors slide', `${h.alt}`);
+      }
+      if (h.type === 'geodekingGong') {
+        const s0 = JSON.stringify(GK.geodekingShapes(h, 0, []));
+        for (let t = 0; t < h.P; t += 0.1) if (JSON.stringify(GK.geodekingShapes(h, t, [])) !== s0) gfail('a gong\'s lethal parts never move (its ring only shoves)', `${h.alt}`);
+        const [l, r] = level.walls(h.alt); if ((r - l) - (2 * X.gong.R + X.gong.out + 8) < W + 150) gfail('a gong leaves most of the shaft open', `${h.alt}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = GK.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) gfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the crown jewels, the Treasury's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(GK.laneSize().w / 2 + 6 + GK.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 220 < f.alt && h.hi + 220 > f.alt) for (const q of GK.geodekingDanger(h)) dd = Math.min(dd, GK.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) geodekingStats.pick = Math.min(geodekingStats.pick, dd);
+      if (dd < need - 0.5) gfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < GK.pickR(fr[i]) + GK.pickR(fr[j]) + GK.PICK_GAP - 0.01) gfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'jewel').length !== 3 || fr.some(f => f.kind === 'jewel' && f.alt > level.gate)) gfail('the approach holds exactly 3 crown jewels', `${fr.filter(f => f.kind === 'jewel').length}`);
+    if (level.all.hazards.filter(h => h.type === 'geodekingGong' && h.alt < level.gate + 9000).length < st0.goals.find(g => g.k === 'geodekingGong').n + 3) gfail('there are plenty of gongs for the unshaken mission', '');
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) gfail('the palace keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    const flown = beats.filter(b => !b.arena || b.a < level.gate + 5000);
+    for (const b of flown) {
+      const bi = beats.indexOf(b), prevTop = bi > 0 ? Math.max(...beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      geodekingStats.traps++; if (b.arena) geodekingStats.arena++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        geodekingStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) gfail('every trap can be passed by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.geodekingDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else geodekingStats.worst = Math.max(geodekingStats.worst, tm);
+      }
+    }
+    // every crown jewel can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'jewel')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        geodekingStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < GK.COCO_R + W / 2 - 4);
+        if (tm < 0) gfail('every crown jewel can be grabbed and escaped by the widest pilot', `jewel at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      geodekingStats.jewels++;
+    }
+  }
+}
+const geodekingSummary = () => `PASS: Geode King: ${geodekingStats.seeds} layouts, a ${geodekingStats.gate} m approach to the Throne Doors then the Throne Hall, only its own traps (${Object.entries(geodekingStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')} before the gate), each taught alone first; shaft ${geodekingStats.minW.toFixed(0)}+ wide, wall slope ${geodekingStats.slope.toFixed(2)} (max ${GK.RULES.maxWallSlope}); resting guards leave ${geodekingStats.open.toFixed(0)}+ open and crossed halberds ${geodekingStats.shut.toFixed(0)} at most; chandelier gaps ${geodekingStats.chandGap.toFixed(0)}+ beyond the widest pilot, plugged ${geodekingStats.chandPlug.toFixed(0)} at most, ${geodekingStats.chandSide.toFixed(0)}+ round the far side; mirror gaps ${geodekingStats.mirGap.toFixed(0)}+ drifting ${geodekingStats.mirV.toFixed(0)} u/s at most; gongs never move (their rings only shove); beats ${geodekingStats.beatGap.toFixed(0)}+ apart; pickups ${geodekingStats.pick.toFixed(1)}+ from any reach; ${geodekingStats.traps} beats (${geodekingStats.arena} in the Throne Hall) × 6 phases and ${geodekingStats.jewels} crown jewels flown by the widest pilot (${geodekingStats.searches} searches, slowest ${geodekingStats.worst.toFixed(1)} s)`;
 // (test slot: Geode King, island level 15)
 // (test slot: Magma Core, island level 19)
 // (test slot: Bellows Drake, island level 20)
@@ -6673,4 +6849,5 @@ console.log(pagodaSummary());
 console.log(snapjawSummary());
 console.log(basaltSummary());
 console.log(idolsSummary());
+console.log(geodekingSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
