@@ -5638,6 +5638,164 @@ const sandstormSummary = () => `PASS: Sandstorm Canyon: ${sandstormStats.seeds} 
 // (test slot: Sandstorm Canyon, island level 38)
 // (test slot: Anthill Underworks, island level 39)
 // (test slot: Bamboo Pagoda, island level 40)
+// ---------- Adventure: Hollow Palm (island level 41), an authored stage with its own traps ----------
+// As the Monkey Carnival's checks: every rule on the stage's layout as the game builds it (and 8 other seeds, which only
+// move phases, aims and looks), then every beat and every jewel beetle flown by a time-space search for the widest
+// pilot on the traps' own clocks from 6 start phases. The searches treat the sap blobs as solid too (they only gum you
+// up in play), so every beat also has a clean line: the "never get stuck in sap" mission can always be flown.
+const HP = new Function(regions.join('\n') + '\nreturn { createHollowpalmLevel, hollowpalmShapes, hollowpalmDanger, hollowpalmEnd, hollowpalmSapGeo, hollowpalmDripAt, hollowpalmPeckAt, hollowpalmBeak, hollowpalmCrabAt, hollowpalmOwlAt, hollowpalmWingPt, HOLLOWPALM, HOLLOWPALM_STAGE, HOLLOWPALM_TYPES, ADV_HOLLOWPALM, RULES, advSeed, shapeDist, laneSize, pickR, COCO_R, PICK_GAP, UNITS_PER_M };')();
+const hollowpalmStats = { seeds: 0, traps: 0, searches: 0, worst: 0, bugs: 0, pick: Infinity, minW: Infinity, slope: 0, beatGap: Infinity, len: 0, kinds: {}, sapLane: Infinity, peckLane: Infinity, crabLane: Infinity, owlLane: Infinity, drop: 0 };
+{
+  const R = HP.RULES, W = PILOT_W, Hh = PILOT_H, M = 4, st0 = HP.ADV_HOLLOWPALM, X = HP.HOLLOWPALM;
+  const hfail = (rule, d) => fail('hollowpalm: ' + rule, d);
+  if (st0.theme !== 'hollowpalm' || !(st0.reward > 0)) hfail('Hollow Palm is a themed stage with a reward', JSON.stringify(st0));
+  if (!Array.isArray(st0.goals) || st0.goals.length !== 3 || !st0.goals.some(g => g.k === 'finish') || !st0.goals.some(g => g.k === 'hollowpalmBugs' && g.n === 3) || !st0.goals.some(g => g.k === 'hollowpalmClean')) hfail('three missions: the crown, 3 jewel beetles and never stuck in sap', JSON.stringify(st0.goals));
+  if (Math.abs(st0.len * HP.UNITS_PER_M - HP.hollowpalmEnd()) > 1e-6) hfail('the stage length matches its layout', `${st0.len}`);
+  // the stage's order: sap, then peckers, then crabs, then owls, each taught alone (never faster first)
+  {
+    const firsts = {}, seen = [], base = { sapPair: 'hollowpalmSap', sapStair: 'hollowpalmSap', peckPair: 'hollowpalmPecker', peckStack: 'hollowpalmPecker', peckSap: 'hollowpalmPecker', crabPair: 'hollowpalmCrab', crabPeck: 'hollowpalmCrab', crabSap: 'hollowpalmCrab', owlPair: 'hollowpalmOwl', owlPeck: 'hollowpalmOwl', owlSap: 'hollowpalmOwl', owlCrab: 'hollowpalmOwl' };
+    const S = HP.HOLLOWPALM_STAGE;
+    for (const sec of S) if (sec.beats) for (const [, kind, o] of sec.beats) {
+      const b = base[kind] || kind;
+      if (!firsts[b]) { firsts[b] = o; seen.push(b); if (kind !== b) hfail('each trap is introduced alone first', `${kind} in ${sec.name}`); }
+      else if (kind === b && o.P && firsts[b].P && o.P > firsts[b].P + 1e-9) hfail('a trap is never slower than its introduction', `${kind} in ${sec.name}`);
+    }
+    if (seen.join() !== 'hollowpalmSap,hollowpalmPecker,hollowpalmCrab,hollowpalmOwl') hfail('the palm teaches sap, then peckers, then crabs, then owls', seen.join());
+    if (!S.some(sec => sec.calm && !sec.finish && sec !== S[0])) hfail('the palm has a breather', '');
+    if (!S[S.length - 1].finish) hfail('the stage ends at the crown', '');
+  }
+  const capHit = (S, x, a, m) => {
+    const r = W / 2 + m, half = Math.max(0, Hh / 2 - W / 2);
+    for (const q of S) for (const da of half ? [-half, 0, half] : [0]) if (HP.shapeDist(q, x, a + da) < r) return true;
+    return false;
+  };
+  const allShapes = (traps, t, S) => { for (const h of traps) HP.hollowpalmShapes(h, t, S); return S; };
+  const reachOf = (S, d) => { let reach = -Infinity; for (const q of S) { const xs = q.k === 'c' ? [q.x + d * q.r] : [q.x0 + d * q.r, q.x1 + d * q.r]; for (const x of xs) reach = Math.max(reach, d * x); } return reach; };
+  function fly(level, traps, x0, a0, t0, goal, lo, hi, via) {
+    const DT = 1 / 15, DX = 11, DA = 11, up = Math.round(440 * DT / DA), dn = Math.round(380 * DT / DA), sd = Math.round(330 * DT / DX);
+    const nA = Math.ceil((hi - lo) / DA) + 1, nX = Math.ceil(400 / DX) + 1, V = 1e6;
+    let front = new Set([Math.round(x0 / DX) * 1000 + Math.round((a0 - lo) / DA)]);
+    for (let step = 1; step <= 18 / DT; step++) {
+      const t = t0 + step * DT, S = allShapes(traps, t, []);
+      const next = new Set(), blocked = new Map();
+      const free = (xi, ai) => {
+        const key = xi * 1000 + ai; if (blocked.has(key)) return blocked.get(key);
+        const x = xi * DX, a = lo + ai * DA, [l, r] = level.walls(a), ok = x - W / 2 - 2 >= l && x + W / 2 + 2 <= r && level.walls(a + Hh / 2)[0] <= x - W / 2 && level.walls(a + Hh / 2)[1] >= x + W / 2 && level.walls(a - Hh / 2)[0] <= x - W / 2 && level.walls(a - Hh / 2)[1] >= x + W / 2 && !capHit(S, x, a, M);
+        blocked.set(key, ok); return ok;
+      };
+      for (const k of front) {
+        const got = k >= V, kk = k % V, xi = Math.floor(kk / 1000), ai = kk % 1000;
+        for (let dA = -dn; dA <= up; dA++) for (let dX = -sd; dX <= sd; dX++) {
+          const nx = xi + dX, na = ai + dA; if (na < 0 || na >= nA || nx < 0 || nx >= nX) continue;
+          const g2 = got || !via || via(nx * DX, lo + na * DA), key = (g2 ? V : 0) + nx * 1000 + na; if (next.has(key) || !free(nx, na)) continue;
+          if (g2 && goal(nx * DX, lo + na * DA)) return step * DT;
+          next.add(key);
+        }
+      }
+      if (!next.size) { globalThis.hollowpalmDbg = { step, t, maxA: Math.max(...[...front].map(k => lo + (k % V) % 1000 * DA)) }; return -1; }
+      front = next;
+    }
+    return -1;
+  }
+  for (let k = 0; k <= 8; k++) {
+    const st = k ? { ...st0, seed: `${st0.seed}~${k}` } : st0, level = HP.createHollowpalmLevel(HP.advSeed(st), st), hz = [], fr = [];
+    hollowpalmStats.seeds++;
+    {
+      const VIEW = 1100, h1 = [], f1 = [];
+      level.fill(VIEW + 900, h1, f1);
+      let sh = h1.length, sf = f1.length;
+      for (let cam = 10; cam < level.end; cam += 10) {
+        level.fill(cam + VIEW + 900, h1, f1);
+        for (; sh < h1.length; sh++) if (h1[sh].lo < cam + VIEW + 100) hfail('traps never pop in on screen', `${h1[sh].type} at ${h1[sh].lo | 0}`);
+        for (; sf < f1.length; sf++) if (f1[sf].alt < cam + VIEW + 100) hfail('pickups never pop in on screen', `${f1[sf].kind} at ${f1[sf].alt | 0}`);
+      }
+      hz.push(...h1); fr.push(...f1);
+    }
+    hollowpalmStats.len = level.end / 10;
+    for (const h of hz) if (!HP.HOLLOWPALM_TYPES.has(h.type)) hfail('the palm only has its own traps', h.type);
+    for (const h of hz) hollowpalmStats.kinds[h.type] = (hollowpalmStats.kinds[h.type] || 0) + (k ? 0 : 1);
+    // beats never crowd: each beat's traps start above the last beat's whole reach (one beat to read at a time)
+    for (let i = 1; i < level.beats.length; i++) { const p = level.beats[i - 1], q = level.beats[i], g = Math.min(...q.hs.map(h => h.lo)) - Math.max(...p.hs.map(h => h.hi)); hollowpalmStats.beatGap = Math.min(hollowpalmStats.beatGap, g); if (g < 0) hfail('beats never overlap', `${p.kind} at ${p.a} / ${q.kind} at ${q.a}`); }
+    // within a beat only sap columns may hang past another trap (never a lethal reach over another lethal reach)
+    for (const b of level.beats) for (let i = 0; i < b.hs.length; i++) for (let j = i + 1; j < b.hs.length; j++) {
+      const p = b.hs[i], q = b.hs[j]; if (p.type === 'hollowpalmSap' || q.type === 'hollowpalmSap') continue;
+      if (p.alt !== q.alt && p.hi > q.lo && q.hi > p.lo) hfail('the traps of a beat never overlap', `${b.kind} at ${b.a}`);
+    }
+    if (hz.some(h => h.hi > level.end - 320)) hfail('the crown below the finish is clear of traps', `${Math.max(...hz.map(h => h.hi)) | 0} vs ${level.end}`);
+    for (let a = 0; a < level.end + 200; a += 1) {
+      const [l, r] = level.walls(a), [l2, r2] = level.walls(a + 1);
+      hollowpalmStats.minW = Math.min(hollowpalmStats.minW, r - l); hollowpalmStats.slope = Math.max(hollowpalmStats.slope, l2 - l, r - r2);
+    }
+    if (hollowpalmStats.minW < R.minWidth) hfail('the shaft is never narrower than minWidth', hollowpalmStats.minW.toFixed(1));
+    if (hollowpalmStats.slope > R.maxWallSlope) hfail('the walls never step in faster than maxWallSlope', hollowpalmStats.slope.toFixed(2));
+    for (const h of hz) {
+      const lane = (S, d, a = h.alt) => { const [l, r] = level.walls(a); return d > 0 ? r - reachOf(S, d) : -reachOf(S, d) - l; };
+      // the worst lane a trap leaves over its whole cycle (its own shapes only)
+      const worstLane = (t0, t1, at) => { let w = Infinity; for (let t = t0; t < t1; t += 0.02) { const S = HP.hollowpalmShapes(h, t, []); if (S.length) w = Math.min(w, lane(S, h.side, at ? at(t) : h.alt)); } return w; };
+      for (let t = 0; t < h.P; t += 0.05) for (const q of HP.hollowpalmShapes(h, t, [])) { const lo = q.k === 'c' ? q.a - q.r : Math.min(q.a0, q.a1) - q.r, hi = q.k === 'c' ? q.a + q.r : Math.max(q.a0, q.a1) + q.r; if (lo < h.lo - 0.5 || hi > h.hi + 0.5) { hfail('a trap stays inside its own band', `${h.type} at ${h.alt}`); t = h.P; break; } }
+      if (h.type === 'hollowpalmSap') {
+        const g = HP.hollowpalmSapGeo(h);
+        g.knots.forEach((kn, i) => { let pa = Infinity; for (let t = 0; t < h.P; t += 0.01) { const s = HP.hollowpalmDripAt(h, i, t); if (s.ph === 'fall' && s.tau > 0.02) { if (s.a > pa + 1e-9 && s.tau > 0.03) { hfail('a sap blob only ever falls', `${h.alt}`); break; } pa = s.a; hollowpalmStats.drop = Math.max(hollowpalmStats.drop, kn.a - s.a); } else pa = Infinity; } });
+        const S = HP.hollowpalmShapes(h, 0, [], 'still'), ln = lane(S, h.side); hollowpalmStats.sapLane = Math.min(hollowpalmStats.sapLane, ln);
+        if (ln < W + 100) hfail('a sap stub leaves a wide lane', `${h.alt} ${ln.toFixed(0)}`);
+      }
+      if (h.type === 'hollowpalmPecker') {
+        if (h.aim > 1e-9) hfail('a beak never spears upward', `${h.alt}`);
+        const ln = worstLane(0, h.P); hollowpalmStats.peckLane = Math.min(hollowpalmStats.peckLane, ln); if (ln < W + 60) hfail('a beak right out leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+      }
+      if (h.type === 'hollowpalmCrab') {
+        const ln = worstLane(0, h.P, t => HP.hollowpalmCrabAt(h, t).a); hollowpalmStats.crabLane = Math.min(hollowpalmStats.crabLane, ln); if (ln < W + 60) hfail('a crab\'s lunge leaves the far lane open', `${h.alt} ${ln.toFixed(0)}`);
+      }
+      if (h.type === 'hollowpalmOwl') {
+        // the wing only ever sweeps down or folds in (never up at you), and its tip leaves the far lane open
+        let pv = null; for (let t = 0; t < h.P * 2; t += 0.01) { const s = HP.hollowpalmOwlAt(h, t); if (pv && pv.e > 6 && s.e > 6 && s.ang > pv.ang + 1e-9) { hfail('an owl\'s wing never sweeps upward', `${h.alt}`); break; } pv = s; }
+        let w = Infinity; for (let t = 0; t < h.P; t += 0.02) { const S = HP.hollowpalmShapes(h, t, []); for (const q of S) { if (q.k !== "c") continue; const [l, r] = level.walls(q.a); w = Math.min(w, h.side > 0 ? r - (q.x + q.r) : (q.x - q.r) - l); } }
+        hollowpalmStats.owlLane = Math.min(hollowpalmStats.owlLane, w); if (w < W + 60) hfail('an owl\'s wing leaves the far lane open', `${h.alt} ${w.toFixed(0)}`);
+      }
+    }
+    for (const f of fr) {
+      const [l, r] = level.walls(f.alt), pr = HP.pickR(f);
+      if (f.x - pr < l + R.fruitMargin - 0.5 || f.x + pr > r - R.fruitMargin + 0.5) hfail('pickups stay off the walls', `${f.kind} at ${f.alt | 0}`);
+      if (f.clear === -Infinity) continue;   // (the dares: the jewel beetles, the Nest Loft's ring)
+      const need = f.clear ?? (f.bonus || f.kind === 'gold' ? Math.ceil(HP.laneSize().w / 2 + 6 + HP.COCO_R) : R.pickup.clear);
+      let dd = Infinity; for (const h of hz) if (h.lo - 360 < f.alt && h.hi + 360 > f.alt) for (const q of HP.hollowpalmDanger(h)) dd = Math.min(dd, HP.shapeDist(q, f.x, f.alt));
+      if (!f.bonus && f.kind !== 'gold' && f.clear == null) hollowpalmStats.pick = Math.min(hollowpalmStats.pick, dd);
+      if (dd < need - 0.5) hfail('pickups stay clear of every trap\'s reach', `${f.kind} at ${f.alt | 0}: ${dd.toFixed(1)} < ${need}`);
+    }
+    for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length && fr[j].alt - fr[i].alt < 80; j++) if (Math.hypot(fr[i].x - fr[j].x, fr[i].alt - fr[j].alt) < HP.pickR(fr[i]) + HP.pickR(fr[j]) + HP.PICK_GAP - 0.01) hfail('pickups never overlap', `${fr[i].alt | 0}`);
+    if (fr.filter(f => f.kind === 'hollowpalmBug').length !== 3) hfail('the palm holds exactly 3 jewel beetles', `${fr.filter(f => f.kind === 'hollowpalmBug').length}`);
+    let gap = 0, last = 60; for (const f of fr) if (f.kind === 'chili') { gap = Math.max(gap, f.alt - last); last = f.alt; }
+    if (gap > 640) hfail('the palm keeps a chili line', `${gap | 0}`);
+    if (k > 2) continue;   // (the searches run on the stage itself and two more seeds)
+    const near = (lo, hi) => hz.filter(h => h.lo < hi + 60 && h.hi > lo - 60);
+    for (const b of level.beats) {
+      const bi = level.beats.indexOf(b), prevTop = bi > 0 ? Math.max(...level.beats[bi - 1].hs.map(h => h.hi)) : -Infinity;
+      const lo = Math.min(...b.hs.map(h => h.lo)) - 150, hi = Math.max(...b.hs.map(h => h.hi)) + 90, traps = near(lo, hi), a0 = Math.max(lo + 40, Math.min(prevTop + 20, Math.min(...b.hs.map(h => h.lo)) - 10));
+      hollowpalmStats.traps++;
+      for (let p = 0; p < 6; p++) {
+        const t0 = p * 1.13 + k * 0.37, [l, r] = level.walls(a0);
+        const S0 = allShapes(traps, t0 + 1 / 15, []), cand = [(l + r) / 2, (l + r) / 2 - 70, (l + r) / 2 + 70, l + 50, r - 50];
+        const x0 = cand.find(x => !capHit(S0, x, a0, M)) ?? cand[0];
+        hollowpalmStats.searches++;
+        const tm = fly(level, traps, x0, a0, t0, (x, a) => a >= hi - 10, lo, hi + 20);
+        if (tm < 0) hfail('every trap can be passed cleanly by the widest pilot from any phase', `${b.kind} at ${b.a} (${b.sec.name}), start ${t0.toFixed(2)} s, seed ${k} ${JSON.stringify(globalThis.hollowpalmDbg)} lo ${lo} hi ${hi} x0 ${x0.toFixed(0)} a0 ${a0}`);
+        else hollowpalmStats.worst = Math.max(hollowpalmStats.worst, tm);
+      }
+    }
+    // every jewel beetle can be touched and then escaped (flown on past its trap) by the widest pilot, from 6 phases
+    for (const f of fr.filter(f => f.kind === 'hollowpalmBug')) {
+      const own = hz.filter(h => h.lo - 40 < f.alt && h.hi + 120 > f.alt), lo = Math.min(f.alt, ...own.map(h => h.lo)) - 200, hi = Math.max(f.alt, ...own.map(h => h.hi)) + 100;
+      const traps = near(lo, hi), [l, r] = level.walls(lo + 40), x0 = (l + r) / 2;
+      for (let p = 0; p < 6; p++) {
+        hollowpalmStats.searches++;
+        const tm = fly(level, traps, x0, lo + 40, p * 1.07 + k * 0.29, (x, a) => a >= hi - 10, lo, hi + 20, (x, a) => Math.hypot(x - f.x, a - f.alt) < HP.COCO_R + W / 2 - 4);
+        if (tm < 0) hfail('every jewel beetle can be grabbed and escaped by the widest pilot', `beetle at ${f.alt | 0}, phase ${p}, seed ${k}`);
+      }
+      hollowpalmStats.bugs++;
+    }
+  }
+}
+const hollowpalmSummary = () => `PASS: Hollow Palm: ${hollowpalmStats.seeds} layouts × ${hollowpalmStats.len} m, only its own traps (${Object.entries(hollowpalmStats.kinds).map(([k, n]) => `${n} ${k}`).join(', ')}), each taught alone first; shaft ${hollowpalmStats.minW.toFixed(0)}+ wide, wall slope ${hollowpalmStats.slope.toFixed(2)} (max ${HP.RULES.maxWallSlope}); sap stubs leave ${hollowpalmStats.sapLane.toFixed(0)}+ lanes and their blobs only fall (${hollowpalmStats.drop.toFixed(0)} at most), beaks never spear upward and leave ${hollowpalmStats.peckLane.toFixed(0)}+, crabs' lunges ${hollowpalmStats.crabLane.toFixed(0)}+, owls' wings only sweep down and leave ${hollowpalmStats.owlLane.toFixed(0)}+; beats ${hollowpalmStats.beatGap.toFixed(0)}+ apart; pickups ${hollowpalmStats.pick.toFixed(1)}+ from any reach; ${hollowpalmStats.traps} beats × 6 phases flown clean of sap and ${hollowpalmStats.bugs} jewel beetles grabbed by the widest pilot (${hollowpalmStats.searches} searches, slowest ${hollowpalmStats.worst.toFixed(1)} s)`;
 // (test slot: Hollow Palm, island level 41)
 
 console.log(advSummary());
@@ -5668,4 +5826,5 @@ console.log(starfallSummary());
 console.log(carnivalSummary());
 console.log(sandstormSummary());
 console.log(beanstalkSummary());
+console.log(hollowpalmSummary());
 console.log(`PASS: wall grabs for ${Object.keys(GRAB_STYLE).length} monsters (${grabStats.limbs} limb poses): hitboxes at most ${grabStats.worstIn.toFixed(1)} in from the wall (band ${GRAB.band}), top ${grabStats.maxTop.toFixed(1)} above the catch line (reach ${GRAB.reach}), narrowest centre lane ${grabStats.minLane.toFixed(0)} (widest pilot ${PILOT_W.toFixed(1)}), wind-up ${GRAB.wind} s; ${grabStats.types.size} limb types, every limb whole and anchored (jointed elbows bent ${grabStats.minBend.toFixed(0)}°+, knees ${grabStats.minKnee.toFixed(0)}°+, tapers ${grabStats.minTaper.toFixed(2)}x+, coils ${grabStats.minCoil.toFixed(2)} thick)`);
